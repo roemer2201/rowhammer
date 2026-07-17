@@ -6,9 +6,10 @@
 #   Terminal setup and non-blocking keyboard input for rowhammer. Switches
 #   to the alternate screen buffer, hides the cursor and provides a
 #   single-key reader that understands the arrow-key escape sequences.
+#   Enter is reported as ENTER so the menu system can use it as "select".
 #   Library file: sourced by tetris.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.2.0  (2026-07-17)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -47,9 +48,9 @@ term_restore() {
 
 # read_key
 # Wait up to TICK_S for a key press and map it to a symbolic name in the
-# global KEY: LEFT RIGHT UP DOWN SPACE ESC or the lower-cased literal
-# character. KEY is empty when no (usable) key arrived. A closed stdin is
-# treated as a fatal error so the loop cannot spin at full speed.
+# global KEY: LEFT RIGHT UP DOWN SPACE ENTER ESC or the lower-cased
+# literal character. KEY is empty when no (usable) key arrived. A closed
+# stdin is treated as a fatal error so the loop cannot spin at full speed.
 read_key() {
     KEY=""
     local c="" rest="" rc=0
@@ -83,8 +84,8 @@ read_key() {
             KEY="SPACE"
             ;;
         '')
-            # Enter yields an empty read; the game has no use for it.
-            KEY=""
+            # Enter yields an empty read (newline is the read delimiter).
+            KEY="ENTER"
             ;;
         *)
             # Letters are matched case-insensitively.

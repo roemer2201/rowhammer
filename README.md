@@ -14,10 +14,12 @@ gleichnamigen Hardware-Angriff hat das Spiel nichts zu tun.
 
 ## Status
 
-**Phase 1 (spielbarer Kern) ist umgesetzt.** Klassisches Tetris laeuft:
-Spielfeld, 7-Bag-Randomizer, Gravitation mit Levelkurve, Reihenabbau,
-Soft-/Hard-Drop, Pause und Game Over mit Neustart. Das vollstaendige Konzept
-und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
+**Phase 1 (spielbarer Kern) plus Startmenue sind umgesetzt.** Klassisches
+Tetris laeuft: Spielfeld, 7-Bag-Randomizer, Gravitation mit Levelkurve,
+Reihenabbau, Soft-/Hard-Drop, Pause und Game Over mit Neustart. Die
+Anwendung startet in einem Menue mit Einzelspieler, Mehrspieler
+(Platzhalter) und Einstellungen. Das vollstaendige Konzept und die
+Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
 ## Spielen
 
@@ -25,22 +27,39 @@ und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 ./tetris.sh
 ```
 
+Das Startmenue bietet:
+
+- **Einzelspieler** - vorerst nur "Normales Spiel"
+- **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
+- **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
+  beides wird in einer Konfigurationsdatei gespeichert (Standard:
+  `~/.config/rowhammer.conf`, organisationsbasierte Suche nach den
+  Script-Konventionen)
+
 Optionen:
 
-| Option       | Umgebungsvariable    | Wirkung                                  |
-|--------------|----------------------|------------------------------------------|
-| `--seed N`   | `ROWHAMMER_SEED`     | Reproduzierbare Teilfolge                |
-| `--no-color` | `ROWHAMMER_NO_COLOR` | Keine ANSI-Farben, Bloecke als `[]`      |
-| `-h/--help`  | -                    | Hilfe mit allen Optionen und Tasten      |
+| Option       | Umgebungsvariable        | Wirkung                                  |
+|--------------|--------------------------|------------------------------------------|
+| `--seed N`   | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
+| `--name NAME`| `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
+| `--no-color` | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, Bloecke als `[]`      |
+| `-h/--help`  | -                        | Hilfe mit allen Optionen und Tasten      |
+
+Die Tastenbelegung laesst sich zusaetzlich per Umgebungsvariablen
+`ROWHAMMER_KEY_*` uebersteuern (siehe `--help`). Praezedenz:
+CLI > Umgebungsvariable > Konfigurationsdatei > Standardwert.
 
 ## Features
 
-Umgesetzt (Phase 1):
+Umgesetzt:
 
 - Klassisches 10x20-Spielfeld, 7 Tetrominos, 7-Bag-Randomizer
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
   (Double-Buffering), sauberes Terminal-Restore beim Beenden
+- Startmenue mit Einzelspieler, Mehrspieler-Platzhalter und Einstellungen
+- Konfigurierbare Tastenbelegung und Spielername, gespeichert in
+  `~/.config/rowhammer.conf`
 
 Geplant:
 
@@ -58,6 +77,9 @@ Geplant:
 
 ## Steuerung
 
+Standardbelegung; die Buchstabentasten sind im Einstellungsmenue
+aenderbar, die Pfeiltasten bleiben immer aktiv:
+
 | Taste             | Aktion                      |
 |-------------------|-----------------------------|
 | `a` / `d`, Pfeile | Links / Rechts              |
@@ -67,8 +89,11 @@ Geplant:
 | Leertaste         | Hard-Drop                   |
 | `c`               | Hold (ab Phase 2)           |
 | `p`               | Pause                       |
-| `Esc` / `x`       | Beenden                     |
+| `Esc` / `x`       | Zurueck ins Menue           |
 | `r`               | Neustart (im Game-Over-Bild)|
+
+In den Menues gelten Pfeiltasten bzw. `w`/`s` zum Waehlen, Enter oder
+Leertaste zum Bestaetigen und `Esc` fuer Zurueck.
 
 ## Mitmachen / Entwicklung
 

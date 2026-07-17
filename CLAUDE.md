@@ -45,7 +45,8 @@ Die fuer uns relevanten Merkmale des Originals:
   Spawn-Zeilen oberhalb.
 - Die 7 Standard-Tetrominos (I, O, T, S, Z, J, L) mit **7-Bag-Randomizer**
   (jede Sorte genau einmal pro 7er-Beutel, dann neu mischen).
-- Steuerung (Vorschlag, konfigurierbar):
+- Steuerung (Standardbelegung; ueber das Einstellungsmenue aenderbar und
+  in der Nutzer-Konfigurationsdatei gespeichert, siehe 4.5):
   - Links/Rechts: `a`/`d` und Pfeiltasten
   - Rotation: `w` bzw. Pfeil hoch (im Uhrzeigersinn), `q` (gegen Uhrzeigersinn)
   - Soft-Drop: `s` bzw. Pfeil runter
@@ -120,6 +121,8 @@ rowhammer/
     squares.sh         # Erkennung und Verwaltung von Gold-/Silber-Quadraten
     render.sh          # Rendering (Double-Buffering, ANSI)
     input.sh           # Nicht-blockierende Tastatureingabe
+    menu.sh            # Startmenue (Einzel-/Mehrspieler, Einstellungen)
+    config.sh          # Laden/Speichern der Nutzer-Konfiguration
     wonders.sh         # Weltwunder-Logik, Baustufen, Fortschritt
     save.sh            # Laden/Speichern des Spielstands
   assets/
@@ -128,11 +131,16 @@ rowhammer/
   README.md
 ```
 
-Stand nach Phase 1: `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
-`lib/input.sh` und `lib/render.sh` existieren (Version 0.1.0).
-`squares.sh`, `wonders.sh`, `save.sh` und `assets/` folgen in Phase 2/3.
+Stand (Version 0.2.0): `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+`lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und `lib/config.sh`
+existieren. `squares.sh`, `wonders.sh`, `save.sh` und `assets/` folgen in
+Phase 2/3. Die Anwendung startet in einem Menue (Einzelspieler /
+Mehrspieler-Platzhalter / Einstellungen / Beenden); die Menue-Beschriftung
+ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`) fuer reproduzierbare
-Teilfolgen, `--no-color` (`ROWHAMMER_NO_COLOR`), `-h/--help`.
+Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`), `--no-color`
+(`ROWHAMMER_NO_COLOR`), `-h/--help`. Tastenbelegung zusaetzlich per
+`ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 
 ### 4.3 Game-Loop, Input, Rendering
 
@@ -168,6 +176,12 @@ Teilfolgen, `--no-color` (`ROWHAMMER_NO_COLOR`), `-h/--help`.
 - Einfaches KEY=VALUE-Format, atomar schreiben (Tempdatei + `mv`).
 - Konfiguration (Tastenbelegung, Farben) folgt den organisationsbasierten
   Konfigurationsregeln der Script-Konventionen (siehe Abschnitt 6).
+- Umgesetzt seit 0.2.0: `lib/config.sh` laedt `rowhammer.conf` in der
+  organisationsbasierten Suchreihenfolge (System `/etc`, dann Nutzer
+  `${HOME}/.config`); das Einstellungsmenue (Spielername, Tastenbelegung)
+  schreibt atomar in die Nutzer-Datei, Standardziel
+  `${HOME}/.config/rowhammer.conf`. Werte werden validiert und
+  single-quoted geschrieben, da die Datei gesourct wird.
 
 ## 5. Multiplayer (spaetere Phase)
 
@@ -218,6 +232,15 @@ mitzupflegen.
 - [x] Rendering mit Double-Buffering und Farben
 - [x] Soft-/Hard-Drop, Pause, Game Over (mit Neustart per `r`)
 
+### Zwischenschritt - Menue und Konfiguration (umgesetzt, Version 0.2.0)
+
+- [x] Startmenue: Einzelspieler / Mehrspieler / Einstellungen / Beenden
+- [x] Einzelspieler-Untermenue mit "Normales Spiel" (weitere Modi spaeter)
+- [x] Mehrspieler als Platzhalter ohne Funktion (Hinweis-Bildschirm)
+- [x] Einstellungen: Tastenbelegung im Spiel aenderbar, Spielername
+- [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
+      atomar geschrieben, Praezedenz Standard < Config < Env < CLI
+
 ### Phase 2 - The-New-Tetris-Mechaniken
 
 - [ ] Stein-Instanz-Tracking (IDs, "zerschnitten"-Markierung)
@@ -237,7 +260,8 @@ mitzupflegen.
 
 ### Phase 4 - Politur
 
-- [ ] Konfigurierbare Tastenbelegung und Farben (Config-Datei nach Konvention)
+- [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
+      Tastenbelegung ist seit 0.2.0 umgesetzt)
 - [ ] Highscore-Liste
 - [ ] 256-Farben-Modus, Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)

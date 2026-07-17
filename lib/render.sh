@@ -6,10 +6,11 @@
 #   Screen rendering for rowhammer. Builds every frame (board, active
 #   piece, sidebar with score and controls) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
-#   terminal flicker-free.
+#   terminal flicker-free. The sidebar shows the player name and the
+#   currently configured key bindings.
 #   Library file: sourced by tetris.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.2.0  (2026-07-17)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -44,25 +45,27 @@ draw_frame() {
         done
     fi
 
-    # Sidebar text, one entry per visible board row.
+    # Sidebar text, one entry per visible board row. The control hints
+    # reflect the configured key bindings from the settings menu.
     local -a side=()
+    side[0]="Player: ${PLAYER_NAME}"
     side[1]="Score: ${SCORE}"
     side[2]="Lines: ${CLEARED_TOTAL}"
     side[3]="Level: ${LEVEL}"
     side[5]="Controls"
-    side[6]="  a/d, arrows  move"
-    side[7]="  w/up   rotate cw"
-    side[8]="  q      rotate ccw"
-    side[9]="  s/down soft drop"
-    side[10]="  space  hard drop"
-    side[11]="  p      pause"
-    side[12]="  x/ESC  quit"
+    side[6]="  ${KEY_LEFT}/${KEY_RIGHT}, arrows  move"
+    side[7]="  ${KEY_ROT_CW}/up   rotate cw"
+    side[8]="  ${KEY_ROT_CCW}      rotate ccw"
+    side[9]="  ${KEY_SOFT}/down soft drop"
+    side[10]="  ${KEY_HARD} hard drop"
+    side[11]="  ${KEY_PAUSE}      pause"
+    side[12]="  ${KEY_QUIT}/ESC  menu"
     if [ "${PAUSED}" -eq 1 ]; then
         side[14]="** PAUSED **"
     fi
     if [ "${GAME_OVER}" -eq 1 ]; then
         side[14]="** GAME OVER **"
-        side[15]="r = restart, x = quit"
+        side[15]="r = restart, ${KEY_QUIT} = menu"
     fi
 
     frame+=$'\e[H'
@@ -88,6 +91,8 @@ draw_frame() {
         line+="|  ${side[y - HIDDEN_ROWS]:-}"
         frame+="${line}"$'\e[K\n'
     done
-    frame+="${border}"$'\e[K'
+    # Clear everything below the board so leftovers from a previously
+    # drawn (taller) menu screen cannot linger.
+    frame+="${border}"$'\e[K\e[0J'
     printf '%s' "${frame}"
 }

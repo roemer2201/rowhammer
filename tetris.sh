@@ -3,67 +3,100 @@
 # tetris.sh
 #
 # Description:
-#   Playable core of "rowhammer", a terminal Tetris game written in pure
-#   bash, modeled after "The New Tetris" (N64). Phase 1 scope: 10x20
+#   "rowhammer", a terminal Tetris game written in pure bash, modeled
+#   after "The New Tetris" (N64). Starts with a menu (singleplayer,
+#   multiplayer placeholder, settings); the playable core offers a 10x20
 #   board, 7-bag randomizer, gravity with level-based speed, line
-#   clearing, soft/hard drop, pause and game over with restart. The
-#   square system (gold/silver), wonders and multiplayer follow in later
-#   phases (see CLAUDE.md).
+#   clearing, soft/hard drop, pause and game over with restart. Player
+#   name and key bindings are configurable in the settings menu and are
+#   persisted to a user config file. The square system (gold/silver),
+#   wonders and a working multiplayer follow in later phases (CLAUDE.md).
 #
 # Program flow:
-#   1. Parse arguments and resolve configuration (CLI > env > default).
+#   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify prerequisites (bash >= 4, interactive terminal, size).
-#   3. Source the library modules (pieces, board, input, render).
-#   4. Enter the alternate screen and install the cleanup trap.
-#   5. Run the game loop: read input, apply gravity, lock pieces, clear
-#      lines, redraw only when the state changed.
-#   6. On game over offer restart or quit; restore the terminal on exit
-#      and print the final score.
+#   3. Source the library modules (config, pieces, board, input, render,
+#      menu).
+#   4. Resolve settings with precedence default < config file < env <
+#      CLI and validate them.
+#   5. Enter the alternate screen and install the cleanup trap.
+#   6. Run the main menu loop; "Einzelspieler" starts the game loop
+#      (input, gravity, locking, line clearing, rendering), settings
+#      changes are written back to the user config file.
+#   7. Restore the terminal on exit.
 #
 # Usage:
-#   tetris.sh [--seed N] [--no-color] [-h|--help]
+#   tetris.sh [--seed N] [--name NAME] [--no-color] [-h|--help]
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.2.0  (2026-07-17)
 
 set -euo pipefail
 
 SCRIPT_NAME="$(basename -- "${0}")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-# --- Defaults seeded from environment variables ---------------------------
-# Precedence: command-line argument > environment variable > built-in default.
+# --- Built-in defaults ----------------------------------------------------
+# Full precedence: command-line argument > environment variable > config
+# file > built-in default. SEED and NO_COLOR are not part of the config
+# file, so they take their env fallback directly; the config-driven
+# settings (player name, key bindings) start from these defaults, get
+# overridden by config_load and the env/CLI blocks after sourcing below.
 SEED="${ROWHAMMER_SEED:-}"
 NO_COLOR_OPT="${ROWHAMMER_NO_COLOR:-0}"
+PLAYER_NAME="Player"
+KEY_LEFT="a"
+KEY_RIGHT="d"
+KEY_ROT_CW="w"
+KEY_ROT_CCW="q"
+KEY_SOFT="s"
+KEY_HARD="SPACE"
+KEY_PAUSE="p"
+KEY_QUIT="x"
+# CLI values are parked here and applied after config_load so the
+# command line keeps the highest precedence.
+CLI_PLAYER_NAME=""
 
 # Print usage information.
 usage() {
     cat <<'EOF'
 Usage: tetris.sh [OPTIONS]
 
-Terminal Tetris - Phase 1 playable core of the rowhammer project.
+Terminal Tetris of the rowhammer project. Starts with a menu:
+singleplayer, multiplayer (placeholder) and settings.
 
 Options:
   --seed N      Seed the piece randomizer for a reproducible sequence.
-                Env: ROWHAMMER_SEED      Default: (random)
+                Env: ROWHAMMER_SEED         Default: (random)
+  --name NAME   Player name shown in the HUD (max. 16 characters from
+                A-Z a-z 0-9 space _ -).
+                Env: ROWHAMMER_PLAYER_NAME  Default: Player
   --no-color    Disable ANSI colors; blocks are drawn as "[]".
-                Env: ROWHAMMER_NO_COLOR  Default: 0
+                Env: ROWHAMMER_NO_COLOR     Default: 0
   -h, --help    Show this help and exit.
 
-Controls:
+Controls (defaults; rebindable in the settings menu):
   a / d or arrow left/right   move piece
   w or arrow up               rotate clockwise
   q                           rotate counter-clockwise
   s or arrow down             soft drop
   space                       hard drop
   p                           pause / resume
-  x or ESC                    quit
+  x or ESC                    back to the menu
   r                           restart (on the game over screen)
 
+Settings (player name, key bindings) are stored in a config file, by
+default ~/.config/rowhammer.conf (organization-based lookup, see the
+script conventions and CLAUDE.md). Key bindings can also be overridden
+via environment variables ROWHAMMER_KEY_LEFT, ROWHAMMER_KEY_RIGHT,
+ROWHAMMER_KEY_ROT_CW, ROWHAMMER_KEY_ROT_CCW, ROWHAMMER_KEY_SOFT,
+ROWHAMMER_KEY_HARD, ROWHAMMER_KEY_PAUSE, ROWHAMMER_KEY_QUIT (single
+characters a-z or 0-9, or the word SPACE).
+
 Precedence for every option: command-line argument > environment variable
-> built-in default.
+> config file > built-in default.
 
 Example:
-  tetris.sh --seed 42 --no-color
+  tetris.sh --seed 42 --name Alice --no-color
 EOF
 }
 
@@ -89,6 +122,18 @@ while [ "$#" -gt 0 ]; do
             ;;
         --seed=*)
             SEED="${1#*=}"
+            shift
+            ;;
+        --name)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            CLI_PLAYER_NAME="${2}"
+            shift 2
+            ;;
+        --name=*)
+            CLI_PLAYER_NAME="${1#*=}"
             shift
             ;;
         --no-color)
@@ -146,7 +191,7 @@ if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
 fi
 
 # --- Library modules ------------------------------------------------------
-for _lib in pieces board input render; do
+for _lib in config pieces board input render menu; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -154,6 +199,46 @@ for _lib in pieces board input render; do
     . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
 unset _lib
+
+# --- Settings resolution (default < config < env < CLI) -------------------
+# The config file may override the built-in defaults above.
+config_load
+
+# Environment variables override the config file.
+PLAYER_NAME="${ROWHAMMER_PLAYER_NAME:-${PLAYER_NAME}}"
+KEY_LEFT="${ROWHAMMER_KEY_LEFT:-${KEY_LEFT}}"
+KEY_RIGHT="${ROWHAMMER_KEY_RIGHT:-${KEY_RIGHT}}"
+KEY_ROT_CW="${ROWHAMMER_KEY_ROT_CW:-${KEY_ROT_CW}}"
+KEY_ROT_CCW="${ROWHAMMER_KEY_ROT_CCW:-${KEY_ROT_CCW}}"
+KEY_SOFT="${ROWHAMMER_KEY_SOFT:-${KEY_SOFT}}"
+KEY_HARD="${ROWHAMMER_KEY_HARD:-${KEY_HARD}}"
+KEY_PAUSE="${ROWHAMMER_KEY_PAUSE:-${KEY_PAUSE}}"
+KEY_QUIT="${ROWHAMMER_KEY_QUIT:-${KEY_QUIT}}"
+
+# The command line has the final say.
+if [ -n "${CLI_PLAYER_NAME}" ]; then
+    PLAYER_NAME="${CLI_PLAYER_NAME}"
+fi
+
+# Validate the resolved settings; the config file and env vars are user
+# input too. The name charset also keeps the sourced config file safe
+# (no quotes or expansions can sneak into it).
+_name_re='^[A-Za-z0-9_ -]{1,16}$'
+if ! [[ "${PLAYER_NAME}" =~ ${_name_re} ]]; then
+    die "Invalid player name: '${PLAYER_NAME}' (allowed: max. 16 characters from A-Z a-z 0-9 space _ -)"
+fi
+_key_re='^([a-z0-9]|SPACE)$'
+for _var in "${KEY_ACTIONS[@]}"; do
+    if ! [[ "${!_var}" =~ ${_key_re} ]]; then
+        die "Invalid key binding ${_var}='${!_var}' (allowed: a-z, 0-9 or SPACE)"
+    fi
+    for _other in "${KEY_ACTIONS[@]}"; do
+        if [ "${_var}" != "${_other}" ] && [ "${!_var}" = "${!_other}" ]; then
+            die "Key bindings ${_var} and ${_other} both use '${!_var}'"
+        fi
+    done
+done
+unset _name_re _key_re _var _other
 
 # Seeding RANDOM makes the 7-bag shuffle sequence reproducible.
 if [ -n "${SEED}" ]; then
@@ -163,7 +248,7 @@ fi
 # --- Game state and helpers -----------------------------------------------
 CUR_TYPE=""; CUR_ROT=0; CUR_X=0; CUR_Y=0
 SCORE=0; CLEARED_TOTAL=0; LEVEL=0; FALL_MS=800
-PAUSED=0; GAME_OVER=0; QUIT=0; DIRTY=1
+PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 NOW_MS=0; LAST_FALL=0
 
 # now_ms: put the current time in milliseconds into the global NOW_MS.
@@ -280,20 +365,22 @@ hard_drop() {
 }
 
 # handle_key: apply the key in the global KEY to the game state. Movement
-# keys are ignored while paused or on the game over screen.
+# keys are ignored while paused or on the game over screen. Letter keys
+# come from the configurable bindings; the arrow keys are always active
+# as a fixed secondary layout.
 handle_key() {
     if [ -z "${KEY}" ]; then
         return 0
     fi
     if [ "${GAME_OVER}" -eq 1 ]; then
         case "${KEY}" in
-            r)     game_reset ;;
-            x|ESC) QUIT=1 ;;
+            r)                  game_reset ;;
+            "${KEY_QUIT}"|ESC)  GAME_EXIT=1 ;;
         esac
         return 0
     fi
     case "${KEY}" in
-        p)
+        "${KEY_PAUSE}")
             PAUSED=$(( 1 - PAUSED ))
             # Restart the gravity timer so a long pause is not counted
             # as elapsed fall time.
@@ -301,19 +388,19 @@ handle_key() {
             LAST_FALL="${NOW_MS}"
             DIRTY=1
             ;;
-        x|ESC)
-            QUIT=1
+        "${KEY_QUIT}"|ESC)
+            GAME_EXIT=1
             ;;
     esac
     if [ "${PAUSED}" -eq 1 ]; then
         return 0
     fi
     case "${KEY}" in
-        LEFT|a)  try_move -1 0 || : ;;
-        RIGHT|d) try_move 1 0 || : ;;
-        UP|w)    try_rotate 1 || : ;;
-        q)       try_rotate -1 || : ;;
-        DOWN|s)
+        LEFT|"${KEY_LEFT}")   try_move -1 0 || : ;;
+        RIGHT|"${KEY_RIGHT}") try_move 1 0 || : ;;
+        UP|"${KEY_ROT_CW}")   try_rotate 1 || : ;;
+        "${KEY_ROT_CCW}")     try_rotate -1 || : ;;
+        DOWN|"${KEY_SOFT}")
             # Soft drop: one point per manually dropped row.
             if can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; then
                 SCORE=$(( SCORE + 1 ))
@@ -322,7 +409,7 @@ handle_key() {
             now_ms
             LAST_FALL="${NOW_MS}"
             ;;
-        SPACE)
+        "${KEY_HARD}")
             hard_drop
             ;;
     esac
@@ -344,15 +431,14 @@ game_reset() {
     DIRTY=1
 }
 
-# --- Main loop ------------------------------------------------------------
-main() {
-    # Restore the terminal on any exit path, including Ctrl-C.
-    trap term_restore EXIT
-    trap 'exit 130' INT TERM
-    term_setup
+# --- Game loop ------------------------------------------------------------
+# game_run: one complete game session; returns to the caller (the menu)
+# when the player leaves via the quit key or the game over screen.
+game_run() {
+    GAME_EXIT=0
     game_reset
 
-    while [ "${QUIT}" -eq 0 ]; do
+    while [ "${GAME_EXIT}" -eq 0 ]; do
         # read_key also paces the loop via its TICK_S timeout.
         read_key
         handle_key
@@ -368,12 +454,43 @@ main() {
             DIRTY=0
         fi
     done
+    return 0
+}
 
-    # Leave the alternate screen before printing the summary so it ends
-    # up in the normal scrollback.
+# --- Main menu loop -------------------------------------------------------
+main() {
+    # Restore the terminal on any exit path, including Ctrl-C.
+    trap term_restore EXIT
+    trap 'exit 130' INT TERM
+    term_setup
+
+    while :; do
+        menu_run "R O W H A M M E R" \
+            "Einzelspieler" \
+            "Mehrspieler" \
+            "Einstellungen" \
+            "Beenden"
+        case "${MENU_CHOICE}" in
+            0)
+                menu_singleplayer
+                ;;
+            1)
+                # Placeholder until the multiplayer phase (see CLAUDE.md).
+                menu_message "Mehrspieler" \
+                    "Der Mehrspieler-Modus ist noch nicht verfuegbar." \
+                    "Er folgt in einer spaeteren Phase (siehe Roadmap)."
+                ;;
+            2)
+                menu_settings
+                ;;
+            *)
+                # "Beenden" or ESC on the top level leaves the game.
+                break
+                ;;
+        esac
+    done
+
     term_restore
-    printf 'Final score: %s (lines: %s, level: %s)\n' \
-        "${SCORE}" "${CLEARED_TOTAL}" "${LEVEL}"
 }
 
 main "$@"
