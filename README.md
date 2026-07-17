@@ -14,17 +14,40 @@ gleichnamigen Hardware-Angriff hat das Spiel nichts zu tun.
 
 ## Status
 
-**Konzeptphase.** Das Spiel ist noch nicht spielbar. Das vollstaendige Konzept
+**Phase 1 (spielbarer Kern) ist umgesetzt.** Klassisches Tetris laeuft:
+Spielfeld, 7-Bag-Randomizer, Gravitation mit Levelkurve, Reihenabbau,
+Soft-/Hard-Drop, Pause und Game Over mit Neustart. Das vollstaendige Konzept
 und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
-## Geplante Features
+## Spielen
+
+```
+./tetris.sh
+```
+
+Optionen:
+
+| Option       | Umgebungsvariable    | Wirkung                                  |
+|--------------|----------------------|------------------------------------------|
+| `--seed N`   | `ROWHAMMER_SEED`     | Reproduzierbare Teilfolge                |
+| `--no-color` | `ROWHAMMER_NO_COLOR` | Keine ANSI-Farben, Bloecke als `[]`      |
+| `-h/--help`  | -                    | Hilfe mit allen Optionen und Tasten      |
+
+## Features
+
+Umgesetzt (Phase 1):
 
 - Klassisches 10x20-Spielfeld, 7 Tetrominos, 7-Bag-Randomizer
-- Vorschau auf die naechsten Teile, Hold, Soft-/Hard-Drop
+- Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
+- Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
+  (Double-Buffering), sauberes Terminal-Restore beim Beenden
+
+Geplant:
+
+- Vorschau auf die naechsten Teile, Hold
 - **Quadrat-System:** Gold- und Silber-Quadrate mit Bonus-Reihenwertung
 - **Weltwunder-Modus:** persistenter Reihenzaehler baut nacheinander
   Weltwunder in mehreren Baustufen auf (Fortschritt wird gespeichert)
-- Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
 - Spaeter: **Multiplayer** ueber das Netzwerk mit Garbage-Reihen
 
 ## Voraussetzungen
@@ -33,7 +56,7 @@ und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 - Ein Terminal mit ANSI-Farbunterstuetzung, mindestens ca. 80x24 Zeichen
 - Keine weiteren Abhaengigkeiten ausser Coreutils
 
-## Geplante Steuerung
+## Steuerung
 
 | Taste             | Aktion                      |
 |-------------------|-----------------------------|
@@ -42,9 +65,10 @@ und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 | `q`               | Rotation gegen Uhrzeigersinn|
 | `s` / Pfeil runter| Soft-Drop                   |
 | Leertaste         | Hard-Drop                   |
-| `c`               | Hold                        |
+| `c`               | Hold (ab Phase 2)           |
 | `p`               | Pause                       |
 | `Esc` / `x`       | Beenden                     |
+| `r`               | Neustart (im Game-Over-Bild)|
 
 ## Mitmachen / Entwicklung
 

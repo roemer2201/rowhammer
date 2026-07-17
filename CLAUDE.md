@@ -128,6 +128,12 @@ rowhammer/
   README.md
 ```
 
+Stand nach Phase 1: `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+`lib/input.sh` und `lib/render.sh` existieren (Version 0.1.0).
+`squares.sh`, `wonders.sh`, `save.sh` und `assets/` folgen in Phase 2/3.
+CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`) fuer reproduzierbare
+Teilfolgen, `--no-color` (`ROWHAMMER_NO_COLOR`), `-h/--help`.
+
 ### 4.3 Game-Loop, Input, Rendering
 
 - **Game-Loop:** feste Tick-Rate; Fall-Intervall abhaengig vom Level.
@@ -200,17 +206,17 @@ mitzupflegen.
 
 ## 7. Roadmap / Todo-Liste
 
-### Phase 1 - Spielbarer Kern
+### Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
-- [ ] Projektgeruest anlegen (`tetris.sh`, `lib/`-Module, Header nach Konvention)
-- [ ] Terminal-Handling: Raw-Mode, alternativer Screen-Buffer, sauberes
+- [x] Projektgeruest anlegen (`tetris.sh`, `lib/`-Module, Header nach Konvention)
+- [x] Terminal-Handling: Raw-Mode, alternativer Screen-Buffer, sauberes
       Aufraeumen per `trap`
-- [ ] Nicht-blockierender Input inkl. Pfeiltasten-Escape-Sequenzen
-- [ ] Spielfeld-Datenmodell und Kollisionspruefung
-- [ ] Tetromino-Definitionen mit Rotationstabellen, 7-Bag-Randomizer
-- [ ] Game-Loop mit Gravitation, Lock, Reihenabbau
-- [ ] Rendering mit Double-Buffering und Farben
-- [ ] Soft-/Hard-Drop, Pause, Game Over
+- [x] Nicht-blockierender Input inkl. Pfeiltasten-Escape-Sequenzen
+- [x] Spielfeld-Datenmodell und Kollisionspruefung
+- [x] Tetromino-Definitionen mit Rotationstabellen, 7-Bag-Randomizer
+- [x] Game-Loop mit Gravitation, Lock, Reihenabbau
+- [x] Rendering mit Double-Buffering und Farben
+- [x] Soft-/Hard-Drop, Pause, Game Over (mit Neustart per `r`)
 
 ### Phase 2 - The-New-Tetris-Mechaniken
 
