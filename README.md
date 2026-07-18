@@ -23,8 +23,16 @@ Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
 ## Spielen
 
+Direkt aus dem Repository:
+
 ```
 ./tetris.sh
+```
+
+Oder als Debian-Paket installieren (siehe unten), dann:
+
+```
+rowhammer
 ```
 
 Das Startmenue bietet:
@@ -68,6 +76,23 @@ Geplant:
 - **Weltwunder-Modus:** persistenter Reihenzaehler baut nacheinander
   Weltwunder in mehreren Baustufen auf (Fortschritt wird gespeichert)
 - Spaeter: **Multiplayer** ueber das Netzwerk mit Garbage-Reihen
+
+## Installation als Debian-Paket
+
+Das Repository enthaelt eine vollstaendige Debian-Paketierung (`debian/`,
+`Makefile`). Bauen und installieren:
+
+```
+./build-deb.sh
+sudo apt install ./dist/rowhammer_*.deb
+```
+
+Benoetigt werden `dpkg-dev` und `debhelper`. Das Paket installiert das
+Spiel nach `/usr/share/rowhammer/` und legt den Starter
+`/usr/games/rowhammer` an. Alternativ geht auch der klassische Weg mit
+`dpkg-buildpackage -us -uc -b` oder eine Installation ohne Paket per
+`sudo make install` (Standard-Praefix `/usr/local`, entfernen mit
+`sudo make uninstall`). Eine RPM-Paketierung ist geplant.
 
 ## Voraussetzungen
 

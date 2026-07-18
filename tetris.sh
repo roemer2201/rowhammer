@@ -28,12 +28,16 @@
 # Usage:
 #   tetris.sh [--seed N] [--name NAME] [--no-color] [-h|--help]
 #
-# Version: 0.2.0  (2026-07-17)
+# Version: 0.2.1  (2026-07-18)
 
 set -euo pipefail
 
 SCRIPT_NAME="$(basename -- "${0}")"
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# CHANGE 2026-07-18: resolve symlinks before taking the directory so the
+# packaged launcher (/usr/games/rowhammer -> /usr/share/rowhammer/tetris.sh)
+# finds the library modules next to the real script. readlink -f is part of
+# coreutils, which is already a baseline requirement.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config

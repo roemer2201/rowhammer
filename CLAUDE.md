@@ -127,11 +127,14 @@ rowhammer/
     save.sh            # Laden/Speichern des Spielstands
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
+  Makefile             # install/uninstall-Ziele (genutzt von deb, spaeter rpm)
+  build-deb.sh         # Baut das Debian-Paket, Artefakte nach dist/
+  debian/              # Debian-Paketierung (debhelper, natives Paket)
   CLAUDE.md
   README.md
 ```
 
-Stand (Version 0.2.0): `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+Stand (Version 0.2.1): `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
 `lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und `lib/config.sh`
 existieren. `squares.sh`, `wonders.sh`, `save.sh` und `assets/` folgen in
 Phase 2/3. Die Anwendung startet in einem Menue (Einzelspieler /
@@ -182,6 +185,25 @@ Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`), `--no-color`
   schreibt atomar in die Nutzer-Datei, Standardziel
   `${HOME}/.config/rowhammer.conf`. Werte werden validiert und
   single-quoted geschrieben, da die Datei gesourct wird.
+
+### 4.6 Paketierung
+
+- **Debian (umgesetzt):** klassische debhelper-Paketierung im `debian/`-
+  Verzeichnis, natives Quellformat "3.0 (native)"; die Paketversion in
+  `debian/changelog` folgt der Skriptversion von `tetris.sh`.
+  Installations-Layout: Spiel und Module nach `/usr/share/rowhammer/`,
+  Starter als relativer Symlink `/usr/games/rowhammer` (Debian-Policy:
+  Spiele nach `/usr/games`). `tetris.sh` loest deshalb beim Bestimmen von
+  `SCRIPT_DIR` Symlinks per `readlink -f` auf. Die Installationslogik
+  liegt zentral im `Makefile` (`make install`, `DESTDIR`/`PREFIX`),
+  `debian/rules` ruft es mit `PREFIX=/usr` auf. Bequemer Build ueber
+  `./build-deb.sh` (Artefakte in `dist/`, per `.gitignore`
+  ausgeschlossen); Build-Abhaengigkeiten: `dpkg-dev`, `debhelper`.
+- **RPM (geplant):** Spec-Datei soll dasselbe `make install`
+  wiederverwenden; gleiche Pfade (`/usr/share/rowhammer`, `/usr/games`).
+- Hinweis: Das Repository hat noch keine Lizenzdatei;
+  `debian/copyright` ist entsprechend als "UNLICENSED" markiert und muss
+  nachgezogen werden, sobald eine Lizenz festgelegt ist.
 
 ## 5. Multiplayer (spaetere Phase)
 
@@ -240,6 +262,15 @@ mitzupflegen.
 - [x] Einstellungen: Tastenbelegung im Spiel aenderbar, Spielername
 - [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
       atomar geschrieben, Praezedenz Standard < Config < Env < CLI
+
+### Zwischenschritt - Paketierung (deb umgesetzt, Version 0.2.1)
+
+- [x] `Makefile` mit install/uninstall (DESTDIR/PREFIX, deb/rpm-tauglich)
+- [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
+      Launcher-Symlink `/usr/games/rowhammer`)
+- [x] Build-Skript `build-deb.sh` nach Script-Konventionen
+- [ ] RPM-Paketierung (Spec-Datei, nutzt `make install`)
+- [ ] Lizenz festlegen und `debian/copyright` aktualisieren
 
 ### Phase 2 - The-New-Tetris-Mechaniken
 

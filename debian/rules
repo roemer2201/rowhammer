@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+# debian/rules for rowhammer.
+#
+# Uses the debhelper sequencer; the only deviation from the defaults is
+# the install step, which must pass PREFIX=/usr because the Makefile
+# defaults to /usr/local for manual installs.
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=debian/rowhammer PREFIX=/usr
