@@ -146,7 +146,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.3.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+Stand (Version 0.5.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
 `lib/squares.sh`, `lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und
 `lib/config.sh` existieren. `wonders.sh`, `save.sh` und `assets/` folgen
 in Phase 3. Die Anwendung startet in einem Menue (Einzelspieler /

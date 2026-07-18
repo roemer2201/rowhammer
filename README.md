@@ -82,7 +82,7 @@ Geplant:
 ## Voraussetzungen
 
 - Bash >= 4.0 (empfohlen: Bash 5)
-- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens ca. 80x24 Zeichen
+- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens 48x24 Zeichen
 - Keine weiteren Abhaengigkeiten ausser Coreutils
 
 ## Steuerung
