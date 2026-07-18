@@ -86,20 +86,22 @@ Geplant:
 
 ## Steuerung
 
-Standardbelegung; die Buchstabentasten sind im Einstellungsmenue
-aenderbar, die Pfeiltasten bleiben immer aktiv:
+Standardbelegung; die Buchstabentasten (`w`, `e`, `c` usw.) sind im
+Einstellungsmenue aenderbar, waehrend die Pfeiltasten sowie Leertaste
+(Hard-Drop) und `2` (Hold) als feste Sekundaerbelegung immer aktiv
+bleiben:
 
-| Taste             | Aktion                      |
-|-------------------|-----------------------------|
-| `a` / `d`, Pfeile | Links / Rechts              |
-| `w` / Pfeil hoch  | Rotation im Uhrzeigersinn   |
-| `q`               | Rotation gegen Uhrzeigersinn|
-| `s` / Pfeil runter| Soft-Drop                   |
-| Leertaste         | Hard-Drop                   |
-| `c`               | Hold / Tauschen             |
-| `p`               | Pause                       |
-| `Esc` / `x`       | Zurueck ins Menue           |
-| `r`               | Neustart (im Game-Over-Bild)|
+| Taste                     | Aktion                      |
+|---------------------------|-----------------------------|
+| `a` / `d`, Pfeile         | Links / Rechts              |
+| `e`                       | Rotation im Uhrzeigersinn   |
+| `q`                       | Rotation gegen Uhrzeigersinn|
+| `s` / Pfeil runter        | Soft-Drop                   |
+| `w`, Pfeil hoch, Leertaste| Hard-Drop                   |
+| `c` / `2`                 | Hold / Tauschen             |
+| `p`                       | Pause                       |
+| `Esc` / `x`               | Zurueck ins Menue           |
+| `r`                       | Neustart (im Game-Over-Bild)|
 
 In den Menues gelten Pfeiltasten bzw. `w`/`s` zum Waehlen, Enter oder
 Leertaste zum Bestaetigen und `Esc` fuer Zurueck.
