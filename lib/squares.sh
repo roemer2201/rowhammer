@@ -8,9 +8,11 @@
 #   Four instances of the same type form a gold (mono) square, mixed
 #   types a silver (multi) square. Square cells are marked in BOARD_SQ
 #   and make cleared rows worth bonus row credit (see ROWS_* below).
+#   In debug mode every formed square is logged with its position and
+#   the four consumed instance ids.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-07-18)
+# Version: 0.3.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -94,6 +96,7 @@ square_check_at() {
         INSTANCE_SQUARED["${id}"]=1
     done
     SQUARE_RESULT="${mark}"
+    debug_event "square formed: ${mark} at ${x0},${y0} instance_ids=${!ids[*]}"
     return 0
 }
 

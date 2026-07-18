@@ -138,6 +138,7 @@ rowhammer/
     input.sh           # Nicht-blockierende Tastatureingabe
     menu.sh            # Startmenue (Einzel-/Mehrspieler, Einstellungen)
     config.sh          # Laden/Speichern der Nutzer-Konfiguration
+    debug.sh           # Debug-Modus: Session-Trace in Log-Dateien
     wonders.sh         # Weltwunder-Logik, Baustufen, Fortschritt
     save.sh            # Laden/Speichern des Spielstands
   assets/
@@ -146,10 +147,10 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.3.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
-`lib/squares.sh`, `lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und
-`lib/config.sh` existieren. `wonders.sh`, `save.sh` und `assets/` folgen
-in Phase 3. Die Anwendung startet in einem Menue (Einzelspieler /
+Stand (Version 0.6.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+`lib/squares.sh`, `lib/input.sh`, `lib/render.sh`, `lib/menu.sh`,
+`lib/config.sh` und `lib/debug.sh` existieren. `wonders.sh`, `save.sh`
+und `assets/` folgen in Phase 3. Die Anwendung startet in einem Menue (Einzelspieler /
 Mehrspieler-Platzhalter / Einstellungen / Beenden); die Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -158,7 +159,8 @@ Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
 Weltwunder-Fortschritt speist, "Lines" zaehlt physische Reihen und
 treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
-`--no-color` (`ROWHAMMER_NO_COLOR`), `-h/--help`. Tastenbelegung
+`--no-color` (`ROWHAMMER_NO_COLOR`), `--debug` (`ROWHAMMER_DEBUG`),
+`--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 
 ### 4.3 Game-Loop, Input, Rendering
@@ -201,6 +203,38 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   schreibt atomar in die Nutzer-Datei, Standardziel
   `${HOME}/.config/rowhammer.conf`. Werte werden validiert und
   single-quoted geschrieben, da die Datei gesourct wird.
+
+### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
+
+Zweck: Ein Problem oder eine Frage zum Spielverlauf soll anhand von
+Log-Dateien nachvollziehbar sein, ohne die Situation live reproduzieren
+zu muessen (z. B. fuer Bug-Reports an Claude Code).
+
+- Aktivierung: `--debug` bzw. `ROWHAMMER_DEBUG=1`; Zielverzeichnis
+  `--debug-dir DIR` bzw. `ROWHAMMER_DEBUG_DIR` (Standard:
+  `${XDG_STATE_HOME:-~/.local/state}/rowhammer/debug/<Zeitstempel>.<PID>`,
+  ein Verzeichnis pro Lauf; der Pfad wird beim Beenden ausgegeben).
+- Drei korrelierte Log-Dateien (`lib/debug.sh`); jede Zeile traegt die
+  Millisekunden seit Sessionstart und den Bildschirm-Update-Zaehler
+  ("f N" = nach Update N, vor N+1):
+  - `frames.log`: jede Terminal-Ausgabe 1:1 (Byte fuer Byte, inklusive
+    ANSI-Sequenzen). Moeglich durch den zentralen Ausgabe-Trichter
+    `screen_write` in `lib/render.sh`, durch den seit 0.6.0 alle Module
+    (Spiel, Menues, Prompts, Terminal-Setup) schreiben.
+  - `input.log`: jeder Tastendruck mit Rohbytes (`printf %q`-quotiert)
+    und gemapptem Symbol; auch nicht zuordenbare Escape-Sequenzen.
+  - `events.log`: Session-Header (Version, Bash, Terminal, Seed,
+    Spieler, Tastenbelegung, geladene Config-Dateien) und alle
+    Aktionen: Spawns samt Queue, Bewegungen/Rotationen (inklusive
+    blockierter Versuche), Gravitations-Fall, Locks, Quadrat-Bildung
+    mit Instanz-IDs, Reihenabbau mit Credit-Aufschluesselung je Reihe,
+    Hold, Pause, Bag-Refills, Menuewahl, Config-Speicherungen, fatale
+    Fehler sowie ein Board-Snapshot (Typ- und Quadrat-Gitter plus
+    cut/squared-Instanzlisten) nach jedem Lock.
+- Ohne `--debug` sind alle Logging-Helfer No-Ops (ein Guard am
+  Funktionsanfang); der Spiel-Loop bleibt frei von Zusatzkosten.
+- Die Logs koennen in langen Sessions mehrere MB gross werden; es gibt
+  bewusst keine Rotation (ein Verzeichnis je Lauf, manuell loeschbar).
 
 ## 5. Multiplayer (spaetere Phase)
 
@@ -276,6 +310,16 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       (Reihen skalieren mit Level, Quadrat-Bonus 2000/1000)
 - [x] Bonus-Werte gegen das Original verifiziert (Recherche, siehe 3.2:
       additiv je Quadrat, Tetris +1) und in 0.4.0 umgesetzt
+
+### Zwischenschritt - Debug-Modus (umgesetzt, Version 0.6.0)
+
+- [x] `--debug`/`--debug-dir` mit Session-Verzeichnis und drei
+      korrelierten Log-Dateien (`frames.log`, `input.log`, `events.log`),
+      Konzept siehe 4.6
+- [x] Zentraler Ausgabe-Trichter `screen_write` (Frames 1:1 auch fuer
+      Menues und Terminal-Setup)
+- [x] Instrumentierung aller Spielaktionen inkl. blockierter Versuche,
+      Board-Snapshots nach jedem Lock
 
 ### Phase 3 - Weltwunder
 

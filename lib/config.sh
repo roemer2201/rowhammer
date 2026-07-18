@@ -10,9 +10,12 @@
 #   Saving from the settings menu writes atomically (temp file + mv) to
 #   the user-scope file. Values are written single-quoted and validated
 #   after loading, because the file is sourced on startup.
+#   The loaded file paths are recorded in CONFIG_LOADED_FILES so the
+#   debug session header can report them (config_load runs before
+#   debug_init); saves are logged as debug events at runtime.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.1  (2026-07-18)
+# Version: 0.3.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -44,6 +47,10 @@ fi
 # first, then user scope (${HOME}/.config) which overrides it. Config
 # values override built-in defaults but are themselves overridden by
 # environment variables and CLI arguments (applied later in rowhammer.sh).
+# Config files sourced by config_load, space-separated, for the debug
+# session header ("" = built-in defaults only).
+CONFIG_LOADED_FILES=""
+
 config_load() {
     local -a sys_files=() user_files=()
     [ -n "${ORGANIZATION}" ] && sys_files+=("/etc/${ORGANIZATION}/${CONFIG_NAME}")
@@ -56,6 +63,7 @@ config_load() {
         if [ -r "${f}" ]; then
             # shellcheck source=/dev/null
             . "${f}"
+            CONFIG_LOADED_FILES+="${CONFIG_LOADED_FILES:+ }${f}"
             break
         fi
     done
@@ -63,6 +71,7 @@ config_load() {
         if [ -r "${f}" ]; then
             # shellcheck source=/dev/null
             . "${f}"
+            CONFIG_LOADED_FILES+="${CONFIG_LOADED_FILES:+ }${f}"
             break
         fi
     done
@@ -110,4 +119,5 @@ config_save() {
         done
     } > "${tmp}"
     mv -f -- "${tmp}" "${path}"
+    debug_event "config saved: ${path}"
 }

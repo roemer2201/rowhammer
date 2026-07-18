@@ -7,10 +7,12 @@
 #   piece, gold/silver squares, sidebar with score, weighted row credit,
 #   piece preview, hold slot and key hints) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
-#   terminal flicker-free.
+#   terminal flicker-free. All terminal output goes through screen_write,
+#   which mirrors every update 1:1 into the frame log when the debug mode
+#   is active (lib/debug.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.1  (2026-07-18)
+# Version: 0.4.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -21,6 +23,17 @@ fi
 # Cells of the active piece, keyed "x,y", rebuilt on every frame so the
 # board pass below can overlay the falling piece without mutating BOARD.
 declare -A OVERLAY=()
+
+# screen_write CONTENT
+# The single funnel for terminal output: print CONTENT and, in debug
+# mode, record it byte for byte in the frame log. Every module that
+# draws to the screen (game frames, menus, prompts, terminal setup) must
+# use this instead of a direct printf, so the debug trace really is a
+# 1:1 copy of what the player saw.
+screen_write() {
+    printf '%s' "${1}"
+    debug_frame "${1}"
+}
 
 # render_mini TYPE ROW
 # Build one display row (4 cells = 8 chars wide) of a piece preview into
@@ -163,5 +176,5 @@ draw_frame() {
     # Clear everything below the board so leftovers from a previously
     # drawn (taller) menu screen cannot linger.
     frame+="${border}"$'\e[K\e[0J'
-    printf '%s' "${frame}"
+    screen_write "${frame}"
 }

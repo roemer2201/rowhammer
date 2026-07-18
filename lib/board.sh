@@ -11,10 +11,11 @@
 #   "G" gold). Line clears mark the instances they run through as cut
 #   (INSTANCE_CUT), which disqualifies them from forming squares, and
 #   report weighted row credit based on the ROWS_* values from
-#   lib/squares.sh. The two top rows are hidden spawn rows.
+#   lib/squares.sh. The two top rows are hidden spawn rows. In debug
+#   mode every cleared row is logged with its credit breakdown.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-07-18)
+# Version: 0.4.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -142,6 +143,7 @@ clear_lines() {
                 + ROWS_GOLD * (gold_cells / 4) \
                 + ROWS_SILVER * (silver_cells / 4) ))
             CLEARED_CREDIT=$(( CLEARED_CREDIT + credit ))
+            debug_event "clear row y=${y}: gold_cells=${gold_cells} silver_cells=${silver_cells} credit=${credit}"
         else
             for (( x = 0; x < BOARD_W; x++ )); do
                 idx=$(( write_y * BOARD_W + x ))

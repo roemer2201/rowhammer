@@ -7,9 +7,11 @@
 #   to the alternate screen buffer, hides the cursor and provides a
 #   single-key reader that understands the arrow-key escape sequences.
 #   Enter is reported as ENTER so the menu system can use it as "select".
+#   In debug mode every received key press is recorded (raw bytes plus
+#   mapped symbol) via debug_input from lib/debug.sh.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.1  (2026-07-18)
+# Version: 0.3.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -29,8 +31,9 @@ TERM_ACTIVE=0
 # back exactly as it was.
 term_setup() {
     SAVED_STTY="$(stty -g)"
-    printf '\e[?1049h\e[2J\e[H\e[?25l'
+    screen_write $'\e[?1049h\e[2J\e[H\e[?25l'
     TERM_ACTIVE=1
+    debug_event "terminal: alternate screen on, cursor hidden"
 }
 
 # Restore cursor, screen buffer and stty state. Idempotent on purpose: it
@@ -38,7 +41,8 @@ term_setup() {
 # not garble the screen when it runs twice.
 term_restore() {
     if [ "${TERM_ACTIVE}" -eq 1 ]; then
-        printf '\e[?25h\e[?1049l'
+        debug_event "terminal: restoring screen and stty state"
+        screen_write $'\e[?25h\e[?1049l'
         if [ -n "${SAVED_STTY}" ]; then
             stty "${SAVED_STTY}" || stty sane
         fi
@@ -65,20 +69,22 @@ read_key() {
         $'\e')
             # Either a lone ESC key or the start of an escape sequence:
             # arrow keys arrive as ESC [ X (or ESC O X in application
-            # mode) within a few milliseconds.
+            # mode) within a few milliseconds. The lone-ESC case falls
+            # through (instead of returning early) so the debug input
+            # logging below sees every key press.
             rc=0
             IFS= read -rsn2 -t 0.02 rest || rc=$?
             if [ "${rc}" -ne 0 ]; then
                 KEY="ESC"
-                return 0
+            else
+                case "${rest}" in
+                    '[A'|'OA') KEY="UP" ;;
+                    '[B'|'OB') KEY="DOWN" ;;
+                    '[C'|'OC') KEY="RIGHT" ;;
+                    '[D'|'OD') KEY="LEFT" ;;
+                    *)         KEY="" ;;
+                esac
             fi
-            case "${rest}" in
-                '[A'|'OA') KEY="UP" ;;
-                '[B'|'OB') KEY="DOWN" ;;
-                '[C'|'OC') KEY="RIGHT" ;;
-                '[D'|'OD') KEY="LEFT" ;;
-                *)         KEY="" ;;
-            esac
             ;;
         ' ')
             KEY="SPACE"
@@ -92,5 +98,9 @@ read_key() {
             KEY="${c,,}"
             ;;
     esac
+    # Record the press (raw bytes and mapped symbol) in debug mode; the
+    # timeout path above never reaches this point, so only real key
+    # presses are logged.
+    debug_input "${c}${rest}" "${KEY}"
     return 0
 }
