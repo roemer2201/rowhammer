@@ -295,6 +295,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Highscore-Liste
 - [ ] 256-Farben-Modus, Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
+- [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
+      naechste drei Steine oben rechts, Hold-Stein links
 - [ ] README mit Screenshots/Asciinema aktualisieren
 
 ### Phase 5 - Multiplayer (spaeter)
