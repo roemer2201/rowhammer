@@ -32,7 +32,7 @@
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--no-color] [-h|--help]
 #
-# Version: 0.4.0  (2026-07-18)
+# Version: 0.5.0  (2026-07-18)
 
 set -euo pipefail
 
@@ -50,10 +50,10 @@ NO_COLOR_OPT="${ROWHAMMER_NO_COLOR:-0}"
 PLAYER_NAME="Player"
 KEY_LEFT="a"
 KEY_RIGHT="d"
-KEY_ROT_CW="w"
+KEY_ROT_CW="e"
 KEY_ROT_CCW="q"
 KEY_SOFT="s"
-KEY_HARD="SPACE"
+KEY_HARD="w"
 KEY_PAUSE="p"
 KEY_QUIT="x"
 KEY_HOLD="c"
@@ -81,11 +81,11 @@ Options:
 
 Controls (defaults; rebindable in the settings menu):
   a / d or arrow left/right   move piece
-  w or arrow up               rotate clockwise
+  e                           rotate clockwise
   q                           rotate counter-clockwise
   s or arrow down             soft drop
-  space                       hard drop
-  c                           hold / swap piece (once per piece)
+  w, arrow up or space        hard drop
+  c or 2                      hold / swap piece (once per piece)
   p                           pause / resume
   x or ESC                    back to the menu
   r                           restart (on the game over screen)
@@ -435,8 +435,9 @@ hard_drop() {
 
 # handle_key: apply the key in the global KEY to the game state. Movement
 # keys are ignored while paused or on the game over screen. Letter keys
-# come from the configurable bindings; the arrow keys are always active
-# as a fixed secondary layout.
+# come from the configurable bindings; a fixed secondary layout is always
+# active on top of them: the arrow keys (left/right move, up = hard drop,
+# down = soft drop), space for hard drop and 2 for hold.
 handle_key() {
     if [ -z "${KEY}" ]; then
         return 0
@@ -467,7 +468,7 @@ handle_key() {
     case "${KEY}" in
         LEFT|"${KEY_LEFT}")   try_move -1 0 || : ;;
         RIGHT|"${KEY_RIGHT}") try_move 1 0 || : ;;
-        UP|"${KEY_ROT_CW}")   try_rotate 1 || : ;;
+        "${KEY_ROT_CW}")      try_rotate 1 || : ;;
         "${KEY_ROT_CCW}")     try_rotate -1 || : ;;
         DOWN|"${KEY_SOFT}")
             # Soft drop: one point per manually dropped row.
@@ -478,10 +479,10 @@ handle_key() {
             now_ms
             LAST_FALL="${NOW_MS}"
             ;;
-        "${KEY_HARD}")
+        UP|SPACE|"${KEY_HARD}")
             hard_drop
             ;;
-        "${KEY_HOLD}")
+        2|"${KEY_HOLD}")
             hold_piece
             ;;
     esac

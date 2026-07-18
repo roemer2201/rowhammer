@@ -48,10 +48,10 @@ Die fuer uns relevanten Merkmale des Originals:
 - Steuerung (Standardbelegung; ueber das Einstellungsmenue aenderbar und
   in der Nutzer-Konfigurationsdatei gespeichert, siehe 4.5):
   - Links/Rechts: `a`/`d` und Pfeiltasten
-  - Rotation: `w` bzw. Pfeil hoch (im Uhrzeigersinn), `q` (gegen Uhrzeigersinn)
+  - Rotation: `e` (im Uhrzeigersinn), `q` (gegen Uhrzeigersinn)
   - Soft-Drop: `s` bzw. Pfeil runter
-  - Hard-Drop: Leertaste
-  - Hold: `c`
+  - Hard-Drop: `w`, Pfeil hoch und Leertaste
+  - Hold: `c` bzw. `2`
   - Pause: `p`, Beenden: `Esc`/`x`
 - Vorschau: die naechsten 3 Teile. Hold: genau ein Teil, einmal pro Zug tauschbar.
 - Level/Geschwindigkeit: Fallgeschwindigkeit steigt mit der Zahl abgebauter
@@ -289,9 +289,12 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 - [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
       Tastenbelegung ist seit 0.2.0 umgesetzt)
-- [ ] Standard-Tastenbelegung aendern (siehe 3.1): `w`/Pfeil hoch **und**
-      Leertaste fuer Hard-Drop, `e` fuer Rotation im Uhrzeigersinn,
-      `c`/`2` fuer Hold/Tauschen
+- [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
+      `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
+      im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und
+      Leertaste liegen als feste Sekundaerbelegung auf dem Hard-Drop,
+      `2` fest auf Hold; `w`, `e` und `c` sind die konfigurierbaren
+      Primaertasten.
 - [ ] Highscore-Liste
 - [ ] 256-Farben-Modus, Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
