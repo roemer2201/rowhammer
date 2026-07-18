@@ -291,8 +291,16 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 ## 8. Offene Punkte
 
-- Exakte Bonus-Werte fuer Gold/Silber-Reihen im Original recherchieren.
-- Endgueltige Weltwunder-Liste und Anzahl der Baustufen je Wunder.
-- Mindest-Terminalgroesse festlegen (Vorschlag: 80x24) und Verhalten bei
-  kleineren Terminals.
-- Punktesystem im Detail (Kombos, Back-to-Back?) - erst nach Phase 1 relevant.
+- Exakte Bonus-Werte fuer Gold/Silber-Reihen im Original recherchieren
+  (aktuell 1/5/10 als Startwerte, siehe 3.2; Quadrat-Bonuspunkte
+  2000/1000 ebenfalls unverifiziert).
+- Endgueltige Weltwunder-Liste und Anzahl der Baustufen je Wunder
+  (vor Phase 3 zu klaeren).
+- Mindest-Terminalgroesse: seit 0.1.0 als 48x24 implementiert (Pruefung
+  nur beim Start). Offen: Verhalten bei Groessenaenderung waehrend des
+  Spiels (SIGWINCH) - gehoert zu Phase 4 "Anpassung an Terminalgroesse".
+- Punktesystem im Detail (Kombos, Back-to-Back?) - Feinschliff nach dem
+  Playtesting.
+- UI-Sprache: Menues sind Deutsch (ASCII), In-Game-HUD und --help
+  Englisch (Konvention). Entscheiden, ob das so bleibt oder das UI
+  einheitlich einsprachig werden soll.
