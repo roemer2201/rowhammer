@@ -5,30 +5,34 @@
 # Description:
 #   "rowhammer", a terminal Tetris game written in pure bash, modeled
 #   after "The New Tetris" (N64). Starts with a menu (singleplayer,
-#   multiplayer placeholder, settings); the playable core offers a 10x20
-#   board, 7-bag randomizer, gravity with level-based speed, line
-#   clearing, soft/hard drop, pause and game over with restart. Player
-#   name and key bindings are configurable in the settings menu and are
-#   persisted to a user config file. The square system (gold/silver),
-#   wonders and a working multiplayer follow in later phases (CLAUDE.md).
+#   multiplayer placeholder, settings); the game offers a 10x20 board,
+#   7-bag randomizer with a 3-piece preview, a hold slot, gravity with a
+#   level-based speed curve, soft/hard drop, pause and game over with
+#   restart. The New Tetris square mechanics are in: 4x4 squares built
+#   from four complete pieces turn gold (mono) or silver (multi) and make
+#   cleared rows worth bonus row credit (the "Rows" counter, which will
+#   build the wonders in Phase 3). Player name and key bindings are
+#   configurable in the settings menu and persisted to a user config
+#   file. Wonders and a working multiplayer follow in later phases
+#   (see CLAUDE.md).
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify prerequisites (bash >= 4, interactive terminal, size).
-#   3. Source the library modules (config, pieces, board, input, render,
-#      menu).
+#   3. Source the library modules (config, pieces, board, squares,
+#      input, render, menu).
 #   4. Resolve settings with precedence default < config file < env <
 #      CLI and validate them.
 #   5. Enter the alternate screen and install the cleanup trap.
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
-#      (input, gravity, locking, line clearing, rendering), settings
-#      changes are written back to the user config file.
+#      (input, gravity, locking, square detection, line clearing,
+#      rendering), settings changes are written back to the config file.
 #   7. Restore the terminal on exit.
 #
 # Usage:
 #   tetris.sh [--seed N] [--name NAME] [--no-color] [-h|--help]
 #
-# Version: 0.2.0  (2026-07-17)
+# Version: 0.3.0  (2026-07-18)
 
 set -euo pipefail
 
@@ -52,6 +56,7 @@ KEY_SOFT="s"
 KEY_HARD="SPACE"
 KEY_PAUSE="p"
 KEY_QUIT="x"
+KEY_HOLD="c"
 # CLI values are parked here and applied after config_load so the
 # command line keeps the highest precedence.
 CLI_PLAYER_NAME=""
@@ -80,17 +85,23 @@ Controls (defaults; rebindable in the settings menu):
   q                           rotate counter-clockwise
   s or arrow down             soft drop
   space                       hard drop
+  c                           hold / swap piece (once per piece)
   p                           pause / resume
   x or ESC                    back to the menu
   r                           restart (on the game over screen)
+
+Square mechanics (The New Tetris): fill a 4x4 area with exactly four
+complete, uncut pieces to form a square - gold if all four are the same
+type, silver if mixed. Rows cleared through a square are worth bonus row
+credit (gold 10, silver 5, normal 1), shown as "Rows" in the HUD.
 
 Settings (player name, key bindings) are stored in a config file, by
 default ~/.config/rowhammer.conf (organization-based lookup, see the
 script conventions and CLAUDE.md). Key bindings can also be overridden
 via environment variables ROWHAMMER_KEY_LEFT, ROWHAMMER_KEY_RIGHT,
 ROWHAMMER_KEY_ROT_CW, ROWHAMMER_KEY_ROT_CCW, ROWHAMMER_KEY_SOFT,
-ROWHAMMER_KEY_HARD, ROWHAMMER_KEY_PAUSE, ROWHAMMER_KEY_QUIT (single
-characters a-z or 0-9, or the word SPACE).
+ROWHAMMER_KEY_HARD, ROWHAMMER_KEY_PAUSE, ROWHAMMER_KEY_QUIT,
+ROWHAMMER_KEY_HOLD (single characters a-z or 0-9, or the word SPACE).
 
 Precedence for every option: command-line argument > environment variable
 > config file > built-in default.
@@ -191,7 +202,7 @@ if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
 fi
 
 # --- Library modules ------------------------------------------------------
-for _lib in config pieces board input render menu; do
+for _lib in config pieces board squares input render menu; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -214,6 +225,7 @@ KEY_SOFT="${ROWHAMMER_KEY_SOFT:-${KEY_SOFT}}"
 KEY_HARD="${ROWHAMMER_KEY_HARD:-${KEY_HARD}}"
 KEY_PAUSE="${ROWHAMMER_KEY_PAUSE:-${KEY_PAUSE}}"
 KEY_QUIT="${ROWHAMMER_KEY_QUIT:-${KEY_QUIT}}"
+KEY_HOLD="${ROWHAMMER_KEY_HOLD:-${KEY_HOLD}}"
 
 # The command line has the final say.
 if [ -n "${CLI_PLAYER_NAME}" ]; then
@@ -247,9 +259,22 @@ fi
 
 # --- Game state and helpers -----------------------------------------------
 CUR_TYPE=""; CUR_ROT=0; CUR_X=0; CUR_Y=0
-SCORE=0; CLEARED_TOTAL=0; LEVEL=0; FALL_MS=800
+SCORE=0; CLEARED_TOTAL=0; ROW_CREDIT=0; LEVEL=0; FALL_MS=800
+GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
+HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 NOW_MS=0; LAST_FALL=0
+
+# Scoring values (adjustable; the detailed system incl. combos is a later
+# roadmap item). Line points scale with (level + 1); squares pay a flat
+# formation bonus on top of the row credit they earn when cleared.
+SCORE_LINES=(0 100 300 500 800)
+SCORE_SQUARE_GOLD=2000
+SCORE_SQUARE_SILVER=1000
+
+# Gravity interval per level in milliseconds. A lookup table instead of a
+# formula so the curve stays easy to tune; the last entry is the cap.
+LEVEL_SPEEDS=(800 720 640 560 480 410 350 300 260 220 190 160 140 120)
 
 # now_ms: put the current time in milliseconds into the global NOW_MS.
 # Uses bash 5's EPOCHREALTIME when available (no fork); older bash falls
@@ -266,14 +291,16 @@ now_ms() {
     fi
 }
 
-# update_speed: derive level and gravity interval from total cleared
-# lines. Values are provisional; the proper level curve is a Phase 2 task.
+# update_speed: derive level and gravity interval from the physical lines
+# cleared this round (one level per 10 lines, speed from LEVEL_SPEEDS).
 update_speed() {
     LEVEL=$(( CLEARED_TOTAL / 10 ))
-    FALL_MS=$(( 800 - 70 * LEVEL ))
-    if (( FALL_MS < 120 )); then
-        FALL_MS=120
+    local idx="${LEVEL}"
+    local max=$(( ${#LEVEL_SPEEDS[@]} - 1 ))
+    if (( idx > max )); then
+        idx="${max}"
     fi
+    FALL_MS="${LEVEL_SPEEDS[idx]}"
 }
 
 # spawn_piece: take the next piece from the bag and place it at the spawn
@@ -290,27 +317,67 @@ spawn_piece() {
     DIRTY=1
 }
 
-# lock_and_next: lock the active piece, clear lines, update score/level
-# and spawn the next piece. Scoring uses the classic 1/2/3/4-line values
-# scaled by level; the full scoring system is refined in Phase 2.
+# lock_and_next: lock the active piece, detect squares, clear lines,
+# update score/credit/level and spawn the next piece. Square detection
+# runs before line clearing on purpose: a piece that completes a square
+# and a row at once still forms the square first, so the cleared row
+# already earns the square's bonus credit.
 lock_and_next() {
     lock_piece "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"
+    if detect_square "${CUR_X}" "${CUR_Y}"; then
+        if [ "${SQUARE_RESULT}" = "G" ]; then
+            GOLD_COUNT=$(( GOLD_COUNT + 1 ))
+            SCORE=$(( SCORE + SCORE_SQUARE_GOLD ))
+        else
+            SILVER_COUNT=$(( SILVER_COUNT + 1 ))
+            SCORE=$(( SCORE + SCORE_SQUARE_SILVER ))
+        fi
+    fi
     clear_lines
     if (( CLEARED > 0 )); then
         CLEARED_TOTAL=$(( CLEARED_TOTAL + CLEARED ))
-        local points=0
-        case "${CLEARED}" in
-            1) points=100 ;;
-            2) points=300 ;;
-            3) points=500 ;;
-            4) points=800 ;;
-        esac
-        SCORE=$(( SCORE + points * (LEVEL + 1) ))
+        ROW_CREDIT=$(( ROW_CREDIT + CLEARED_CREDIT ))
+        SCORE=$(( SCORE + SCORE_LINES[CLEARED] * (LEVEL + 1) ))
         update_speed
     fi
+    # The hold slot unlocks again once a piece has locked.
+    HOLD_USED=0
     spawn_piece
     now_ms
     LAST_FALL="${NOW_MS}"
+}
+
+# hold_piece: stash the active piece (first use) or swap it with the held
+# one - at most once per piece. The swap is refused instead of forcing a
+# game over when the incoming piece has no room at the spawn position.
+hold_piece() {
+    if [ "${HOLD_USED}" -eq 1 ]; then
+        return 0
+    fi
+    if [ -z "${HOLD_TYPE}" ]; then
+        queue_fill
+        if ! can_place "${QUEUE[0]}" 0 3 0; then
+            return 0
+        fi
+        HOLD_TYPE="${CUR_TYPE}"
+        HOLD_USED=1
+        spawn_piece
+    else
+        if ! can_place "${HOLD_TYPE}" 0 3 0; then
+            return 0
+        fi
+        local tmp="${HOLD_TYPE}"
+        HOLD_TYPE="${CUR_TYPE}"
+        CUR_TYPE="${tmp}"
+        CUR_ROT=0
+        CUR_X=3
+        CUR_Y=0
+        HOLD_USED=1
+        DIRTY=1
+    fi
+    now_ms
+    LAST_FALL="${NOW_MS}"
+    return 0
 }
 
 # try_move DX DY: move the piece if the target position is free.
@@ -412,6 +479,9 @@ handle_key() {
         "${KEY_HARD}")
             hard_drop
             ;;
+        "${KEY_HOLD}")
+            hold_piece
+            ;;
     esac
     return 0
 }
@@ -420,8 +490,17 @@ handle_key() {
 game_reset() {
     board_init
     BAG=()
+    QUEUE=()
+    INSTANCE_CUT=()
+    INSTANCE_SQUARED=()
+    NEXT_INSTANCE_ID=1
     SCORE=0
     CLEARED_TOTAL=0
+    ROW_CREDIT=0
+    GOLD_COUNT=0
+    SILVER_COUNT=0
+    HOLD_TYPE=""
+    HOLD_USED=0
     PAUSED=0
     GAME_OVER=0
     update_speed

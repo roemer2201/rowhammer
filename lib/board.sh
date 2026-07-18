@@ -3,13 +3,18 @@
 # lib/board.sh
 #
 # Description:
-#   Board state and rules for rowhammer: the playfield array, collision
-#   checking, piece locking and line clearing. The board is stored as a
-#   one-dimensional array indexed y * BOARD_W + x; the two top rows are
-#   hidden spawn rows above the visible 10x20 area.
+#   Board state and rules for rowhammer: the playfield, collision
+#   checking, piece locking and line clearing. Three parallel arrays
+#   describe each cell (index y * BOARD_W + x): BOARD holds the piece
+#   type letter (or EMPTY_CELL), BOARD_ID the locked piece instance id
+#   (0 = none) and BOARD_SQ the square status ("" none, "S" silver,
+#   "G" gold). Line clears mark the instances they run through as cut
+#   (INSTANCE_CUT), which disqualifies them from forming squares, and
+#   report weighted row credit based on the ROWS_* values from
+#   lib/squares.sh. The two top rows are hidden spawn rows.
 #   Library file: sourced by tetris.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.2.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -18,19 +23,32 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 fi
 
 # Board geometry: 10 columns, 20 visible rows plus 2 hidden spawn rows on
-# top (rows 0 and 1). Cells hold a piece type letter or EMPTY_CELL.
+# top (rows 0 and 1).
 BOARD_W=10
 BOARD_H=22
 HIDDEN_ROWS=2
 EMPTY_CELL="."
 BOARD=()
+BOARD_ID=()
+BOARD_SQ=()
+
+# Per-instance state, keyed by instance id. Cut instances were damaged by
+# a line clear; squared instances are consumed by a formed square. Both
+# are reset per round (game_reset). The id counter itself lives in
+# tetris.sh (NEXT_INSTANCE_ID) with the other game state globals.
+declare -A INSTANCE_CUT=()
+declare -A INSTANCE_SQUARED=()
 
 # Reset the whole board to empty cells.
 board_init() {
     local i
     BOARD=()
+    BOARD_ID=()
+    BOARD_SQ=()
     for (( i = 0; i < BOARD_W * BOARD_H; i++ )); do
         BOARD[i]="${EMPTY_CELL}"
+        BOARD_ID[i]=0
+        BOARD_SQ[i]=""
     done
 }
 
@@ -58,29 +76,39 @@ can_place() {
 }
 
 # lock_piece TYPE ROT X Y
-# Write the piece permanently into the board. The caller must have checked
-# the position with can_place first.
+# Write the piece permanently into the board under a fresh instance id,
+# so the square detection can identify complete tetrominoes later. The
+# caller must have checked the position with can_place first.
 lock_piece() {
     local type="${1}" rot="${2}" px="${3}" py="${4}"
     local -a cells
-    local cell cx cy
+    local cell cx cy idx
+    local id="${NEXT_INSTANCE_ID}"
+    NEXT_INSTANCE_ID=$(( NEXT_INSTANCE_ID + 1 ))
     IFS=' ' read -ra cells <<< "${PIECE_SHAPE["${type}${rot}"]}"
     for cell in "${cells[@]}"; do
         cx="${cell%,*}"
         cy="${cell#*,}"
-        BOARD[(py + cy) * BOARD_W + (px + cx)]="${type}"
+        idx=$(( (py + cy) * BOARD_W + (px + cx) ))
+        BOARD[idx]="${type}"
+        BOARD_ID[idx]="${id}"
     done
 }
 
 # clear_lines
 # Remove every full row, let the rows above fall down and refill the top
-# with empty rows. The number of cleared rows is reported in the global
-# CLEARED. Rows are compacted bottom-up into a fresh array so multiple
-# simultaneous clears are handled in one pass.
+# with empty rows. Reports two globals: CLEARED (physical rows removed,
+# drives the level curve) and CLEARED_CREDIT (weighted row credit: a row
+# through a gold square is worth ROWS_GOLD, through a silver square
+# ROWS_SILVER, otherwise ROWS_NORMAL; feeds the wonder progress).
+# Every instance a cleared row runs through is marked cut; the surviving
+# cells keep their id and square marking (a trimmed gold/silver square
+# keeps paying bonus credit, like in The New Tetris).
 clear_lines() {
     CLEARED=0
-    local -a nb
-    local y x write_y row_full
+    CLEARED_CREDIT=0
+    local -a nb nid nsq
+    local y x idx write_y row_full has_gold has_silver id credit
     write_y=$(( BOARD_H - 1 ))
     for (( y = BOARD_H - 1; y >= 0; y-- )); do
         row_full=1
@@ -92,17 +120,46 @@ clear_lines() {
         done
         if [ "${row_full}" -eq 1 ]; then
             CLEARED=$(( CLEARED + 1 ))
+            has_gold=0
+            has_silver=0
+            for (( x = 0; x < BOARD_W; x++ )); do
+                idx=$(( y * BOARD_W + x ))
+                case "${BOARD_SQ[idx]}" in
+                    G) has_gold=1 ;;
+                    S) has_silver=1 ;;
+                esac
+                # The cleared row cuts every instance it runs through.
+                id="${BOARD_ID[idx]}"
+                if [ "${id}" -ne 0 ]; then
+                    INSTANCE_CUT["${id}"]=1
+                fi
+            done
+            credit="${ROWS_NORMAL}"
+            if [ "${has_gold}" -eq 1 ]; then
+                credit="${ROWS_GOLD}"
+            elif [ "${has_silver}" -eq 1 ]; then
+                credit="${ROWS_SILVER}"
+            fi
+            CLEARED_CREDIT=$(( CLEARED_CREDIT + credit ))
         else
             for (( x = 0; x < BOARD_W; x++ )); do
-                nb[write_y * BOARD_W + x]="${BOARD[y * BOARD_W + x]}"
+                idx=$(( write_y * BOARD_W + x ))
+                nb[idx]="${BOARD[y * BOARD_W + x]}"
+                nid[idx]="${BOARD_ID[y * BOARD_W + x]}"
+                nsq[idx]="${BOARD_SQ[y * BOARD_W + x]}"
             done
             write_y=$(( write_y - 1 ))
         fi
     done
     for (( y = write_y; y >= 0; y-- )); do
         for (( x = 0; x < BOARD_W; x++ )); do
-            nb[y * BOARD_W + x]="${EMPTY_CELL}"
+            idx=$(( y * BOARD_W + x ))
+            nb[idx]="${EMPTY_CELL}"
+            nid[idx]=0
+            nsq[idx]=""
         done
     done
     BOARD=("${nb[@]}")
+    BOARD_ID=("${nid[@]}")
+    BOARD_SQ=("${nsq[@]}")
 }

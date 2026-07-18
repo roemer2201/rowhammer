@@ -12,7 +12,7 @@
 #   after loading, because the file is sourced on startup.
 #   Library file: sourced by tetris.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.2.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -25,9 +25,10 @@ CONFIG_NAME="rowhammer.conf"
 
 # The configurable key binding variables. Shared by the settings menu
 # (rebinding), validation and config_save, so new bindings only need to
-# be added here and in the defaults/env blocks of tetris.sh.
+# be added here, in KEY_LABELS (lib/menu.sh) and in the defaults/env
+# blocks of tetris.sh.
 KEY_ACTIONS=(KEY_LEFT KEY_RIGHT KEY_ROT_CW KEY_ROT_CCW
-             KEY_SOFT KEY_HARD KEY_PAUSE KEY_QUIT)
+             KEY_SOFT KEY_HARD KEY_PAUSE KEY_QUIT KEY_HOLD)
 
 # Resolve ORGANIZATION from /etc/org.conf. Sourced in a subshell with
 # errexit disabled there, so a missing file or a faulty line cannot abort

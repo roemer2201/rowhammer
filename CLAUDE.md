@@ -72,6 +72,10 @@ Die fuer uns relevanten Merkmale des Originals:
   - Reihe durch ein Silber-Quadrat: **5** Reihen
   - Reihe durch ein Gold-Quadrat: **10** Reihen
   - TODO: Werte gegen das Original verifizieren und per Playtesting justieren.
+- Umgesetzt seit 0.3.0 (`lib/squares.sh`): Werte liegen justierbar in
+  `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`; verlaeuft eine Reihe durch
+  mehrere Quadrat-Typen, gilt Gold vor Silber. Ein angeschnittenes
+  Quadrat behaelt seine Gold-/Silber-Zellen und liefert weiter Bonus.
 
 ### 3.3 Weltwunder-Aufbau
 
@@ -131,16 +135,20 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.2.0): `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
-`lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und `lib/config.sh`
-existieren. `squares.sh`, `wonders.sh`, `save.sh` und `assets/` folgen in
-Phase 2/3. Die Anwendung startet in einem Menue (Einzelspieler /
+Stand (Version 0.3.0): `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+`lib/squares.sh`, `lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und
+`lib/config.sh` existieren. `wonders.sh`, `save.sh` und `assets/` folgen
+in Phase 3. Die Anwendung startet in einem Menue (Einzelspieler /
 Mehrspieler-Platzhalter / Einstellungen / Beenden); die Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
-CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`) fuer reproduzierbare
-Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`), `--no-color`
-(`ROWHAMMER_NO_COLOR`), `-h/--help`. Tastenbelegung zusaetzlich per
-`ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
+Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
+Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
+"Rows" ist die gewichtete Reihenwertung (1/5/10), die in Phase 3 den
+Weltwunder-Fortschritt speist, "Lines" zaehlt physische Reihen und
+treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
+fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
+`--no-color` (`ROWHAMMER_NO_COLOR`), `-h/--help`. Tastenbelegung
+zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 
 ### 4.3 Game-Loop, Input, Rendering
 
@@ -241,13 +249,15 @@ mitzupflegen.
 - [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
       atomar geschrieben, Praezedenz Standard < Config < Env < CLI
 
-### Phase 2 - The-New-Tetris-Mechaniken
+### Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
 
-- [ ] Stein-Instanz-Tracking (IDs, "zerschnitten"-Markierung)
-- [ ] 4x4-Quadrat-Erkennung nach jedem Lock
-- [ ] Gold-/Silber-Darstellung und Bonus-Reihenwertung (1/5/10, justierbar)
-- [ ] Vorschau (3 Teile) und Hold-Funktion
-- [ ] Level-/Geschwindigkeitskurve, Punktesystem
+- [x] Stein-Instanz-Tracking (IDs, "zerschnitten"-Markierung)
+- [x] 4x4-Quadrat-Erkennung nach jedem Lock
+- [x] Gold-/Silber-Darstellung und Bonus-Reihenwertung (1/5/10, justierbar
+      in `lib/squares.sh`)
+- [x] Vorschau (3 Teile) und Hold-Funktion (Taste `c`, konfigurierbar)
+- [x] Level-/Geschwindigkeitskurve (Tabelle `LEVEL_SPEEDS`), Punktesystem
+      (Reihen skalieren mit Level, Quadrat-Bonus 2000/1000)
 - [ ] Bonus-Werte gegen das Original verifizieren, Playtesting
 
 ### Phase 3 - Weltwunder
