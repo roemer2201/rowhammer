@@ -289,9 +289,14 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 - [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
       Tastenbelegung ist seit 0.2.0 umgesetzt)
+- [ ] Standard-Tastenbelegung aendern (siehe 3.1): `w`/Pfeil hoch **und**
+      Leertaste fuer Hard-Drop, `e` fuer Rotation im Uhrzeigersinn,
+      `c`/`2` fuer Hold/Tauschen
 - [ ] Highscore-Liste
 - [ ] 256-Farben-Modus, Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
+- [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
+      naechste drei Steine oben rechts, Hold-Stein links
 - [ ] README mit Screenshots/Asciinema aktualisieren
 
 ### Phase 5 - Multiplayer (spaeter)
