@@ -8,23 +8,28 @@
 #   Four instances of the same type form a gold (mono) square, mixed
 #   types a silver (multi) square. Square cells are marked in BOARD_SQ
 #   and make cleared rows worth bonus row credit (see ROWS_* below).
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-18)
+# Version: 0.2.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/squares.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/squares.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 
-# Row credit values: how many rows a cleared line is worth for the wonder
-# progress counter. Start values from CLAUDE.md 3.2 - deliberately kept
-# as plain variables so playtesting can tune them easily. Gold beats
-# silver beats normal when a row runs through several square types.
+# Row credit values for the wonder progress counter, following the
+# original's verified rules (CLAUDE.md 3.2): every cleared row counts
+# ROWS_NORMAL as its base, plus ROWS_GOLD per gold square and
+# ROWS_SILVER per silver square the row runs through (additive when a
+# row crosses several squares). Clearing four rows at once (a Tetris)
+# adds ROWS_TETRIS once on top. Famous maximum: a Tetris through two
+# complete gold squares = 4 + 1 + 8 x 10 = 85. Kept as plain variables
+# so playtesting can tune them easily.
 ROWS_NORMAL=1
 ROWS_SILVER=5
 ROWS_GOLD=10
+ROWS_TETRIS=1
 
 # Result of the last successful detect_square call: "G" or "S".
 SQUARE_RESULT=""

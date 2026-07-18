@@ -67,15 +67,26 @@ Die fuer uns relevanten Merkmale des Originals:
   - Ja, gemischte Sorten -> **Silber-Quadrat**.
 - Quadrate werden farblich hervorgehoben (Gold/Gelb bzw. Silber/Weiss) und
   verhalten sich physikalisch wie normale Bloecke.
-- **Reihenwertung beim Abbau** (Startwerte, spielbar abstimmbar):
-  - normale Reihe: **1** Reihe Baufortschritt
-  - Reihe durch ein Silber-Quadrat: **5** Reihen
-  - Reihe durch ein Gold-Quadrat: **10** Reihen
-  - TODO: Werte gegen das Original verifizieren und per Playtesting justieren.
-- Umgesetzt seit 0.3.0 (`lib/squares.sh`): Werte liegen justierbar in
-  `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`; verlaeuft eine Reihe durch
-  mehrere Quadrat-Typen, gilt Gold vor Silber. Ein angeschnittenes
-  Quadrat behaelt seine Gold-/Silber-Zellen und liefert weiter Bonus.
+- **Reihenwertung beim Abbau** (per Recherche gegen das Original
+  verifiziert): keine Multiplikation, sondern feste Bonuszeilen pro
+  Quadrat in der geraeumten Reihe:
+  - Basis: jede abgebaute Reihe zaehlt **1** Reihe Baufortschritt
+  - je **Silber-Quadrat** in der Reihe: **+5** Bonuszeilen
+  - je **Gold-Quadrat** in der Reihe: **+10** Bonuszeilen
+  - Boni sind **additiv** bei mehreren Quadraten in einer Reihe
+  - **Tetris** (4 Reihen auf einmal): **+1** Bonuszeile zusaetzlich
+  - Beispiele: Tetris durch ein komplettes Gold-Quadrat = 4 + 1 + 4x10 =
+    **45**; durch ein Silber-Quadrat = **25**; durch zwei komplette
+    Gold-Quadrate = 4 + 1 + 8x10 = die beruehmten **85**.
+- Umgesetzt seit 0.4.0 (`lib/squares.sh`, `lib/board.sh`): Werte
+  justierbar in `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`.
+  Die Quadrat-Anzahl je Reihe ergibt sich aus Gold-/Silber-Zellen / 4
+  (Reihenabbau entfernt nur ganze Zeilen, Quadrate bleiben horizontal
+  immer 4 Zellen breit). Ein angeschnittenes Quadrat behaelt seine
+  Gold-/Silber-Zellen und liefert weiter Bonus.
+- Original-Regel bewusst noch nicht umgesetzt: Ein "Spin Move" beim
+  Abraeumen laesst Gold-/Silber-Bloecke vorher in normale Einzelbloecke
+  zerfallen (siehe Offene Punkte).
 
 ### 3.3 Weltwunder-Aufbau
 
@@ -118,7 +129,7 @@ Ein Hauptskript, Logik in sourcebaren Modulen:
 
 ```
 rowhammer/
-  tetris.sh            # Hauptskript: Argumente, Init, Game-Loop
+  rowhammer.sh         # Hauptskript: Argumente, Init, Game-Loop
   lib/
     board.sh           # Spielfeld-Zustand, Kollision, Reihenabbau
     pieces.sh          # Tetromino-Definitionen und Rotationstabellen
@@ -135,7 +146,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.3.0): `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+Stand (Version 0.3.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
 `lib/squares.sh`, `lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und
 `lib/config.sh` existieren. `wonders.sh`, `save.sh` und `assets/` folgen
 in Phase 3. Die Anwendung startet in einem Menue (Einzelspieler /
@@ -235,7 +246,7 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 ### Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
-- [x] Projektgeruest anlegen (`tetris.sh`, `lib/`-Module, Header nach Konvention)
+- [x] Projektgeruest anlegen (`rowhammer.sh`, `lib/`-Module, Header nach Konvention)
 - [x] Terminal-Handling: Raw-Mode, alternativer Screen-Buffer, sauberes
       Aufraeumen per `trap`
 - [x] Nicht-blockierender Input inkl. Pfeiltasten-Escape-Sequenzen
@@ -263,7 +274,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [x] Vorschau (3 Teile) und Hold-Funktion (Taste `c`, konfigurierbar)
 - [x] Level-/Geschwindigkeitskurve (Tabelle `LEVEL_SPEEDS`), Punktesystem
       (Reihen skalieren mit Level, Quadrat-Bonus 2000/1000)
-- [ ] Bonus-Werte gegen das Original verifizieren, Playtesting
+- [x] Bonus-Werte gegen das Original verifiziert (Recherche, siehe 3.2:
+      additiv je Quadrat, Tetris +1) und in 0.4.0 umgesetzt
 
 ### Phase 3 - Weltwunder
 
@@ -291,9 +303,13 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 ## 8. Offene Punkte
 
-- Exakte Bonus-Werte fuer Gold/Silber-Reihen im Original recherchieren
-  (aktuell 1/5/10 als Startwerte, siehe 3.2; Quadrat-Bonuspunkte
-  2000/1000 ebenfalls unverifiziert).
+- Bonus-Reihenwertung ist verifiziert und umgesetzt (siehe 3.2). Noch
+  offen: die Score-Punkte fuer die Quadrat-Bildung (aktuell 2000/1000)
+  sind weiterhin unverifiziert.
+- "Spin Move"-Regel des Originals umsetzen? Beim Abraeumen mit einem
+  Spin zerfallen Gold-/Silber-Bloecke vorher in normale Einzelbloecke
+  und verlieren ihren Bonus. Erfordert Erkennung, ob der letzte Zug ein
+  Spin war - Aufwand/Nutzen vor Umsetzung abwaegen.
 - Endgueltige Weltwunder-Liste und Anzahl der Baustufen je Wunder
   (vor Phase 3 zu klaeren).
 - Mindest-Terminalgroesse: seit 0.1.0 als 48x24 implementiert (Pruefung

@@ -8,13 +8,13 @@
 #   settings with key bindings and player name). Menu labels are German
 #   on purpose (requested UI language); code and comments stay English
 #   per the script conventions.
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-07-18)
+# Version: 0.2.1  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/menu.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/menu.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 

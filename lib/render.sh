@@ -8,13 +8,13 @@
 #   piece preview, hold slot and key hints) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
 #   terminal flicker-free.
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-07-18)
+# Version: 0.3.1  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/render.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/render.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 

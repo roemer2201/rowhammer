@@ -12,13 +12,13 @@
 #   (INSTANCE_CUT), which disqualifies them from forming squares, and
 #   report weighted row credit based on the ROWS_* values from
 #   lib/squares.sh. The two top rows are hidden spawn rows.
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-07-18)
+# Version: 0.3.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/board.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/board.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 
@@ -35,7 +35,7 @@ BOARD_SQ=()
 # Per-instance state, keyed by instance id. Cut instances were damaged by
 # a line clear; squared instances are consumed by a formed square. Both
 # are reset per round (game_reset). The id counter itself lives in
-# tetris.sh (NEXT_INSTANCE_ID) with the other game state globals.
+# rowhammer.sh (NEXT_INSTANCE_ID) with the other game state globals.
 declare -A INSTANCE_CUT=()
 declare -A INSTANCE_SQUARED=()
 
@@ -98,9 +98,13 @@ lock_piece() {
 # clear_lines
 # Remove every full row, let the rows above fall down and refill the top
 # with empty rows. Reports two globals: CLEARED (physical rows removed,
-# drives the level curve) and CLEARED_CREDIT (weighted row credit: a row
-# through a gold square is worth ROWS_GOLD, through a silver square
-# ROWS_SILVER, otherwise ROWS_NORMAL; feeds the wonder progress).
+# drives the level curve) and CLEARED_CREDIT (weighted row credit that
+# feeds the wonder progress). Credit per the original's verified rules:
+# every row counts ROWS_NORMAL, plus ROWS_GOLD per gold square and
+# ROWS_SILVER per silver square the row runs through (additive); a
+# Tetris (4 rows at once) adds ROWS_TETRIS once. The number of squares
+# in a row is gold/silver cell count divided by 4: line clears only
+# remove whole rows, so a square always keeps its full 4-cell width.
 # Every instance a cleared row runs through is marked cut; the surviving
 # cells keep their id and square marking (a trimmed gold/silver square
 # keeps paying bonus credit, like in The New Tetris).
@@ -108,7 +112,7 @@ clear_lines() {
     CLEARED=0
     CLEARED_CREDIT=0
     local -a nb nid nsq
-    local y x idx write_y row_full has_gold has_silver id credit
+    local y x idx write_y row_full gold_cells silver_cells id credit
     write_y=$(( BOARD_H - 1 ))
     for (( y = BOARD_H - 1; y >= 0; y-- )); do
         row_full=1
@@ -120,13 +124,13 @@ clear_lines() {
         done
         if [ "${row_full}" -eq 1 ]; then
             CLEARED=$(( CLEARED + 1 ))
-            has_gold=0
-            has_silver=0
+            gold_cells=0
+            silver_cells=0
             for (( x = 0; x < BOARD_W; x++ )); do
                 idx=$(( y * BOARD_W + x ))
                 case "${BOARD_SQ[idx]}" in
-                    G) has_gold=1 ;;
-                    S) has_silver=1 ;;
+                    G) gold_cells=$(( gold_cells + 1 )) ;;
+                    S) silver_cells=$(( silver_cells + 1 )) ;;
                 esac
                 # The cleared row cuts every instance it runs through.
                 id="${BOARD_ID[idx]}"
@@ -134,12 +138,9 @@ clear_lines() {
                     INSTANCE_CUT["${id}"]=1
                 fi
             done
-            credit="${ROWS_NORMAL}"
-            if [ "${has_gold}" -eq 1 ]; then
-                credit="${ROWS_GOLD}"
-            elif [ "${has_silver}" -eq 1 ]; then
-                credit="${ROWS_SILVER}"
-            fi
+            credit=$(( ROWS_NORMAL \
+                + ROWS_GOLD * (gold_cells / 4) \
+                + ROWS_SILVER * (silver_cells / 4) ))
             CLEARED_CREDIT=$(( CLEARED_CREDIT + credit ))
         else
             for (( x = 0; x < BOARD_W; x++ )); do
@@ -162,4 +163,9 @@ clear_lines() {
     BOARD=("${nb[@]}")
     BOARD_ID=("${nid[@]}")
     BOARD_SQ=("${nsq[@]}")
+    # Tetris bonus: clearing four rows in one move adds one extra row of
+    # credit, per the original's rules.
+    if [ "${CLEARED}" -eq 4 ]; then
+        CLEARED_CREDIT=$(( CLEARED_CREDIT + ROWS_TETRIS ))
+    fi
 }

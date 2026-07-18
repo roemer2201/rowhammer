@@ -7,13 +7,13 @@
 #   four rotation states, per-piece ANSI colors, the 7-bag randomizer
 #   (every piece type appears exactly once per bag of seven) and the
 #   upcoming-piece queue that feeds the HUD preview.
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-07-18)
+# Version: 0.2.1  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/pieces.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/pieces.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 

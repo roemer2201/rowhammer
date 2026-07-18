@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# tetris.sh
+# rowhammer.sh
 #
 # Description:
 #   "rowhammer", a terminal Tetris game written in pure bash, modeled
@@ -30,9 +30,9 @@
 #   7. Restore the terminal on exit.
 #
 # Usage:
-#   tetris.sh [--seed N] [--name NAME] [--no-color] [-h|--help]
+#   rowhammer.sh [--seed N] [--name NAME] [--no-color] [-h|--help]
 #
-# Version: 0.3.0  (2026-07-18)
+# Version: 0.4.0  (2026-07-18)
 
 set -euo pipefail
 
@@ -64,7 +64,7 @@ CLI_PLAYER_NAME=""
 # Print usage information.
 usage() {
     cat <<'EOF'
-Usage: tetris.sh [OPTIONS]
+Usage: rowhammer.sh [OPTIONS]
 
 Terminal Tetris of the rowhammer project. Starts with a menu:
 singleplayer, multiplayer (placeholder) and settings.
@@ -92,8 +92,10 @@ Controls (defaults; rebindable in the settings menu):
 
 Square mechanics (The New Tetris): fill a 4x4 area with exactly four
 complete, uncut pieces to form a square - gold if all four are the same
-type, silver if mixed. Rows cleared through a square are worth bonus row
-credit (gold 10, silver 5, normal 1), shown as "Rows" in the HUD.
+type, silver if mixed. Every cleared row is worth 1 row of credit, plus
+10 per gold square and 5 per silver square it runs through (additive);
+clearing 4 rows at once (a Tetris) adds 1 extra. The credit is shown as
+"Rows" in the HUD and will build the wonders in Phase 3.
 
 Settings (player name, key bindings) are stored in a config file, by
 default ~/.config/rowhammer.conf (organization-based lookup, see the
@@ -107,7 +109,7 @@ Precedence for every option: command-line argument > environment variable
 > config file > built-in default.
 
 Example:
-  tetris.sh --seed 42 --name Alice --no-color
+  rowhammer.sh --seed 42 --name Alice --no-color
 EOF
 }
 
