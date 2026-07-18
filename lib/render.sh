@@ -4,17 +4,17 @@
 #
 # Description:
 #   Screen rendering for rowhammer. Builds every frame (board, active
-#   piece, sidebar with score and controls) into one string and prints it
+#   piece, gold/silver squares, sidebar with score, weighted row credit,
+#   piece preview, hold slot and key hints) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
-#   terminal flicker-free. The sidebar shows the player name and the
-#   currently configured key bindings.
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   terminal flicker-free.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-07-17)
+# Version: 0.3.1  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/render.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/render.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 
@@ -22,13 +22,43 @@ fi
 # board pass below can overlay the falling piece without mutating BOARD.
 declare -A OVERLAY=()
 
+# render_mini TYPE ROW
+# Build one display row (4 cells = 8 chars wide) of a piece preview into
+# the global RENDER_MINI, using spawn rotation 0. Rows 0 and 1 cover
+# every piece type (the I piece sits in row 1 of its box). An empty TYPE
+# yields blanks, so the hold slot can render before anything is held.
+render_mini() {
+    local type="${1}" row="${2}"
+    local shape cx
+    RENDER_MINI=""
+    if [ -z "${type}" ]; then
+        RENDER_MINI="        "
+        return 0
+    fi
+    shape=" ${PIECE_SHAPE["${type}0"]} "
+    for (( cx = 0; cx < 4; cx++ )); do
+        if [[ "${shape}" == *" ${cx},${row} "* ]]; then
+            if [ "${USE_COLOR}" -eq 1 ]; then
+                RENDER_MINI+=$'\e[7;'"${PIECE_COLOR[${type}]}m  "$'\e[0m'
+            else
+                RENDER_MINI+="[]"
+            fi
+        else
+            RENDER_MINI+="  "
+        fi
+    done
+    return 0
+}
+
 # draw_frame
-# Render the complete screen. Reads the game state globals (BOARD, CUR_*,
-# SCORE, CLEARED_TOTAL, LEVEL, PAUSED, GAME_OVER) and the USE_COLOR flag.
-# Every line ends with ESC[K so shorter new content fully replaces longer
-# old content (for example when the PAUSED marker disappears).
+# Render the complete screen. Reads the game state globals (BOARD,
+# BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, SCORE, CLEARED_TOTAL, ROW_CREDIT,
+# LEVEL, GOLD_COUNT, SILVER_COUNT, PAUSED, GAME_OVER) and the USE_COLOR
+# flag. Every line ends with ESC[K so shorter new content fully replaces
+# longer old content; the frame ends with ESC[0J to wipe leftovers from
+# taller menu screens.
 draw_frame() {
-    local frame="" line cell color y x
+    local frame="" line cell sq idx y x
     local border="+--------------------+"
 
     # Overlay the active piece; on the game over screen the piece that
@@ -45,27 +75,42 @@ draw_frame() {
         done
     fi
 
-    # Sidebar text, one entry per visible board row. The control hints
-    # reflect the configured key bindings from the settings menu.
+    # Sidebar text, one entry per visible board row. "Lines" counts
+    # physical rows (drives the level), "Rows" is the weighted credit
+    # (gold/silver bonus) that will build the wonders in Phase 3.
     local -a side=()
     side[0]="Player: ${PLAYER_NAME}"
     side[1]="Score: ${SCORE}"
     side[2]="Lines: ${CLEARED_TOTAL}"
-    side[3]="Level: ${LEVEL}"
-    side[5]="Controls"
-    side[6]="  ${KEY_LEFT}/${KEY_RIGHT}, arrows  move"
-    side[7]="  ${KEY_ROT_CW}/up   rotate cw"
-    side[8]="  ${KEY_ROT_CCW}      rotate ccw"
-    side[9]="  ${KEY_SOFT}/down soft drop"
-    side[10]="  ${KEY_HARD} hard drop"
-    side[11]="  ${KEY_PAUSE}      pause"
-    side[12]="  ${KEY_QUIT}/ESC  menu"
+    side[3]="Rows:  ${ROW_CREDIT}"
+    side[4]="Level: ${LEVEL}"
+    side[5]="Gold: ${GOLD_COUNT}   Silver: ${SILVER_COUNT}"
+    side[7]="Next        Hold"
+    render_mini "${QUEUE[0]:-}" 0
+    local n1a="${RENDER_MINI}"
+    render_mini "${QUEUE[0]:-}" 1
+    local n1b="${RENDER_MINI}"
+    render_mini "${HOLD_TYPE}" 0
+    local h0="${RENDER_MINI}"
+    render_mini "${HOLD_TYPE}" 1
+    local h1="${RENDER_MINI}"
+    side[8]="${n1a}    ${h0}"
+    side[9]="${n1b}    ${h1}"
+    render_mini "${QUEUE[1]:-}" 0
+    side[11]="${RENDER_MINI}"
+    render_mini "${QUEUE[1]:-}" 1
+    side[12]="${RENDER_MINI}"
+    render_mini "${QUEUE[2]:-}" 0
+    side[14]="${RENDER_MINI}"
+    render_mini "${QUEUE[2]:-}" 1
+    side[15]="${RENDER_MINI}"
+    side[17]="${KEY_HOLD} hold   ${KEY_PAUSE} pause   ${KEY_QUIT}/ESC menu"
     if [ "${PAUSED}" -eq 1 ]; then
-        side[14]="** PAUSED **"
+        side[19]="** PAUSED **"
     fi
     if [ "${GAME_OVER}" -eq 1 ]; then
-        side[14]="** GAME OVER **"
-        side[15]="r = restart, ${KEY_QUIT} = menu"
+        side[18]="** GAME OVER **"
+        side[19]="r = restart, ${KEY_QUIT} = menu"
     fi
 
     frame+=$'\e[H'
@@ -75,17 +120,41 @@ draw_frame() {
         line="|"
         for (( x = 0; x < BOARD_W; x++ )); do
             cell="${OVERLAY["${x},${y}"]:-}"
-            if [ -z "${cell}" ]; then
-                cell="${BOARD[y * BOARD_W + x]}"
-            fi
-            if [ "${cell}" = "${EMPTY_CELL}" ]; then
-                line+="  "
-            elif [ "${USE_COLOR}" -eq 1 ]; then
-                # Reverse video with the piece color paints a solid block.
-                color="${PIECE_COLOR[${cell}]}"
-                line+=$'\e[7;'"${color}m  "$'\e[0m'
+            if [ -n "${cell}" ]; then
+                # Active piece cell.
+                if [ "${USE_COLOR}" -eq 1 ]; then
+                    line+=$'\e[7;'"${PIECE_COLOR[${cell}]}m  "$'\e[0m'
+                else
+                    line+="[]"
+                fi
             else
-                line+="[]"
+                idx=$(( y * BOARD_W + x ))
+                cell="${BOARD[idx]}"
+                if [ "${cell}" = "${EMPTY_CELL}" ]; then
+                    line+="  "
+                else
+                    # Settled cell: gold/silver squares get their own
+                    # look so they stand out from normal pieces (the "##"
+                    # glyph also distinguishes gold from the yellow O).
+                    sq="${BOARD_SQ[idx]}"
+                    if [ "${sq}" = "G" ]; then
+                        if [ "${USE_COLOR}" -eq 1 ]; then
+                            line+=$'\e[30;43m##\e[0m'
+                        else
+                            line+="GG"
+                        fi
+                    elif [ "${sq}" = "S" ]; then
+                        if [ "${USE_COLOR}" -eq 1 ]; then
+                            line+=$'\e[30;47m##\e[0m'
+                        else
+                            line+="SS"
+                        fi
+                    elif [ "${USE_COLOR}" -eq 1 ]; then
+                        line+=$'\e[7;'"${PIECE_COLOR[${cell}]}m  "$'\e[0m'
+                    else
+                        line+="[]"
+                    fi
+                fi
             fi
         done
         line+="|  ${side[y - HIDDEN_ROWS]:-}"

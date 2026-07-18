@@ -14,17 +14,22 @@ gleichnamigen Hardware-Angriff hat das Spiel nichts zu tun.
 
 ## Status
 
-**Phase 1 (spielbarer Kern) plus Startmenue sind umgesetzt.** Klassisches
-Tetris laeuft: Spielfeld, 7-Bag-Randomizer, Gravitation mit Levelkurve,
-Reihenabbau, Soft-/Hard-Drop, Pause und Game Over mit Neustart. Die
-Anwendung startet in einem Menue mit Einzelspieler, Mehrspieler
-(Platzhalter) und Einstellungen. Das vollstaendige Konzept und die
-Roadmap stehen in [CLAUDE.md](CLAUDE.md).
+**Phasen 1 und 2 sind umgesetzt** (spielbarer Kern, Startmenue und die
+The-New-Tetris-Mechaniken): Spielfeld, 7-Bag-Randomizer mit Vorschau auf
+3 Teile, Hold, Gravitation mit Levelkurve, Reihenabbau, Soft-/Hard-Drop,
+Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
+4x4-Feld aus genau vier unversehrten Tetrominos baut, erhaelt ein Gold-
+(sortenrein) oder Silber-Quadrat (gemischt); jede abgebaute Reihe bringt
++10 Bonuszeilen je Gold- und +5 je Silber-Quadrat (ein Tetris +1 extra)
+fuer den "Rows"-Zaehler, der ab Phase 3 das Weltwunder baut. Die
+Anwendung startet in einem Menue mit Einzelspieler,
+Mehrspieler (Platzhalter) und Einstellungen. Das vollstaendige Konzept
+und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
 ## Spielen
 
 ```
-./tetris.sh
+./rowhammer.sh
 ```
 
 Das Startmenue bietet:
@@ -54,7 +59,13 @@ CLI > Umgebungsvariable > Konfigurationsdatei > Standardwert.
 Umgesetzt:
 
 - Klassisches 10x20-Spielfeld, 7 Tetrominos, 7-Bag-Randomizer
+- Vorschau auf die naechsten 3 Teile und Hold (einmal pro Zug)
+- **Quadrat-System:** Gold- (sortenrein) und Silber-Quadrate (gemischt)
+  aus je vier unversehrten Teilen; jede geraeumte Reihe zaehlt 1 plus
+  +10 je Gold- und +5 je Silber-Quadrat in der Reihe (additiv), ein
+  Tetris bringt +1 extra ("Rows" im HUD) - bis zu 85 in einem Zug
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
+- Levelkurve (schneller je 10 Reihen) und Punktesystem
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
   (Double-Buffering), sauberes Terminal-Restore beim Beenden
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter und Einstellungen
@@ -63,8 +74,6 @@ Umgesetzt:
 
 Geplant:
 
-- Vorschau auf die naechsten Teile, Hold
-- **Quadrat-System:** Gold- und Silber-Quadrate mit Bonus-Reihenwertung
 - **Weltwunder-Modus:** persistenter Reihenzaehler baut nacheinander
   Weltwunder in mehreren Baustufen auf (Fortschritt wird gespeichert)
 - Spaeter: **Multiplayer** ueber das Netzwerk mit Garbage-Reihen
@@ -87,7 +96,7 @@ aenderbar, die Pfeiltasten bleiben immer aktiv:
 | `q`               | Rotation gegen Uhrzeigersinn|
 | `s` / Pfeil runter| Soft-Drop                   |
 | Leertaste         | Hard-Drop                   |
-| `c`               | Hold (ab Phase 2)           |
+| `c`               | Hold / Tauschen             |
 | `p`               | Pause                       |
 | `Esc` / `x`       | Zurueck ins Menue           |
 | `r`               | Neustart (im Game-Over-Bild)|

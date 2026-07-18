@@ -7,13 +7,13 @@
 #   to the alternate screen buffer, hides the cursor and provides a
 #   single-key reader that understands the arrow-key escape sequences.
 #   Enter is reported as ENTER so the menu system can use it as "select".
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-07-17)
+# Version: 0.2.1  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/input.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/input.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 

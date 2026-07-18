@@ -10,13 +10,13 @@
 #   Saving from the settings menu writes atomically (temp file + mv) to
 #   the user-scope file. Values are written single-quoted and validated
 #   after loading, because the file is sourced on startup.
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.2.1  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/config.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/config.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 
@@ -25,9 +25,10 @@ CONFIG_NAME="rowhammer.conf"
 
 # The configurable key binding variables. Shared by the settings menu
 # (rebinding), validation and config_save, so new bindings only need to
-# be added here and in the defaults/env blocks of tetris.sh.
+# be added here, in KEY_LABELS (lib/menu.sh) and in the defaults/env
+# blocks of rowhammer.sh.
 KEY_ACTIONS=(KEY_LEFT KEY_RIGHT KEY_ROT_CW KEY_ROT_CCW
-             KEY_SOFT KEY_HARD KEY_PAUSE KEY_QUIT)
+             KEY_SOFT KEY_HARD KEY_PAUSE KEY_QUIT KEY_HOLD)
 
 # Resolve ORGANIZATION from /etc/org.conf. Sourced in a subshell with
 # errexit disabled there, so a missing file or a faulty line cannot abort
@@ -42,7 +43,7 @@ fi
 # Source the first matching config file per scope: system scope (/etc)
 # first, then user scope (${HOME}/.config) which overrides it. Config
 # values override built-in defaults but are themselves overridden by
-# environment variables and CLI arguments (applied later in tetris.sh).
+# environment variables and CLI arguments (applied later in rowhammer.sh).
 config_load() {
     local -a sys_files=() user_files=()
     [ -n "${ORGANIZATION}" ] && sys_files+=("/etc/${ORGANIZATION}/${CONFIG_NAME}")

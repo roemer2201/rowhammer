@@ -67,11 +67,26 @@ Die fuer uns relevanten Merkmale des Originals:
   - Ja, gemischte Sorten -> **Silber-Quadrat**.
 - Quadrate werden farblich hervorgehoben (Gold/Gelb bzw. Silber/Weiss) und
   verhalten sich physikalisch wie normale Bloecke.
-- **Reihenwertung beim Abbau** (Startwerte, spielbar abstimmbar):
-  - normale Reihe: **1** Reihe Baufortschritt
-  - Reihe durch ein Silber-Quadrat: **5** Reihen
-  - Reihe durch ein Gold-Quadrat: **10** Reihen
-  - TODO: Werte gegen das Original verifizieren und per Playtesting justieren.
+- **Reihenwertung beim Abbau** (per Recherche gegen das Original
+  verifiziert): keine Multiplikation, sondern feste Bonuszeilen pro
+  Quadrat in der geraeumten Reihe:
+  - Basis: jede abgebaute Reihe zaehlt **1** Reihe Baufortschritt
+  - je **Silber-Quadrat** in der Reihe: **+5** Bonuszeilen
+  - je **Gold-Quadrat** in der Reihe: **+10** Bonuszeilen
+  - Boni sind **additiv** bei mehreren Quadraten in einer Reihe
+  - **Tetris** (4 Reihen auf einmal): **+1** Bonuszeile zusaetzlich
+  - Beispiele: Tetris durch ein komplettes Gold-Quadrat = 4 + 1 + 4x10 =
+    **45**; durch ein Silber-Quadrat = **25**; durch zwei komplette
+    Gold-Quadrate = 4 + 1 + 8x10 = die beruehmten **85**.
+- Umgesetzt seit 0.4.0 (`lib/squares.sh`, `lib/board.sh`): Werte
+  justierbar in `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`.
+  Die Quadrat-Anzahl je Reihe ergibt sich aus Gold-/Silber-Zellen / 4
+  (Reihenabbau entfernt nur ganze Zeilen, Quadrate bleiben horizontal
+  immer 4 Zellen breit). Ein angeschnittenes Quadrat behaelt seine
+  Gold-/Silber-Zellen und liefert weiter Bonus.
+- Original-Regel bewusst noch nicht umgesetzt: Ein "Spin Move" beim
+  Abraeumen laesst Gold-/Silber-Bloecke vorher in normale Einzelbloecke
+  zerfallen (siehe Offene Punkte).
 
 ### 3.3 Weltwunder-Aufbau
 
@@ -114,7 +129,7 @@ Ein Hauptskript, Logik in sourcebaren Modulen:
 
 ```
 rowhammer/
-  tetris.sh            # Hauptskript: Argumente, Init, Game-Loop
+  rowhammer.sh         # Hauptskript: Argumente, Init, Game-Loop
   lib/
     board.sh           # Spielfeld-Zustand, Kollision, Reihenabbau
     pieces.sh          # Tetromino-Definitionen und Rotationstabellen
@@ -131,16 +146,20 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.2.0): `tetris.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
-`lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und `lib/config.sh`
-existieren. `squares.sh`, `wonders.sh`, `save.sh` und `assets/` folgen in
-Phase 2/3. Die Anwendung startet in einem Menue (Einzelspieler /
+Stand (Version 0.3.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+`lib/squares.sh`, `lib/input.sh`, `lib/render.sh`, `lib/menu.sh` und
+`lib/config.sh` existieren. `wonders.sh`, `save.sh` und `assets/` folgen
+in Phase 3. Die Anwendung startet in einem Menue (Einzelspieler /
 Mehrspieler-Platzhalter / Einstellungen / Beenden); die Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
-CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`) fuer reproduzierbare
-Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`), `--no-color`
-(`ROWHAMMER_NO_COLOR`), `-h/--help`. Tastenbelegung zusaetzlich per
-`ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
+Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
+Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
+"Rows" ist die gewichtete Reihenwertung (1/5/10), die in Phase 3 den
+Weltwunder-Fortschritt speist, "Lines" zaehlt physische Reihen und
+treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
+fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
+`--no-color` (`ROWHAMMER_NO_COLOR`), `-h/--help`. Tastenbelegung
+zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 
 ### 4.3 Game-Loop, Input, Rendering
 
@@ -218,11 +237,16 @@ hier nachrangig, die uebrigen Regeln gelten uneingeschraenkt.
 Diese CLAUDE.md (Konzept, Roadmap) ist bei jeder inhaltlichen Aenderung
 mitzupflegen.
 
+Arbeitsregel: **Keine Abwaertskompatibilitaet noetig.** Das Projekt wird
+sequenziell entwickelt und war nie anderswo installiert; Migrationslogik
+fuer alte Config-/Savegame-Formate oder alte Schnittstellen ist unnoetig
+und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
+
 ## 7. Roadmap / Todo-Liste
 
 ### Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
-- [x] Projektgeruest anlegen (`tetris.sh`, `lib/`-Module, Header nach Konvention)
+- [x] Projektgeruest anlegen (`rowhammer.sh`, `lib/`-Module, Header nach Konvention)
 - [x] Terminal-Handling: Raw-Mode, alternativer Screen-Buffer, sauberes
       Aufraeumen per `trap`
 - [x] Nicht-blockierender Input inkl. Pfeiltasten-Escape-Sequenzen
@@ -241,14 +265,17 @@ mitzupflegen.
 - [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
       atomar geschrieben, Praezedenz Standard < Config < Env < CLI
 
-### Phase 2 - The-New-Tetris-Mechaniken
+### Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
 
-- [ ] Stein-Instanz-Tracking (IDs, "zerschnitten"-Markierung)
-- [ ] 4x4-Quadrat-Erkennung nach jedem Lock
-- [ ] Gold-/Silber-Darstellung und Bonus-Reihenwertung (1/5/10, justierbar)
-- [ ] Vorschau (3 Teile) und Hold-Funktion
-- [ ] Level-/Geschwindigkeitskurve, Punktesystem
-- [ ] Bonus-Werte gegen das Original verifizieren, Playtesting
+- [x] Stein-Instanz-Tracking (IDs, "zerschnitten"-Markierung)
+- [x] 4x4-Quadrat-Erkennung nach jedem Lock
+- [x] Gold-/Silber-Darstellung und Bonus-Reihenwertung (1/5/10, justierbar
+      in `lib/squares.sh`)
+- [x] Vorschau (3 Teile) und Hold-Funktion (Taste `c`, konfigurierbar)
+- [x] Level-/Geschwindigkeitskurve (Tabelle `LEVEL_SPEEDS`), Punktesystem
+      (Reihen skalieren mit Level, Quadrat-Bonus 2000/1000)
+- [x] Bonus-Werte gegen das Original verifiziert (Recherche, siehe 3.2:
+      additiv je Quadrat, Tetris +1) und in 0.4.0 umgesetzt
 
 ### Phase 3 - Weltwunder
 
@@ -276,8 +303,20 @@ mitzupflegen.
 
 ## 8. Offene Punkte
 
-- Exakte Bonus-Werte fuer Gold/Silber-Reihen im Original recherchieren.
-- Endgueltige Weltwunder-Liste und Anzahl der Baustufen je Wunder.
-- Mindest-Terminalgroesse festlegen (Vorschlag: 80x24) und Verhalten bei
-  kleineren Terminals.
-- Punktesystem im Detail (Kombos, Back-to-Back?) - erst nach Phase 1 relevant.
+- Bonus-Reihenwertung ist verifiziert und umgesetzt (siehe 3.2). Noch
+  offen: die Score-Punkte fuer die Quadrat-Bildung (aktuell 2000/1000)
+  sind weiterhin unverifiziert.
+- "Spin Move"-Regel des Originals umsetzen? Beim Abraeumen mit einem
+  Spin zerfallen Gold-/Silber-Bloecke vorher in normale Einzelbloecke
+  und verlieren ihren Bonus. Erfordert Erkennung, ob der letzte Zug ein
+  Spin war - Aufwand/Nutzen vor Umsetzung abwaegen.
+- Endgueltige Weltwunder-Liste und Anzahl der Baustufen je Wunder
+  (vor Phase 3 zu klaeren).
+- Mindest-Terminalgroesse: seit 0.1.0 als 48x24 implementiert (Pruefung
+  nur beim Start). Offen: Verhalten bei Groessenaenderung waehrend des
+  Spiels (SIGWINCH) - gehoert zu Phase 4 "Anpassung an Terminalgroesse".
+- Punktesystem im Detail (Kombos, Back-to-Back?) - Feinschliff nach dem
+  Playtesting.
+- UI-Sprache: Menues sind Deutsch (ASCII), In-Game-HUD und --help
+  Englisch (Konvention). Entscheiden, ob das so bleibt oder das UI
+  einheitlich einsprachig werden soll.

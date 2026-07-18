@@ -4,15 +4,16 @@
 #
 # Description:
 #   Tetromino definitions for rowhammer: the seven piece types with their
-#   four rotation states, per-piece ANSI colors and the 7-bag randomizer
-#   (every piece type appears exactly once per bag of seven).
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   four rotation states, per-piece ANSI colors, the 7-bag randomizer
+#   (every piece type appears exactly once per bag of seven) and the
+#   upcoming-piece queue that feeds the HUD preview.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.2.1  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/pieces.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/pieces.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 
@@ -62,13 +63,29 @@ bag_refill() {
     done
 }
 
-# bag_next: pop the next piece type into the global NEXT_TYPE, refilling
-# the bag when it runs empty. The result is passed via a global instead of
+# Queue of upcoming pieces drawn from the bag. It always holds at least
+# PREVIEW_COUNT + 1 entries so the HUD can show three previews plus the
+# piece that spawns next.
+QUEUE=()
+PREVIEW_COUNT=3
+
+# queue_fill: top the queue up from the bag (refilling the bag as needed).
+queue_fill() {
+    while [ "${#QUEUE[@]}" -lt $(( PREVIEW_COUNT + 1 )) ]; do
+        if [ "${#BAG[@]}" -eq 0 ]; then
+            bag_refill
+        fi
+        QUEUE+=("${BAG[0]}")
+        BAG=("${BAG[@]:1}")
+    done
+}
+
+# bag_next: pop the next piece type into the global NEXT_TYPE and keep the
+# preview queue topped up. The result is passed via a global instead of
 # command substitution to avoid forking a subshell in the game loop.
 bag_next() {
-    if [ "${#BAG[@]}" -eq 0 ]; then
-        bag_refill
-    fi
-    NEXT_TYPE="${BAG[0]}"
-    BAG=("${BAG[@]:1}")
+    queue_fill
+    NEXT_TYPE="${QUEUE[0]}"
+    QUEUE=("${QUEUE[@]:1}")
+    queue_fill
 }
