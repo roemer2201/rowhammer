@@ -226,6 +226,11 @@ hier nachrangig, die uebrigen Regeln gelten uneingeschraenkt.
 Diese CLAUDE.md (Konzept, Roadmap) ist bei jeder inhaltlichen Aenderung
 mitzupflegen.
 
+Arbeitsregel: **Keine Abwaertskompatibilitaet noetig.** Das Projekt wird
+sequenziell entwickelt und war nie anderswo installiert; Migrationslogik
+fuer alte Config-/Savegame-Formate oder alte Schnittstellen ist unnoetig
+und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
+
 ## 7. Roadmap / Todo-Liste
 
 ### Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
