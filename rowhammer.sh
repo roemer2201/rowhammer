@@ -13,40 +13,51 @@
 #   cleared rows worth bonus row credit (the "Rows" counter, which will
 #   build the wonders in Phase 3). Player name and key bindings are
 #   configurable in the settings menu and persisted to a user config
-#   file. Wonders and a working multiplayer follow in later phases
-#   (see CLAUDE.md).
+#   file. A debug mode (--debug) traces the whole session into log
+#   files: every screen update 1:1, every key press and every game
+#   action (see lib/debug.sh). Wonders and a working multiplayer follow
+#   in later phases (see CLAUDE.md).
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify prerequisites (bash >= 4, interactive terminal, size).
-#   3. Source the library modules (config, pieces, board, squares,
-#      input, render, menu).
+#   3. Source the library modules (debug, config, pieces, board,
+#      squares, input, render, menu).
 #   4. Resolve settings with precedence default < config file < env <
 #      CLI and validate them.
-#   5. Enter the alternate screen and install the cleanup trap.
+#   5. Install the cleanup trap, start the debug logs (when --debug is
+#      set) and enter the alternate screen.
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
 #      (input, gravity, locking, square detection, line clearing,
 #      rendering), settings changes are written back to the config file.
-#   7. Restore the terminal on exit.
+#   7. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
-#   rowhammer.sh [--seed N] [--name NAME] [--no-color] [-h|--help]
+#   rowhammer.sh [--seed N] [--name NAME] [--no-color] [--debug]
+#                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.5.0  (2026-07-18)
+# Version: 0.6.0  (2026-07-18)
 
 set -euo pipefail
 
 SCRIPT_NAME="$(basename -- "${0}")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+# Game version, reported in the debug session header. Keep in sync with
+# the Version field in the header comment above.
+ROWHAMMER_VERSION="0.6.0"
+
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
-# file > built-in default. SEED and NO_COLOR are not part of the config
-# file, so they take their env fallback directly; the config-driven
-# settings (player name, key bindings) start from these defaults, get
-# overridden by config_load and the env/CLI blocks after sourcing below.
+# file > built-in default. SEED, NO_COLOR and the debug switches are not
+# part of the config file, so they take their env fallback directly; the
+# config-driven settings (player name, key bindings) start from these
+# defaults, get overridden by config_load and the env/CLI blocks after
+# sourcing below.
 SEED="${ROWHAMMER_SEED:-}"
 NO_COLOR_OPT="${ROWHAMMER_NO_COLOR:-0}"
+DEBUG_OPT="${ROWHAMMER_DEBUG:-0}"
+DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 PLAYER_NAME="Player"
 KEY_LEFT="a"
 KEY_RIGHT="d"
@@ -77,7 +88,28 @@ Options:
                 Env: ROWHAMMER_PLAYER_NAME  Default: Player
   --no-color    Disable ANSI colors; blocks are drawn as "[]".
                 Env: ROWHAMMER_NO_COLOR     Default: 0
+  --debug       Enable the debug/trace mode: the session is recorded
+                into log files (see below). Logs can grow to several
+                megabytes in long sessions.
+                Env: ROWHAMMER_DEBUG        Default: 0
+  --debug-dir DIR
+                Directory for the debug logs of this run.
+                Env: ROWHAMMER_DEBUG_DIR
+                Default: ~/.local/state/rowhammer/debug/<timestamp>.<pid>
   -h, --help    Show this help and exit.
+
+Debug mode writes three correlated log files (shared millisecond
+timestamps and a screen update counter) meant to make bug reports
+reproducible:
+  events.log    session header (version, terminal, seed, key bindings,
+                config files) and every game action: spawns, moves and
+                rotations (including blocked ones), falls, locks, square
+                formation, line clears with credit details, hold, pause,
+                menu choices, config saves and a board snapshot after
+                every lock.
+  input.log     every key press, raw bytes and mapped symbol.
+  frames.log    every screen update byte for byte (1:1, ANSI included).
+The log directory is printed when the game exits.
 
 Controls (defaults; rebindable in the settings menu):
   a / d or arrow left/right   move piece
@@ -116,8 +148,13 @@ EOF
 # die MESSAGE...
 # Report an explicit failure to STDERR and exit non-zero. The game is
 # purely interactive and never runs from cron/systemd, so per the script
-# conventions the syslog/logger part is intentionally omitted.
+# conventions the syslog/logger part is intentionally omitted. In debug
+# mode the failure also lands in the event log (guarded with a default,
+# because die can run before lib/debug.sh is sourced).
 die() {
+    if [ "${DEBUG_ACTIVE:-0}" -eq 1 ]; then
+        debug_event "fatal: $*"
+    fi
     printf '%s: %s\n' "${SCRIPT_NAME}" "$*" >&2
     exit 1
 }
@@ -153,6 +190,22 @@ while [ "$#" -gt 0 ]; do
             NO_COLOR_OPT=1
             shift
             ;;
+        --debug)
+            DEBUG_OPT=1
+            shift
+            ;;
+        --debug-dir)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            DEBUG_DIR="${2}"
+            shift 2
+            ;;
+        --debug-dir=*)
+            DEBUG_DIR="${1#*=}"
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -184,6 +237,14 @@ case "${NO_COLOR_OPT}" in
         ;;
 esac
 USE_COLOR=$(( 1 - NO_COLOR_OPT ))
+case "${DEBUG_OPT}" in
+    0|1) : ;;
+    *)
+        printf '%s: ROWHAMMER_DEBUG expects 0 or 1, got: %s\n' \
+            "${SCRIPT_NAME}" "${DEBUG_OPT}" >&2
+        exit 2
+        ;;
+esac
 
 # --- Prerequisites --------------------------------------------------------
 # Associative arrays (piece tables) and fractional read timeouts need
@@ -204,7 +265,7 @@ if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
 fi
 
 # --- Library modules ------------------------------------------------------
-for _lib in config pieces board squares input render menu; do
+for _lib in debug config pieces board squares input render menu; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -315,6 +376,9 @@ spawn_piece() {
     CUR_Y=0
     if ! can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"; then
         GAME_OVER=1
+        debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} blocked - game over (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+    else
+        debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} queue=${QUEUE[*]}"
     fi
     DIRTY=1
 }
@@ -326,13 +390,17 @@ spawn_piece() {
 # already earns the square's bonus credit.
 lock_and_next() {
     lock_piece "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"
+    # lock_piece consumed the id it stamped into the board.
+    debug_event "lock ${CUR_TYPE} rot=${CUR_ROT} at ${CUR_X},${CUR_Y} id=$(( NEXT_INSTANCE_ID - 1 ))"
     if detect_square "${CUR_X}" "${CUR_Y}"; then
         if [ "${SQUARE_RESULT}" = "G" ]; then
             GOLD_COUNT=$(( GOLD_COUNT + 1 ))
             SCORE=$(( SCORE + SCORE_SQUARE_GOLD ))
+            debug_event "gold square bonus: +${SCORE_SQUARE_GOLD} score=${SCORE} gold_total=${GOLD_COUNT}"
         else
             SILVER_COUNT=$(( SILVER_COUNT + 1 ))
             SCORE=$(( SCORE + SCORE_SQUARE_SILVER ))
+            debug_event "silver square bonus: +${SCORE_SQUARE_SILVER} score=${SCORE} silver_total=${SILVER_COUNT}"
         fi
     fi
     clear_lines
@@ -341,7 +409,9 @@ lock_and_next() {
         ROW_CREDIT=$(( ROW_CREDIT + CLEARED_CREDIT ))
         SCORE=$(( SCORE + SCORE_LINES[CLEARED] * (LEVEL + 1) ))
         update_speed
+        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} score=${SCORE} level=${LEVEL} fall_ms=${FALL_MS}"
     fi
+    debug_board_snapshot
     # The hold slot unlocks again once a piece has locked.
     HOLD_USED=0
     spawn_piece
@@ -354,20 +424,25 @@ lock_and_next() {
 # game over when the incoming piece has no room at the spawn position.
 hold_piece() {
     if [ "${HOLD_USED}" -eq 1 ]; then
+        debug_event "hold refused: already used for this piece"
         return 0
     fi
     if [ -z "${HOLD_TYPE}" ]; then
         queue_fill
         if ! can_place "${QUEUE[0]}" 0 3 0; then
+            debug_event "hold refused: next piece ${QUEUE[0]} has no room to spawn"
             return 0
         fi
         HOLD_TYPE="${CUR_TYPE}"
         HOLD_USED=1
+        debug_event "hold: stashed ${HOLD_TYPE}"
         spawn_piece
     else
         if ! can_place "${HOLD_TYPE}" 0 3 0; then
+            debug_event "hold refused: held piece ${HOLD_TYPE} has no room to spawn"
             return 0
         fi
+        debug_event "hold: swap ${CUR_TYPE} <-> ${HOLD_TYPE}"
         local tmp="${HOLD_TYPE}"
         HOLD_TYPE="${CUR_TYPE}"
         CUR_TYPE="${tmp}"
@@ -388,9 +463,11 @@ try_move() {
     if can_place "${CUR_TYPE}" "${CUR_ROT}" "${nx}" "${ny}"; then
         CUR_X="${nx}"
         CUR_Y="${ny}"
+        debug_event "move ${1},${2} -> ${CUR_X},${CUR_Y}"
         DIRTY=1
         return 0
     fi
+    debug_event "move ${1},${2} blocked at ${CUR_X},${CUR_Y}"
     return 1
 }
 
@@ -404,17 +481,22 @@ try_rotate() {
         if can_place "${CUR_TYPE}" "${nrot}" "$(( CUR_X + kick ))" "${CUR_Y}"; then
             CUR_ROT="${nrot}"
             CUR_X=$(( CUR_X + kick ))
+            debug_event "rotate dir=${1} -> rot=${CUR_ROT} kick=${kick} at ${CUR_X},${CUR_Y}"
             DIRTY=1
             return 0
         fi
     done
+    debug_event "rotate dir=${1} blocked (rot=${CUR_ROT} at ${CUR_X},${CUR_Y})"
     return 1
 }
 
 # step_down: move the piece one row down; lock it when it cannot fall.
+# Serves both gravity and soft drop; the debug input log tells the two
+# apart (a fall right after a soft-drop key press was manual).
 step_down() {
     if can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; then
         CUR_Y=$(( CUR_Y + 1 ))
+        debug_event "fall -> y=${CUR_Y}"
         DIRTY=1
     else
         lock_and_next
@@ -425,10 +507,13 @@ step_down() {
 # hard_drop: drop the piece to the floor and lock it immediately. Two
 # points per dropped row, like most guideline implementations.
 hard_drop() {
+    local dropped=0
     while can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; do
         CUR_Y=$(( CUR_Y + 1 ))
         SCORE=$(( SCORE + 2 ))
+        dropped=$(( dropped + 1 ))
     done
+    debug_event "hard drop: ${dropped} row(s) to y=${CUR_Y} score=${SCORE}"
     lock_and_next
     return 0
 }
@@ -444,14 +529,25 @@ handle_key() {
     fi
     if [ "${GAME_OVER}" -eq 1 ]; then
         case "${KEY}" in
-            r)                  game_reset ;;
-            "${KEY_QUIT}"|ESC)  GAME_EXIT=1 ;;
+            r)
+                debug_event "restart from game over screen"
+                game_reset
+                ;;
+            "${KEY_QUIT}"|ESC)
+                debug_event "quit to menu from game over screen"
+                GAME_EXIT=1
+                ;;
         esac
         return 0
     fi
     case "${KEY}" in
         "${KEY_PAUSE}")
             PAUSED=$(( 1 - PAUSED ))
+            if [ "${PAUSED}" -eq 1 ]; then
+                debug_event "paused"
+            else
+                debug_event "resumed"
+            fi
             # Restart the gravity timer so a long pause is not counted
             # as elapsed fall time.
             now_ms
@@ -459,6 +555,7 @@ handle_key() {
             DIRTY=1
             ;;
         "${KEY_QUIT}"|ESC)
+            debug_event "quit to menu"
             GAME_EXIT=1
             ;;
     esac
@@ -491,6 +588,7 @@ handle_key() {
 
 # game_reset: start a fresh round (used at launch and for restart).
 game_reset() {
+    debug_event "round start (seed=${SEED:-unset})"
     board_init
     BAG=()
     QUEUE=()
@@ -536,14 +634,20 @@ game_run() {
             DIRTY=0
         fi
     done
+    debug_event "game session end (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
     return 0
 }
 
 # --- Main menu loop -------------------------------------------------------
 main() {
-    # Restore the terminal on any exit path, including Ctrl-C.
-    trap term_restore EXIT
+    # Restore the terminal on any exit path, including Ctrl-C; the debug
+    # logs close afterwards, so the "logs written to" note lands on the
+    # normal screen buffer.
+    trap 'term_restore; debug_close' EXIT
     trap 'exit 130' INT TERM
+    # Debug logging starts before the alternate screen, so init errors
+    # (unwritable log directory etc.) stay readable.
+    debug_init
     term_setup
 
     while :; do

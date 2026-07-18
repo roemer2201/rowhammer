@@ -7,10 +7,13 @@
 #   application menus (main menu, singleplayer, multiplayer placeholder,
 #   settings with key bindings and player name). Menu labels are German
 #   on purpose (requested UI language); code and comments stay English
-#   per the script conventions.
+#   per the script conventions. All screen output goes through
+#   screen_write (lib/render.sh) and selections, rebinds and name
+#   changes are logged as debug events, so debug sessions capture the
+#   menus 1:1 as well.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.1  (2026-07-18)
+# Version: 0.3.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -46,15 +49,23 @@ menu_run() {
                 fi
             done
             frame+=$'\e[K\n'"  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck"$'\e[K\n\e[J'
-            printf '%s' "${frame}"
+            screen_write "${frame}"
             dirty=0
         fi
         read_key
         case "${KEY}" in
             UP|w)        sel=$(( (sel + n - 1) % n )); dirty=1 ;;
             DOWN|s)      sel=$(( (sel + 1) % n )); dirty=1 ;;
-            ENTER|SPACE) MENU_CHOICE="${sel}"; return 0 ;;
-            ESC|x)       MENU_CHOICE=-1; return 0 ;;
+            ENTER|SPACE)
+                MENU_CHOICE="${sel}"
+                debug_event "menu '${title}': selected '${entries[sel]}'"
+                return 0
+                ;;
+            ESC|x)
+                MENU_CHOICE=-1
+                debug_event "menu '${title}': back"
+                return 0
+                ;;
         esac
     done
 }
@@ -70,7 +81,7 @@ menu_message() {
         frame+="  ${line}"$'\e[K\n'
     done
     frame+=$'\e[K\n'"  Beliebige Taste druecken..."$'\e[K\n\e[J'
-    printf '%s' "${frame}"
+    screen_write "${frame}"
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
@@ -132,10 +143,10 @@ menu_keys() {
 # stays reserved for the game over restart. Refuses keys that are already
 # bound to another action, then persists the new binding.
 prompt_rebind() {
-    local var="${1}" label="${2}" other
-    printf '\e[H\n  Tasten konfigurieren\e[K\n\e[K\n'
-    printf '  Neue Taste fuer "%s" druecken\e[K\n' "${label}"
-    printf '  (aktuell: %s, ESC = abbrechen)\e[K\n\e[J' "${!var}"
+    local var="${1}" label="${2}" other frame
+    printf -v frame '\e[H\n  Tasten konfigurieren\e[K\n\e[K\n  Neue Taste fuer "%s" druecken\e[K\n  (aktuell: %s, ESC = abbrechen)\e[K\n\e[J' \
+        "${label}" "${!var}"
+    screen_write "${frame}"
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
@@ -169,6 +180,7 @@ prompt_rebind() {
         fi
     done
     printf -v "${var}" '%s' "${KEY}"
+    debug_event "key rebind: ${var}=${KEY}"
     config_save
     return 0
 }
@@ -177,21 +189,21 @@ prompt_rebind() {
 # Line-based name input (canonical mode, so backspace editing works).
 # An empty input keeps the current name; valid input is persisted.
 prompt_player_name() {
-    printf '\e[H\n  Spielername\e[K\n\e[K\n'
-    printf '  Aktueller Name: %s\e[K\n\e[K\n' "${PLAYER_NAME}"
-    printf '  Neuer Name (leer = unveraendert, max. 16 Zeichen,\e[K\n'
-    printf '  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)\e[K\n\e[J\n  > '
-    local name=""
+    local frame name=""
+    printf -v frame '\e[H\n  Spielername\e[K\n\e[K\n  Aktueller Name: %s\e[K\n\e[K\n  Neuer Name (leer = unveraendert, max. 16 Zeichen,\e[K\n  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)\e[K\n\e[J\n  > ' \
+        "${PLAYER_NAME}"
+    screen_write "${frame}"
     # Show the cursor while typing, hide it again afterwards.
-    printf '\e[?25h'
+    screen_write $'\e[?25h'
     IFS= read -r name || name=""
-    printf '\e[?25l'
+    screen_write $'\e[?25l'
     if [ -z "${name}" ]; then
         return 0
     fi
     local re='^[A-Za-z0-9_ -]{1,16}$'
     if [[ "${name}" =~ ${re} ]]; then
         PLAYER_NAME="${name}"
+        debug_event "player name changed to '${name}'"
         config_save
     else
         menu_message "Spielername" \

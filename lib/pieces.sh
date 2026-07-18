@@ -6,10 +6,11 @@
 #   Tetromino definitions for rowhammer: the seven piece types with their
 #   four rotation states, per-piece ANSI colors, the 7-bag randomizer
 #   (every piece type appears exactly once per bag of seven) and the
-#   upcoming-piece queue that feeds the HUD preview.
+#   upcoming-piece queue that feeds the HUD preview. In debug mode every
+#   bag refill is logged with the shuffled piece order.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.1  (2026-07-18)
+# Version: 0.3.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -61,6 +62,7 @@ bag_refill() {
         BAG[i]="${BAG[j]}"
         BAG[j]="${tmp}"
     done
+    debug_event "bag refill: ${BAG[*]}"
 }
 
 # Queue of upcoming pieces drawn from the bag. It always holds at least

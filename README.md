@@ -43,12 +43,22 @@ Das Startmenue bietet:
 
 Optionen:
 
-| Option       | Umgebungsvariable        | Wirkung                                  |
-|--------------|--------------------------|------------------------------------------|
-| `--seed N`   | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
-| `--name NAME`| `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
-| `--no-color` | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, Bloecke als `[]`      |
-| `-h/--help`  | -                        | Hilfe mit allen Optionen und Tasten      |
+| Option           | Umgebungsvariable        | Wirkung                                  |
+|------------------|--------------------------|------------------------------------------|
+| `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
+| `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
+| `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, Bloecke als `[]`      |
+| `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
+| `--debug-dir DIR`| `ROWHAMMER_DEBUG_DIR`    | Zielverzeichnis fuer die Debug-Logs      |
+| `-h/--help`      | -                        | Hilfe mit allen Optionen und Tasten      |
+
+Der Debug-Modus zeichnet die komplette Session in drei korrelierte
+Log-Dateien auf (Standardziel:
+`~/.local/state/rowhammer/debug/<Zeitstempel>.<PID>`): `frames.log`
+(jede Bildschirmausgabe 1:1), `input.log` (jeder Tastendruck) und
+`events.log` (alle Spielaktionen samt Board-Snapshots). Das hilft,
+Fehlverhalten oder Spielsituationen im Nachhinein exakt
+nachzuvollziehen - z. B. fuer einen Bug-Report.
 
 Die Tastenbelegung laesst sich zusaetzlich per Umgebungsvariablen
 `ROWHAMMER_KEY_*` uebersteuern (siehe `--help`). Praezedenz:
