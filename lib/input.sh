@@ -6,10 +6,13 @@
 #   Terminal setup and non-blocking keyboard input for rowhammer. Switches
 #   to the alternate screen buffer, hides the cursor and provides a
 #   single-key reader that understands the arrow-key escape sequences.
-#   Enter is reported as ENTER so the menu system can use it as "select".
+#   Escape sequences are consumed completely (including modifier variants
+#   like ESC [ 1 ; 2 D and unknown keys like PgUp), so no tail bytes can
+#   leak into the key stream and trigger phantom game keys. Enter is
+#   reported as ENTER so the menu system can use it as "select".
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.1  (2026-07-18)
+# Version: 0.3.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -46,14 +49,100 @@ term_restore() {
     fi
 }
 
+# input_flush
+# Drain any pending bytes after a garbled or unfinished escape sequence,
+# so stray tail bytes cannot be misread as game keys on later ticks.
+input_flush() {
+    local junk
+    while IFS= read -rsn1 -t 0.001 junk; do
+        :
+    done
+    return 0
+}
+
+# read_escape_sequence
+# Called after an ESC byte was read. Consumes the complete sequence and
+# maps the cursor keys into KEY. CHANGE 2026-07-18: previously a fixed
+# 2-byte read left the tail of longer sequences (e.g. the modifier
+# variant ESC [ 1 ; 2 D, or ESC [ 5 ~ for PgUp) in the input buffer;
+# those tail bytes were then misread as literal keys ('D' -> phantom
+# move, 'C' -> phantom hold). Keep parsing byte-wise until the final
+# byte, and flush on anything unexpected.
+read_escape_sequence() {
+    local b="" rc=0 i
+    # A lone ESC key has no follow-up byte; a sequence delivers it
+    # within a few milliseconds.
+    IFS= read -rsn1 -t 0.02 b || rc=$?
+    if [ "${rc}" -ne 0 ]; then
+        KEY="ESC"
+        return 0
+    fi
+    case "${b}" in
+        '[')
+            # CSI sequence: optional parameter bytes (digits and ';'),
+            # then one final byte. Bounded loop as a safety net against
+            # binary garbage (e.g. stray mouse reports).
+            for (( i = 0; i < 8; i++ )); do
+                rc=0
+                IFS= read -rsn1 -t 0.02 b || rc=$?
+                if [ "${rc}" -ne 0 ]; then
+                    # Sequence torn mid-way: drop it entirely.
+                    input_flush
+                    return 0
+                fi
+                case "${b}" in
+                    [0-9\;]) : ;;
+                    *)       break ;;
+                esac
+            done
+            case "${b}" in
+                A) KEY="UP" ;;
+                B) KEY="DOWN" ;;
+                C) KEY="RIGHT" ;;
+                D) KEY="LEFT" ;;
+                [0-9\;])
+                    # Loop bound hit while still in parameter bytes.
+                    input_flush
+                    ;;
+                *)
+                    # Complete but unknown sequence (Home, PgUp, F-keys,
+                    # ...): ignore it as a whole.
+                    ;;
+            esac
+            ;;
+        O)
+            # SS3 variant (application cursor mode): ESC O A..D.
+            rc=0
+            IFS= read -rsn1 -t 0.02 b || rc=$?
+            if [ "${rc}" -ne 0 ]; then
+                input_flush
+                return 0
+            fi
+            case "${b}" in
+                A) KEY="UP" ;;
+                B) KEY="DOWN" ;;
+                C) KEY="RIGHT" ;;
+                D) KEY="LEFT" ;;
+                *) : ;;
+            esac
+            ;;
+        *)
+            # ESC followed by a printable byte (Alt+key chords): ignore.
+            ;;
+    esac
+    return 0
+}
+
 # read_key
 # Wait up to TICK_S for a key press and map it to a symbolic name in the
-# global KEY: LEFT RIGHT UP DOWN SPACE ENTER ESC or the lower-cased
-# literal character. KEY is empty when no (usable) key arrived. A closed
-# stdin is treated as a fatal error so the loop cannot spin at full speed.
+# global KEY: LEFT RIGHT UP DOWN SPACE ENTER ESC or a literal lowercase
+# letter/digit. KEY is empty when no (usable) key arrived. Uppercase
+# letters are ignored on purpose: the finals of escape sequences are
+# uppercase, so mapping them to bindings would reintroduce phantom keys.
+# A closed stdin is a fatal error so the loop cannot spin at full speed.
 read_key() {
     KEY=""
-    local c="" rest="" rc=0
+    local c="" rc=0
     IFS= read -rsn1 -t "${TICK_S}" c || rc=$?
     if [ "${rc}" -gt 128 ]; then
         # Timeout: no key pressed during this tick.
@@ -63,22 +152,7 @@ read_key() {
     fi
     case "${c}" in
         $'\e')
-            # Either a lone ESC key or the start of an escape sequence:
-            # arrow keys arrive as ESC [ X (or ESC O X in application
-            # mode) within a few milliseconds.
-            rc=0
-            IFS= read -rsn2 -t 0.02 rest || rc=$?
-            if [ "${rc}" -ne 0 ]; then
-                KEY="ESC"
-                return 0
-            fi
-            case "${rest}" in
-                '[A'|'OA') KEY="UP" ;;
-                '[B'|'OB') KEY="DOWN" ;;
-                '[C'|'OC') KEY="RIGHT" ;;
-                '[D'|'OD') KEY="LEFT" ;;
-                *)         KEY="" ;;
-            esac
+            read_escape_sequence
             ;;
         ' ')
             KEY="SPACE"
@@ -87,9 +161,11 @@ read_key() {
             # Enter yields an empty read (newline is the read delimiter).
             KEY="ENTER"
             ;;
+        [a-z0-9])
+            KEY="${c}"
+            ;;
         *)
-            # Letters are matched case-insensitively.
-            KEY="${c,,}"
+            # Uppercase, punctuation, control bytes: ignore.
             ;;
     esac
     return 0

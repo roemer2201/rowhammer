@@ -24,15 +24,15 @@
 #   4. Resolve settings with precedence default < config file < env <
 #      CLI and validate them.
 #   5. Enter the alternate screen and install the cleanup trap.
-#   6. Run the main menu loop; "Einzelspieler" starts the game loop
-#      (input, gravity, locking, square detection, line clearing,
+#   6. Run the main menu loop; "Einzelspieler" starts or resumes the game
+#      loop (input, gravity, locking, square detection, line clearing,
 #      rendering), settings changes are written back to the config file.
 #   7. Restore the terminal on exit.
 #
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--no-color] [-h|--help]
 #
-# Version: 0.4.0  (2026-07-18)
+# Version: 0.5.0  (2026-07-18)
 
 set -euo pipefail
 
@@ -266,6 +266,9 @@ GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 NOW_MS=0; LAST_FALL=0
+# A round left via the quit key stays alive (GAME_ALIVE=1) and can be
+# resumed from the singleplayer menu; game over ends it for good.
+GAME_ALIVE=0
 
 # Scoring values (adjustable; the detailed system incl. combos is a later
 # roadmap item). Line points scale with (level + 1); squares pay a flat
@@ -513,11 +516,13 @@ game_reset() {
 }
 
 # --- Game loop ------------------------------------------------------------
-# game_run: one complete game session; returns to the caller (the menu)
-# when the player leaves via the quit key or the game over screen.
+# game_run: run the game loop on the current game state until the player
+# leaves via the quit key or the game over screen. Leaving mid-round
+# keeps the round alive for the resume entry in the singleplayer menu;
+# leaving from the game over screen ends it.
 game_run() {
     GAME_EXIT=0
-    game_reset
+    GAME_ALIVE=1
 
     while [ "${GAME_EXIT}" -eq 0 ]; do
         # read_key also paces the loop via its TICK_S timeout.
@@ -535,6 +540,27 @@ game_run() {
             DIRTY=0
         fi
     done
+    if [ "${GAME_OVER}" -eq 1 ]; then
+        GAME_ALIVE=0
+    fi
+    return 0
+}
+
+# game_new: start a fresh round and play it.
+game_new() {
+    game_reset
+    game_run
+    return 0
+}
+
+# game_resume: re-enter a round that was left via the quit key. Only the
+# gravity timer is restarted, so time spent in the menu does not count
+# as fall time; everything else continues where it stopped.
+game_resume() {
+    now_ms
+    LAST_FALL="${NOW_MS}"
+    DIRTY=1
+    game_run
     return 0
 }
 

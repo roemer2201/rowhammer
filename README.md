@@ -34,7 +34,8 @@ und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
 Das Startmenue bietet:
 
-- **Einzelspieler** - vorerst nur "Normales Spiel"
+- **Einzelspieler** - vorerst nur "Normales Spiel"; eine ueber `Esc`/`x`
+  verlassene Partie kann hier fortgesetzt werden
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in einer Konfigurationsdatei gespeichert (Standard:

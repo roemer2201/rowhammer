@@ -277,6 +277,16 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [x] Bonus-Werte gegen das Original verifiziert (Recherche, siehe 3.2:
       additiv je Quadrat, Tetris +1) und in 0.4.0 umgesetzt
 
+### Nachbesserungen (umgesetzt, Version 0.5.0)
+
+- [x] Input-Parser robust gegen zerrissene/erweiterte Escape-Sequenzen
+      (Modifier-Pfeile, PgUp & Co. werden vollstaendig konsumiert statt
+      Restbytes als Phantom-Tasten zu liefern; Grossbuchstaben werden
+      ignoriert)
+- [x] Laufende Partie bleibt beim Wechsel ins Menue erhalten:
+      Einzelspieler-Menue bietet "Spiel fortsetzen" (Game Over beendet
+      die Partie endgueltig)
+
 ### Phase 3 - Weltwunder
 
 - [ ] Wunder-Liste final festlegen (Abgleich mit dem Original)

@@ -10,7 +10,7 @@
 #   per the script conventions.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.1  (2026-07-18)
+# Version: 0.3.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -77,15 +77,28 @@ menu_message() {
     done
 }
 
-# menu_singleplayer: for now only the normal game; more modes (for
-# example a sprint mode) can be added as further entries later.
+# menu_singleplayer: offers resuming a round that was left via the quit
+# key before starting a new one; more modes (for example a sprint mode)
+# can be added as further entries later.
 menu_singleplayer() {
     while :; do
-        menu_run "Einzelspieler" "Normales Spiel" "Zurueck"
-        if [ "${MENU_CHOICE}" -eq 0 ]; then
-            game_run
+        if [ "${GAME_ALIVE}" -eq 1 ]; then
+            menu_run "Einzelspieler" \
+                "Spiel fortsetzen (Score: ${SCORE}, Lines: ${CLEARED_TOTAL})" \
+                "Neues Spiel (verwirft die laufende Partie)" \
+                "Zurueck"
+            case "${MENU_CHOICE}" in
+                0) game_resume ;;
+                1) game_new ;;
+                *) return 0 ;;
+            esac
         else
-            return 0
+            menu_run "Einzelspieler" "Normales Spiel" "Zurueck"
+            if [ "${MENU_CHOICE}" -eq 0 ]; then
+                game_new
+            else
+                return 0
+            fi
         fi
     done
 }
