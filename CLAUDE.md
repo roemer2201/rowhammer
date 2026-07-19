@@ -139,6 +139,7 @@ rowhammer/
     menu.sh            # Startmenue (Einzel-/Mehrspieler, Einstellungen)
     config.sh          # Laden/Speichern der Nutzer-Konfiguration
     debug.sh           # Debug-Modus: Session-Trace in Log-Dateien
+    highscore.sh       # Persistente Highscore-Liste (Top 10)
     wonders.sh         # Weltwunder-Logik, Baustufen, Fortschritt
     save.sh            # Laden/Speichern des Spielstands
   assets/
@@ -147,11 +148,12 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.6.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
+Stand (Version 0.7.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
 `lib/squares.sh`, `lib/input.sh`, `lib/render.sh`, `lib/menu.sh`,
-`lib/config.sh` und `lib/debug.sh` existieren. `wonders.sh`, `save.sh`
-und `assets/` folgen in Phase 3. Die Anwendung startet in einem Menue (Einzelspieler /
-Mehrspieler-Platzhalter / Einstellungen / Beenden); die Menue-Beschriftung
+`lib/config.sh`, `lib/debug.sh` und `lib/highscore.sh` existieren.
+`wonders.sh`, `save.sh` und `assets/` folgen in Phase 3. Die Anwendung
+startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
+Highscores / Einstellungen / Beenden); die Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
 Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
@@ -159,6 +161,7 @@ Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
 Weltwunder-Fortschritt speist, "Lines" zaehlt physische Reihen und
 treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
+`--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
 `--no-color` (`ROWHAMMER_NO_COLOR`), `--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
@@ -192,17 +195,30 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 
 ### 4.5 Persistenz
 
-- Spielstand (Gesamt-Reihen, aktuelles Wunder, Baustufe, Highscores) unter
-  `${XDG_DATA_HOME:-${HOME}/.local/share}/rowhammer/save`.
-- Einfaches KEY=VALUE-Format, atomar schreiben (Tempdatei + `mv`).
-- Konfiguration (Tastenbelegung, Farben) folgt den organisationsbasierten
-  Konfigurationsregeln der Script-Konventionen (siehe Abschnitt 6).
-- Umgesetzt seit 0.2.0: `lib/config.sh` laedt `rowhammer.conf` in der
-  organisationsbasierten Suchreihenfolge (System `/etc`, dann Nutzer
-  `${HOME}/.config`); das Einstellungsmenue (Spielername, Tastenbelegung)
-  schreibt atomar in die Nutzer-Datei, Standardziel
-  `${HOME}/.config/rowhammer.conf`. Werte werden validiert und
-  single-quoted geschrieben, da die Datei gesourct wird.
+- Alle persistenten Spieldaten liegen gemeinsam im Datenverzeichnis
+  `${HOME}/rowhammer` (aenderbar per `--data-dir DIR` bzw.
+  `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
+  Highscore-Liste `highscore` und ab Phase 3 der Spielstand
+  (Gesamt-Reihen, aktuelles Wunder, Baustufe).
+- Bewusste Abweichung von den Script-Konventionen (Abschnitt 11,
+  organisationsbasierte Suche unter `/etc` und `${HOME}/.config`):
+  seit 0.7.0 gibt es genau eine Config-Datei im Datenverzeichnis
+  (Nutzerentscheidung). Alte Pfade werden gemaess der Arbeitsregel
+  "keine Abwaertskompatibilitaet" nicht mehr beruecksichtigt.
+- Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
+- `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
+  (Spielername, Tastenbelegung) schreibt `${DATA_DIR}/rowhammer.conf`;
+  Werte werden validiert und single-quoted geschrieben, da die Datei
+  gesourct wird.
+- `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
+  `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
+  `score|lines|rows|level|name|date`, absteigend nach Score sortiert.
+  Die Datei wird geparst und validiert (nicht gesourct); defekte
+  Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
+  Rundenende genau einmal gewertet (Game Over oder Verlassen ins
+  Menue; Score 0 zaehlt nicht, gleiche Scores rangieren hinter dem
+  aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
+  die Liste unter "Highscores" im Hauptmenue.
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -339,7 +355,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Leertaste liegen als feste Sekundaerbelegung auf dem Hard-Drop,
       `2` fest auf Hold; `w`, `e` und `c` sind die konfigurierbaren
       Primaertasten.
-- [ ] Highscore-Liste
+- [x] Highscore-Liste (Version 0.7.0: Top 10 im Datenverzeichnis,
+      Anzeige im Hauptmenue, Rang im Game-Over-Bild; siehe 4.5)
 - [ ] 256-Farben-Modus, Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,

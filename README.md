@@ -23,7 +23,8 @@ Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
 +10 Bonuszeilen je Gold- und +5 je Silber-Quadrat (ein Tetris +1 extra)
 fuer den "Rows"-Zaehler, der ab Phase 3 das Weltwunder baut. Die
 Anwendung startet in einem Menue mit Einzelspieler,
-Mehrspieler (Platzhalter) und Einstellungen. Das vollstaendige Konzept
+Mehrspieler (Platzhalter), Highscores und Einstellungen; die besten
+10 Runden werden dauerhaft gespeichert. Das vollstaendige Konzept
 und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
 ## Spielen
@@ -36,10 +37,14 @@ Das Startmenue bietet:
 
 - **Einzelspieler** - vorerst nur "Normales Spiel"
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
+- **Highscores** - die besten 10 Runden mit Name, Score, Rows und
+  Level; ein Game Over zeigt den erreichten Rang direkt an
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
-  beides wird in einer Konfigurationsdatei gespeichert (Standard:
-  `~/.config/rowhammer.conf`, organisationsbasierte Suche nach den
-  Script-Konventionen)
+  beides wird in der Konfigurationsdatei gespeichert (Standard:
+  `~/rowhammer/rowhammer.conf`)
+
+Alle Spieldaten (Konfiguration, Highscores) liegen im Datenverzeichnis
+`~/rowhammer`, aenderbar per `--data-dir`.
 
 Optionen:
 
@@ -47,6 +52,7 @@ Optionen:
 |------------------|--------------------------|------------------------------------------|
 | `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
 | `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
+| `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Highscores)    |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, Bloecke als `[]`      |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
 | `--debug-dir DIR`| `ROWHAMMER_DEBUG_DIR`    | Zielverzeichnis fuer die Debug-Logs      |
@@ -78,9 +84,12 @@ Umgesetzt:
 - Levelkurve (schneller je 10 Reihen) und Punktesystem
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
   (Double-Buffering), sauberes Terminal-Restore beim Beenden
-- Startmenue mit Einzelspieler, Mehrspieler-Platzhalter und Einstellungen
+- Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores
+  und Einstellungen
+- Persistente Highscore-Liste: die besten 10 Runden in
+  `~/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
-  `~/.config/rowhammer.conf`
+  `~/rowhammer/rowhammer.conf`
 
 Geplant:
 
