@@ -14,16 +14,21 @@ gleichnamigen Hardware-Angriff hat das Spiel nichts zu tun.
 
 ## Status
 
-**Phasen 1 und 2 sind umgesetzt** (spielbarer Kern, Startmenue und die
-The-New-Tetris-Mechaniken): Spielfeld, 7-Bag-Randomizer mit Vorschau auf
+**Phasen 1 bis 3 sind umgesetzt** (spielbarer Kern, Startmenue, die
+The-New-Tetris-Mechaniken und der Weltwunder-Modus): Spielfeld,
+7-Bag-Randomizer mit Vorschau auf
 3 Teile, Hold, Gravitation mit Levelkurve, Reihenabbau, Soft-/Hard-Drop,
 Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
 4x4-Feld aus genau vier unversehrten Tetrominos baut, erhaelt ein Gold-
 (sortenrein) oder Silber-Quadrat (gemischt); jede abgebaute Reihe bringt
 +10 Bonuszeilen je Gold- und +5 je Silber-Quadrat (ein Tetris +1 extra)
-fuer den "Rows"-Zaehler, der ab Phase 3 das Weltwunder baut. Die
+fuer den "Rows"-Zaehler. Dieser Zaehler baut ueber alle Runden hinweg
+sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
+unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
+und im HUD, nach jeder Runde und im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
-Mehrspieler (Platzhalter), Highscores und Einstellungen; die besten
+Mehrspieler (Platzhalter), Highscores, Weltwunder und Einstellungen;
+die besten
 10 Runden werden dauerhaft gespeichert. Das vollstaendige Konzept
 und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
@@ -39,11 +44,14 @@ Das Startmenue bietet:
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
 - **Highscores** - die besten 10 Runden mit Name, Score, Rows und
   Level; ein Game Over zeigt den erreichten Rang direkt an
+- **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
+  und Gesamtfortschritt
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
   `~/rowhammer/rowhammer.conf`)
 
-Alle Spieldaten (Konfiguration, Highscores) liegen im Datenverzeichnis
+Alle Spieldaten (Konfiguration, Highscores, Weltwunder-Spielstand)
+liegen im Datenverzeichnis
 `~/rowhammer`, aenderbar per `--data-dir`.
 
 Optionen:
@@ -52,7 +60,7 @@ Optionen:
 |------------------|--------------------------|------------------------------------------|
 | `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
 | `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
-| `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Highscores)    |
+| `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, Bloecke als `[]`      |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
 | `--debug-dir DIR`| `ROWHAMMER_DEBUG_DIR`    | Zielverzeichnis fuer die Debug-Logs      |
@@ -88,13 +96,16 @@ Umgesetzt:
   und Einstellungen
 - Persistente Highscore-Liste: die besten 10 Runden in
   `~/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
+- **Weltwunder-Modus:** der "Rows"-Zaehler baut ueber alle Runden
+  hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,
+  Chinesische Mauer, Taj Mahal, Basilius-Kathedrale) als ASCII-Art
+  Baustufe fuer Baustufe von unten auf; Fortschritt persistent in
+  `~/rowhammer/save`, Anzeige im HUD, nach jeder Runde und im Menue
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
   `~/rowhammer/rowhammer.conf`
 
 Geplant:
 
-- **Weltwunder-Modus:** persistenter Reihenzaehler baut nacheinander
-  Weltwunder in mehreren Baustufen auf (Fortschritt wird gespeichert)
 - Spaeter: **Multiplayer** ueber das Netzwerk mit Garbage-Reihen
 
 ## Voraussetzungen

@@ -10,10 +10,11 @@
 #   per the script conventions. All screen output goes through
 #   screen_write (lib/render.sh) and selections, rebinds and name
 #   changes are logged as debug events, so debug sessions capture the
-#   menus 1:1 as well.
+#   menus 1:1 as well. Leaving a game session shows the wonder
+#   construction site (lib/wonders.sh) with the round's credit banked.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-07-18)
+# Version: 0.4.0  (2026-07-19)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -89,12 +90,15 @@ menu_message() {
 }
 
 # menu_singleplayer: for now only the normal game; more modes (for
-# example a sprint mode) can be added as further entries later.
+# example a sprint mode) can be added as further entries later. After a
+# game session the wonder construction site is shown with the freshly
+# banked row total (the round credit was banked by record_round_score).
 menu_singleplayer() {
     while :; do
         menu_run "Einzelspieler" "Normales Spiel" "Zurueck"
         if [ "${MENU_CHOICE}" -eq 0 ]; then
             game_run
+            wonder_screen "${TOTAL_ROW_CREDIT}"
         else
             return 0
         fi

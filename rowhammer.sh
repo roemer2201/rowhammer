@@ -10,30 +10,36 @@
 #   level-based speed curve, soft/hard drop, pause and game over with
 #   restart. The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
-#   cleared rows worth bonus row credit (the "Rows" counter, which will
-#   build the wonders in Phase 3). Player name and key bindings are
+#   cleared rows worth bonus row credit (the "Rows" counter). That credit
+#   accumulates across all rounds in a savegame and builds the seven
+#   world wonders of the Wonders mode: the current wonder rises as ASCII
+#   art, revealed bottom-up with every invested row, shown live in the
+#   HUD, after every round and via the "Weltwunder" main menu entry.
+#   Player name and key bindings are
 #   configurable in the settings menu and persisted to a user config
-#   file. All game data (config, persistent top-10 highscore list,
-#   later the savegame) lives in one data directory, by default
+#   file. All game data (config, persistent top-10 highscore list and
+#   the savegame) lives in one data directory, by default
 #   ~/rowhammer. Finished rounds enter the highscore list, which the
 #   main menu shows and whose rank appears on the game over screen.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
-#   action (see lib/debug.sh). Wonders and a working multiplayer follow
-#   in later phases (see CLAUDE.md).
+#   action (see lib/debug.sh). A working multiplayer follows
+#   in a later phase (see CLAUDE.md).
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify prerequisites (bash >= 4, interactive terminal, size).
 #   3. Source the library modules (debug, config, pieces, board,
-#      squares, highscore, input, render, menu).
+#      squares, highscore, save, wonders, input, render, menu).
 #   4. Resolve settings with precedence default < config file < env <
 #      CLI and validate them.
 #   5. Install the cleanup trap, start the debug logs (when --debug is
-#      set), load the highscore list and enter the alternate screen.
+#      set), load the highscore list and the savegame and enter the
+#      alternate screen.
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
 #      (input, gravity, locking, square detection, line clearing,
-#      rendering), finished rounds are recorded in the highscore list,
+#      rendering), finished rounds are recorded in the highscore list
+#      and their row credit is banked into the wonder savegame,
 #      settings changes are written back to the config file.
 #   7. Restore the terminal on exit and close the debug logs.
 #
@@ -41,7 +47,7 @@
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.7.0  (2026-07-18)
+# Version: 0.8.0  (2026-07-19)
 
 set -euo pipefail
 
@@ -50,7 +56,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.7.0"
+ROWHAMMER_VERSION="0.8.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -98,7 +104,7 @@ Options:
                 Env: ROWHAMMER_PLAYER_NAME  Default: Player
   --data-dir DIR
                 Directory for all persistent game data: the config file
-                rowhammer.conf and the highscore list.
+                rowhammer.conf, the highscore list and the savegame.
                 Env: ROWHAMMER_DATA_DIR     Default: ~/rowhammer
   --no-color    Disable ANSI colors; blocks are drawn as "[]".
                 Env: ROWHAMMER_NO_COLOR     Default: 0
@@ -141,7 +147,13 @@ complete, uncut pieces to form a square - gold if all four are the same
 type, silver if mixed. Every cleared row is worth 1 row of credit, plus
 10 per gold square and 5 per silver square it runs through (additive);
 clearing 4 rows at once (a Tetris) adds 1 extra. The credit is shown as
-"Rows" in the HUD and will build the wonders in Phase 3.
+"Rows" in the HUD.
+
+Wonders: the row credit of every round is added to a persistent counter
+stored in <data-dir>/save. It builds seven world wonders in a fixed
+sequence; the current wonder and its build percentage are shown in the
+HUD, the construction site (ASCII art revealed bottom-up) after every
+round and via the "Weltwunder" main menu entry.
 
 Settings (player name, key bindings) are stored in the config file
 <data-dir>/rowhammer.conf, by default ~/rowhammer/rowhammer.conf. The
@@ -297,7 +309,7 @@ if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
 fi
 
 # --- Library modules ------------------------------------------------------
-for _lib in debug config pieces board squares highscore input render menu; do
+for _lib in debug config pieces board squares highscore save wonders input render menu; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -401,9 +413,11 @@ update_speed() {
     FALL_MS="${LEVEL_SPEEDS[idx]}"
 }
 
-# record_round_score: enter the finished round into the highscore list,
-# at most once per round. Runs right when the game over triggers, so the
-# game over sidebar can show the achieved rank (HS_LAST_RANK), and again
+# record_round_score: close the books on a finished round, at most once
+# per round: enter it into the highscore list and bank its row credit
+# into the persistent wonder counter (savegame). Runs right when the
+# game over triggers, so the game over sidebar can show the achieved
+# rank (HS_LAST_RANK) and the HUD the updated wonder progress, and again
 # as a catch-all when the player quits a running round to the menu.
 record_round_score() {
     if [ "${SCORE_RECORDED}" -eq 1 ]; then
@@ -411,6 +425,13 @@ record_round_score() {
     fi
     SCORE_RECORDED=1
     highscore_add "${SCORE}" "${CLEARED_TOTAL}" "${ROW_CREDIT}" "${LEVEL}" "${PLAYER_NAME}"
+    # Every cleared row counts toward the wonder, even from an aborted
+    # round - like the original, where all modes feed the line total.
+    if [ "${ROW_CREDIT}" -gt 0 ]; then
+        TOTAL_ROW_CREDIT=$(( TOTAL_ROW_CREDIT + ROW_CREDIT ))
+        save_write
+    fi
+    wonders_update "${TOTAL_ROW_CREDIT}"
     return 0
 }
 
@@ -458,7 +479,10 @@ lock_and_next() {
         ROW_CREDIT=$(( ROW_CREDIT + CLEARED_CREDIT ))
         SCORE=$(( SCORE + SCORE_LINES[CLEARED] * (LEVEL + 1) ))
         update_speed
-        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} score=${SCORE} level=${LEVEL} fall_ms=${FALL_MS}"
+        # The HUD wonder line tracks the running round live: banked
+        # total plus the credit earned so far in this round.
+        wonders_update $(( TOTAL_ROW_CREDIT + ROW_CREDIT ))
+        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} score=${SCORE} level=${LEVEL} fall_ms=${FALL_MS} wonder=${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
     fi
     debug_board_snapshot
     # The hold slot unlocks again once a piece has locked.
@@ -704,6 +728,10 @@ main() {
     # Load the persistent highscore list once; rounds update it in
     # memory and rewrite the file when they enter the list.
     highscore_load
+    # Load the wonder savegame and derive the initial wonder state for
+    # the HUD before the first frame is drawn.
+    save_load
+    wonders_update "${TOTAL_ROW_CREDIT}"
     term_setup
 
     while :; do
@@ -711,6 +739,7 @@ main() {
             "Einzelspieler" \
             "Mehrspieler" \
             "Highscores" \
+            "Weltwunder" \
             "Einstellungen" \
             "Beenden"
         case "${MENU_CHOICE}" in
@@ -727,6 +756,11 @@ main() {
                 highscore_screen
                 ;;
             3)
+                # Progress screen: the current construction site with
+                # the banked all-time row total.
+                wonder_screen "${TOTAL_ROW_CREDIT}"
+                ;;
+            4)
                 menu_settings
                 ;;
             *)
