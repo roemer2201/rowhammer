@@ -164,17 +164,19 @@ rowhammer/
     highscore.sh       # Persistente Highscore-Liste (Top 10)
     wonders.sh         # Weltwunder-Logik, Baustufen, Fortschritt
     save.sh            # Laden/Speichern des Spielstands
+    stats.sh           # Persistente Spielstatistik (Reihen, Bonusreihen, Bloecke)
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
   CLAUDE.md
   README.md
 ```
 
-Stand (Version 0.9.0): alle Module aus dem Baum oben existieren
-(`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh` und `save.sh` sowie
+Stand (Version 0.10.0): alle Module aus dem Baum oben existieren
+(`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
+`stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
-Highscores / Weltwunder / Einstellungen / Beenden); die
+Highscores / Weltwunder / Statistik / Einstellungen / Beenden); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -222,7 +224,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - Alle persistenten Spieldaten liegen gemeinsam im Datenverzeichnis
   `${HOME}/rowhammer` (aenderbar per `--data-dir DIR` bzw.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
-  Highscore-Liste `highscore` und der Spielstand `save`.
+  Highscore-Liste `highscore`, der Spielstand `save` und die
+  Statistik `stats`.
 - Bewusste Abweichung von den Script-Konventionen (Abschnitt 11,
   organisationsbasierte Suche unter `/etc` und `${HOME}/.config`):
   seit 0.7.0 gibt es genau eine Config-Datei im Datenverzeichnis
@@ -248,6 +251,17 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Nur der Zaehler wird gespeichert; aktuelles Wunder und Baustufe
   werden daraus deterministisch abgeleitet (`lib/wonders.sh`), damit
   Spielstand und Wunder-Tabellen nie auseinanderlaufen koennen.
+- `lib/stats.sh` (seit 0.10.0): persistente Gesamt-Statistik in
+  `${DATA_DIR}/stats` als validierte `key=value`-Zeilen (geparst,
+  nicht gesourct; defekte Zeilen fallen auf 0 zurueck): abgebaute
+  Reihen (`lines`), Bonusreihen (`bonus_rows`, der Gold-/Silber-/
+  Tetris-Anteil der Reihenwertung, also Rows minus Lines) sowie
+  gebaute Gold- (`gold_squares`) und Silberquadrate
+  (`silver_squares`). Eine Runde wird beim Rundenende genau einmal
+  verbucht (gemeinsam mit Highscore und Savegame in
+  `record_round_score`); Anzeige ueber den Hauptmenuepunkt
+  "Statistik", inklusive der gewichteten Gesamtsumme
+  (Lines + Bonus).
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -395,6 +409,10 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       `auto` erkennt 256-Farben-Terminals selbst; erweiterte Palette mit
       Guideline-Farben inkl. echtem Orange fuer L sowie satterem
       Gold/Silber, siehe 4.1)
+- [x] Spielstatistik (Version 0.10.0: persistente Zaehler fuer
+      abgebaute Reihen, Bonusreihen und gebaute Gold-/Silberquadrate
+      in `${DATA_DIR}/stats`, Anzeige im Hauptmenuepunkt "Statistik",
+      siehe 4.5)
 - [ ] Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,

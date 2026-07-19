@@ -19,10 +19,14 @@
 #   configurable in the settings menu and persisted to a user config
 #   file. Blocks render in the basic 8/16-color ANSI palette or, when
 #   the terminal supports it (auto-detected, overridable via
-#   --color-mode), in an extended xterm 256-color palette. All game data (config, persistent top-10 highscore list and
-#   the savegame) lives in one data directory, by default
+#   --color-mode), in an extended xterm 256-color palette. All game data (config, persistent top-10 highscore list,
+#   the savegame and the all-time statistics) lives in one data
+#   directory, by default
 #   ~/rowhammer. Finished rounds enter the highscore list, which the
 #   main menu shows and whose rank appears on the game over screen.
+#   Every round also feeds persistent statistics (cleared rows, bonus
+#   rows, gold/silver squares built), shown via the "Statistik" main
+#   menu entry.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
 #   action (see lib/debug.sh). A working multiplayer follows
@@ -32,16 +36,17 @@
 #   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify prerequisites (bash >= 4, interactive terminal, size).
 #   3. Source the library modules (debug, config, pieces, board,
-#      squares, highscore, save, wonders, input, render, menu).
+#      squares, highscore, save, stats, wonders, input, render, menu).
 #   4. Resolve settings with precedence default < config file < env <
 #      CLI and validate them.
 #   5. Install the cleanup trap, start the debug logs (when --debug is
-#      set), load the highscore list and the savegame and enter the
-#      alternate screen.
+#      set), load the highscore list, the savegame and the statistics
+#      and enter the alternate screen.
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
 #      (input, gravity, locking, square detection, line clearing,
-#      rendering), finished rounds are recorded in the highscore list
-#      and their row credit is banked into the wonder savegame,
+#      rendering), finished rounds are recorded in the highscore list,
+#      their row credit is banked into the wonder savegame and their
+#      counters into the statistics file,
 #      settings changes are written back to the config file.
 #   7. Restore the terminal on exit and close the debug logs.
 #
@@ -50,7 +55,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.9.0  (2026-07-19)
+# Version: 0.10.0  (2026-07-19)
 
 set -euo pipefail
 
@@ -59,7 +64,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.9.0"
+ROWHAMMER_VERSION="0.10.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -102,7 +107,8 @@ usage() {
 Usage: rowhammer.sh [OPTIONS]
 
 Terminal Tetris of the rowhammer project. Starts with a menu:
-singleplayer, multiplayer (placeholder) and settings.
+singleplayer, multiplayer (placeholder), highscores, wonders,
+statistics and settings.
 
 Options:
   --seed N      Seed the piece randomizer for a reproducible sequence.
@@ -112,7 +118,8 @@ Options:
                 Env: ROWHAMMER_PLAYER_NAME  Default: Player
   --data-dir DIR
                 Directory for all persistent game data: the config file
-                rowhammer.conf, the highscore list and the savegame.
+                rowhammer.conf, the highscore list, the savegame and
+                the statistics file.
                 Env: ROWHAMMER_DATA_DIR     Default: ~/rowhammer
   --no-color    Disable ANSI colors; blocks are drawn as "[]".
                 Overrides --color-mode.
@@ -170,6 +177,11 @@ stored in <data-dir>/save. It builds seven world wonders in a fixed
 sequence; the current wonder and its build percentage are shown in the
 HUD, the construction site (ASCII art revealed bottom-up) after every
 round and via the "Weltwunder" main menu entry.
+
+Statistics: every finished round also adds its cleared rows, bonus rows
+(the gold/silver/Tetris part of the row credit) and the gold and silver
+squares built to persistent all-time counters in <data-dir>/stats,
+shown via the "Statistik" main menu entry.
 
 Settings (player name, key bindings) are stored in the config file
 <data-dir>/rowhammer.conf, by default ~/rowhammer/rowhammer.conf. The
@@ -345,7 +357,7 @@ if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
 fi
 
 # --- Library modules ------------------------------------------------------
-for _lib in debug config pieces board squares highscore save wonders input render menu; do
+for _lib in debug config pieces board squares highscore save stats wonders input render menu; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -455,8 +467,9 @@ update_speed() {
 }
 
 # record_round_score: close the books on a finished round, at most once
-# per round: enter it into the highscore list and bank its row credit
-# into the persistent wonder counter (savegame). Runs right when the
+# per round: enter it into the highscore list, bank its row credit
+# into the persistent wonder counter (savegame) and its counters into
+# the all-time statistics (lib/stats.sh). Runs right when the
 # game over triggers, so the game over sidebar can show the achieved
 # rank (HS_LAST_RANK) and the HUD the updated wonder progress, and again
 # as a catch-all when the player quits a running round to the menu.
@@ -473,6 +486,10 @@ record_round_score() {
         save_write
     fi
     wonders_update "${TOTAL_ROW_CREDIT}"
+    # All-time statistics: physical lines, the bonus part of the row
+    # credit (credit minus physical lines) and the squares built.
+    stats_add_round "${CLEARED_TOTAL}" "$(( ROW_CREDIT - CLEARED_TOTAL ))" \
+        "${GOLD_COUNT}" "${SILVER_COUNT}"
     return 0
 }
 
@@ -773,6 +790,9 @@ main() {
     # the HUD before the first frame is drawn.
     save_load
     wonders_update "${TOTAL_ROW_CREDIT}"
+    # Load the all-time statistics; rounds extend them via
+    # record_round_score.
+    stats_load
     term_setup
 
     while :; do
@@ -781,6 +801,7 @@ main() {
             "Mehrspieler" \
             "Highscores" \
             "Weltwunder" \
+            "Statistik" \
             "Einstellungen" \
             "Beenden"
         case "${MENU_CHOICE}" in
@@ -802,6 +823,9 @@ main() {
                 wonder_screen "${TOTAL_ROW_CREDIT}"
                 ;;
             4)
+                stats_screen
+                ;;
+            5)
                 menu_settings
                 ;;
             *)

@@ -27,7 +27,8 @@ sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
 unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
 und im HUD, nach jeder Runde und im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
-Mehrspieler (Platzhalter), Highscores, Weltwunder und Einstellungen;
+Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik und
+Einstellungen;
 die besten
 10 Runden werden dauerhaft gespeichert. Das vollstaendige Konzept
 und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
@@ -46,12 +47,14 @@ Das Startmenue bietet:
   Level; ein Game Over zeigt den erreichten Rang direkt an
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
+- **Statistik** - Gesamtzaehler ueber alle Runden: abgebaute Reihen,
+  Bonusreihen sowie gebaute Gold- und Silberbloecke
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
   `~/rowhammer/rowhammer.conf`)
 
-Alle Spieldaten (Konfiguration, Highscores, Weltwunder-Spielstand)
-liegen im Datenverzeichnis
+Alle Spieldaten (Konfiguration, Highscores, Weltwunder-Spielstand,
+Statistik) liegen im Datenverzeichnis
 `~/rowhammer`, aenderbar per `--data-dir`.
 
 Optionen:
@@ -97,10 +100,14 @@ Umgesetzt:
   erkannt, umschaltbar per `--color-mode`) eine satte xterm-Palette mit
   den Guideline-Teilfarben - inklusive echtem Orange fuer das L-Teil
   und kraeftigerem Gold/Silber fuer die Quadrate
-- Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores
-  und Einstellungen
+- Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
+  Weltwunder, Statistik und Einstellungen
 - Persistente Highscore-Liste: die besten 10 Runden in
   `~/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
+- **Statistik:** persistente Gesamtzaehler in `~/rowhammer/stats` -
+  abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
+  Reihenwertung) und gebaute Gold-/Silberbloecke, einsehbar im
+  Hauptmenue
 - **Weltwunder-Modus:** der "Rows"-Zaehler baut ueber alle Runden
   hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,
   Chinesische Mauer, Taj Mahal, Basilius-Kathedrale) als ASCII-Art
