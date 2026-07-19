@@ -8,7 +8,8 @@
 #   directory (default ${XDG_STATE_HOME:-~/.local/state}/rowhammer/debug/
 #   <timestamp>.<pid>, overridable with --debug-dir / ROWHAMMER_DEBUG_DIR):
 #     events.log - session header (version, bash, terminal, seed, player,
-#                  key bindings, loaded config files) followed by every
+#                  key bindings, data directory, loaded config files)
+#                  followed by every
 #                  game action: spawns, moves and rotations (including
 #                  blocked attempts), gravity falls, locks, square
 #                  formation, line clears with credit details, hold,
@@ -28,7 +29,7 @@
 #   rowhammer.sh (defaults/env/CLI blocks); this module only reads them.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-18)
+# Version: 0.2.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -83,6 +84,7 @@ debug_init() {
         printf '# seed:     %s\n' "${SEED:-unset (random)}"
         printf '# player:   %s  color=%s\n' "${PLAYER_NAME}" "${USE_COLOR}"
         printf '# keys:     %s\n' "${keys}"
+        printf '# data:     %s\n' "${DATA_DIR}"
         printf '# config:   %s\n' "${CONFIG_LOADED_FILES:-none}"
         printf '# Line format: [elapsed_ms] [f screen_update_no] message.\n'
         printf '# An event tagged f N happened after screen update N.\n'

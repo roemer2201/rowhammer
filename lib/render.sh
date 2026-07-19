@@ -5,14 +5,15 @@
 # Description:
 #   Screen rendering for rowhammer. Builds every frame (board, active
 #   piece, gold/silver squares, sidebar with score, weighted row credit,
-#   piece preview, hold slot and key hints) into one string and prints it
+#   piece preview, hold slot, key hints and the achieved highscore rank
+#   on the game over screen) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
 #   terminal flicker-free. All terminal output goes through screen_write,
 #   which mirrors every update 1:1 into the frame log when the debug mode
 #   is active (lib/debug.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-07-18)
+# Version: 0.5.0  (2026-07-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -122,6 +123,11 @@ draw_frame() {
         side[19]="** PAUSED **"
     fi
     if [ "${GAME_OVER}" -eq 1 ]; then
+        # The finished round was recorded when the game over triggered
+        # (record_round_score), so HS_LAST_RANK is this round's rank.
+        if [ "${HS_LAST_RANK}" -gt 0 ]; then
+            side[16]="New highscore: rank ${HS_LAST_RANK}"
+        fi
         side[18]="** GAME OVER **"
         side[19]="r = restart, ${KEY_QUIT} = menu"
     fi

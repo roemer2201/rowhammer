@@ -13,7 +13,11 @@
 #   cleared rows worth bonus row credit (the "Rows" counter, which will
 #   build the wonders in Phase 3). Player name and key bindings are
 #   configurable in the settings menu and persisted to a user config
-#   file. A debug mode (--debug) traces the whole session into log
+#   file. All game data (config, persistent top-10 highscore list,
+#   later the savegame) lives in one data directory, by default
+#   ~/rowhammer. Finished rounds enter the highscore list, which the
+#   main menu shows and whose rank appears on the game over screen.
+#   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
 #   action (see lib/debug.sh). Wonders and a working multiplayer follow
 #   in later phases (see CLAUDE.md).
@@ -22,21 +26,22 @@
 #   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify prerequisites (bash >= 4, interactive terminal, size).
 #   3. Source the library modules (debug, config, pieces, board,
-#      squares, input, render, menu).
+#      squares, highscore, input, render, menu).
 #   4. Resolve settings with precedence default < config file < env <
 #      CLI and validate them.
 #   5. Install the cleanup trap, start the debug logs (when --debug is
-#      set) and enter the alternate screen.
+#      set), load the highscore list and enter the alternate screen.
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
 #      (input, gravity, locking, square detection, line clearing,
-#      rendering), settings changes are written back to the config file.
+#      rendering), finished rounds are recorded in the highscore list,
+#      settings changes are written back to the config file.
 #   7. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
-#   rowhammer.sh [--seed N] [--name NAME] [--no-color] [--debug]
-#                [--debug-dir DIR] [-h|--help]
+#   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
+#                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.6.0  (2026-07-18)
+# Version: 0.7.0  (2026-07-18)
 
 set -euo pipefail
 
@@ -45,7 +50,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.6.0"
+ROWHAMMER_VERSION="0.7.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -58,6 +63,11 @@ SEED="${ROWHAMMER_SEED:-}"
 NO_COLOR_OPT="${ROWHAMMER_NO_COLOR:-0}"
 DEBUG_OPT="${ROWHAMMER_DEBUG:-0}"
 DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
+# Data directory for everything the game persists (rowhammer.conf,
+# highscore, later the savegame). Not part of the config file itself,
+# because the config file lives inside it; precedence is therefore
+# default < env < CLI like the debug switches.
+DATA_DIR="${ROWHAMMER_DATA_DIR:-${HOME}/rowhammer}"
 PLAYER_NAME="Player"
 KEY_LEFT="a"
 KEY_RIGHT="d"
@@ -86,6 +96,10 @@ Options:
   --name NAME   Player name shown in the HUD (max. 16 characters from
                 A-Z a-z 0-9 space _ -).
                 Env: ROWHAMMER_PLAYER_NAME  Default: Player
+  --data-dir DIR
+                Directory for all persistent game data: the config file
+                rowhammer.conf and the highscore list.
+                Env: ROWHAMMER_DATA_DIR     Default: ~/rowhammer
   --no-color    Disable ANSI colors; blocks are drawn as "[]".
                 Env: ROWHAMMER_NO_COLOR     Default: 0
   --debug       Enable the debug/trace mode: the session is recorded
@@ -129,9 +143,11 @@ type, silver if mixed. Every cleared row is worth 1 row of credit, plus
 clearing 4 rows at once (a Tetris) adds 1 extra. The credit is shown as
 "Rows" in the HUD and will build the wonders in Phase 3.
 
-Settings (player name, key bindings) are stored in a config file, by
-default ~/.config/rowhammer.conf (organization-based lookup, see the
-script conventions and CLAUDE.md). Key bindings can also be overridden
+Settings (player name, key bindings) are stored in the config file
+<data-dir>/rowhammer.conf, by default ~/rowhammer/rowhammer.conf. The
+best 10 rounds are kept in <data-dir>/highscore; the list is shown in
+the main menu and a finished round reports its rank on the game over
+screen. Key bindings can also be overridden
 via environment variables ROWHAMMER_KEY_LEFT, ROWHAMMER_KEY_RIGHT,
 ROWHAMMER_KEY_ROT_CW, ROWHAMMER_KEY_ROT_CCW, ROWHAMMER_KEY_SOFT,
 ROWHAMMER_KEY_HARD, ROWHAMMER_KEY_PAUSE, ROWHAMMER_KEY_QUIT,
@@ -186,6 +202,18 @@ while [ "$#" -gt 0 ]; do
             CLI_PLAYER_NAME="${1#*=}"
             shift
             ;;
+        --data-dir)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            DATA_DIR="${2}"
+            shift 2
+            ;;
+        --data-dir=*)
+            DATA_DIR="${1#*=}"
+            shift
+            ;;
         --no-color)
             NO_COLOR_OPT=1
             shift
@@ -228,6 +256,10 @@ if [ -n "${SEED}" ] && ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
         "${SCRIPT_NAME}" "${SEED}" >&2
     exit 2
 fi
+if [ -z "${DATA_DIR}" ]; then
+    printf '%s: --data-dir must not be empty\n' "${SCRIPT_NAME}" >&2
+    exit 2
+fi
 case "${NO_COLOR_OPT}" in
     0|1) : ;;
     *)
@@ -265,7 +297,7 @@ if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
 fi
 
 # --- Library modules ------------------------------------------------------
-for _lib in debug config pieces board squares input render menu; do
+for _lib in debug config pieces board squares highscore input render menu; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -327,6 +359,9 @@ GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 NOW_MS=0; LAST_FALL=0
+# Guards record_round_score so one round enters the highscore list only
+# once (a round can end twice: game over, then quitting to the menu).
+SCORE_RECORDED=0
 
 # Scoring values (adjustable; the detailed system incl. combos is a later
 # roadmap item). Line points scale with (level + 1); squares pay a flat
@@ -366,6 +401,19 @@ update_speed() {
     FALL_MS="${LEVEL_SPEEDS[idx]}"
 }
 
+# record_round_score: enter the finished round into the highscore list,
+# at most once per round. Runs right when the game over triggers, so the
+# game over sidebar can show the achieved rank (HS_LAST_RANK), and again
+# as a catch-all when the player quits a running round to the menu.
+record_round_score() {
+    if [ "${SCORE_RECORDED}" -eq 1 ]; then
+        return 0
+    fi
+    SCORE_RECORDED=1
+    highscore_add "${SCORE}" "${CLEARED_TOTAL}" "${ROW_CREDIT}" "${LEVEL}" "${PLAYER_NAME}"
+    return 0
+}
+
 # spawn_piece: take the next piece from the bag and place it at the spawn
 # position. A blocked spawn position means the stack reached the top.
 spawn_piece() {
@@ -377,6 +425,7 @@ spawn_piece() {
     if ! can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"; then
         GAME_OVER=1
         debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} blocked - game over (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+        record_round_score
     else
         debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} queue=${QUEUE[*]}"
     fi
@@ -604,6 +653,7 @@ game_reset() {
     HOLD_USED=0
     PAUSED=0
     GAME_OVER=0
+    SCORE_RECORDED=0
     update_speed
     spawn_piece
     now_ms
@@ -634,6 +684,9 @@ game_run() {
             DIRTY=0
         fi
     done
+    # Quitting a running round to the menu ends it too; the flag makes
+    # this a no-op when the game over path already recorded the round.
+    record_round_score
     debug_event "game session end (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
     return 0
 }
@@ -648,12 +701,16 @@ main() {
     # Debug logging starts before the alternate screen, so init errors
     # (unwritable log directory etc.) stay readable.
     debug_init
+    # Load the persistent highscore list once; rounds update it in
+    # memory and rewrite the file when they enter the list.
+    highscore_load
     term_setup
 
     while :; do
         menu_run "R O W H A M M E R" \
             "Einzelspieler" \
             "Mehrspieler" \
+            "Highscores" \
             "Einstellungen" \
             "Beenden"
         case "${MENU_CHOICE}" in
@@ -667,6 +724,9 @@ main() {
                     "Er folgt in einer spaeteren Phase (siehe Roadmap)."
                 ;;
             2)
+                highscore_screen
+                ;;
+            3)
                 menu_settings
                 ;;
             *)
