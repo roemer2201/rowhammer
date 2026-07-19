@@ -5,7 +5,8 @@
 # Description:
 #   Screen rendering for rowhammer. Builds every frame (board, active
 #   piece, gold/silver squares, sidebar with score, weighted row credit,
-#   piece preview, hold slot, key hints and the achieved highscore rank
+#   the wonder under construction with its build percentage, piece
+#   preview, hold slot, key hints and the achieved highscore rank
 #   on the game over screen) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
 #   terminal flicker-free. All terminal output goes through screen_write,
@@ -13,7 +14,7 @@
 #   is active (lib/debug.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.5.0  (2026-07-18)
+# Version: 0.6.0  (2026-07-19)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -67,8 +68,8 @@ render_mini() {
 # draw_frame
 # Render the complete screen. Reads the game state globals (BOARD,
 # BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, SCORE, CLEARED_TOTAL, ROW_CREDIT,
-# LEVEL, GOLD_COUNT, SILVER_COUNT, PAUSED, GAME_OVER) and the USE_COLOR
-# flag. Every line ends with ESC[K so shorter new content fully replaces
+# LEVEL, GOLD_COUNT, SILVER_COUNT, PAUSED, GAME_OVER, the WONDER_*
+# state from lib/wonders.sh) and the USE_COLOR flag. Every line ends with ESC[K so shorter new content fully replaces
 # longer old content; the frame ends with ESC[0J to wipe leftovers from
 # taller menu screens.
 draw_frame() {
@@ -99,6 +100,14 @@ draw_frame() {
     side[3]="Rows:  ${ROW_CREDIT}"
     side[4]="Level: ${LEVEL}"
     side[5]="Gold: ${GOLD_COUNT}   Silver: ${SILVER_COUNT}"
+    # Wonder progress, kept live by wonders_update on every line clear
+    # (banked total plus this round's credit). No "Wonder:" label so the
+    # longest name still fits the 24-column sidebar budget.
+    if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
+        side[6]="All wonders built"
+    else
+        side[6]="${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
+    fi
     side[7]="Next        Hold"
     render_mini "${QUEUE[0]:-}" 0
     local n1a="${RENDER_MINI}"

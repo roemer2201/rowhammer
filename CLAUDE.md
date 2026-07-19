@@ -88,23 +88,41 @@ Die fuer uns relevanten Merkmale des Originals:
   Abraeumen laesst Gold-/Silber-Bloecke vorher in normale Einzelbloecke
   zerfallen (siehe Offene Punkte).
 
-### 3.3 Weltwunder-Aufbau
+### 3.3 Weltwunder-Aufbau (umgesetzt, Version 0.8.0)
 
-- Es gibt eine feste Abfolge von Weltwundern. Vorschlag fuer die erste Version
-  (Liste gegen das Original pruefen, ggf. anpassen):
-  1. Stonehenge
-  2. Pyramiden von Gizeh
-  3. Haengende Gaerten von Babylon
-  4. Kolosseum
-  5. Chinesische Mauer
-  6. Maya-Pyramide (Chichen Itza)
-  7. Taj Mahal
-- Jedes Wunder ist als **ASCII-Art** in mehreren Baustufen hinterlegt
-  (z. B. 10 Stufen). Der persistente Gesamt-Reihenzaehler bestimmt Wunder und
-  Baustufe; nach Fertigstellung folgt das naechste Wunder.
-- Der Baufortschritt wird **ueber Sitzungen hinweg gespeichert** (Savegame,
-  siehe 4.5) und nach jeder Runde sowie auf einem Fortschrittsbildschirm
-  angezeigt.
+- Feste Abfolge von sieben Weltwundern (`lib/wonders.sh`). Der Abgleich
+  mit dem Original ergab (Recherche, Quellen nur teilweise erreichbar):
+  Die Wunder des Originals sind reale Bauwerke, belegt sind u. a.
+  Maya-Tempel, Stonehenge, Sphinx, Pantheon und Basilius-Kathedrale;
+  das erste Wunder (Maya) ist dort bei 2.500 Zeilen fertig, das letzte
+  bei 500.000. Finale Liste (Reihen-Kosten je Wunder in Klammern,
+  justierbar in `WONDER_COSTS`):
+  1. Maya-Tempel / Chichen Itza (100)
+  2. Stonehenge (200)
+  3. Sphinx von Gizeh (400)
+  4. Pantheon, Rom (800)
+  5. Chinesische Mauer (1600)
+  6. Taj Mahal (3200)
+  7. Basilius-Kathedrale, Moskau (6400)
+  Chinesische Mauer und Taj Mahal fuellen die zwei nicht verifizierbaren
+  Plaetze. Die Kosten verdoppeln sich je Wunder (grob geometrisch wie im
+  Original), sind aber auf Einzelrechner-Spielzeit herunterskaliert
+  (12.700 gewichtete Reihen insgesamt statt 500.000 Zeilen).
+- Jedes Wunder ist **eine** ASCII-Art-Datei (`assets/wonders/`, 12
+  Zeilen, max. 44 Spalten, reines ASCII). Die Baustufen werden nicht als
+  separate Dateien gepflegt, sondern durch **zeilenweises Aufdecken von
+  unten** proportional zum Baufortschritt abgeleitet (12 Zeilen = 12
+  Baustufen); die oberste Zeile erscheint erst bei 100 %. Der
+  persistente Gesamt-Reihenzaehler bestimmt Wunder und Baustufe; nach
+  Fertigstellung folgt das naechste Wunder, nach dem letzten zaehlt der
+  Zaehler weiter und der Bildschirm meldet "Alle Weltwunder errichtet".
+- Der Baufortschritt wird **ueber Sitzungen hinweg gespeichert**
+  (Savegame `${DATA_DIR}/save`, siehe 4.5). Der Rundenkredit ("Rows")
+  wird genau einmal je Runde verbucht (Game Over oder Verlassen ins
+  Menue; auch abgebrochene Runden zaehlen, wie im Original). Anzeige:
+  im HUD laufend (aktuelles Wunder + Prozent, inkl. der laufenden
+  Runde), als Baustellen-Bildschirm nach jedem Spiel beim Verlassen ins
+  Menue sowie jederzeit ueber den Hauptmenuepunkt "Weltwunder".
 
 ### 3.4 Anzeige / HUD
 
@@ -148,16 +166,16 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.7.0): `rowhammer.sh` sowie `lib/pieces.sh`, `lib/board.sh`,
-`lib/squares.sh`, `lib/input.sh`, `lib/render.sh`, `lib/menu.sh`,
-`lib/config.sh`, `lib/debug.sh` und `lib/highscore.sh` existieren.
-`wonders.sh`, `save.sh` und `assets/` folgen in Phase 3. Die Anwendung
+Stand (Version 0.8.0): alle Module aus dem Baum oben existieren
+(`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh` und `save.sh` sowie
+`assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
-Highscores / Einstellungen / Beenden); die Menue-Beschriftung
+Highscores / Weltwunder / Einstellungen / Beenden); die
+Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
 Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
-"Rows" ist die gewichtete Reihenwertung (1/5/10), die in Phase 3 den
+"Rows" ist die gewichtete Reihenwertung (1/5/10), die den
 Weltwunder-Fortschritt speist, "Lines" zaehlt physische Reihen und
 treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
@@ -198,8 +216,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - Alle persistenten Spieldaten liegen gemeinsam im Datenverzeichnis
   `${HOME}/rowhammer` (aenderbar per `--data-dir DIR` bzw.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
-  Highscore-Liste `highscore` und ab Phase 3 der Spielstand
-  (Gesamt-Reihen, aktuelles Wunder, Baustufe).
+  Highscore-Liste `highscore` und der Spielstand `save`.
 - Bewusste Abweichung von den Script-Konventionen (Abschnitt 11,
   organisationsbasierte Suche unter `/etc` und `${HOME}/.config`):
   seit 0.7.0 gibt es genau eine Config-Datei im Datenverzeichnis
@@ -219,6 +236,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Menue; Score 0 zaehlt nicht, gleiche Scores rangieren hinter dem
   aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
   die Liste unter "Highscores" im Hauptmenue.
+- `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
+  `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,
+  nicht gesourct; eine defekte Datei faellt mit Meldung auf 0 zurueck).
+  Nur der Zaehler wird gespeichert; aktuelles Wunder und Baustufe
+  werden daraus deterministisch abgeleitet (`lib/wonders.sh`), damit
+  Spielstand und Wunder-Tabellen nie auseinanderlaufen koennen.
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -337,13 +360,18 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [x] Instrumentierung aller Spielaktionen inkl. blockierter Versuche,
       Board-Snapshots nach jedem Lock
 
-### Phase 3 - Weltwunder
+### Phase 3 - Weltwunder (umgesetzt, Version 0.8.0)
 
-- [ ] Wunder-Liste final festlegen (Abgleich mit dem Original)
-- [ ] ASCII-Art je Wunder in Baustufen erstellen (`assets/wonders/`)
-- [ ] Persistenter Gesamt-Reihenzaehler und Savegame (`save.sh`, atomar)
-- [ ] Fortschrittsanzeige im HUD und Wunder-Bildschirm nach Rundenende
-- [ ] Freischalt-Logik: naechstes Wunder nach Fertigstellung
+- [x] Wunder-Liste final festgelegt (Abgleich mit dem Original per
+      Recherche; verifizierte Bauwerke uebernommen, Kosten skaliert,
+      siehe 3.3)
+- [x] ASCII-Art je Wunder (`assets/wonders/`, eine Datei je Wunder;
+      Baustufen durch zeilenweises Aufdecken von unten, siehe 3.3)
+- [x] Persistenter Gesamt-Reihenzaehler und Savegame (`save.sh`, atomar)
+- [x] Fortschrittsanzeige im HUD, Wunder-Bildschirm nach Rundenende
+      und Hauptmenuepunkt "Weltwunder"
+- [x] Freischalt-Logik: naechstes Wunder nach Fertigstellung; nach dem
+      letzten Wunder "Alle Weltwunder errichtet"
 
 ### Phase 4 - Politur
 
@@ -379,8 +407,10 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
   Spin zerfallen Gold-/Silber-Bloecke vorher in normale Einzelbloecke
   und verlieren ihren Bonus. Erfordert Erkennung, ob der letzte Zug ein
   Spin war - Aufwand/Nutzen vor Umsetzung abwaegen.
-- Endgueltige Weltwunder-Liste und Anzahl der Baustufen je Wunder
-  (vor Phase 3 zu klaeren).
+- Weltwunder-Liste und Baustufen sind seit 0.8.0 festgelegt (siehe
+  3.3). Offen bleibt: Die Reihen-Kosten je Wunder (100..6400) sind
+  gegenueber dem Original bewusst herunterskaliert und sollten nach
+  Playtesting ggf. nachjustiert werden (`WONDER_COSTS`).
 - Mindest-Terminalgroesse: seit 0.1.0 als 48x24 implementiert (Pruefung
   nur beim Start). Offen: Verhalten bei Groessenaenderung waehrend des
   Spiels (SIGWINCH) - gehoert zu Phase 4 "Anpassung an Terminalgroesse".
