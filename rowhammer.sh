@@ -25,7 +25,8 @@
 #   ~/rowhammer. Finished rounds enter the highscore list, which the
 #   main menu shows and whose rank appears on the game over screen.
 #   Every round also feeds persistent statistics (cleared rows, bonus
-#   rows, gold/silver squares built), shown via the "Statistik" main
+#   rows, gold/silver squares built, plus the results of the last three
+#   rounds), shown via the "Statistik" main
 #   menu entry.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
@@ -55,7 +56,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.10.0  (2026-07-19)
+# Version: 0.11.0  (2026-07-19)
 
 set -euo pipefail
 
@@ -64,7 +65,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.10.0"
+ROWHAMMER_VERSION="0.11.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -180,7 +181,9 @@ round and via the "Weltwunder" main menu entry.
 
 Statistics: every finished round also adds its cleared rows, bonus rows
 (the gold/silver/Tetris part of the row credit) and the gold and silver
-squares built to persistent all-time counters in <data-dir>/stats,
+squares built to persistent all-time counters in <data-dir>/stats; the
+results of the last three rounds (score, rows, bonus rows, squares) are
+kept there as well. Both are
 shown via the "Statistik" main menu entry.
 
 Settings (player name, key bindings) are stored in the config file
@@ -486,10 +489,11 @@ record_round_score() {
         save_write
     fi
     wonders_update "${TOTAL_ROW_CREDIT}"
-    # All-time statistics: physical lines, the bonus part of the row
-    # credit (credit minus physical lines) and the squares built.
-    stats_add_round "${CLEARED_TOTAL}" "$(( ROW_CREDIT - CLEARED_TOTAL ))" \
-        "${GOLD_COUNT}" "${SILVER_COUNT}"
+    # All-time statistics: the round's score, physical lines, the bonus
+    # part of the row credit (credit minus physical lines) and the
+    # squares built; the round also enters the recent-rounds list.
+    stats_add_round "${SCORE}" "${CLEARED_TOTAL}" \
+        "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}"
     return 0
 }
 

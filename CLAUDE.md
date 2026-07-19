@@ -171,7 +171,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.10.0): alle Module aus dem Baum oben existieren
+Stand (Version 0.11.0): alle Module aus dem Baum oben existieren
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
 `stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
@@ -257,11 +257,14 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Reihen (`lines`), Bonusreihen (`bonus_rows`, der Gold-/Silber-/
   Tetris-Anteil der Reihenwertung, also Rows minus Lines) sowie
   gebaute Gold- (`gold_squares`) und Silberquadrate
-  (`silver_squares`). Eine Runde wird beim Rundenende genau einmal
+  (`silver_squares`). Seit 0.11.0 zusaetzlich die Ergebnisse der
+  letzten drei Runden (`recent=`-Zeilen im Format
+  `score|lines|bonus|gold|silver`, neueste zuerst). Eine Runde wird
+  beim Rundenende genau einmal
   verbucht (gemeinsam mit Highscore und Savegame in
   `record_round_score`); Anzeige ueber den Hauptmenuepunkt
   "Statistik", inklusive der gewichteten Gesamtsumme
-  (Lines + Bonus).
+  (Lines + Bonus) und der letzten drei Spiele.
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -411,7 +414,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Gold/Silber, siehe 4.1)
 - [x] Spielstatistik (Version 0.10.0: persistente Zaehler fuer
       abgebaute Reihen, Bonusreihen und gebaute Gold-/Silberquadrate
-      in `${DATA_DIR}/stats`, Anzeige im Hauptmenuepunkt "Statistik",
+      in `${DATA_DIR}/stats`, Anzeige im Hauptmenuepunkt "Statistik";
+      seit 0.11.0 zusaetzlich die Ergebnisse der letzten drei Spiele,
       siehe 4.5)
 - [ ] Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
