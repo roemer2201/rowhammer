@@ -17,7 +17,9 @@
 #   HUD, after every round and via the "Weltwunder" main menu entry.
 #   Player name and key bindings are
 #   configurable in the settings menu and persisted to a user config
-#   file. All game data (config, persistent top-10 highscore list and
+#   file. Blocks render in the basic 8/16-color ANSI palette or, when
+#   the terminal supports it (auto-detected, overridable via
+#   --color-mode), in an extended xterm 256-color palette. All game data (config, persistent top-10 highscore list and
 #   the savegame) lives in one data directory, by default
 #   ~/rowhammer. Finished rounds enter the highscore list, which the
 #   main menu shows and whose rank appears on the game over screen.
@@ -45,9 +47,10 @@
 #
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
-#                [--debug] [--debug-dir DIR] [-h|--help]
+#                [--color-mode auto|basic|extended] [--debug]
+#                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.8.0  (2026-07-19)
+# Version: 0.9.0  (2026-07-19)
 
 set -euo pipefail
 
@@ -56,7 +59,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.8.0"
+ROWHAMMER_VERSION="0.9.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -67,6 +70,11 @@ ROWHAMMER_VERSION="0.8.0"
 # sourcing below.
 SEED="${ROWHAMMER_SEED:-}"
 NO_COLOR_OPT="${ROWHAMMER_NO_COLOR:-0}"
+# Color mode: auto probes the terminal for 256-color support and picks
+# extended or basic accordingly (color_mode_resolve, lib/render.sh);
+# basic/extended force the respective palette. --no-color disables
+# colors entirely and makes the mode irrelevant.
+COLOR_MODE="${ROWHAMMER_COLOR_MODE:-auto}"
 DEBUG_OPT="${ROWHAMMER_DEBUG:-0}"
 DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 # Data directory for everything the game persists (rowhammer.conf,
@@ -107,7 +115,15 @@ Options:
                 rowhammer.conf, the highscore list and the savegame.
                 Env: ROWHAMMER_DATA_DIR     Default: ~/rowhammer
   --no-color    Disable ANSI colors; blocks are drawn as "[]".
+                Overrides --color-mode.
                 Env: ROWHAMMER_NO_COLOR     Default: 0
+  --color-mode MODE
+                Color palette: "auto" detects 256-color support (tput
+                colors, TERM, COLORTERM) and picks extended or basic;
+                "basic" forces the 8/16-color ANSI palette; "extended"
+                forces the xterm 256-color palette (guideline piece
+                colors incl. a real orange L, richer gold/silver).
+                Env: ROWHAMMER_COLOR_MODE   Default: auto
   --debug       Enable the debug/trace mode: the session is recorded
                 into log files (see below). Logs can grow to several
                 megabytes in long sessions.
@@ -230,6 +246,18 @@ while [ "$#" -gt 0 ]; do
             NO_COLOR_OPT=1
             shift
             ;;
+        --color-mode)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            COLOR_MODE="${2}"
+            shift 2
+            ;;
+        --color-mode=*)
+            COLOR_MODE="${1#*=}"
+            shift
+            ;;
         --debug)
             DEBUG_OPT=1
             shift
@@ -281,6 +309,14 @@ case "${NO_COLOR_OPT}" in
         ;;
 esac
 USE_COLOR=$(( 1 - NO_COLOR_OPT ))
+case "${COLOR_MODE}" in
+    auto|basic|extended) : ;;
+    *)
+        printf '%s: --color-mode expects auto, basic or extended, got: %s\n' \
+            "${SCRIPT_NAME}" "${COLOR_MODE}" >&2
+        exit 2
+        ;;
+esac
 case "${DEBUG_OPT}" in
     0|1) : ;;
     *)
@@ -363,6 +399,11 @@ unset _name_re _key_re _var _other
 if [ -n "${SEED}" ]; then
     RANDOM="${SEED}"
 fi
+
+# Resolve "auto" into basic or extended by probing the terminal, then
+# precompute the block SGR sequences for the renderer (lib/render.sh).
+color_mode_resolve
+render_colors_init
 
 # --- Game state and helpers -----------------------------------------------
 CUR_TYPE=""; CUR_ROT=0; CUR_X=0; CUR_Y=0

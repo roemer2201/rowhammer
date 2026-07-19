@@ -9,12 +9,15 @@
 #   preview, hold slot, key hints and the achieved highscore rank
 #   on the game over screen) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
-#   terminal flicker-free. All terminal output goes through screen_write,
-#   which mirrors every update 1:1 into the frame log when the debug mode
-#   is active (lib/debug.sh).
+#   terminal flicker-free. Blocks are drawn with per-piece SGR sequences
+#   precomputed for the resolved color mode: basic (8/16-color ANSI,
+#   reverse video) or extended (xterm 256-color backgrounds); "auto"
+#   detection lives in color_mode_resolve. All terminal output goes
+#   through screen_write, which mirrors every update 1:1 into the frame
+#   log when the debug mode is active (lib/debug.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.6.0  (2026-07-19)
+# Version: 0.7.0  (2026-07-19)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -25,6 +28,62 @@ fi
 # Cells of the active piece, keyed "x,y", rebuilt on every frame so the
 # board pass below can overlay the falling piece without mutating BOARD.
 declare -A OVERLAY=()
+
+# Per-piece block SGR sequences plus the gold/silver square looks,
+# precomputed once by render_colors_init so the per-cell render loops
+# stay free of mode branches and string assembly.
+declare -A PIECE_SGR=()
+SQ_GOLD_SGR=""
+SQ_SILVER_SGR=""
+RESET_SGR=$'\e[0m'
+
+# color_mode_resolve
+# Resolve COLOR_MODE=auto into basic or extended by probing the
+# terminal: tput colors when available (tput is optional per the
+# conventions), with TERM/COLORTERM as fallback signals. Explicit basic
+# or extended requests are left untouched.
+color_mode_resolve() {
+    if [ "${COLOR_MODE}" != "auto" ]; then
+        return 0
+    fi
+    local n=0
+    if command -v tput >/dev/null 2>&1; then
+        n="$(tput colors 2>/dev/null)" || n=0
+    fi
+    if ! [[ "${n}" =~ ^[0-9]+$ ]]; then
+        n=0
+    fi
+    if (( n >= 256 )) || [[ "${TERM:-}" == *256color* ]] \
+        || [ "${COLORTERM:-}" = "truecolor" ] || [ "${COLORTERM:-}" = "24bit" ]; then
+        COLOR_MODE="extended"
+    else
+        COLOR_MODE="basic"
+    fi
+    return 0
+}
+
+# render_colors_init
+# Build the block SGR lookup for the resolved color mode. Basic mode
+# keeps the original look (reverse video on the 8-color foreground);
+# extended mode paints xterm 256-color backgrounds and gives the squares
+# richer gold/grey tones instead of plain yellow/white.
+render_colors_init() {
+    local t
+    if [ "${COLOR_MODE}" = "extended" ]; then
+        for t in "${PIECE_TYPES[@]}"; do
+            PIECE_SGR["${t}"]=$'\e[48;5;'"${PIECE_COLOR_EXT[${t}]}m"
+        done
+        SQ_GOLD_SGR=$'\e[38;5;16;48;5;178m'
+        SQ_SILVER_SGR=$'\e[38;5;16;48;5;250m'
+    else
+        for t in "${PIECE_TYPES[@]}"; do
+            PIECE_SGR["${t}"]=$'\e[7;'"${PIECE_COLOR[${t}]}m"
+        done
+        SQ_GOLD_SGR=$'\e[30;43m'
+        SQ_SILVER_SGR=$'\e[30;47m'
+    fi
+    return 0
+}
 
 # screen_write CONTENT
 # The single funnel for terminal output: print CONTENT and, in debug
@@ -54,7 +113,7 @@ render_mini() {
     for (( cx = 0; cx < 4; cx++ )); do
         if [[ "${shape}" == *" ${cx},${row} "* ]]; then
             if [ "${USE_COLOR}" -eq 1 ]; then
-                RENDER_MINI+=$'\e[7;'"${PIECE_COLOR[${type}]}m  "$'\e[0m'
+                RENDER_MINI+="${PIECE_SGR[${type}]}  ${RESET_SGR}"
             else
                 RENDER_MINI+="[]"
             fi
@@ -151,7 +210,7 @@ draw_frame() {
             if [ -n "${cell}" ]; then
                 # Active piece cell.
                 if [ "${USE_COLOR}" -eq 1 ]; then
-                    line+=$'\e[7;'"${PIECE_COLOR[${cell}]}m  "$'\e[0m'
+                    line+="${PIECE_SGR[${cell}]}  ${RESET_SGR}"
                 else
                     line+="[]"
                 fi
@@ -167,18 +226,18 @@ draw_frame() {
                     sq="${BOARD_SQ[idx]}"
                     if [ "${sq}" = "G" ]; then
                         if [ "${USE_COLOR}" -eq 1 ]; then
-                            line+=$'\e[30;43m##\e[0m'
+                            line+="${SQ_GOLD_SGR}##${RESET_SGR}"
                         else
                             line+="GG"
                         fi
                     elif [ "${sq}" = "S" ]; then
                         if [ "${USE_COLOR}" -eq 1 ]; then
-                            line+=$'\e[30;47m##\e[0m'
+                            line+="${SQ_SILVER_SGR}##${RESET_SGR}"
                         else
                             line+="SS"
                         fi
                     elif [ "${USE_COLOR}" -eq 1 ]; then
-                        line+=$'\e[7;'"${PIECE_COLOR[${cell}]}m  "$'\e[0m'
+                        line+="${PIECE_SGR[${cell}]}  ${RESET_SGR}"
                     else
                         line+="[]"
                     fi

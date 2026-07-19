@@ -139,7 +139,11 @@ Die fuer uns relevanten Merkmale des Originals:
 - Keine harten Abhaengigkeiten ausser Coreutils; `tput` optional (Fallback auf
   feste ANSI-Sequenzen).
 - Farben ueber ANSI-Escape-Sequenzen (8/16 Farben als Basis, 256-Farben als
-  Verbesserung wenn verfuegbar).
+  Verbesserung wenn verfuegbar). Umgesetzt seit 0.9.0: `--color-mode`
+  mit `auto` (Erkennung ueber `tput colors`, `TERM`, `COLORTERM`),
+  `basic` und `extended`; die 256-Farben-Palette liegt in
+  `lib/pieces.sh` (`PIECE_COLOR_EXT`), die vorberechneten SGR-Sequenzen
+  baut `render_colors_init` in `lib/render.sh`.
 
 ### 4.2 Architektur und Dateistruktur
 
@@ -166,7 +170,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.8.0): alle Module aus dem Baum oben existieren
+Stand (Version 0.9.0): alle Module aus dem Baum oben existieren
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh` und `save.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
@@ -180,7 +184,9 @@ Weltwunder-Fortschritt speist, "Lines" zaehlt physische Reihen und
 treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
-`--no-color` (`ROWHAMMER_NO_COLOR`), `--debug` (`ROWHAMMER_DEBUG`),
+`--no-color` (`ROWHAMMER_NO_COLOR`), `--color-mode auto|basic|extended`
+(`ROWHAMMER_COLOR_MODE`, Standard `auto`; `--no-color` gewinnt),
+`--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 
@@ -385,7 +391,11 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Primaertasten.
 - [x] Highscore-Liste (Version 0.7.0: Top 10 im Datenverzeichnis,
       Anzeige im Hauptmenue, Rang im Game-Over-Bild; siehe 4.5)
-- [ ] 256-Farben-Modus, Anpassung an Terminalgroesse
+- [x] 256-Farben-Modus (Version 0.9.0: `--color-mode auto|basic|extended`,
+      `auto` erkennt 256-Farben-Terminals selbst; erweiterte Palette mit
+      Guideline-Farben inkl. echtem Orange fuer L sowie satterem
+      Gold/Silber, siehe 4.1)
+- [ ] Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
       naechste drei Steine oben rechts, Hold-Stein links

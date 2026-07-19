@@ -62,6 +62,7 @@ Optionen:
 | `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, Bloecke als `[]`      |
+| `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
 | `--debug-dir DIR`| `ROWHAMMER_DEBUG_DIR`    | Zielverzeichnis fuer die Debug-Logs      |
 | `-h/--help`      | -                        | Hilfe mit allen Optionen und Tasten      |
@@ -92,6 +93,10 @@ Umgesetzt:
 - Levelkurve (schneller je 10 Reihen) und Punktesystem
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
   (Double-Buffering), sauberes Terminal-Restore beim Beenden
+- **Erweiterter Farbmodus:** auf 256-Farben-Terminals (automatisch
+  erkannt, umschaltbar per `--color-mode`) eine satte xterm-Palette mit
+  den Guideline-Teilfarben - inklusive echtem Orange fuer das L-Teil
+  und kraeftigerem Gold/Silber fuer die Quadrate
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores
   und Einstellungen
 - Persistente Highscore-Liste: die besten 10 Runden in

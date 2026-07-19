@@ -4,13 +4,14 @@
 #
 # Description:
 #   Tetromino definitions for rowhammer: the seven piece types with their
-#   four rotation states, per-piece ANSI colors, the 7-bag randomizer
-#   (every piece type appears exactly once per bag of seven) and the
-#   upcoming-piece queue that feeds the HUD preview. In debug mode every
-#   bag refill is logged with the shuffled piece order.
+#   four rotation states, per-piece colors for both the basic (8/16
+#   color ANSI) and the extended (xterm 256-color) palette, the 7-bag
+#   randomizer (every piece type appears exactly once per bag of seven)
+#   and the upcoming-piece queue that feeds the HUD preview. In debug
+#   mode every bag refill is logged with the shuffled piece order.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-07-18)
+# Version: 0.4.0  (2026-07-19)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -38,12 +39,22 @@ declare -A PIECE_SHAPE=(
     [L2]="0,1 1,1 2,1 0,2"  [L3]="0,0 1,0 1,1 1,2"
 )
 
-# ANSI foreground color (SGR code) per piece type. Rendering combines this
-# with reverse video to draw solid colored blocks. Only the basic 8-color
-# palette is used so the game works in any color-capable terminal; a nicer
-# 256-color mode is planned for a later phase (see CLAUDE.md).
+# ANSI foreground color (SGR code) per piece type for the basic color
+# mode. Rendering combines this with reverse video to draw solid colored
+# blocks. The basic 8-color palette works in any color-capable terminal;
+# terminals with 256-color support get the extended palette below
+# (COLOR_MODE, resolved in rowhammer.sh / lib/render.sh).
 declare -A PIECE_COLOR=(
     [I]="36" [O]="33" [T]="35" [S]="32" [Z]="31" [J]="34" [L]="37"
+)
+
+# xterm 256-color index per piece type for the extended color mode.
+# Rendering uses these as background colors (48;5;N). The picks follow
+# the common Tetris guideline colors; the L piece finally gets a real
+# orange (208), which the basic 8-color palette cannot express (there it
+# falls back to white).
+declare -A PIECE_COLOR_EXT=(
+    [I]="51" [O]="220" [T]="135" [S]="40" [Z]="196" [J]="33" [L]="208"
 )
 
 # The bag of upcoming pieces (7-bag randomizer state).
