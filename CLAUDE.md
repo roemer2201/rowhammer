@@ -53,8 +53,9 @@ Die fuer uns relevanten Merkmale des Originals:
   - Hard-Drop: `w`, Pfeil hoch und Leertaste
   - Hold: `c` bzw. `2`
   - Pause: `p`; `Esc`/`x` oeffnet das Pausenmenue (seit 0.12.0, Issue
-    #12): Fortsetzen, Ins Hauptmenue (Runde pausiert, dort ueber den
-    Hauptmenuepunkt "Fortsetzen" wieder aufnehmbar) oder Runde beenden
+    #12): Fortsetzen, Ins Hauptmenue (Runde pausiert, wieder aufnehmbar
+    ueber den Eintrag "Fortsetzen", der dann im Hauptmenue und im
+    Einzelspieler-Menue an erster Stelle steht) oder Runde beenden
 - Vorschau: die naechsten 3 Teile. Hold: genau ein Teil, einmal pro Zug tauschbar.
 - Level/Geschwindigkeit: Fallgeschwindigkeit steigt mit der Zahl abgebauter
   Reihen der laufenden Runde.
@@ -185,7 +186,7 @@ Stand (Version 0.12.0): alle Module aus dem Baum oben existieren
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
 Highscores / Weltwunder / Statistik / Einstellungen / Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
-erster Stelle); die
+erster Stelle, ebenso im Einzelspieler-Untermenue); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -429,7 +430,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [x] Pausenmenue und fortsetzbare Runden (Version 0.12.0, Issue #12):
       `Esc`/`x` im Spiel oeffnet ein Pausenmenue (Fortsetzen / Ins
       Hauptmenue / Runde beenden); eine ins Hauptmenue gelegte Runde
-      bleibt ueber den Hauptmenuepunkt "Fortsetzen" wieder aufnehmbar
+      bleibt ueber den Eintrag "Fortsetzen" (im Hauptmenue und im
+      Einzelspieler-Menue) wieder aufnehmbar
       und wird erst beim echten Rundenende gewertet (siehe 3.1, 3.3)
 - [ ] Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)

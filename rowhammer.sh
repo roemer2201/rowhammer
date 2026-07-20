@@ -10,7 +10,8 @@
 #   level-based speed curve, soft/hard drop, pause and game over with
 #   restart. Pressing the quit key (x/ESC) in a running round opens a
 #   pause menu instead of aborting: resume, suspend the round into the
-#   main menu (it stays resumable there via the "Fortsetzen" entry) or
+#   main menu (it stays resumable via the "Fortsetzen" entry offered in
+#   the main menu and in the singleplayer menu) or
 #   end it; a round is recorded only when it really ends.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
@@ -171,7 +172,8 @@ Controls (defaults; rebindable in the settings menu):
   p                           pause / resume
   x or ESC                    open the pause menu: resume, go to the
                               main menu with the round suspended
-                              (resumable there via "Fortsetzen"), or
+                              (resumable via the "Fortsetzen" entry in
+                              the main and singleplayer menus), or
                               end the round
   r                           restart (on the game over screen)
 
@@ -786,7 +788,7 @@ game_run() {
     if [ "${mode}" = "resume" ] && [ "${GAME_SUSPENDED}" -eq 1 ]; then
         GAME_SUSPENDED=0
         PAUSED=1
-        debug_event "round resumed from main menu (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+        debug_event "round resumed from menu (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
         now_ms
         LAST_FALL="${NOW_MS}"
         DIRTY=1

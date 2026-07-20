@@ -14,10 +14,11 @@
 #   construction site (lib/wonders.sh) with the round's credit banked.
 #   The pause menu (menu_pause, issue #12) opens on the quit key during
 #   a round and offers to resume, to suspend the round into the main
-#   menu (resumable via its "Fortsetzen" entry) or to end the round.
+#   menu (resumable via the "Fortsetzen" entry shown in the main menu
+#   and in the singleplayer menu) or to end the round.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.5.0  (2026-07-20)
+# Version: 0.6.0  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -95,7 +96,8 @@ menu_message() {
 # menu_pause: opened by the quit key (ESC/x) during a running round
 # (issue #12: quitting used to end the round on the spot). The player
 # chooses to resume, to suspend the round and go to the main menu
-# (where it stays resumable via the "Fortsetzen" entry) or to end the
+# (where it stays resumable via the "Fortsetzen" entry, offered in the
+# main menu and in the singleplayer menu) or to end the
 # round for good; ESC/back counts as resume. Only sets GAME_EXIT and
 # GAME_SUSPENDED - recording the round stays with game_run, so the
 # books close only when the round really ends.
@@ -126,10 +128,33 @@ menu_pause() {
 # banked row total (the round credit was banked by record_round_score).
 # A round suspended via the pause menu skips that screen and returns to
 # the main menu instead, where its "Fortsetzen" entry picks it up.
+# While a suspended round waits, this menu offers the same "Fortsetzen"
+# entry at the top as the main menu (the other entries shift down by
+# one, so the selection is normalized before the dispatch).
 menu_singleplayer() {
+    local -a entries
+    local choice
     while :; do
-        menu_run "Einzelspieler" "Normales Spiel" "Zurueck"
-        if [ "${MENU_CHOICE}" -eq 0 ]; then
+        entries=()
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+            entries+=("Fortsetzen")
+        fi
+        entries+=("Normales Spiel" "Zurueck")
+        menu_run "Einzelspieler" "${entries[@]}"
+        choice="${MENU_CHOICE}"
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+            if [ "${choice}" -eq 0 ]; then
+                game_run resume
+                if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                    return 0
+                fi
+                wonder_screen "${TOTAL_ROW_CREDIT}"
+                continue
+            elif [ "${choice}" -gt 0 ]; then
+                choice=$(( choice - 1 ))
+            fi
+        fi
+        if [ "${choice}" -eq 0 ]; then
             game_run
             if [ "${GAME_SUSPENDED}" -eq 1 ]; then
                 return 0
