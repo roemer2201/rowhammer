@@ -15,7 +15,7 @@
 #   mode every cleared row is logged with its credit breakdown.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-07-18)
+# Version: 0.4.1  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -100,7 +100,8 @@ lock_piece() {
 # Remove every full row, let the rows above fall down and refill the top
 # with empty rows. Reports two globals: CLEARED (physical rows removed,
 # drives the level curve) and CLEARED_CREDIT (weighted row credit that
-# feeds the wonder progress). Credit per the original's verified rules:
+# feeds the wonder progress and, since the scoring rebuild, is also the
+# round's score). Credit per the original's verified rules:
 # every row counts ROWS_NORMAL, plus ROWS_GOLD per gold square and
 # ROWS_SILVER per silver square the row runs through (additive); a
 # Tetris (4 rows at once) adds ROWS_TETRIS once. The number of squares

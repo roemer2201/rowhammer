@@ -4,8 +4,9 @@
 #
 # Description:
 #   Screen rendering for rowhammer. Builds every frame (board, active
-#   piece, gold/silver squares, sidebar with score, weighted row credit,
-#   the wonder under construction with its build percentage, piece
+#   piece, gold/silver squares, sidebar with the weighted row credit
+#   (the game's score since the scoring rebuild), the wonder under
+#   construction with its build percentage, piece
 #   preview, hold slot, key hints and the achieved highscore rank
 #   on the game over screen) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
@@ -17,7 +18,7 @@
 #   log when the debug mode is active (lib/debug.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.7.0  (2026-07-19)
+# Version: 0.8.0  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -126,7 +127,7 @@ render_mini() {
 
 # draw_frame
 # Render the complete screen. Reads the game state globals (BOARD,
-# BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, SCORE, CLEARED_TOTAL, ROW_CREDIT,
+# BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, CLEARED_TOTAL, ROW_CREDIT,
 # LEVEL, GOLD_COUNT, SILVER_COUNT, PAUSED, GAME_OVER, the WONDER_*
 # state from lib/wonders.sh) and the USE_COLOR flag. Every line ends with ESC[K so shorter new content fully replaces
 # longer old content; the frame ends with ESC[0J to wipe leftovers from
@@ -151,21 +152,22 @@ draw_frame() {
 
     # Sidebar text, one entry per visible board row. "Lines" counts
     # physical rows (drives the level), "Rows" is the weighted credit
-    # (gold/silver bonus) that will build the wonders in Phase 3.
+    # (gold/silver bonus) that builds the wonders - and, since the
+    # scoring rebuild, the round's score; the old separate score line
+    # is gone.
     local -a side=()
     side[0]="Player: ${PLAYER_NAME}"
-    side[1]="Score: ${SCORE}"
-    side[2]="Lines: ${CLEARED_TOTAL}"
-    side[3]="Rows:  ${ROW_CREDIT}"
-    side[4]="Level: ${LEVEL}"
-    side[5]="Gold: ${GOLD_COUNT}   Silver: ${SILVER_COUNT}"
+    side[1]="Lines: ${CLEARED_TOTAL}"
+    side[2]="Rows:  ${ROW_CREDIT}"
+    side[3]="Level: ${LEVEL}"
+    side[4]="Gold: ${GOLD_COUNT}   Silver: ${SILVER_COUNT}"
     # Wonder progress, kept live by wonders_update on every line clear
     # (banked total plus this round's credit). No "Wonder:" label so the
     # longest name still fits the 24-column sidebar budget.
     if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
-        side[6]="All wonders built"
+        side[5]="All wonders built"
     else
-        side[6]="${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
+        side[5]="${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
     fi
     side[7]="Next        Hold"
     render_mini "${QUEUE[0]:-}" 0
@@ -192,7 +194,7 @@ draw_frame() {
     fi
     if [ "${GAME_OVER}" -eq 1 ]; then
         # The finished round was recorded when the game over triggered
-        # (record_round_score), so HS_LAST_RANK is this round's rank.
+        # (record_round), so HS_LAST_RANK is this round's rank.
         if [ "${HS_LAST_RANK}" -gt 0 ]; then
             side[16]="New highscore: rank ${HS_LAST_RANK}"
         fi

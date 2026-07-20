@@ -46,8 +46,9 @@ Das Startmenue bietet:
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
 - **Einzelspieler** - vorerst nur "Normales Spiel"
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
-- **Highscores** - die besten 10 Runden mit Name, Score, Rows und
-  Level; ein Game Over zeigt den erreichten Rang direkt an
+- **Highscores** - die besten 10 Runden mit Name, Rows (die Punkte
+  der Runde), Gold-/Silberquadraten und Datum; ein Game Over zeigt
+  den erreichten Rang direkt an
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
 - **Statistik** - Gesamtzaehler ueber alle Runden: abgebaute Reihen,
@@ -95,12 +96,14 @@ Umgesetzt:
 - **Quadrat-System:** Gold- (sortenrein) und Silber-Quadrate (gemischt)
   aus je vier unversehrten Teilen; jede geraeumte Reihe zaehlt 1 plus
   +10 je Gold- und +5 je Silber-Quadrat in der Reihe (additiv), ein
-  Tetris bringt +1 extra ("Rows" im HUD) - bis zu 85 in einem Zug
+  Tetris bringt +1 extra ("Rows" im HUD) - bis zu 85 in einem Zug.
+  Diese Reihenwertung ist zugleich das Punktesystem: nur abgebaute
+  Reihen bringen Punkte, Drops und Quadrat-Bildung nicht
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
 - **Pausenmenue statt hartem Abbruch:** `Esc`/`x` unterbricht die
   Runde; sie kann ins Hauptmenue gelegt und dort ueber "Fortsetzen"
   wieder aufgenommen werden - gewertet wird erst beim echten Rundenende
-- Levelkurve (schneller je 10 Reihen) und Punktesystem
+- Levelkurve (schneller je 10 Reihen)
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
   (Double-Buffering), sauberes Terminal-Restore beim Beenden
 - **Erweiterter Farbmodus:** auf 256-Farben-Terminals (automatisch

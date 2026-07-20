@@ -11,11 +11,11 @@
 #   and validated, not sourced: it is one number, and a corrupted file
 #   must fall back to zero progress instead of breaking the game.
 #   Saving is atomic (temp file + mv). The round credit is banked into
-#   the counter exactly once per finished round (record_round_score in
+#   the counter exactly once per finished round (record_round in
 #   rowhammer.sh calls save_write).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.1  (2026-07-20)
+# Version: 0.1.2  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -29,7 +29,7 @@ SAVE_FILE_NAME="save"
 SAVE_LINE_RE='^total_rows=([0-9]{1,15})$'
 
 # The all-time weighted row credit across every round ever played. Loaded
-# on startup, extended by record_round_score, read by lib/wonders.sh.
+# on startup, extended by record_round, read by lib/wonders.sh.
 TOTAL_ROW_CREDIT=0
 
 # save_load

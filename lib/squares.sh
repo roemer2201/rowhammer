@@ -7,12 +7,14 @@
 #   squares built from exactly four complete, uncut tetromino instances.
 #   Four instances of the same type form a gold (mono) square, mixed
 #   types a silver (multi) square. Square cells are marked in BOARD_SQ
-#   and make cleared rows worth bonus row credit (see ROWS_* below).
+#   and make cleared rows worth bonus row credit (see ROWS_* below);
+#   forming a square earns no instant points - since the scoring
+#   rebuild the row credit of cleared rows is the game's only score.
 #   In debug mode every formed square is logged with its position and
 #   the four consumed instance ids.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-07-18)
+# Version: 0.3.1  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -20,7 +22,8 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     exit 2
 fi
 
-# Row credit values for the wonder progress counter, following the
+# Row credit values for the wonder progress counter - and, since the
+# scoring rebuild, the game's scoring values - following the
 # original's verified rules (CLAUDE.md 3.2): every cleared row counts
 # ROWS_NORMAL as its base, plus ROWS_GOLD per gold square and
 # ROWS_SILVER per silver square the row runs through (additive when a

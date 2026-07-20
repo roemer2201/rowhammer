@@ -18,7 +18,7 @@
 #   and in the singleplayer menu) or to end the round.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.6.0  (2026-07-20)
+# Version: 0.6.1  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -125,7 +125,7 @@ menu_pause() {
 # menu_singleplayer: for now only the normal game; more modes (for
 # example a sprint mode) can be added as further entries later. After a
 # game session the wonder construction site is shown with the freshly
-# banked row total (the round credit was banked by record_round_score).
+# banked row total (the round credit was banked by record_round).
 # A round suspended via the pause menu skips that screen and returns to
 # the main menu instead, where its "Fortsetzen" entry picks it up.
 # While a suspended round waits, this menu offers the same "Fortsetzen"
