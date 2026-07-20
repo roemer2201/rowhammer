@@ -179,7 +179,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.12.0): alle Module aus dem Baum oben existieren
+Stand (Version 0.14.0): alle Module aus dem Baum oben existieren
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
 `stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
@@ -258,7 +258,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
   Beenden der Runde, siehe 3.3; Score 0 zaehlt nicht, gleiche Scores
   rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
-  die Liste unter "Highscores" im Hauptmenue.
+  die Liste unter "Highscores" im Hauptmenue. Seit 0.14.0 zeigt die
+  Liste auch das gespeicherte Datum je Eintrag; damit das ins
+  48-Spalten-Minimum passt, wird der Name in der Anzeige auf 14
+  Zeichen gekuerzt (gespeichert bleiben weiterhin bis zu 16 Zeichen).
 - `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
   `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,
   nicht gesourct; eine defekte Datei faellt mit Meldung auf 0 zurueck).
@@ -272,13 +275,16 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Tetris-Anteil der Reihenwertung, also Rows minus Lines) sowie
   gebaute Gold- (`gold_squares`) und Silberquadrate
   (`silver_squares`). Seit 0.11.0 zusaetzlich die Ergebnisse der
-  letzten drei Runden (`recent=`-Zeilen im Format
-  `score|lines|bonus|gold|silver`, neueste zuerst). Eine Runde wird
+  letzten drei Runden (`recent=`-Zeilen, neueste zuerst; seit 0.14.0
+  im Format `score|lines|bonus|gold|silver|date` mit dem Spieldatum
+  als `YYYY-MM-DD` - alte Zeilen ohne Datum werden gemaess der
+  Arbeitsregel "keine Abwaertskompatibilitaet" beim Laden verworfen).
+  Eine Runde wird
   beim Rundenende genau einmal
   verbucht (gemeinsam mit Highscore und Savegame in
   `record_round_score`); Anzeige ueber den Hauptmenuepunkt
   "Statistik", inklusive der gewichteten Gesamtsumme
-  (Lines + Bonus) und der letzten drei Spiele.
+  (Lines + Bonus) und der letzten drei Spiele samt Datum.
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -449,9 +455,11 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Eintraegen ohne diese Felder gilt als Standardwert 0
 - [ ] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
       einbauen, falls noch eine laufende Runde im Zwischenspeicher liegt
-- [ ] Anzeige des Datums in der Highscore-Liste nachruesten (Feld `date`
-      wird laut `lib/highscore.sh` gespeichert, aber aktuell nicht
-      angezeigt, siehe 4.5)
+- [x] Anzeige des Datums in der Highscore-Liste nachruesten (Version
+      0.14.0: das gespeicherte Feld `date` wird als eigene Spalte
+      angezeigt, Name in der Anzeige auf 14 Zeichen gekuerzt; die
+      Statistik speichert und zeigt seither ebenfalls das Datum der
+      letzten drei Spiele, siehe 4.5)
 
 ### Phase 5 - Multiplayer (spaeter)
 

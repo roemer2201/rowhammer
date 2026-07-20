@@ -7,7 +7,8 @@
 #   (physical lines), earned bonus rows (the weighted row credit beyond
 #   the physical lines, i.e. gold/silver/Tetris bonuses) and the number
 #   of gold and silver squares built - plus the results of the last
-#   three rounds (score, lines, bonus rows, gold/silver squares; newest
+#   three rounds (score, lines, bonus rows, gold/silver squares and the
+#   date the round was played; newest
 #   first). Everything is kept in ${DATA_DIR}/stats (default
 #   ~/.config/rowhammer/stats) as "key=value" lines
 #   plus comment lines. The file is parsed and validated, not sourced:
@@ -21,7 +22,7 @@
 #   entry via menu_message (lib/menu.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.1  (2026-07-20)
+# Version: 0.3.0  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -32,17 +33,19 @@ fi
 # File name below DATA_DIR and the accepted line formats. The digit
 # caps keep the arithmetic clear of bash integer overflow (same guard
 # as the savegame in lib/save.sh). A "recent" line stores one round as
-# "recent=score|lines|bonus|gold|silver"; the file keeps the newest
-# round first.
+# "recent=score|lines|bonus|gold|silver|date" (date as YYYY-MM-DD, the
+# same shape the highscore list stores); the file keeps the newest
+# round first. Old date-less recent lines are simply dropped on load
+# (project rule: no backward compatibility, formats may just break).
 STATS_FILE_NAME="stats"
 STATS_LINE_RE='^(lines|bonus_rows|gold_squares|silver_squares)=([0-9]{1,15})$'
-STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){4})$'
+STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){4}\|[0-9]{4}-[0-9]{2}-[0-9]{2})$'
 
 # How many recent rounds are kept and shown.
 STATS_RECENT_MAX=3
 
 # All-time counters across every round ever played, plus the recent
-# round list ("score|lines|bonus|gold|silver" per element, newest
+# round list ("score|lines|bonus|gold|silver|date" per element, newest
 # first). Loaded on startup, extended by stats_add_round, read by
 # stats_screen.
 STATS_LINES=0
@@ -114,8 +117,8 @@ stats_write() {
         printf 'bonus_rows=%d\n' "${STATS_BONUS_ROWS}"
         printf 'gold_squares=%d\n' "${STATS_GOLD}"
         printf 'silver_squares=%d\n' "${STATS_SILVER}"
-        # Newest round first; format score|lines|bonus|gold|silver. The
-        # length guard keeps bash < 4.4 happy under set -u.
+        # Newest round first; format score|lines|bonus|gold|silver|date.
+        # The length guard keeps bash < 4.4 happy under set -u.
         if [ "${#STATS_RECENT[@]}" -gt 0 ]; then
             printf 'recent=%s\n' "${STATS_RECENT[@]}"
         fi
@@ -127,12 +130,15 @@ stats_write() {
 
 # stats_add_round SCORE LINES BONUS GOLD SILVER
 # Bank one finished round into the all-time counters, prepend it to the
-# recent round list (capped at STATS_RECENT_MAX) and persist both. A
+# recent round list (capped at STATS_RECENT_MAX) and persist both. The
+# round is stamped with today's date, the same way the highscore list
+# dates its entries. A
 # round without any progress at all (no score, no lines, no squares)
 # leaves the counters, the list and the file
 # untouched, so idle rounds cause no disk writes.
 stats_add_round() {
     local score="${1}" lines="${2}" bonus="${3}" gold="${4}" silver="${5}"
+    local entry
     if (( score == 0 && lines == 0 && bonus == 0 && gold == 0 && silver == 0 )); then
         return 0
     fi
@@ -140,13 +146,14 @@ stats_add_round() {
     STATS_BONUS_ROWS=$(( STATS_BONUS_ROWS + bonus ))
     STATS_GOLD=$(( STATS_GOLD + gold ))
     STATS_SILVER=$(( STATS_SILVER + silver ))
+    entry="${score}|${lines}|${bonus}|${gold}|${silver}|$(date +%Y-%m-%d)"
     # Prepend the round; slicing an empty array errors under set -u on
     # bash < 4.4, hence the guard.
     if [ "${#STATS_RECENT[@]}" -gt 0 ]; then
-        STATS_RECENT=("${score}|${lines}|${bonus}|${gold}|${silver}" \
+        STATS_RECENT=("${entry}" \
             "${STATS_RECENT[@]:0:STATS_RECENT_MAX-1}")
     else
-        STATS_RECENT=("${score}|${lines}|${bonus}|${gold}|${silver}")
+        STATS_RECENT=("${entry}")
     fi
     debug_event "stats: round banked score=${score} +${lines} lines +${bonus} bonus +${gold} gold +${silver} silver"
     stats_write
@@ -159,11 +166,12 @@ stats_add_round() {
 # conventions). The weighted total (lines + bonus rows) is shown as a
 # summary line because it is the number that builds the wonders. Below
 # the counters the results of the last STATS_RECENT_MAX rounds are
-# listed, newest first; the column layout stays within the 48-column
+# listed, newest first and including the date they were played; the
+# column layout stays within the 48-column
 # minimum terminal width.
 stats_screen() {
     local -a body=()
-    local line entry r_score r_lines r_bonus r_gold r_silver
+    local line entry r_score r_lines r_bonus r_gold r_silver r_date
     printf -v line '%-26s %10d' "Abgebaute Reihen:" "${STATS_LINES}"
     body+=("${line}")
     printf -v line '%-26s %10d' "Bonusreihen:" "${STATS_BONUS_ROWS}"
@@ -181,13 +189,17 @@ stats_screen() {
     if [ "${#STATS_RECENT[@]}" -eq 0 ]; then
         body+=("Noch keine Spiele.")
     else
-        printf -v line '%8s %7s %6s %5s %7s' \
-            "Score" "Reihen" "Bonus" "Gold" "Silber"
+        # Tighter columns than before so the date fits: 44 characters
+        # plus the 2-column menu indent stay below 48.
+        printf -v line '%8s %6s %5s %4s %6s %10s' \
+            "Score" "Reihen" "Bonus" "Gold" "Silber" "Datum"
         body+=("${line}")
         for entry in "${STATS_RECENT[@]}"; do
-            IFS='|' read -r r_score r_lines r_bonus r_gold r_silver <<< "${entry}"
-            printf -v line '%8d %7d %6d %5d %7d' \
-                "${r_score}" "${r_lines}" "${r_bonus}" "${r_gold}" "${r_silver}"
+            IFS='|' read -r r_score r_lines r_bonus r_gold r_silver r_date \
+                <<< "${entry}"
+            printf -v line '%8d %6d %5d %4d %6d %10s' \
+                "${r_score}" "${r_lines}" "${r_bonus}" "${r_gold}" \
+                "${r_silver}" "${r_date}"
             body+=("${line}")
         done
     fi
