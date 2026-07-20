@@ -14,10 +14,10 @@
 #   highscore_add records a finished round and reports the achieved rank
 #   in HS_LAST_RANK (0 = did not make the list), which the game over
 #   sidebar shows. highscore_screen renders the list for the main menu
-#   via menu_message (lib/menu.sh).
+#   via menu_message (lib/menu.sh), including each entry's date.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.1  (2026-07-20)
+# Version: 0.2.0  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -125,22 +125,27 @@ highscore_add() {
 # highscore_screen
 # Show the list as a menu-style info screen and wait for any key. Labels
 # are German like the menus; the columns reuse the English HUD terms
-# (Score/Rows/Lv). The layout stays within the 48-column minimum, so
-# lines and date are stored but not displayed here.
+# (Score/Rows/Lv). The stored date is shown as its own column; to keep
+# the layout within the 48-column minimum the name column is capped at
+# 14 characters (longer names are truncated for display only) and lines
+# remain stored but not displayed here.
 highscore_screen() {
     local -a body=()
-    local i line hs_score hs_rows hs_level hs_name
+    local i line hs_score hs_rows hs_level hs_name hs_date
     if [ "${#HS_ENTRIES[@]}" -eq 0 ]; then
         body+=("Noch keine Eintraege.")
         body+=("")
         body+=("Spiele eine Runde, um dich einzutragen.")
     else
-        printf -v line '%2s  %-16s  %7s  %5s  %2s' "Nr" "Name" "Score" "Rows" "Lv"
+        printf -v line '%2s %-14s %7s %5s %2s %10s' \
+            "Nr" "Name" "Score" "Rows" "Lv" "Datum"
         body+=("${line}")
         for i in "${!HS_ENTRIES[@]}"; do
-            IFS='|' read -r hs_score _ hs_rows hs_level hs_name _ <<< "${HS_ENTRIES[i]}"
-            printf -v line '%2d  %-16s  %7d  %5d  %2d' \
-                "$(( i + 1 ))" "${hs_name}" "${hs_score}" "${hs_rows}" "${hs_level}"
+            IFS='|' read -r hs_score _ hs_rows hs_level hs_name hs_date \
+                <<< "${HS_ENTRIES[i]}"
+            printf -v line '%2d %-14.14s %7d %5d %2d %10s' \
+                "$(( i + 1 ))" "${hs_name}" "${hs_score}" "${hs_rows}" \
+                "${hs_level}" "${hs_date}"
             body+=("${line}")
         done
     fi

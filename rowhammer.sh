@@ -31,8 +31,8 @@
 #   main menu shows and whose rank appears on the game over screen.
 #   Every round also feeds persistent statistics (cleared rows, bonus
 #   rows, gold/silver squares built, plus the results of the last three
-#   rounds), shown via the "Statistik" main
-#   menu entry.
+#   rounds with their play date), shown via the "Statistik" main
+#   menu entry; the highscore list shows each entry's date as well.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
 #   action (see lib/debug.sh). A working multiplayer follows
@@ -63,7 +63,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.13.0  (2026-07-20)
+# Version: 0.14.0  (2026-07-20)
 
 set -euo pipefail
 
@@ -72,7 +72,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.13.0"
+ROWHAMMER_VERSION="0.14.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
