@@ -179,7 +179,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.14.0): alle Module aus dem Baum oben existieren
+Stand (Version 0.15.0): alle Module aus dem Baum oben existieren
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
 `stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
@@ -252,16 +252,24 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gesourct wird.
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
-  `score|lines|rows|level|name|date`, absteigend nach Score sortiert.
+  `score|lines|rows|level|name|date|gold|silver` (die Gold-/Silber-
+  Zaehler seit 0.15.0; Eintraege ohne diese Felder werden beim Laden
+  mit dem Standardwert 0 ergaenzt - bewusste, im Roadmap-Punkt so
+  festgelegte Ausnahme von der Arbeitsregel "keine
+  Abwaertskompatibilitaet"), absteigend nach Score sortiert.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
   Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
   Beenden der Runde, siehe 3.3; Score 0 zaehlt nicht, gleiche Scores
   rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
-  die Liste unter "Highscores" im Hauptmenue. Seit 0.14.0 zeigt die
-  Liste auch das gespeicherte Datum je Eintrag; damit das ins
-  48-Spalten-Minimum passt, wird der Name in der Anzeige auf 14
-  Zeichen gekuerzt (gespeichert bleiben weiterhin bis zu 16 Zeichen).
+  die Liste unter "Highscores" im Hauptmenue. Angezeigt werden je
+  Eintrag Rang, Name, Rows, Gold- und Silberquadrate sowie das Datum
+  (seit 0.14.0); die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch
+  aus der Anzeige entfernt (der Score bleibt gespeichert und
+  bestimmt weiterhin die Rangfolge und den Rang im Game-Over-Bild).
+  Damit das Layout ins 48-Spalten-Minimum passt, wird der Name in
+  der Anzeige auf 13 Zeichen gekuerzt (gespeichert bleiben weiterhin
+  bis zu 16 Zeichen).
 - `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
   `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,
   nicht gesourct; eine defekte Datei faellt mit Meldung auf 0 zurueck).
@@ -450,9 +458,13 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] README mit Screenshots/Asciinema aktualisieren
 - [ ] Spielzeit-Counter fuer die aktuelle Runde einbauen (Anzeige im HUD,
       Zeitmessung analog zum Game-Loop ueber `${EPOCHREALTIME}`, siehe 4.3)
-- [ ] Highscore-Liste um Anzahl erzeugter Silber- und Gold-Bloecke
-      erweitern (zusaetzliche Felder im Zeilenformat, siehe 4.5); bei
-      Eintraegen ohne diese Felder gilt als Standardwert 0
+- [x] Highscore-Liste um Anzahl erzeugter Silber- und Gold-Bloecke
+      erweitern (Version 0.15.0: zusaetzliche Felder im Zeilenformat,
+      siehe 4.5; bei Eintraegen ohne diese Felder gilt als
+      Standardwert 0. Gold/Silber werden als Spalten angezeigt, die
+      Score-Spalte ist dafuer auf Nutzerwunsch aus der Anzeige
+      entfernt - der Score bleibt gespeichert und bestimmt weiterhin
+      die Rangfolge)
 - [ ] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
       einbauen, falls noch eine laufende Runde im Zwischenspeicher liegt
 - [x] Anzeige des Datums in der Highscore-Liste nachruesten (Version
