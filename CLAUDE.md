@@ -406,6 +406,7 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Einzelspieler-Spielmodus "Sprint" einbauen: Spiel gegen die Zeit,
       Ziel ist eine feste Punktzahl (Ueberschreitung ist moeglich);
       eigene Statistik und Highscore-Liste fuer diesen Modus ergaenzen
+- [ ] Moeglichkeit zur Spielaufzeichnung einbauen
 
 ### Phase 5 - Multiplayer (spaeter)
 
