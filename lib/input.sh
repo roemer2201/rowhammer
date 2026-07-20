@@ -6,12 +6,15 @@
 #   Terminal setup and non-blocking keyboard input for rowhammer. Switches
 #   to the alternate screen buffer, hides the cursor and provides a
 #   single-key reader that understands the arrow-key escape sequences.
+#   Escape sequences are parsed byte by byte up to their final byte, so
+#   longer sequences (modified arrows, Delete, function keys) are consumed
+#   completely instead of leaking tail bytes as fake key presses (issue #7).
 #   Enter is reported as ENTER so the menu system can use it as "select".
 #   In debug mode every received key press is recorded (raw bytes plus
 #   mapped symbol) via debug_input from lib/debug.sh.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-07-18)
+# Version: 0.4.0  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -22,6 +25,14 @@ fi
 # Poll interval of the game loop in seconds. The read timeout doubles as
 # the tick pacing of the main loop, so the game never busy-waits.
 TICK_S="0.02"
+
+# Grace period in seconds for the continuation bytes of an escape
+# sequence. Deliberately more generous than TICK_S: over SSH, inside
+# tmux/screen or under load the bytes of one arrow-key sequence can
+# arrive several milliseconds apart, and a too short window tears the
+# sequence apart (issue #7). 50 ms is still far below the time a human
+# needs to press Esc and a second key on purpose.
+ESC_SUFFIX_T="0.05"
 
 SAVED_STTY=""
 TERM_ACTIVE=0
@@ -57,26 +68,65 @@ term_restore() {
 # stdin is treated as a fatal error so the loop cannot spin at full speed.
 read_key() {
     KEY=""
-    local c="" rest="" rc=0
+    local c="" rest="" b="" n=0 ord=0 rc=0
     IFS= read -rsn1 -t "${TICK_S}" c || rc=$?
     if [ "${rc}" -gt 128 ]; then
-        # Timeout: no key pressed during this tick.
-        return 0
+        # rc > 128 is a timeout. bash (observed on 5.1) can hand over a
+        # byte together with the timeout status when it arrives in the
+        # very moment the timeout expires; such a byte must not be
+        # dropped: discarding it here silently swallowed the leading ESC
+        # of an arrow-key sequence and its tail bytes were then misread
+        # as normal key presses (issue #7). Only a timeout without data
+        # means that no key was pressed during this tick.
+        if [ -z "${c}" ]; then
+            return 0
+        fi
     elif [ "${rc}" -ne 0 ]; then
         die "Input stream closed (stdin is gone)"
     fi
     case "${c}" in
         $'\e')
             # Either a lone ESC key or the start of an escape sequence:
-            # arrow keys arrive as ESC [ X (or ESC O X in application
-            # mode) within a few milliseconds. The lone-ESC case falls
-            # through (instead of returning early) so the debug input
-            # logging below sees every key press.
-            rc=0
-            IFS= read -rsn2 -t 0.02 rest || rc=$?
-            if [ "${rc}" -ne 0 ]; then
+            # arrow keys arrive as ESC [ X (CSI) or ESC O X (SS3 in
+            # application mode). The suffix is read byte by byte up to
+            # the final byte of the sequence, so longer sequences
+            # (Shift/Ctrl-arrows ESC [ 1 ; 2 C, Delete ESC [ 3 ~,
+            # function keys) are consumed completely; the fixed
+            # two-byte read used before 0.4.0 left their tail bytes in
+            # the buffer where the next calls misread them as normal
+            # key presses (issue #7). The lone-ESC case falls through
+            # (instead of returning early) so the debug input logging
+            # below sees every key press. The suffix reads test the
+            # variable content instead of the read status for the same
+            # bash 5.1 reason as above.
+            IFS= read -rsn1 -t "${ESC_SUFFIX_T}" b || :
+            if [ -z "${b}" ]; then
+                # Nothing followed within the grace period: lone ESC.
                 KEY="ESC"
-            else
+            elif [ "${b}" = '[' ] || [ "${b}" = 'O' ]; then
+                rest="${b}"
+                # Collect parameter bytes until the final byte (ASCII
+                # 0x40..0x7e) ends the sequence. The length cap guards
+                # against a runaway byte stream.
+                while [ "${n}" -lt 16 ]; do
+                    n=$(( n + 1 ))
+                    b=""
+                    IFS= read -rsn1 -t "${ESC_SUFFIX_T}" b || :
+                    if [ -z "${b}" ]; then
+                        break
+                    fi
+                    rest="${rest}${b}"
+                    # Linux console function keys use ESC [ [ X; the
+                    # second '[' is not a final byte there, exactly one
+                    # more byte follows.
+                    if [ "${rest}" = '[[' ]; then
+                        continue
+                    fi
+                    printf -v ord '%d' "'${b}"
+                    if [ "${ord}" -ge 64 ] && [ "${ord}" -le 126 ]; then
+                        break
+                    fi
+                done
                 case "${rest}" in
                     '[A'|'OA') KEY="UP" ;;
                     '[B'|'OB') KEY="DOWN" ;;
@@ -84,6 +134,15 @@ read_key() {
                     '[D'|'OD') KEY="LEFT" ;;
                     *)         KEY="" ;;
                 esac
+            else
+                # ESC immediately followed by an ordinary byte: an
+                # Alt-chord (Alt sends ESC plus the key's byte) or a key
+                # pressed right after Esc. Neither is a game key, so the
+                # pair is consumed without mapping to anything; passing
+                # the second byte on as its own key press would be
+                # exactly the misinterpretation issue #7 is about.
+                rest="${b}"
+                KEY=""
             fi
             ;;
         ' ')

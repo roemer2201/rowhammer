@@ -222,7 +222,15 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - **Input:** nicht-blockierend ueber `read -rsn1 -t <timeout>`;
   Escape-Sequenzen der Pfeiltasten sauber einlesen. Terminal-Modus mit `stty`
   setzen und ueber einen `trap`-Handler (EXIT/INT/TERM) garantiert
-  wiederherstellen.
+  wiederherstellen. Seit 0.16.1 (Issue #7) werden Escape-Sequenzen
+  byteweise bis zu ihrem Endbyte gelesen (grosszuegigeres
+  Fortsetzungs-Timeout `ESC_SUFFIX_T`, 50 ms): laengere Sequenzen
+  (Shift-/Ctrl-Pfeile, Entf, F-Tasten, Alt-Chords) werden komplett
+  konsumiert und verworfen statt Restbytes als Tastendruecke
+  fehlzudeuten; ausserdem wird ein Byte, das Bash (beobachtet mit 5.1)
+  im Timeout-Moment zusammen mit dem Timeout-Status liefert, nicht
+  mehr verworfen (beides zusammen loeste ungewollte Hold-Wechsel durch
+  den Schwanz zerrissener Pfeiltasten-Sequenzen aus).
 - **Rendering:** pro Frame den kompletten Bildschirm in einen String puffern
   und mit **einem** `printf` ausgeben (Double-Buffering gegen Flackern);
   Cursor verstecken, alternativen Screen-Buffer nutzen (`tput smcup`/`rmcup`).
@@ -492,6 +500,13 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       angezeigt, Name in der Anzeige auf 14 Zeichen gekuerzt; die
       Statistik speichert und zeigt seither ebenfalls das Datum der
       letzten drei Spiele, siehe 4.5)
+- [x] Fehlinterpretierte Tastendruecke behoben (Version 0.16.1,
+      Issue #7): zerrissen zugestellte Pfeiltasten-Sequenzen loesten
+      ueber ihre Restbytes (`[`, `C` -> Taste `c`) ungewollte
+      Hold-Wechsel aus; per Debug-Log nachgewiesen. `read_key` liest
+      Escape-Sequenzen jetzt byteweise bis zum Endbyte mit
+      grosszuegigerem Timeout und wertet auch ein im Timeout-Moment
+      geliefertes Byte aus (siehe 4.3)
 - [x] Punktesystem-Umbau (Version 0.16.0, Nutzerentscheidung):
       abgebaute Reihen sind die einzige Punktquelle, der Score ist
       identisch mit der gewichteten Reihenwertung "Rows" (1 je Reihe,
