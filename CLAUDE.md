@@ -392,6 +392,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] README mit Screenshots/Asciinema aktualisieren
 - [ ] Spielzeit-Counter fuer die aktuelle Runde einbauen (Anzeige im HUD,
       Zeitmessung analog zum Game-Loop ueber `${EPOCHREALTIME}`, siehe 4.3)
+- [ ] Highscore-Liste um Anzahl erzeugter Silber- und Gold-Bloecke
+      erweitern (zusaetzliche Felder im Zeilenformat, siehe 4.5)
 
 ### Phase 5 - Multiplayer (spaeter)
 
