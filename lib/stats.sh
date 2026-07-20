@@ -9,7 +9,7 @@
 #   of gold and silver squares built - plus the results of the last
 #   three rounds (score, lines, bonus rows, gold/silver squares; newest
 #   first). Everything is kept in ${DATA_DIR}/stats (default
-#   ~/rowhammer/stats) as "key=value" lines
+#   ~/.config/rowhammer/stats) as "key=value" lines
 #   plus comment lines. The file is parsed and validated, not sourced:
 #   a corrupted line only loses that one counter or round entry (falls
 #   back to 0 / drops the entry), it
@@ -21,7 +21,7 @@
 #   entry via menu_message (lib/menu.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-07-19)
+# Version: 0.2.1  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

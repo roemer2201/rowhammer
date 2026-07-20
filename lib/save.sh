@@ -5,7 +5,8 @@
 # Description:
 #   Persistent savegame for rowhammer: the all-time weighted row credit
 #   ("Rows") that drives the wonder construction (lib/wonders.sh). The
-#   counter is kept in ${DATA_DIR}/save (default ~/rowhammer/save) as a
+#   counter is kept in ${DATA_DIR}/save (default
+#   ~/.config/rowhammer/save) as a
 #   single "total_rows=N" line plus comment lines. The file is parsed
 #   and validated, not sourced: it is one number, and a corrupted file
 #   must fall back to zero progress instead of breaking the game.
@@ -14,7 +15,7 @@
 #   rowhammer.sh calls save_write).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-19)
+# Version: 0.1.1  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

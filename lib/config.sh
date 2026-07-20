@@ -5,7 +5,7 @@
 # Description:
 #   User configuration for rowhammer: player name and key bindings.
 #   The config file lives at ${DATA_DIR}/rowhammer.conf (default
-#   ~/rowhammer/rowhammer.conf), the shared game data directory that
+#   ~/.config/rowhammer/rowhammer.conf), the shared game data directory that
 #   also holds the highscore list (lib/highscore.sh). Saving from the
 #   settings menu writes atomically (temp file + mv). Values are written
 #   single-quoted and validated after loading, because the file is
@@ -15,7 +15,7 @@
 #   debug_init); saves are logged as debug events at runtime.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-07-18)
+# Version: 0.4.1  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -27,8 +27,10 @@ fi
 # CHANGE 2026-07-18: the organization-based lookup (/etc and ~/.config,
 # script conventions section 11) was replaced by exactly one file in the
 # game data directory. Deliberate user decision: all rowhammer data
-# (config, highscore, later the savegame) lives together in ~/rowhammer,
-# and the project needs no backward compatibility (see CLAUDE.md).
+# (config, highscore, savegame, statistics) lives together in one data
+# directory (since 0.13.0 defaulting to ~/.config/rowhammer, previously
+# ~/rowhammer), and the project needs no backward compatibility (see
+# CLAUDE.md).
 CONFIG_NAME="rowhammer.conf"
 
 # The configurable key binding variables. Shared by the settings menu
