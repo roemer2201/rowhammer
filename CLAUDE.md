@@ -438,6 +438,16 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
       naechste drei Steine oben rechts, Hold-Stein links
 - [ ] README mit Screenshots/Asciinema aktualisieren
+- [ ] Spielzeit-Counter fuer die aktuelle Runde einbauen (Anzeige im HUD,
+      Zeitmessung analog zum Game-Loop ueber `${EPOCHREALTIME}`, siehe 4.3)
+- [ ] Highscore-Liste um Anzahl erzeugter Silber- und Gold-Bloecke
+      erweitern (zusaetzliche Felder im Zeilenformat, siehe 4.5); bei
+      Eintraegen ohne diese Felder gilt als Standardwert 0
+- [ ] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
+      einbauen, falls noch eine laufende Runde im Zwischenspeicher liegt
+- [ ] Anzeige des Datums in der Highscore-Liste nachruesten (Feld `date`
+      wird laut `lib/highscore.sh` gespeichert, aber aktuell nicht
+      angezeigt, siehe 4.5)
 
 ### Phase 5 - Multiplayer (spaeter)
 
