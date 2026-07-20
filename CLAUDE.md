@@ -52,7 +52,9 @@ Die fuer uns relevanten Merkmale des Originals:
   - Soft-Drop: `s` bzw. Pfeil runter
   - Hard-Drop: `w`, Pfeil hoch und Leertaste
   - Hold: `c` bzw. `2`
-  - Pause: `p`, Beenden: `Esc`/`x`
+  - Pause: `p`; `Esc`/`x` oeffnet das Pausenmenue (seit 0.12.0, Issue
+    #12): Fortsetzen, Ins Hauptmenue (Runde pausiert, dort ueber den
+    Hauptmenuepunkt "Fortsetzen" wieder aufnehmbar) oder Runde beenden
 - Vorschau: die naechsten 3 Teile. Hold: genau ein Teil, einmal pro Zug tauschbar.
 - Level/Geschwindigkeit: Fallgeschwindigkeit steigt mit der Zahl abgebauter
   Reihen der laufenden Runde.
@@ -118,8 +120,13 @@ Die fuer uns relevanten Merkmale des Originals:
   Zaehler weiter und der Bildschirm meldet "Alle Weltwunder errichtet".
 - Der Baufortschritt wird **ueber Sitzungen hinweg gespeichert**
   (Savegame `${DATA_DIR}/save`, siehe 4.5). Der Rundenkredit ("Rows")
-  wird genau einmal je Runde verbucht (Game Over oder Verlassen ins
-  Menue; auch abgebrochene Runden zaehlen, wie im Original). Anzeige:
+  wird genau einmal je Runde verbucht, und zwar beim echten Rundenende:
+  Game Over, "Runde beenden" im Pausenmenue oder - falls noch eine
+  pausierte Runde wartet - beim Start einer neuen Runde bzw. beim
+  Beenden des Programms (auch abgebrochene Runden zaehlen, wie im
+  Original). Eine ueber das Pausenmenue ins Hauptmenue gelegte Runde
+  ist noch nicht beendet und wird nicht verbucht (seit 0.12.0, Issue
+  #12). Anzeige:
   im HUD laufend (aktuelles Wunder + Prozent, inkl. der laufenden
   Runde), als Baustellen-Bildschirm nach jedem Spiel beim Verlassen ins
   Menue sowie jederzeit ueber den Hauptmenuepunkt "Weltwunder".
@@ -171,12 +178,14 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.11.0): alle Module aus dem Baum oben existieren
+Stand (Version 0.12.0): alle Module aus dem Baum oben existieren
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
 `stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
-Highscores / Weltwunder / Statistik / Einstellungen / Beenden); die
+Highscores / Weltwunder / Statistik / Einstellungen / Beenden;
+solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
+erster Stelle); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -241,9 +250,9 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `score|lines|rows|level|name|date`, absteigend nach Score sortiert.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
   Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
-  Rundenende genau einmal gewertet (Game Over oder Verlassen ins
-  Menue; Score 0 zaehlt nicht, gleiche Scores rangieren hinter dem
-  aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
+  echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
+  Beenden der Runde, siehe 3.3; Score 0 zaehlt nicht, gleiche Scores
+  rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
   die Liste unter "Highscores" im Hauptmenue.
 - `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
   `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,
@@ -417,6 +426,11 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       in `${DATA_DIR}/stats`, Anzeige im Hauptmenuepunkt "Statistik";
       seit 0.11.0 zusaetzlich die Ergebnisse der letzten drei Spiele,
       siehe 4.5)
+- [x] Pausenmenue und fortsetzbare Runden (Version 0.12.0, Issue #12):
+      `Esc`/`x` im Spiel oeffnet ein Pausenmenue (Fortsetzen / Ins
+      Hauptmenue / Runde beenden); eine ins Hauptmenue gelegte Runde
+      bleibt ueber den Hauptmenuepunkt "Fortsetzen" wieder aufnehmbar
+      und wird erst beim echten Rundenende gewertet (siehe 3.1, 3.3)
 - [ ] Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
