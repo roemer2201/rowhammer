@@ -390,6 +390,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
       naechste drei Steine oben rechts, Hold-Stein links
 - [ ] README mit Screenshots/Asciinema aktualisieren
+- [ ] Spielzeit-Counter fuer die aktuelle Runde einbauen (Anzeige im HUD,
+      Zeitmessung analog zum Game-Loop ueber `${EPOCHREALTIME}`, siehe 4.3)
 
 ### Phase 5 - Multiplayer (spaeter)
 
