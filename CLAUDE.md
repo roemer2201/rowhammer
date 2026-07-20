@@ -395,6 +395,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Highscore-Liste um Anzahl erzeugter Silber- und Gold-Bloecke
       erweitern (zusaetzliche Felder im Zeilenformat, siehe 4.5); bei
       Eintraegen ohne diese Felder gilt als Standardwert 0
+- [ ] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
+      einbauen, falls noch eine laufende Runde im Zwischenspeicher liegt
 
 ### Phase 5 - Multiplayer (spaeter)
 
