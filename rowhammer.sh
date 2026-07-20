@@ -15,7 +15,11 @@
 #   end it; a round is recorded only when it really ends.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
-#   cleared rows worth bonus row credit (the "Rows" counter). That credit
+#   cleared rows worth bonus row credit (the "Rows" counter). Since
+#   0.16.0 that weighted row credit is the one and only scoring
+#   currency (user decision): cleared rows are the sole source of
+#   points, drops, square formation and spins earn nothing, and there
+#   is no separate score. The credit
 #   accumulates across all rounds in a savegame and builds the seven
 #   world wonders of the Wonders mode: the current wonder rises as ASCII
 #   art, revealed bottom-up with every invested row, shown live in the
@@ -28,9 +32,9 @@
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
 #   ~/.config/rowhammer. Finished rounds enter the highscore list, which the
-#   main menu shows (rows, gold/silver squares and date per entry; the
-#   score decides the ranking but is not displayed) and whose rank
-#   appears on the game over screen.
+#   main menu shows (rows, gold/silver squares and date per entry) and
+#   whose rank appears on the game over screen; the row credit decides
+#   the ranking.
 #   Every round also feeds persistent statistics (cleared rows, bonus
 #   rows, gold/silver squares built, plus the results of the last three
 #   rounds with their play date), shown via the "Statistik" main
@@ -65,7 +69,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.15.0  (2026-07-20)
+# Version: 0.16.0  (2026-07-20)
 
 set -euo pipefail
 
@@ -74,7 +78,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.15.0"
+ROWHAMMER_VERSION="0.16.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -187,7 +191,10 @@ complete, uncut pieces to form a square - gold if all four are the same
 type, silver if mixed. Every cleared row is worth 1 row of credit, plus
 10 per gold square and 5 per silver square it runs through (additive);
 clearing 4 rows at once (a Tetris) adds 1 extra. The credit is shown as
-"Rows" in the HUD.
+"Rows" in the HUD and is the game's only score: cleared rows are the
+sole source of points - drops, square formation and spins earn nothing.
+Famous maximum for a single move: a Tetris through two complete gold
+squares = 4 + 1 + 8 x 10 = 85.
 
 Wonders: the row credit of every round is added to a persistent counter
 stored in <data-dir>/save. It builds seven world wonders in a fixed
@@ -198,7 +205,7 @@ round and via the "Weltwunder" main menu entry.
 Statistics: every finished round also adds its cleared rows, bonus rows
 (the gold/silver/Tetris part of the row credit) and the gold and silver
 squares built to persistent all-time counters in <data-dir>/stats; the
-results of the last three rounds (score, rows, bonus rows, squares) are
+results of the last three rounds (rows, bonus rows, squares) are
 kept there as well. Both are
 shown via the "Statistik" main menu entry.
 
@@ -438,7 +445,7 @@ render_colors_init
 
 # --- Game state and helpers -----------------------------------------------
 CUR_TYPE=""; CUR_ROT=0; CUR_X=0; CUR_Y=0
-SCORE=0; CLEARED_TOTAL=0; ROW_CREDIT=0; LEVEL=0; FALL_MS=800
+CLEARED_TOTAL=0; ROW_CREDIT=0; LEVEL=0; FALL_MS=800
 GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
@@ -447,16 +454,16 @@ PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 # "Fortsetzen" main menu entry (issue #12).
 GAME_SUSPENDED=0
 NOW_MS=0; LAST_FALL=0
-# Guards record_round_score so one round enters the highscore list only
+# Guards record_round so one round enters the highscore list only
 # once (a round can end twice: game over, then quitting to the menu).
-SCORE_RECORDED=0
+ROUND_RECORDED=0
 
-# Scoring values (adjustable; the detailed system incl. combos is a later
-# roadmap item). Line points scale with (level + 1); squares pay a flat
-# formation bonus on top of the row credit they earn when cleared.
-SCORE_LINES=(0 100 300 500 800)
-SCORE_SQUARE_GOLD=2000
-SCORE_SQUARE_SILVER=1000
+# CHANGE 2026-07-20: the separate score (line points scaling with the
+# level, flat square formation bonuses, drop points) was removed on user
+# decision. The weighted row credit ROW_CREDIT (1 per row, +5 per silver
+# and +10 per gold square strip in a cleared row, +1 for a Tetris; see
+# ROWS_* in lib/squares.sh) is the game's only scoring currency now -
+# the same number that builds the wonders.
 
 # Gravity interval per level in milliseconds. A lookup table instead of a
 # formula so the curve stays easy to tune; the last entry is the cap.
@@ -489,19 +496,19 @@ update_speed() {
     FALL_MS="${LEVEL_SPEEDS[idx]}"
 }
 
-# record_round_score: close the books on a finished round, at most once
+# record_round: close the books on a finished round, at most once
 # per round: enter it into the highscore list, bank its row credit
 # into the persistent wonder counter (savegame) and its counters into
 # the all-time statistics (lib/stats.sh). Runs right when the
 # game over triggers, so the game over sidebar can show the achieved
 # rank (HS_LAST_RANK) and the HUD the updated wonder progress, and again
 # as a catch-all when the player quits a running round to the menu.
-record_round_score() {
-    if [ "${SCORE_RECORDED}" -eq 1 ]; then
+record_round() {
+    if [ "${ROUND_RECORDED}" -eq 1 ]; then
         return 0
     fi
-    SCORE_RECORDED=1
-    highscore_add "${SCORE}" "${CLEARED_TOTAL}" "${ROW_CREDIT}" "${LEVEL}" \
+    ROUND_RECORDED=1
+    highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
         "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}"
     # Every cleared row counts toward the wonder, even from an aborted
     # round - like the original, where all modes feed the line total.
@@ -510,10 +517,10 @@ record_round_score() {
         save_write
     fi
     wonders_update "${TOTAL_ROW_CREDIT}"
-    # All-time statistics: the round's score, physical lines, the bonus
+    # All-time statistics: the round's physical lines, the bonus
     # part of the row credit (credit minus physical lines) and the
     # squares built; the round also enters the recent-rounds list.
-    stats_add_round "${SCORE}" "${CLEARED_TOTAL}" \
+    stats_add_round "${CLEARED_TOTAL}" \
         "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}"
     return 0
 }
@@ -528,8 +535,8 @@ spawn_piece() {
     CUR_Y=0
     if ! can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"; then
         GAME_OVER=1
-        debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} blocked - game over (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
-        record_round_score
+        debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} blocked - game over (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+        record_round
     else
         debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} queue=${QUEUE[*]}"
     fi
@@ -537,10 +544,11 @@ spawn_piece() {
 }
 
 # lock_and_next: lock the active piece, detect squares, clear lines,
-# update score/credit/level and spawn the next piece. Square detection
+# update credit/level and spawn the next piece. Square detection
 # runs before line clearing on purpose: a piece that completes a square
 # and a row at once still forms the square first, so the cleared row
-# already earns the square's bonus credit.
+# already earns the square's bonus credit. Forming a square earns no
+# instant points (only its strips pay off when their rows clear later).
 lock_and_next() {
     lock_piece "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"
     # lock_piece consumed the id it stamped into the board.
@@ -548,24 +556,21 @@ lock_and_next() {
     if detect_square "${CUR_X}" "${CUR_Y}"; then
         if [ "${SQUARE_RESULT}" = "G" ]; then
             GOLD_COUNT=$(( GOLD_COUNT + 1 ))
-            SCORE=$(( SCORE + SCORE_SQUARE_GOLD ))
-            debug_event "gold square bonus: +${SCORE_SQUARE_GOLD} score=${SCORE} gold_total=${GOLD_COUNT}"
+            debug_event "gold square formed: gold_total=${GOLD_COUNT}"
         else
             SILVER_COUNT=$(( SILVER_COUNT + 1 ))
-            SCORE=$(( SCORE + SCORE_SQUARE_SILVER ))
-            debug_event "silver square bonus: +${SCORE_SQUARE_SILVER} score=${SCORE} silver_total=${SILVER_COUNT}"
+            debug_event "silver square formed: silver_total=${SILVER_COUNT}"
         fi
     fi
     clear_lines
     if (( CLEARED > 0 )); then
         CLEARED_TOTAL=$(( CLEARED_TOTAL + CLEARED ))
         ROW_CREDIT=$(( ROW_CREDIT + CLEARED_CREDIT ))
-        SCORE=$(( SCORE + SCORE_LINES[CLEARED] * (LEVEL + 1) ))
         update_speed
         # The HUD wonder line tracks the running round live: banked
         # total plus the credit earned so far in this round.
         wonders_update $(( TOTAL_ROW_CREDIT + ROW_CREDIT ))
-        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} score=${SCORE} level=${LEVEL} fall_ms=${FALL_MS} wonder=${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
+        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} fall_ms=${FALL_MS} wonder=${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
     fi
     debug_board_snapshot
     # The hold slot unlocks again once a piece has locked.
@@ -660,16 +665,16 @@ step_down() {
     return 0
 }
 
-# hard_drop: drop the piece to the floor and lock it immediately. Two
-# points per dropped row, like most guideline implementations.
+# hard_drop: drop the piece to the floor and lock it immediately.
+# CHANGE 2026-07-20: no points per dropped row anymore - cleared rows
+# are the only score source (see the scoring note above).
 hard_drop() {
     local dropped=0
     while can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; do
         CUR_Y=$(( CUR_Y + 1 ))
-        SCORE=$(( SCORE + 2 ))
         dropped=$(( dropped + 1 ))
     done
-    debug_event "hard drop: ${dropped} row(s) to y=${CUR_Y} score=${SCORE}"
+    debug_event "hard drop: ${dropped} row(s) to y=${CUR_Y}"
     lock_and_next
     return 0
 }
@@ -736,10 +741,8 @@ handle_key() {
         "${KEY_ROT_CW}")      try_rotate 1 || : ;;
         "${KEY_ROT_CCW}")     try_rotate -1 || : ;;
         DOWN|"${KEY_SOFT}")
-            # Soft drop: one point per manually dropped row.
-            if can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; then
-                SCORE=$(( SCORE + 1 ))
-            fi
+            # Soft drop earns no points (cleared rows are the only
+            # score source); it just pulls the piece down early.
             step_down
             now_ms
             LAST_FALL="${NOW_MS}"
@@ -763,7 +766,6 @@ game_reset() {
     INSTANCE_CUT=()
     INSTANCE_SQUARED=()
     NEXT_INSTANCE_ID=1
-    SCORE=0
     CLEARED_TOTAL=0
     ROW_CREDIT=0
     GOLD_COUNT=0
@@ -772,7 +774,7 @@ game_reset() {
     HOLD_USED=0
     PAUSED=0
     GAME_OVER=0
-    SCORE_RECORDED=0
+    ROUND_RECORDED=0
     update_speed
     spawn_piece
     now_ms
@@ -794,7 +796,7 @@ game_run() {
     if [ "${mode}" = "resume" ] && [ "${GAME_SUSPENDED}" -eq 1 ]; then
         GAME_SUSPENDED=0
         PAUSED=1
-        debug_event "round resumed from menu (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+        debug_event "round resumed from menu (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
         now_ms
         LAST_FALL="${NOW_MS}"
         DIRTY=1
@@ -804,7 +806,7 @@ game_run() {
         # credit is not lost (aborted rounds count, see CLAUDE.md).
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             GAME_SUSPENDED=0
-            record_round_score
+            record_round
         fi
         game_reset
     fi
@@ -826,15 +828,15 @@ game_run() {
         fi
     done
     # A suspended round is not finished: keep the whole game state
-    # (including the SCORE_RECORDED guard) for the "Fortsetzen" entry.
+    # (including the ROUND_RECORDED guard) for the "Fortsetzen" entry.
     if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-        debug_event "game session suspended (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
+        debug_event "game session suspended (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
         return 0
     fi
     # Quitting a running round to the menu ends it too; the flag makes
     # this a no-op when the game over path already recorded the round.
-    record_round_score
-    debug_event "game session end (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
+    record_round
+    debug_event "game session end (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
     return 0
 }
 
@@ -856,7 +858,7 @@ main() {
     save_load
     wonders_update "${TOTAL_ROW_CREDIT}"
     # Load the all-time statistics; rounds extend them via
-    # record_round_score.
+    # record_round.
     stats_load
     term_setup
 
@@ -918,7 +920,7 @@ main() {
                 # keeps its row credit (aborted rounds count).
                 if [ "${GAME_SUSPENDED}" -eq 1 ]; then
                     GAME_SUSPENDED=0
-                    record_round_score
+                    record_round
                 fi
                 break
                 ;;

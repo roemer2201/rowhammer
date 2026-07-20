@@ -87,6 +87,15 @@ Die fuer uns relevanten Merkmale des Originals:
   (Reihenabbau entfernt nur ganze Zeilen, Quadrate bleiben horizontal
   immer 4 Zellen breit). Ein angeschnittenes Quadrat behaelt seine
   Gold-/Silber-Zellen und liefert weiter Bonus.
+- **Die Reihenwertung ist zugleich das Punktesystem** (seit 0.16.0,
+  Nutzerentscheidung): abgebaute Reihen sind die einzige Punktquelle,
+  der "Rows"-Zaehler ist der Score der Runde. Es gibt keine separaten
+  Punkte mehr fuer Soft-/Hard-Drop, fuer die Quadrat-Bildung (der Bonus
+  faellt erst beim Abbau der Reihen an) oder fuer Spins, und keine
+  Level-Skalierung. Beispiele fuer eine einzelne Reihe: 2x Silber =
+  1 + 2x5 = 11, 1x Silber + 1x Gold = 1 + 5 + 10 = 16, 2x Gold =
+  1 + 2x10 = 21; Maximum pro Zug bleibt der Tetris durch zwei komplette
+  Gold-Quadrate mit 85.
 - Original-Regel bewusst noch nicht umgesetzt: Ein "Spin Move" beim
   Abraeumen laesst Gold-/Silber-Bloecke vorher in normale Einzelbloecke
   zerfallen (siehe Offene Punkte).
@@ -135,8 +144,11 @@ Die fuer uns relevanten Merkmale des Originals:
 ### 3.4 Anzeige / HUD
 
 - Hauptbereich: Spielfeld mit Rahmen.
-- Seitenleiste: Naechste Teile, Hold, Reihen (Runde), Reihen (gesamt),
-  aktuelles Wunder + Baufortschritt (Miniatur oder Prozent), Level, Punkte.
+- Seitenleiste: Naechste Teile, Hold, Lines (physische Reihen der
+  Runde), Rows (gewertete Reihen = Punkte der Runde, siehe 3.2),
+  aktuelles Wunder + Baufortschritt (Miniatur oder Prozent), Level,
+  Gold-/Silberzaehler. Eine separate Score-Zeile gibt es seit 0.16.0
+  nicht mehr.
 - Nach Rundenende: Bildschirm mit dem aktuellen Wunder in seiner neuen Baustufe.
 
 ## 4. Technisches Konzept
@@ -179,7 +191,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.15.0): alle Module aus dem Baum oben existieren
+Stand (Version 0.16.0): alle Module aus dem Baum oben existieren
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
 `stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
@@ -192,7 +204,8 @@ ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
 Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
 "Rows" ist die gewichtete Reihenwertung (1/5/10), die den
-Weltwunder-Fortschritt speist, "Lines" zaehlt physische Reihen und
+Weltwunder-Fortschritt speist und seit 0.16.0 zugleich der Score der
+Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
 treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
@@ -252,21 +265,23 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gesourct wird.
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
-  `score|lines|rows|level|name|date|gold|silver` (die Gold-/Silber-
-  Zaehler seit 0.15.0; Eintraege ohne diese Felder werden beim Laden
-  mit dem Standardwert 0 ergaenzt - bewusste, im Roadmap-Punkt so
-  festgelegte Ausnahme von der Arbeitsregel "keine
-  Abwaertskompatibilitaet"), absteigend nach Score sortiert.
+  `rows|lines|level|name|date|gold|silver`, absteigend nach Rows
+  sortiert. Seit dem Punktesystem-Umbau (0.16.0) ist die gewichtete
+  Reihenwertung der einzige Score: das fruehere fuehrende
+  `score`-Feld entfaellt, Rows bestimmt die Rangfolge und den Rang
+  im Game-Over-Bild; alte 8-Feld-Zeilen fallen gemaess der
+  Arbeitsregel "keine Abwaertskompatibilitaet" bei der Validierung
+  einfach heraus.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
   Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
-  Beenden der Runde, siehe 3.3; Score 0 zaehlt nicht, gleiche Scores
+  Beenden der Runde, siehe 3.3; 0 Rows zaehlt nicht, gleiche Rows
   rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
   die Liste unter "Highscores" im Hauptmenue. Angezeigt werden je
   Eintrag Rang, Name, Rows, Gold- und Silberquadrate sowie das Datum
-  (seit 0.14.0); die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch
-  aus der Anzeige entfernt (der Score bleibt gespeichert und
-  bestimmt weiterhin die Rangfolge und den Rang im Game-Over-Bild).
+  (seit 0.14.0; die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
+  der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt; Lines
+  und Level bleiben gespeichert, werden aber nicht angezeigt).
   Damit das Layout ins 48-Spalten-Minimum passt, wird der Name in
   der Anzeige auf 13 Zeichen gekuerzt (gespeichert bleiben weiterhin
   bis zu 16 Zeichen).
@@ -283,14 +298,17 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Tetris-Anteil der Reihenwertung, also Rows minus Lines) sowie
   gebaute Gold- (`gold_squares`) und Silberquadrate
   (`silver_squares`). Seit 0.11.0 zusaetzlich die Ergebnisse der
-  letzten drei Runden (`recent=`-Zeilen, neueste zuerst; seit 0.14.0
-  im Format `score|lines|bonus|gold|silver|date` mit dem Spieldatum
-  als `YYYY-MM-DD` - alte Zeilen ohne Datum werden gemaess der
+  letzten drei Runden (`recent=`-Zeilen, neueste zuerst; seit 0.16.0
+  im Format `lines|bonus|gold|silver|date` mit dem Spieldatum
+  als `YYYY-MM-DD` - das fruehere fuehrende `score`-Feld entfiel mit
+  dem Punktesystem-Umbau, die Punkte einer Runde sind Lines + Bonus
+  und werden bei der Anzeige abgeleitet statt gespeichert; alte
+  Zeilen im falschen Format werden gemaess der
   Arbeitsregel "keine Abwaertskompatibilitaet" beim Laden verworfen).
   Eine Runde wird
   beim Rundenende genau einmal
   verbucht (gemeinsam mit Highscore und Savegame in
-  `record_round_score`); Anzeige ueber den Hauptmenuepunkt
+  `record_round`); Anzeige ueber den Hauptmenuepunkt
   "Statistik", inklusive der gewichteten Gesamtsumme
   (Lines + Bonus) und der letzten drei Spiele samt Datum.
 
@@ -397,7 +415,9 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       in `lib/squares.sh`)
 - [x] Vorschau (3 Teile) und Hold-Funktion (Taste `c`, konfigurierbar)
 - [x] Level-/Geschwindigkeitskurve (Tabelle `LEVEL_SPEEDS`), Punktesystem
-      (Reihen skalieren mit Level, Quadrat-Bonus 2000/1000)
+      (urspruenglich: Reihen skalieren mit Level, Quadrat-Bonus
+      2000/1000; in 0.16.0 durch die Reihenwertung als einziges
+      Punktesystem ersetzt, siehe 3.2)
 - [x] Bonus-Werte gegen das Original verifiziert (Recherche, siehe 3.2:
       additiv je Quadrat, Tetris +1) und in 0.4.0 umgesetzt
 
@@ -472,6 +492,13 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       angezeigt, Name in der Anzeige auf 14 Zeichen gekuerzt; die
       Statistik speichert und zeigt seither ebenfalls das Datum der
       letzten drei Spiele, siehe 4.5)
+- [x] Punktesystem-Umbau (Version 0.16.0, Nutzerentscheidung):
+      abgebaute Reihen sind die einzige Punktquelle, der Score ist
+      identisch mit der gewichteten Reihenwertung "Rows" (1 je Reihe,
+      +5 je Silber-, +10 je Gold-Streifen, +1 je Tetris, siehe 3.2).
+      Entfallen sind Drop-Punkte, Quadrat-Bildungs-Boni (2000/1000)
+      und die Level-Skalierung; Highscore (Rangfolge nach Rows) und
+      Statistik speichern kein separates Score-Feld mehr (siehe 4.5)
 
 ### Phase 5 - Multiplayer (spaeter)
 
@@ -482,9 +509,10 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 ## 8. Offene Punkte
 
-- Bonus-Reihenwertung ist verifiziert und umgesetzt (siehe 3.2). Noch
-  offen: die Score-Punkte fuer die Quadrat-Bildung (aktuell 2000/1000)
-  sind weiterhin unverifiziert.
+- Bonus-Reihenwertung ist verifiziert und umgesetzt (siehe 3.2); seit
+  dem Punktesystem-Umbau in 0.16.0 ist sie zugleich der Score. Die
+  frueher offene Frage nach den Punkten fuer die Quadrat-Bildung hat
+  sich damit erledigt (es gibt bewusst keine Bildungs-Punkte mehr).
 - "Spin Move"-Regel des Originals umsetzen? Beim Abraeumen mit einem
   Spin zerfallen Gold-/Silber-Bloecke vorher in normale Einzelbloecke
   und verlieren ihren Bonus. Erfordert Erkennung, ob der letzte Zug ein
@@ -496,8 +524,10 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - Mindest-Terminalgroesse: seit 0.1.0 als 48x24 implementiert (Pruefung
   nur beim Start). Offen: Verhalten bei Groessenaenderung waehrend des
   Spiels (SIGWINCH) - gehoert zu Phase 4 "Anpassung an Terminalgroesse".
-- Punktesystem im Detail (Kombos, Back-to-Back?) - Feinschliff nach dem
-  Playtesting.
+- Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
+  0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
+  bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach
+  expliziter Nutzerentscheidung wieder aufgreifen.
 - UI-Sprache: Menues sind Deutsch (ASCII), In-Game-HUD und --help
   Englisch (Konvention). Entscheiden, ob das so bleibt oder das UI
   einheitlich einsprachig werden soll.
