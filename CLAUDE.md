@@ -386,6 +386,9 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [x] Highscore-Liste (Version 0.7.0: Top 10 im Datenverzeichnis,
       Anzeige im Hauptmenue, Rang im Game-Over-Bild; siehe 4.5)
 - [ ] 256-Farben-Modus, Anpassung an Terminalgroesse
+- [ ] Bei `--no-color` unterschiedliche Zeichen fuer die verschiedenen
+      Basis-Blocksorten verwenden, damit der Aufbau von Gold-/
+      Silber-Quadraten auch ohne Farbe nachvollziehbar ist
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
       naechste drei Steine oben rechts, Hold-Stein links
