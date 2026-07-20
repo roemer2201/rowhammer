@@ -393,7 +393,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Spielzeit-Counter fuer die aktuelle Runde einbauen (Anzeige im HUD,
       Zeitmessung analog zum Game-Loop ueber `${EPOCHREALTIME}`, siehe 4.3)
 - [ ] Highscore-Liste um Anzahl erzeugter Silber- und Gold-Bloecke
-      erweitern (zusaetzliche Felder im Zeilenformat, siehe 4.5)
+      erweitern (zusaetzliche Felder im Zeilenformat, siehe 4.5); bei
+      Eintraegen ohne diese Felder gilt als Standardwert 0
 
 ### Phase 5 - Multiplayer (spaeter)
 
