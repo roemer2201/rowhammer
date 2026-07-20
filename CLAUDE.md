@@ -403,6 +403,9 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Anzeige des Datums in der Highscore-Liste nachruesten (Feld `date`
       wird laut `lib/highscore.sh` gespeichert, aber aktuell nicht
       angezeigt, siehe 4.5)
+- [ ] Einzelspieler-Spielmodus "Sprint" einbauen: Spiel gegen die Zeit,
+      Ziel ist eine feste Punktzahl (Ueberschreitung ist moeglich);
+      eigene Statistik und Highscore-Liste fuer diesen Modus ergaenzen
 
 ### Phase 5 - Multiplayer (spaeter)
 
