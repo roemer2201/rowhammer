@@ -397,6 +397,8 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Eintraegen ohne diese Felder gilt als Standardwert 0
 - [ ] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
       einbauen, falls noch eine laufende Runde im Zwischenspeicher liegt
+- [ ] Highscore-Eintraege um vollen Zeit+Datumsstempel (nicht nur Datum)
+      zum Zeitpunkt des Rundenendes erweitern (Feld `date` in 4.5)
 
 ### Phase 5 - Multiplayer (spaeter)
 
