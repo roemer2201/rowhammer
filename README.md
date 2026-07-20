@@ -42,7 +42,8 @@ und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 Das Startmenue bietet:
 
 - **Fortsetzen** - erscheint nur, solange eine ueber das Pausenmenue
-  ins Hauptmenue gelegte Runde wartet, und nimmt sie wieder auf
+  ins Hauptmenue gelegte Runde wartet, und nimmt sie wieder auf; der
+  Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
 - **Einzelspieler** - vorerst nur "Normales Spiel"
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
 - **Highscores** - die besten 10 Runden mit Name, Score, Rows und
