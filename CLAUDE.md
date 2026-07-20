@@ -232,7 +232,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 ### 4.5 Persistenz
 
 - Alle persistenten Spieldaten liegen gemeinsam im Datenverzeichnis
-  `${HOME}/rowhammer` (aenderbar per `--data-dir DIR` bzw.
+  `${HOME}/.config/rowhammer` (seit 0.13.0, vorher `${HOME}/rowhammer`;
+  aenderbar per `--data-dir DIR` bzw.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
   Highscore-Liste `highscore`, der Spielstand `save` und die
   Statistik `stats`.
@@ -240,7 +241,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   organisationsbasierte Suche unter `/etc` und `${HOME}/.config`):
   seit 0.7.0 gibt es genau eine Config-Datei im Datenverzeichnis
   (Nutzerentscheidung). Alte Pfade werden gemaess der Arbeitsregel
-  "keine Abwaertskompatibilitaet" nicht mehr beruecksichtigt.
+  "keine Abwaertskompatibilitaet" nicht mehr beruecksichtigt - das
+  gilt auch fuer den Umzug des Datenverzeichnisses nach
+  `${HOME}/.config/rowhammer` in 0.13.0 (keine Migration von
+  `${HOME}/rowhammer`).
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
   (Spielername, Tastenbelegung) schreibt `${DATA_DIR}/rowhammer.conf`;

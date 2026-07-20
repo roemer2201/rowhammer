@@ -4,7 +4,8 @@
 #
 # Description:
 #   Persistent highscore list for rowhammer. The best HS_MAX (10) rounds
-#   are kept in ${DATA_DIR}/highscore (default ~/rowhammer/highscore),
+#   are kept in ${DATA_DIR}/highscore (default
+#   ~/.config/rowhammer/highscore),
 #   one entry per line in the field format
 #   "score|lines|rows|level|name|date", sorted by score descending.
 #   The file is parsed and validated line by line, not sourced: it is
@@ -16,7 +17,7 @@
 #   via menu_message (lib/menu.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-18)
+# Version: 0.1.1  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

@@ -27,7 +27,7 @@
 #   --color-mode), in an extended xterm 256-color palette. All game data (config, persistent top-10 highscore list,
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
-#   ~/rowhammer. Finished rounds enter the highscore list, which the
+#   ~/.config/rowhammer. Finished rounds enter the highscore list, which the
 #   main menu shows and whose rank appears on the game over screen.
 #   Every round also feeds persistent statistics (cleared rows, bonus
 #   rows, gold/silver squares built, plus the results of the last three
@@ -63,7 +63,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.12.0  (2026-07-20)
+# Version: 0.13.0  (2026-07-20)
 
 set -euo pipefail
 
@@ -72,7 +72,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.12.0"
+ROWHAMMER_VERSION="0.13.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -94,7 +94,10 @@ DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 # highscore, later the savegame). Not part of the config file itself,
 # because the config file lives inside it; precedence is therefore
 # default < env < CLI like the debug switches.
-DATA_DIR="${ROWHAMMER_DATA_DIR:-${HOME}/rowhammer}"
+# CHANGE 2026-07-20: default moved from ~/rowhammer to
+# ~/.config/rowhammer (user decision: keep the home directory clean);
+# no migration of the old path per the no-backward-compatibility rule.
+DATA_DIR="${ROWHAMMER_DATA_DIR:-${HOME}/.config/rowhammer}"
 PLAYER_NAME="Player"
 KEY_LEFT="a"
 KEY_RIGHT="d"
@@ -128,7 +131,7 @@ Options:
                 Directory for all persistent game data: the config file
                 rowhammer.conf, the highscore list, the savegame and
                 the statistics file.
-                Env: ROWHAMMER_DATA_DIR     Default: ~/rowhammer
+                Env: ROWHAMMER_DATA_DIR     Default: ~/.config/rowhammer
   --no-color    Disable ANSI colors; blocks are drawn as "[]".
                 Overrides --color-mode.
                 Env: ROWHAMMER_NO_COLOR     Default: 0
@@ -198,7 +201,7 @@ kept there as well. Both are
 shown via the "Statistik" main menu entry.
 
 Settings (player name, key bindings) are stored in the config file
-<data-dir>/rowhammer.conf, by default ~/rowhammer/rowhammer.conf. The
+<data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
 best 10 rounds are kept in <data-dir>/highscore; the list is shown in
 the main menu and a finished round reports its rank on the game over
 screen. Key bindings can also be overridden

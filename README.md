@@ -55,11 +55,11 @@ Das Startmenue bietet:
   Ergebnisse der letzten drei Spiele
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
-  `~/rowhammer/rowhammer.conf`)
+  `~/.config/rowhammer/rowhammer.conf`)
 
 Alle Spieldaten (Konfiguration, Highscores, Weltwunder-Spielstand,
 Statistik) liegen im Datenverzeichnis
-`~/rowhammer`, aenderbar per `--data-dir`.
+`~/.config/rowhammer`, aenderbar per `--data-dir`.
 
 Optionen:
 
@@ -110,8 +110,8 @@ Umgesetzt:
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
   Weltwunder, Statistik und Einstellungen
 - Persistente Highscore-Liste: die besten 10 Runden in
-  `~/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
-- **Statistik:** persistente Gesamtzaehler in `~/rowhammer/stats` -
+  `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
+- **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
   Reihenwertung) und gebaute Gold-/Silberbloecke sowie die Ergebnisse
   der letzten drei Spiele, einsehbar im
@@ -120,9 +120,9 @@ Umgesetzt:
   hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,
   Chinesische Mauer, Taj Mahal, Basilius-Kathedrale) als ASCII-Art
   Baustufe fuer Baustufe von unten auf; Fortschritt persistent in
-  `~/rowhammer/save`, Anzeige im HUD, nach jeder Runde und im Menue
+  `~/.config/rowhammer/save`, Anzeige im HUD, nach jeder Runde und im Menue
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
-  `~/rowhammer/rowhammer.conf`
+  `~/.config/rowhammer/rowhammer.conf`
 
 Geplant:
 
