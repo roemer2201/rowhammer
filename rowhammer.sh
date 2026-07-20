@@ -8,7 +8,11 @@
 #   multiplayer placeholder, settings); the game offers a 10x20 board,
 #   7-bag randomizer with a 3-piece preview, a hold slot, gravity with a
 #   level-based speed curve, soft/hard drop, pause and game over with
-#   restart. The New Tetris square mechanics are in: 4x4 squares built
+#   restart. Pressing the quit key (x/ESC) in a running round opens a
+#   pause menu instead of aborting: resume, suspend the round into the
+#   main menu (it stays resumable there via the "Fortsetzen" entry) or
+#   end it; a round is recorded only when it really ends.
+#   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
 #   cleared rows worth bonus row credit (the "Rows" counter). That credit
 #   accumulates across all rounds in a savegame and builds the seven
@@ -48,7 +52,9 @@
 #      rendering), finished rounds are recorded in the highscore list,
 #      their row credit is banked into the wonder savegame and their
 #      counters into the statistics file,
-#      settings changes are written back to the config file.
+#      settings changes are written back to the config file. A round
+#      suspended via the pause menu returns to the main menu
+#      unrecorded and continues via its "Fortsetzen" entry.
 #   7. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
@@ -56,7 +62,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.11.0  (2026-07-19)
+# Version: 0.12.0  (2026-07-20)
 
 set -euo pipefail
 
@@ -65,7 +71,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.11.0"
+ROWHAMMER_VERSION="0.12.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -163,7 +169,10 @@ Controls (defaults; rebindable in the settings menu):
   w, arrow up or space        hard drop
   c or 2                      hold / swap piece (once per piece)
   p                           pause / resume
-  x or ESC                    back to the menu
+  x or ESC                    open the pause menu: resume, go to the
+                              main menu with the round suspended
+                              (resumable there via "Fortsetzen"), or
+                              end the round
   r                           restart (on the game over screen)
 
 Square mechanics (The New Tetris): fill a 4x4 area with exactly four
@@ -426,6 +435,10 @@ SCORE=0; CLEARED_TOTAL=0; ROW_CREDIT=0; LEVEL=0; FALL_MS=800
 GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
+# A round left via the pause menu's "Ins Hauptmenue" keeps its complete
+# state in the globals above; this flag marks it as waiting for the
+# "Fortsetzen" main menu entry (issue #12).
+GAME_SUSPENDED=0
 NOW_MS=0; LAST_FALL=0
 # Guards record_round_score so one round enters the highscore list only
 # once (a round can end twice: game over, then quitting to the menu).
@@ -690,8 +703,20 @@ handle_key() {
             DIRTY=1
             ;;
         "${KEY_QUIT}"|ESC)
-            debug_event "quit to menu"
-            GAME_EXIT=1
+            # Since 0.12.0 the quit key no longer aborts the round on
+            # the spot (issue #12): the pause menu asks whether to
+            # resume, suspend the round into the main menu or end it
+            # (lib/menu.sh sets GAME_EXIT/GAME_SUSPENDED accordingly).
+            debug_event "pause menu opened"
+            menu_pause
+            # The menu overdrew the game screen and consumed time:
+            # force a redraw and restart the gravity timer. Return so
+            # the menu's confirmation key (Enter/space) is not applied
+            # to the game as well.
+            now_ms
+            LAST_FALL="${NOW_MS}"
+            DIRTY=1
+            return 0
             ;;
     esac
     if [ "${PAUSED}" -eq 1 ]; then
@@ -748,11 +773,33 @@ game_reset() {
 }
 
 # --- Game loop ------------------------------------------------------------
-# game_run: one complete game session; returns to the caller (the menu)
-# when the player leaves via the quit key or the game over screen.
+# game_run [MODE]
+# One game session; returns to the caller (the menu) when the player
+# leaves via the pause menu or the game over screen. MODE "resume"
+# continues the round suspended earlier through the pause menu instead
+# of starting a fresh one; the round comes back paused so it does not
+# run before the player is ready. A round suspended (again) is not
+# recorded - the books close only when the round really ends.
 game_run() {
+    local mode="${1:-new}"
     GAME_EXIT=0
-    game_reset
+    if [ "${mode}" = "resume" ] && [ "${GAME_SUSPENDED}" -eq 1 ]; then
+        GAME_SUSPENDED=0
+        PAUSED=1
+        debug_event "round resumed from main menu (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+        now_ms
+        LAST_FALL="${NOW_MS}"
+        DIRTY=1
+    else
+        # Starting a new round while another one is still suspended
+        # ends the suspended one for good; record it first so its row
+        # credit is not lost (aborted rounds count, see CLAUDE.md).
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+            GAME_SUSPENDED=0
+            record_round_score
+        fi
+        game_reset
+    fi
 
     while [ "${GAME_EXIT}" -eq 0 ]; do
         # read_key also paces the loop via its TICK_S timeout.
@@ -770,6 +817,12 @@ game_run() {
             DIRTY=0
         fi
     done
+    # A suspended round is not finished: keep the whole game state
+    # (including the SCORE_RECORDED guard) for the "Fortsetzen" entry.
+    if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+        debug_event "game session suspended (score=${SCORE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
+        return 0
+    fi
     # Quitting a running round to the menu ends it too; the flag makes
     # this a no-op when the game over path already recorded the round.
     record_round_score
@@ -799,16 +852,35 @@ main() {
     stats_load
     term_setup
 
+    # While a round is suspended (pause menu, issue #12) the main menu
+    # grows a "Fortsetzen" entry at the top; the other entries shift
+    # down by one, so the selection is normalized before the dispatch.
+    local -a entries
+    local choice
     while :; do
-        menu_run "R O W H A M M E R" \
-            "Einzelspieler" \
-            "Mehrspieler" \
-            "Highscores" \
-            "Weltwunder" \
-            "Statistik" \
-            "Einstellungen" \
-            "Beenden"
-        case "${MENU_CHOICE}" in
+        entries=()
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+            entries+=("Fortsetzen")
+        fi
+        entries+=("Einzelspieler" "Mehrspieler" "Highscores" \
+            "Weltwunder" "Statistik" "Einstellungen" "Beenden")
+        menu_run "R O W H A M M E R" "${entries[@]}"
+        choice="${MENU_CHOICE}"
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+            if [ "${choice}" -eq 0 ]; then
+                # Resume the suspended round; when it ends for real
+                # now, show the construction site like after any other
+                # round (when it was suspended again, skip it).
+                game_run resume
+                if [ "${GAME_SUSPENDED}" -eq 0 ]; then
+                    wonder_screen "${TOTAL_ROW_CREDIT}"
+                fi
+                continue
+            elif [ "${choice}" -gt 0 ]; then
+                choice=$(( choice - 1 ))
+            fi
+        fi
+        case "${choice}" in
             0)
                 menu_singleplayer
                 ;;
@@ -833,7 +905,13 @@ main() {
                 menu_settings
                 ;;
             *)
-                # "Beenden" or ESC on the top level leaves the game.
+                # "Beenden" or ESC on the top level leaves the game. A
+                # round still suspended here ends now; recording it
+                # keeps its row credit (aborted rounds count).
+                if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                    GAME_SUSPENDED=0
+                    record_round_score
+                fi
                 break
                 ;;
         esac

@@ -41,6 +41,8 @@ und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
 Das Startmenue bietet:
 
+- **Fortsetzen** - erscheint nur, solange eine ueber das Pausenmenue
+  ins Hauptmenue gelegte Runde wartet, und nimmt sie wieder auf
 - **Einzelspieler** - vorerst nur "Normales Spiel"
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
 - **Highscores** - die besten 10 Runden mit Name, Score, Rows und
@@ -94,6 +96,9 @@ Umgesetzt:
   +10 je Gold- und +5 je Silber-Quadrat in der Reihe (additiv), ein
   Tetris bringt +1 extra ("Rows" im HUD) - bis zu 85 in einem Zug
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
+- **Pausenmenue statt hartem Abbruch:** `Esc`/`x` unterbricht die
+  Runde; sie kann ins Hauptmenue gelegt und dort ueber "Fortsetzen"
+  wieder aufgenommen werden - gewertet wird erst beim echten Rundenende
 - Levelkurve (schneller je 10 Reihen) und Punktesystem
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
   (Double-Buffering), sauberes Terminal-Restore beim Beenden
@@ -144,7 +149,7 @@ bleiben:
 | `w`, Pfeil hoch, Leertaste| Hard-Drop                   |
 | `c` / `2`                 | Hold / Tauschen             |
 | `p`                       | Pause                       |
-| `Esc` / `x`               | Zurueck ins Menue           |
+| `Esc` / `x`               | Pausenmenue (Fortsetzen / Ins Hauptmenue / Runde beenden) |
 | `r`                       | Neustart (im Game-Over-Bild)|
 
 In den Menues gelten Pfeiltasten bzw. `w`/`s` zum Waehlen, Enter oder

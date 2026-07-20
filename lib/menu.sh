@@ -12,9 +12,12 @@
 #   changes are logged as debug events, so debug sessions capture the
 #   menus 1:1 as well. Leaving a game session shows the wonder
 #   construction site (lib/wonders.sh) with the round's credit banked.
+#   The pause menu (menu_pause, issue #12) opens on the quit key during
+#   a round and offers to resume, to suspend the round into the main
+#   menu (resumable via its "Fortsetzen" entry) or to end the round.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-07-19)
+# Version: 0.5.0  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -89,15 +92,48 @@ menu_message() {
     done
 }
 
+# menu_pause: opened by the quit key (ESC/x) during a running round
+# (issue #12: quitting used to end the round on the spot). The player
+# chooses to resume, to suspend the round and go to the main menu
+# (where it stays resumable via the "Fortsetzen" entry) or to end the
+# round for good; ESC/back counts as resume. Only sets GAME_EXIT and
+# GAME_SUSPENDED - recording the round stays with game_run, so the
+# books close only when the round really ends.
+menu_pause() {
+    menu_run "Pause" \
+        "Fortsetzen" \
+        "Ins Hauptmenue (Runde pausiert)" \
+        "Runde beenden"
+    case "${MENU_CHOICE}" in
+        1)
+            GAME_SUSPENDED=1
+            GAME_EXIT=1
+            ;;
+        2)
+            GAME_EXIT=1
+            ;;
+        *)
+            # "Fortsetzen" or ESC: straight back into the round.
+            :
+            ;;
+    esac
+    return 0
+}
+
 # menu_singleplayer: for now only the normal game; more modes (for
 # example a sprint mode) can be added as further entries later. After a
 # game session the wonder construction site is shown with the freshly
 # banked row total (the round credit was banked by record_round_score).
+# A round suspended via the pause menu skips that screen and returns to
+# the main menu instead, where its "Fortsetzen" entry picks it up.
 menu_singleplayer() {
     while :; do
         menu_run "Einzelspieler" "Normales Spiel" "Zurueck"
         if [ "${MENU_CHOICE}" -eq 0 ]; then
             game_run
+            if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                return 0
+            fi
             wonder_screen "${TOTAL_ROW_CREDIT}"
         else
             return 0
