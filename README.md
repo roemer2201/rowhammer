@@ -69,7 +69,7 @@ Optionen:
 | `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
 | `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
-| `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, Bloecke als `[]` (auch Standard-`NO_COLOR`, s. u.) |
+| `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen (auch Standard-`NO_COLOR`, s. u.) |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
 | `--debug-dir DIR`| `ROWHAMMER_DEBUG_DIR`    | Zielverzeichnis fuer die Debug-Logs      |
@@ -82,6 +82,13 @@ Log-Dateien auf (Standardziel:
 `events.log` (alle Spielaktionen samt Board-Snapshots). Das hilft,
 Fehlverhalten oder Spielsituationen im Nachhinein exakt
 nachzuvollziehen - z. B. fuer einen Bug-Report.
+
+Ohne Farben (`--no-color`) bekommt jede Steinsorte ein eigenes
+Zwei-Zeichen-Symbol (`II OO TT SS ZZ JJ LL`), damit sich die Steine auch
+nach dem Ablegen noch unterscheiden lassen - Voraussetzung, um gezielt
+Gold- (sortenrein) und Silber-Quadrate (gemischt) zu bauen. Die Quadrate
+selbst heben sich mit eigenen Symbolen ab: Gold als `##`, Silber als
+`%%`.
 
 Zusaetzlich zu `--no-color`/`ROWHAMMER_NO_COLOR` wird die
 De-facto-Standardvariable [`NO_COLOR`](https://no-color.org/) beachtet:

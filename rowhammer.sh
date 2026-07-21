@@ -152,11 +152,14 @@ Options:
                 rowhammer.conf, the highscore list, the savegame and
                 the statistics file.
                 Env: ROWHAMMER_DATA_DIR     Default: ~/.config/rowhammer
-  --no-color    Disable ANSI colors; blocks are drawn as "[]".
-                Overrides --color-mode. The de-facto standard NO_COLOR
-                variable (https://no-color.org/) is also honored: if it
-                is set and non-empty, colors default to off; set
-                ROWHAMMER_NO_COLOR=0 to force them back on.
+  --no-color    Disable ANSI colors. Each piece type is then drawn with
+                its own two-letter glyph (II OO TT SS ZZ JJ LL) so blocks
+                stay tellable apart after locking; gold squares show as
+                "##", silver as "%%". Overrides --color-mode. The
+                de-facto standard NO_COLOR variable
+                (https://no-color.org/) is also honored: if it is set and
+                non-empty, colors default to off; set ROWHAMMER_NO_COLOR=0
+                to force them back on.
                 Env: ROWHAMMER_NO_COLOR     Default: 0
   --color-mode MODE
                 Color palette: "auto" detects 256-color support (tput

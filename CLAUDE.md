@@ -164,6 +164,14 @@ Die fuer uns relevanten Merkmale des Originals:
   `basic` und `extended`; die 256-Farben-Palette liegt in
   `lib/pieces.sh` (`PIECE_COLOR_EXT`), die vorberechneten SGR-Sequenzen
   baut `render_colors_init` in `lib/render.sh`.
+- Im farblosen Modus (`--no-color`/`NO_COLOR`, seit 0.17.0) bekommt jede
+  Steinsorte ein eigenes Zwei-Zeichen-Glyph statt eines einheitlichen
+  `[]` (`PIECE_GLYPH` in `lib/pieces.sh`: `II OO TT SS ZZ JJ LL`), damit
+  abgelegte Steine unterscheidbar bleiben und Gold-/Silber-Quadrate
+  ueberhaupt planbar sind. Die Quadrate nutzen bewusst Nicht-Buchstaben-
+  Glyphen (`SQ_GOLD_GLYPH`/`SQ_SILVER_GLYPH` in `lib/render.sh`: `##`
+  fuer Gold, `%%` fuer Silber), damit ein Quadrat nie mit einer Steinsorte
+  kollidiert.
 
 ### 4.2 Architektur und Dateistruktur
 
@@ -462,6 +470,12 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 - [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
       Tastenbelegung ist seit 0.2.0 umgesetzt)
+- [x] Steine im farblosen Modus unterscheidbar machen (Version 0.17.0):
+      `--no-color` zeichnete zuvor jede Sorte als `[]`, sodass abgelegte
+      Steine ununterscheidbar wurden und Gold-/Silber-Quadrate nicht
+      planbar waren. Jede Sorte hat jetzt ein eigenes Zwei-Zeichen-Glyph
+      (`PIECE_GLYPH`), Gold-/Silber-Quadrate eigene Nicht-Buchstaben-
+      Glyphen (`##`/`%%`, siehe 4.1)
 - [x] Standard-`NO_COLOR`-Umgebungsvariable beachten (Version 0.17.0):
       neben `--no-color`/`ROWHAMMER_NO_COLOR` schaltet auch das
       De-facto-Standardsignal `NO_COLOR` (https://no-color.org/) die

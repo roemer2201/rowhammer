@@ -8,10 +8,12 @@
 #   color ANSI) and the extended (xterm 256-color) palette, the 7-bag
 #   randomizer (every piece type appears exactly once per bag of seven)
 #   and the upcoming-piece queue that feeds the HUD preview. In debug
-#   mode every bag refill is logged with the shuffled piece order.
+#   mode every bag refill is logged with the shuffled piece order. A
+#   per-type two-character glyph (PIECE_GLYPH) keeps pieces
+#   distinguishable in the no-color mode.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-07-19)
+# Version: 0.5.0  (2026-07-21)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -55,6 +57,17 @@ declare -A PIECE_COLOR=(
 # falls back to white).
 declare -A PIECE_COLOR_EXT=(
     [I]="51" [O]="220" [T]="135" [S]="40" [Z]="196" [J]="33" [L]="208"
+)
+
+# Two-character fallback glyph per piece type for the no-color mode
+# (--no-color / NO_COLOR). Without color every settled block used to look
+# the same ("[]"), so pieces became indistinguishable once they locked
+# and planning gold (mono) / silver (mixed) squares was impossible. Each
+# type now keeps its own marker - the doubled type letter, which makes
+# the mapping self-evident. The gold/silver squares use non-letter glyphs
+# (SQ_*_GLYPH in lib/render.sh) so a square never collides with a piece.
+declare -A PIECE_GLYPH=(
+    [I]="II" [O]="OO" [T]="TT" [S]="SS" [Z]="ZZ" [J]="JJ" [L]="LL"
 )
 
 # The bag of upcoming pieces (7-bag randomizer state).
