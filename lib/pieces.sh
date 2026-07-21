@@ -4,15 +4,18 @@
 #
 # Description:
 #   Tetromino definitions for rowhammer: the seven piece types with their
-#   four rotation states, per-piece ANSI colors and the 7-bag randomizer
-#   (every piece type appears exactly once per bag of seven).
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   four rotation states, per-piece colors for both the basic (8/16
+#   color ANSI) and the extended (xterm 256-color) palette, the 7-bag
+#   randomizer (every piece type appears exactly once per bag of seven)
+#   and the upcoming-piece queue that feeds the HUD preview. In debug
+#   mode every bag refill is logged with the shuffled piece order.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.4.0  (2026-07-19)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/pieces.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/pieces.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 
@@ -36,12 +39,22 @@ declare -A PIECE_SHAPE=(
     [L2]="0,1 1,1 2,1 0,2"  [L3]="0,0 1,0 1,1 1,2"
 )
 
-# ANSI foreground color (SGR code) per piece type. Rendering combines this
-# with reverse video to draw solid colored blocks. Only the basic 8-color
-# palette is used so the game works in any color-capable terminal; a nicer
-# 256-color mode is planned for a later phase (see CLAUDE.md).
+# ANSI foreground color (SGR code) per piece type for the basic color
+# mode. Rendering combines this with reverse video to draw solid colored
+# blocks. The basic 8-color palette works in any color-capable terminal;
+# terminals with 256-color support get the extended palette below
+# (COLOR_MODE, resolved in rowhammer.sh / lib/render.sh).
 declare -A PIECE_COLOR=(
     [I]="36" [O]="33" [T]="35" [S]="32" [Z]="31" [J]="34" [L]="37"
+)
+
+# xterm 256-color index per piece type for the extended color mode.
+# Rendering uses these as background colors (48;5;N). The picks follow
+# the common Tetris guideline colors; the L piece finally gets a real
+# orange (208), which the basic 8-color palette cannot express (there it
+# falls back to white).
+declare -A PIECE_COLOR_EXT=(
+    [I]="51" [O]="220" [T]="135" [S]="40" [Z]="196" [J]="33" [L]="208"
 )
 
 # The bag of upcoming pieces (7-bag randomizer state).
@@ -60,15 +73,32 @@ bag_refill() {
         BAG[i]="${BAG[j]}"
         BAG[j]="${tmp}"
     done
+    debug_event "bag refill: ${BAG[*]}"
 }
 
-# bag_next: pop the next piece type into the global NEXT_TYPE, refilling
-# the bag when it runs empty. The result is passed via a global instead of
+# Queue of upcoming pieces drawn from the bag. It always holds at least
+# PREVIEW_COUNT + 1 entries so the HUD can show three previews plus the
+# piece that spawns next.
+QUEUE=()
+PREVIEW_COUNT=3
+
+# queue_fill: top the queue up from the bag (refilling the bag as needed).
+queue_fill() {
+    while [ "${#QUEUE[@]}" -lt $(( PREVIEW_COUNT + 1 )) ]; do
+        if [ "${#BAG[@]}" -eq 0 ]; then
+            bag_refill
+        fi
+        QUEUE+=("${BAG[0]}")
+        BAG=("${BAG[@]:1}")
+    done
+}
+
+# bag_next: pop the next piece type into the global NEXT_TYPE and keep the
+# preview queue topped up. The result is passed via a global instead of
 # command substitution to avoid forking a subshell in the game loop.
 bag_next() {
-    if [ "${#BAG[@]}" -eq 0 ]; then
-        bag_refill
-    fi
-    NEXT_TYPE="${BAG[0]}"
-    BAG=("${BAG[@]:1}")
+    queue_fill
+    NEXT_TYPE="${QUEUE[0]}"
+    QUEUE=("${QUEUE[@]:1}")
+    queue_fill
 }

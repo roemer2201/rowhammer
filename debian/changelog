@@ -1,3 +1,13 @@
+rowhammer (0.16.2) unstable; urgency=medium
+
+  * Sync packaging with the current game (0.16.x): the main script is now
+    rowhammer.sh and the wonder ASCII art in assets/wonders/ is installed
+    alongside the library modules.
+  * Reapply the symlink resolution for SCRIPT_DIR in rowhammer.sh so the
+    /usr/games/rowhammer launcher finds modules and assets.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 21 Jul 2026 12:00:00 +0200
+
 rowhammer (0.2.1) unstable; urgency=medium
 
   * Initial Debian packaging (native package).

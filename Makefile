@@ -7,15 +7,16 @@
 #   to reuse the same target).
 #
 # Layout:
-#   ${PREFIX}/share/rowhammer/tetris.sh   main script (real location)
-#   ${PREFIX}/share/rowhammer/lib/*.sh    library modules
-#   ${PREFIX}/games/rowhammer             relative symlink to tetris.sh
+#   ${PREFIX}/share/rowhammer/rowhammer.sh      main script (real location)
+#   ${PREFIX}/share/rowhammer/lib/*.sh          library modules
+#   ${PREFIX}/share/rowhammer/assets/wonders/   wonder ASCII art
+#   ${PREFIX}/games/rowhammer                   relative symlink to rowhammer.sh
 #
 # Usage:
 #   make install [DESTDIR=/staging] [PREFIX=/usr]
 #   make uninstall [DESTDIR=/staging] [PREFIX=/usr]
 #
-# Version: 1.0.0  (2026-07-18)
+# Version: 1.1.0  (2026-07-21)
 
 PREFIX  ?= /usr/local
 DESTDIR ?=
@@ -27,7 +28,8 @@ INSTALL      = install
 INSTALL_DATA = $(INSTALL) -m 0644
 INSTALL_PROG = $(INSTALL) -m 0755
 
-LIB_FILES = $(wildcard lib/*.sh)
+LIB_FILES    = $(wildcard lib/*.sh)
+WONDER_FILES = $(wildcard assets/wonders/*.txt)
 
 .PHONY: all install uninstall
 
@@ -39,10 +41,12 @@ all:
 # which holds for the layouts used here (/usr and /usr/local).
 install:
 	$(INSTALL) -d "$(DESTDIR)$(DATADIR)/lib"
-	$(INSTALL_PROG) tetris.sh "$(DESTDIR)$(DATADIR)/tetris.sh"
+	$(INSTALL) -d "$(DESTDIR)$(DATADIR)/assets/wonders"
+	$(INSTALL_PROG) rowhammer.sh "$(DESTDIR)$(DATADIR)/rowhammer.sh"
 	$(INSTALL_DATA) $(LIB_FILES) "$(DESTDIR)$(DATADIR)/lib/"
+	$(INSTALL_DATA) $(WONDER_FILES) "$(DESTDIR)$(DATADIR)/assets/wonders/"
 	$(INSTALL) -d "$(DESTDIR)$(GAMESDIR)"
-	ln -sf ../share/rowhammer/tetris.sh "$(DESTDIR)$(GAMESDIR)/rowhammer"
+	ln -sf ../share/rowhammer/rowhammer.sh "$(DESTDIR)$(GAMESDIR)/rowhammer"
 
 # Remove everything the install target created.
 uninstall:

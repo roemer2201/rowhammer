@@ -7,21 +7,29 @@
 #   application menus (main menu, singleplayer, multiplayer placeholder,
 #   settings with key bindings and player name). Menu labels are German
 #   on purpose (requested UI language); code and comments stay English
-#   per the script conventions.
-#   Library file: sourced by tetris.sh, not meant to be executed directly.
+#   per the script conventions. All screen output goes through
+#   screen_write (lib/render.sh) and selections, rebinds and name
+#   changes are logged as debug events, so debug sessions capture the
+#   menus 1:1 as well. Leaving a game session shows the wonder
+#   construction site (lib/wonders.sh) with the round's credit banked.
+#   The pause menu (menu_pause, issue #12) opens on the quit key during
+#   a round and offers to resume, to suspend the round into the main
+#   menu (resumable via the "Fortsetzen" entry shown in the main menu
+#   and in the singleplayer menu) or to end the round.
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-17)
+# Version: 0.6.1  (2026-07-20)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-    printf 'lib/menu.sh is a library; source it from tetris.sh\n' >&2
+    printf 'lib/menu.sh is a library; source it from rowhammer.sh\n' >&2
     exit 2
 fi
 
 # German display labels for the key binding variables in KEY_ACTIONS
 # (same order; both live side by side so rebinding stays table-driven).
 KEY_LABELS=("Links" "Rechts" "Drehen rechts" "Drehen links"
-            "Soft-Drop" "Hard-Drop" "Pause" "Zurueck ins Menue")
+            "Soft-Drop" "Hard-Drop" "Pause" "Zurueck ins Menue" "Hold")
 
 MENU_CHOICE=-1
 
@@ -46,15 +54,23 @@ menu_run() {
                 fi
             done
             frame+=$'\e[K\n'"  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck"$'\e[K\n\e[J'
-            printf '%s' "${frame}"
+            screen_write "${frame}"
             dirty=0
         fi
         read_key
         case "${KEY}" in
             UP|w)        sel=$(( (sel + n - 1) % n )); dirty=1 ;;
             DOWN|s)      sel=$(( (sel + 1) % n )); dirty=1 ;;
-            ENTER|SPACE) MENU_CHOICE="${sel}"; return 0 ;;
-            ESC|x)       MENU_CHOICE=-1; return 0 ;;
+            ENTER|SPACE)
+                MENU_CHOICE="${sel}"
+                debug_event "menu '${title}': selected '${entries[sel]}'"
+                return 0
+                ;;
+            ESC|x)
+                MENU_CHOICE=-1
+                debug_event "menu '${title}': back"
+                return 0
+                ;;
         esac
     done
 }
@@ -70,20 +86,80 @@ menu_message() {
         frame+="  ${line}"$'\e[K\n'
     done
     frame+=$'\e[K\n'"  Beliebige Taste druecken..."$'\e[K\n\e[J'
-    printf '%s' "${frame}"
+    screen_write "${frame}"
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
     done
 }
 
+# menu_pause: opened by the quit key (ESC/x) during a running round
+# (issue #12: quitting used to end the round on the spot). The player
+# chooses to resume, to suspend the round and go to the main menu
+# (where it stays resumable via the "Fortsetzen" entry, offered in the
+# main menu and in the singleplayer menu) or to end the
+# round for good; ESC/back counts as resume. Only sets GAME_EXIT and
+# GAME_SUSPENDED - recording the round stays with game_run, so the
+# books close only when the round really ends.
+menu_pause() {
+    menu_run "Pause" \
+        "Fortsetzen" \
+        "Ins Hauptmenue (Runde pausiert)" \
+        "Runde beenden"
+    case "${MENU_CHOICE}" in
+        1)
+            GAME_SUSPENDED=1
+            GAME_EXIT=1
+            ;;
+        2)
+            GAME_EXIT=1
+            ;;
+        *)
+            # "Fortsetzen" or ESC: straight back into the round.
+            :
+            ;;
+    esac
+    return 0
+}
+
 # menu_singleplayer: for now only the normal game; more modes (for
-# example a sprint mode) can be added as further entries later.
+# example a sprint mode) can be added as further entries later. After a
+# game session the wonder construction site is shown with the freshly
+# banked row total (the round credit was banked by record_round).
+# A round suspended via the pause menu skips that screen and returns to
+# the main menu instead, where its "Fortsetzen" entry picks it up.
+# While a suspended round waits, this menu offers the same "Fortsetzen"
+# entry at the top as the main menu (the other entries shift down by
+# one, so the selection is normalized before the dispatch).
 menu_singleplayer() {
+    local -a entries
+    local choice
     while :; do
-        menu_run "Einzelspieler" "Normales Spiel" "Zurueck"
-        if [ "${MENU_CHOICE}" -eq 0 ]; then
+        entries=()
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+            entries+=("Fortsetzen")
+        fi
+        entries+=("Normales Spiel" "Zurueck")
+        menu_run "Einzelspieler" "${entries[@]}"
+        choice="${MENU_CHOICE}"
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+            if [ "${choice}" -eq 0 ]; then
+                game_run resume
+                if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                    return 0
+                fi
+                wonder_screen "${TOTAL_ROW_CREDIT}"
+                continue
+            elif [ "${choice}" -gt 0 ]; then
+                choice=$(( choice - 1 ))
+            fi
+        fi
+        if [ "${choice}" -eq 0 ]; then
             game_run
+            if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                return 0
+            fi
+            wonder_screen "${TOTAL_ROW_CREDIT}"
         else
             return 0
         fi
@@ -132,10 +208,10 @@ menu_keys() {
 # stays reserved for the game over restart. Refuses keys that are already
 # bound to another action, then persists the new binding.
 prompt_rebind() {
-    local var="${1}" label="${2}" other
-    printf '\e[H\n  Tasten konfigurieren\e[K\n\e[K\n'
-    printf '  Neue Taste fuer "%s" druecken\e[K\n' "${label}"
-    printf '  (aktuell: %s, ESC = abbrechen)\e[K\n\e[J' "${!var}"
+    local var="${1}" label="${2}" other frame
+    printf -v frame '\e[H\n  Tasten konfigurieren\e[K\n\e[K\n  Neue Taste fuer "%s" druecken\e[K\n  (aktuell: %s, ESC = abbrechen)\e[K\n\e[J' \
+        "${label}" "${!var}"
+    screen_write "${frame}"
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
@@ -169,6 +245,7 @@ prompt_rebind() {
         fi
     done
     printf -v "${var}" '%s' "${KEY}"
+    debug_event "key rebind: ${var}=${KEY}"
     config_save
     return 0
 }
@@ -177,21 +254,21 @@ prompt_rebind() {
 # Line-based name input (canonical mode, so backspace editing works).
 # An empty input keeps the current name; valid input is persisted.
 prompt_player_name() {
-    printf '\e[H\n  Spielername\e[K\n\e[K\n'
-    printf '  Aktueller Name: %s\e[K\n\e[K\n' "${PLAYER_NAME}"
-    printf '  Neuer Name (leer = unveraendert, max. 16 Zeichen,\e[K\n'
-    printf '  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)\e[K\n\e[J\n  > '
-    local name=""
+    local frame name=""
+    printf -v frame '\e[H\n  Spielername\e[K\n\e[K\n  Aktueller Name: %s\e[K\n\e[K\n  Neuer Name (leer = unveraendert, max. 16 Zeichen,\e[K\n  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)\e[K\n\e[J\n  > ' \
+        "${PLAYER_NAME}"
+    screen_write "${frame}"
     # Show the cursor while typing, hide it again afterwards.
-    printf '\e[?25h'
+    screen_write $'\e[?25h'
     IFS= read -r name || name=""
-    printf '\e[?25l'
+    screen_write $'\e[?25l'
     if [ -z "${name}" ]; then
         return 0
     fi
     local re='^[A-Za-z0-9_ -]{1,16}$'
     if [[ "${name}" =~ ${re} ]]; then
         PLAYER_NAME="${name}"
+        debug_event "player name changed to '${name}'"
         config_save
     else
         menu_message "Spielername" \
