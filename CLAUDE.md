@@ -187,6 +187,9 @@ rowhammer/
     stats.sh           # Persistente Spielstatistik (Reihen, Bonusreihen, Bloecke)
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
+  Makefile             # install/uninstall-Ziele (genutzt von deb, spaeter rpm)
+  build-deb.sh         # Baut das Debian-Paket, Artefakte nach dist/
+  debian/              # Debian-Paketierung (debhelper, natives Paket)
   CLAUDE.md
   README.md
 ```
@@ -352,6 +355,26 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
 - Die Logs koennen in langen Sessions mehrere MB gross werden; es gibt
   bewusst keine Rotation (ein Verzeichnis je Lauf, manuell loeschbar).
 
+### 4.7 Paketierung
+
+- **Debian (umgesetzt):** klassische debhelper-Paketierung im `debian/`-
+  Verzeichnis, natives Quellformat "3.0 (native)"; die Paketversion in
+  `debian/changelog` folgt der Skriptversion von `rowhammer.sh`.
+  Installations-Layout: Spiel, Module und `assets/` nach
+  `/usr/share/rowhammer/`,
+  Starter als relativer Symlink `/usr/games/rowhammer` (Debian-Policy:
+  Spiele nach `/usr/games`). `rowhammer.sh` loest deshalb beim Bestimmen
+  von `SCRIPT_DIR` Symlinks per `readlink -f` auf. Die Installationslogik
+  liegt zentral im `Makefile` (`make install`, `DESTDIR`/`PREFIX`),
+  `debian/rules` ruft es mit `PREFIX=/usr` auf. Bequemer Build ueber
+  `./build-deb.sh` (Artefakte in `dist/`, per `.gitignore`
+  ausgeschlossen); Build-Abhaengigkeiten: `dpkg-dev`, `debhelper`.
+- **RPM (geplant):** Spec-Datei soll dasselbe `make install`
+  wiederverwenden; gleiche Pfade (`/usr/share/rowhammer`, `/usr/games`).
+- Hinweis: Das Repository hat noch keine Lizenzdatei;
+  `debian/copyright` ist entsprechend als "UNLICENSED" markiert und muss
+  nachgezogen werden, sobald eine Lizenz festgelegt ist.
+
 ## 5. Multiplayer (spaetere Phase)
 
 Bewusst **nicht** Teil der ersten Versionen. Grobkonzept fuer spaeter:
@@ -414,6 +437,15 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [x] Einstellungen: Tastenbelegung im Spiel aenderbar, Spielername
 - [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
       atomar geschrieben, Praezedenz Standard < Config < Env < CLI
+
+### Zwischenschritt - Paketierung (deb umgesetzt, Version 0.16.2)
+
+- [x] `Makefile` mit install/uninstall (DESTDIR/PREFIX, deb/rpm-tauglich)
+- [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
+      Launcher-Symlink `/usr/games/rowhammer`)
+- [x] Build-Skript `build-deb.sh` nach Script-Konventionen
+- [ ] RPM-Paketierung (Spec-Datei, nutzt `make install`)
+- [ ] Lizenz festlegen und `debian/copyright` aktualisieren
 
 ### Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
 

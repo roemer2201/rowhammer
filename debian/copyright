@@ -1,0 +1,11 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: rowhammer
+Source: https://github.com/roemer2201/rowhammer
+Comment: The upstream repository does not declare a license yet. Until a
+ license file is added upstream, the package must be treated as
+ all-rights-reserved and must not be redistributed publicly.
+
+Files: *
+Copyright: 2026 roemer2201 <r.oliver@web.de>
+License: UNLICENSED
+ No license has been declared for this project yet. All rights reserved.

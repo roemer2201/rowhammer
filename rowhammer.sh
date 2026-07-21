@@ -69,16 +69,21 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.16.1  (2026-07-20)
+# Version: 0.16.2  (2026-07-21)
 
 set -euo pipefail
 
 SCRIPT_NAME="$(basename -- "${0}")"
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# CHANGE 2026-07-18 (reapplied 2026-07-21 after the rename to rowhammer.sh):
+# resolve symlinks before taking the directory so the packaged launcher
+# (/usr/games/rowhammer -> /usr/share/rowhammer/rowhammer.sh) finds the
+# library modules and assets next to the real script. readlink -f is part
+# of coreutils, which is already a baseline requirement.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.16.1"
+ROWHAMMER_VERSION="0.16.2"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
