@@ -209,7 +209,13 @@ Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
 treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
-`--no-color` (`ROWHAMMER_NO_COLOR`), `--color-mode auto|basic|extended`
+`--no-color` (`ROWHAMMER_NO_COLOR`; seit 0.17.0 wird zusaetzlich die
+De-facto-Standardvariable `NO_COLOR` [https://no-color.org/] beachtet:
+ist sie gesetzt und nicht leer, sind Farben standardmaessig aus.
+Praezedenz der Abschalt-Schalter: Standard-`NO_COLOR` < projekteigenes
+`ROWHAMMER_NO_COLOR` < `--no-color` auf der Kommandozeile, sodass ein
+global exportiertes `NO_COLOR` per `ROWHAMMER_NO_COLOR=0` fuer rowhammer
+wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
 (`ROWHAMMER_COLOR_MODE`, Standard `auto`; `--no-color` gewinnt),
 `--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
@@ -456,6 +462,12 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 - [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
       Tastenbelegung ist seit 0.2.0 umgesetzt)
+- [x] Standard-`NO_COLOR`-Umgebungsvariable beachten (Version 0.17.0):
+      neben `--no-color`/`ROWHAMMER_NO_COLOR` schaltet auch das
+      De-facto-Standardsignal `NO_COLOR` (https://no-color.org/) die
+      Farben ab, wenn es gesetzt und nicht leer ist; Praezedenz
+      Standard-`NO_COLOR` < `ROWHAMMER_NO_COLOR` < `--no-color`
+      (siehe 4.2)
 - [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
       `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
       im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und

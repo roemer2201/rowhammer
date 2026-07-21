@@ -69,7 +69,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.16.1  (2026-07-20)
+# Version: 0.17.0  (2026-07-21)
 
 set -euo pipefail
 
@@ -78,17 +78,31 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.16.1"
+ROWHAMMER_VERSION="0.17.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
-# file > built-in default. SEED, NO_COLOR and the debug switches are not
+# file > built-in default. SEED, the no-color switch and the debug
+# switches are not
 # part of the config file, so they take their env fallback directly; the
 # config-driven settings (player name, key bindings) start from these
 # defaults, get overridden by config_load and the env/CLI blocks after
 # sourcing below.
 SEED="${ROWHAMMER_SEED:-}"
-NO_COLOR_OPT="${ROWHAMMER_NO_COLOR:-0}"
+# Color on/off. Beyond the project's own ROWHAMMER_NO_COLOR we honor the
+# de-facto standard NO_COLOR variable (https://no-color.org/): when it is
+# present and not an empty string, colors are disabled regardless of its
+# value. Precedence for the disable switch: standard NO_COLOR < the
+# project's ROWHAMMER_NO_COLOR < --no-color on the command line. That
+# lets a user who exports NO_COLOR globally still force colors back on for
+# rowhammer with ROWHAMMER_NO_COLOR=0.
+if [ -n "${ROWHAMMER_NO_COLOR:-}" ]; then
+    NO_COLOR_OPT="${ROWHAMMER_NO_COLOR}"
+elif [ -n "${NO_COLOR:-}" ]; then
+    NO_COLOR_OPT=1
+else
+    NO_COLOR_OPT=0
+fi
 # Color mode: auto probes the terminal for 256-color support and picks
 # extended or basic accordingly (color_mode_resolve, lib/render.sh);
 # basic/extended force the respective palette. --no-color disables
@@ -139,7 +153,10 @@ Options:
                 the statistics file.
                 Env: ROWHAMMER_DATA_DIR     Default: ~/.config/rowhammer
   --no-color    Disable ANSI colors; blocks are drawn as "[]".
-                Overrides --color-mode.
+                Overrides --color-mode. The de-facto standard NO_COLOR
+                variable (https://no-color.org/) is also honored: if it
+                is set and non-empty, colors default to off; set
+                ROWHAMMER_NO_COLOR=0 to force them back on.
                 Env: ROWHAMMER_NO_COLOR     Default: 0
   --color-mode MODE
                 Color palette: "auto" detects 256-color support (tput
