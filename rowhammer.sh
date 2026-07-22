@@ -7,7 +7,8 @@
 #   after "The New Tetris" (N64). Starts with a menu (singleplayer,
 #   multiplayer placeholder, settings); the game offers a 10x20 board,
 #   7-bag randomizer with a 3-piece preview, a hold slot, gravity with a
-#   level-based speed curve, soft/hard drop, pause and game over with
+#   level-based speed curve, soft/hard drop, a short lock delay that lets a
+#   landing piece still be slid or rotated, pause and game over with
 #   restart. Pressing the quit key (x/ESC) in a running round opens a
 #   pause menu instead of aborting: resume, suspend the round into the
 #   main menu (it stays resumable via the "Fortsetzen" entry offered in
@@ -71,7 +72,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.17.0  (2026-07-22)
+# Version: 0.18.0  (2026-07-22)
 
 set -euo pipefail
 
@@ -85,7 +86,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.17.0"
+ROWHAMMER_VERSION="0.18.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -461,6 +462,13 @@ PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 # "Fortsetzen" main menu entry (issue #12).
 GAME_SUSPENDED=0
 NOW_MS=0; LAST_FALL=0
+# Lock delay (2026-07-22): a piece that cannot fall is not locked on the
+# spot but rests for a short grace window (LOCK_DELAY_MS below), during
+# which the player may still slide or rotate it. LOCK_PENDING marks that
+# armed state, TOUCHDOWN_MS is the timestamp the current rest started -
+# the lock fires once the delay has elapsed (see lock_touchdown, step_down
+# and the game loop).
+LOCK_PENDING=0; TOUCHDOWN_MS=0
 # Play time of the current round in milliseconds and the timestamp the
 # currently running play segment was last accounted from. Only time spent
 # actually playing counts: pauses (the "p" toggle and the pause menu) and
@@ -482,6 +490,14 @@ ROUND_RECORDED=0
 # Gravity interval per level in milliseconds. A lookup table instead of a
 # formula so the curve stays easy to tune; the last entry is the cap.
 LEVEL_SPEEDS=(800 720 640 560 480 410 350 300 260 220 190 160 140 120)
+
+# Lock delay in milliseconds: the grace window a resting piece gets before
+# it locks, so a landing can still be nudged left/right or rotated. Only a
+# move that makes the piece airborne again cancels the pending lock (see
+# lock_delay_recheck); a move that leaves it resting keeps the original
+# deadline, so a piece cannot be kept alive forever on the floor. An
+# adjustable game-feel constant, like LEVEL_SPEEDS and TICK_S.
+LOCK_DELAY_MS=250
 
 # now_ms: put the current time in milliseconds into the global NOW_MS.
 # Uses bash 5's EPOCHREALTIME when available (no fork); older bash falls
@@ -518,6 +534,13 @@ play_clock_resume() {
     now_ms
     LAST_FALL="${NOW_MS}"
     PLAY_LAST="${NOW_MS}"
+    # A piece resting with the lock delay armed must not lose that window
+    # to the idle interval (pause, pause menu, resumed round); restamp its
+    # touchdown to "now" so the delay starts over on resume instead of
+    # firing immediately from the real time elapsed while idle.
+    if [ "${LOCK_PENDING}" -eq 1 ]; then
+        TOUCHDOWN_MS="${NOW_MS}"
+    fi
 }
 
 # update_speed: derive level and gravity interval from the physical lines
@@ -571,6 +594,9 @@ spawn_piece() {
     CUR_ROT=0
     CUR_X=3
     CUR_Y=0
+    # A freshly spawned piece starts airborne: clear any lock delay left
+    # from the piece that just locked.
+    LOCK_PENDING=0
     if ! can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"; then
         GAME_OVER=1
         debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} blocked - game over (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
@@ -649,11 +675,31 @@ hold_piece() {
         CUR_X=3
         CUR_Y=0
         HOLD_USED=1
+        # The swapped-in piece re-enters airborne at the spawn position;
+        # drop any lock delay armed for the piece we just swapped out.
+        LOCK_PENDING=0
         DIRTY=1
     fi
     now_ms
     LAST_FALL="${NOW_MS}"
     return 0
+}
+
+# lock_delay_recheck: after a successful move or rotation of a piece whose
+# lock delay is already armed, cancel the pending lock if the repositioned
+# piece can fall again. Per the lock-delay design (see LOCK_DELAY_MS) only
+# a shift that makes the piece airborne again resets the touchdown timer -
+# it then falls under normal gravity; a move that leaves it resting keeps
+# the original deadline running, so repeated floor moves cannot stall the
+# lock forever.
+lock_delay_recheck() {
+    if [ "${LOCK_PENDING}" -eq 1 ] && \
+       can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; then
+        LOCK_PENDING=0
+        now_ms
+        LAST_FALL="${NOW_MS}"
+        debug_event "lock delay reset: piece airborne again at ${CUR_X},${CUR_Y}"
+    fi
 }
 
 # try_move DX DY: move the piece if the target position is free.
@@ -664,6 +710,7 @@ try_move() {
         CUR_Y="${ny}"
         debug_event "move ${1},${2} -> ${CUR_X},${CUR_Y}"
         DIRTY=1
+        lock_delay_recheck
         return 0
     fi
     debug_event "move ${1},${2} blocked at ${CUR_X},${CUR_Y}"
@@ -682,6 +729,7 @@ try_rotate() {
             CUR_X=$(( CUR_X + kick ))
             debug_event "rotate dir=${1} -> rot=${CUR_ROT} kick=${kick} at ${CUR_X},${CUR_Y}"
             DIRTY=1
+            lock_delay_recheck
             return 0
         fi
     done
@@ -689,16 +737,31 @@ try_rotate() {
     return 1
 }
 
-# step_down: move the piece one row down; lock it when it cannot fall.
-# Serves both gravity and soft drop; the debug input log tells the two
-# apart (a fall right after a soft-drop key press was manual).
+# lock_touchdown: the active piece cannot fall. Instead of locking on the
+# spot, arm the lock delay (LOCK_DELAY_MS) so the game loop locks it only
+# after the grace window, giving the player a moment to still slide or
+# rotate the landing. Only the transition into the pending state stamps
+# the deadline, so repeated gravity ticks against the floor (or a soft
+# drop on an already resting piece) do not keep pushing it back.
+lock_touchdown() {
+    if [ "${LOCK_PENDING}" -eq 0 ]; then
+        LOCK_PENDING=1
+        now_ms
+        TOUCHDOWN_MS="${NOW_MS}"
+        debug_event "touchdown at ${CUR_X},${CUR_Y}: lock delay ${LOCK_DELAY_MS}ms armed"
+    fi
+}
+
+# step_down: move the piece one row down; arm the lock delay when it cannot
+# fall. Serves both gravity and soft drop; the debug input log tells the
+# two apart (a fall right after a soft-drop key press was manual).
 step_down() {
     if can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; then
         CUR_Y=$(( CUR_Y + 1 ))
         debug_event "fall -> y=${CUR_Y}"
         DIRTY=1
     else
-        lock_and_next
+        lock_touchdown
     fi
     return 0
 }
@@ -813,6 +876,7 @@ game_reset() {
     PAUSED=0
     GAME_OVER=0
     ROUND_RECORDED=0
+    LOCK_PENDING=0
     PLAY_MS=0
     update_speed
     spawn_piece
@@ -861,7 +925,14 @@ game_run() {
             # at every resume, so an idle phase never lands in PLAY_MS.
             PLAY_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
             PLAY_LAST="${NOW_MS}"
-            if (( NOW_MS - LAST_FALL >= FALL_MS )); then
+            if [ "${LOCK_PENDING}" -eq 1 ]; then
+                # Resting piece: lock once the grace window has elapsed.
+                # Gravity is idle here - the piece cannot fall anyway.
+                if (( NOW_MS - TOUCHDOWN_MS >= LOCK_DELAY_MS )); then
+                    debug_event "lock delay expired at ${CUR_X},${CUR_Y}"
+                    lock_and_next
+                fi
+            elif (( NOW_MS - LAST_FALL >= FALL_MS )); then
                 LAST_FALL="${NOW_MS}"
                 step_down
             fi
