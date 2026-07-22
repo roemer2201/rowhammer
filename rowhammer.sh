@@ -32,9 +32,11 @@
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
 #   ~/.config/rowhammer. Finished rounds enter the highscore list, which the
-#   main menu shows (rows, gold/silver squares and date per entry) and
+#   main menu shows (rows, gold/silver squares, play time and date per
+#   entry) and
 #   whose rank appears on the game over screen; the row credit decides
-#   the ranking.
+#   the ranking. The HUD also shows the running round's play time (paused
+#   time excluded).
 #   Every round also feeds persistent statistics (cleared rows, bonus
 #   rows, gold/silver squares built, plus the results of the last three
 #   rounds with their play date), shown via the "Statistik" main
@@ -69,7 +71,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.16.2  (2026-07-21)
+# Version: 0.17.0  (2026-07-22)
 
 set -euo pipefail
 
@@ -83,7 +85,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.16.2"
+ROWHAMMER_VERSION="0.17.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -459,6 +461,13 @@ PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 # "Fortsetzen" main menu entry (issue #12).
 GAME_SUSPENDED=0
 NOW_MS=0; LAST_FALL=0
+# Play time of the current round in milliseconds and the timestamp the
+# currently running play segment was last accounted from. Only time spent
+# actually playing counts: pauses (the "p" toggle and the pause menu) and
+# the game over screen do not, because those states reset PLAY_LAST to
+# "now" when play resumes (play_clock_resume), so the idle interval is
+# never added. The round keeps its PLAY_MS across a suspend/resume too.
+PLAY_MS=0; PLAY_LAST=0
 # Guards record_round so one round enters the highscore list only
 # once (a round can end twice: game over, then quitting to the menu).
 ROUND_RECORDED=0
@@ -489,6 +498,28 @@ now_ms() {
     fi
 }
 
+# fmt_duration SECONDS: format a whole-second duration as MM:SS into the
+# global FMT_DURATION. Minutes are not rolled into hours so the field
+# stays five characters for any realistic round (90 min -> "90:00"),
+# which keeps the HUD and the highscore column narrow. Shared by the HUD
+# (draw_frame) and the highscore screen so both read identically.
+FMT_DURATION="00:00"
+fmt_duration() {
+    local s="${1}"
+    printf -v FMT_DURATION '%02d:%02d' $(( s / 60 )) $(( s % 60 ))
+}
+
+# play_clock_resume: mark "now" as the start of a fresh play-time segment
+# (also restarting the gravity timer, which every resume point already
+# did). Called wherever the round returns to active play after an idle
+# phase - unpausing, leaving the pause menu, a new or a resumed round -
+# so the interval spent paused or in a menu is not counted as play time.
+play_clock_resume() {
+    now_ms
+    LAST_FALL="${NOW_MS}"
+    PLAY_LAST="${NOW_MS}"
+}
+
 # update_speed: derive level and gravity interval from the physical lines
 # cleared this round (one level per 10 lines, speed from LEVEL_SPEEDS).
 update_speed() {
@@ -513,8 +544,10 @@ record_round() {
         return 0
     fi
     ROUND_RECORDED=1
+    # Round play time in whole seconds; stored with the highscore entry.
     highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
-        "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}"
+        "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
+        "$(( PLAY_MS / 1000 ))"
     # Every cleared row counts toward the wonder, even from an aborted
     # round - like the original, where all modes feed the line total.
     if [ "${ROW_CREDIT}" -gt 0 ]; then
@@ -714,10 +747,10 @@ handle_key() {
             else
                 debug_event "resumed"
             fi
-            # Restart the gravity timer so a long pause is not counted
-            # as elapsed fall time.
-            now_ms
-            LAST_FALL="${NOW_MS}"
+            # Restart the gravity and play-time clocks so a long pause is
+            # counted neither as elapsed fall time nor as play time (on
+            # pausing PLAY_LAST is moot; on resuming it must be "now").
+            play_clock_resume
             DIRTY=1
             ;;
         "${KEY_QUIT}"|ESC)
@@ -727,12 +760,12 @@ handle_key() {
             # (lib/menu.sh sets GAME_EXIT/GAME_SUSPENDED accordingly).
             debug_event "pause menu opened"
             menu_pause
-            # The menu overdrew the game screen and consumed time:
-            # force a redraw and restart the gravity timer. Return so
-            # the menu's confirmation key (Enter/space) is not applied
-            # to the game as well.
-            now_ms
-            LAST_FALL="${NOW_MS}"
+            # The menu overdrew the game screen and consumed time: force
+            # a redraw and restart the gravity and play-time clocks (the
+            # time spent in the menu is not play time). Return so the
+            # menu's confirmation key (Enter/space) is not applied to the
+            # game as well.
+            play_clock_resume
             DIRTY=1
             return 0
             ;;
@@ -780,10 +813,10 @@ game_reset() {
     PAUSED=0
     GAME_OVER=0
     ROUND_RECORDED=0
+    PLAY_MS=0
     update_speed
     spawn_piece
-    now_ms
-    LAST_FALL="${NOW_MS}"
+    play_clock_resume
     DIRTY=1
 }
 
@@ -802,8 +835,9 @@ game_run() {
         GAME_SUSPENDED=0
         PAUSED=1
         debug_event "round resumed from menu (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
-        now_ms
-        LAST_FALL="${NOW_MS}"
+        # The round keeps its accumulated PLAY_MS; only restart the clocks
+        # so the suspended interval is not counted (it comes back paused).
+        play_clock_resume
         DIRTY=1
     else
         # Starting a new round while another one is still suspended
@@ -822,6 +856,11 @@ game_run() {
         handle_key
         if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
             now_ms
+            # Accumulate the play time of the segment since the last
+            # accounted moment. play_clock_resume set PLAY_LAST to "now"
+            # at every resume, so an idle phase never lands in PLAY_MS.
+            PLAY_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
+            PLAY_LAST="${NOW_MS}"
             if (( NOW_MS - LAST_FALL >= FALL_MS )); then
                 LAST_FALL="${NOW_MS}"
                 step_down

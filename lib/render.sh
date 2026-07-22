@@ -6,7 +6,8 @@
 #   Screen rendering for rowhammer. Builds every frame (board, active
 #   piece, gold/silver squares, sidebar with the weighted row credit
 #   (the game's score since the scoring rebuild), the wonder under
-#   construction with its build percentage, piece
+#   construction with its build percentage, the running round's play
+#   time (MM:SS, paused time excluded), piece
 #   preview, hold slot, key hints and the achieved highscore rank
 #   on the game over screen) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
@@ -18,7 +19,7 @@
 #   log when the debug mode is active (lib/debug.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.8.0  (2026-07-20)
+# Version: 0.9.0  (2026-07-22)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -128,8 +129,8 @@ render_mini() {
 # draw_frame
 # Render the complete screen. Reads the game state globals (BOARD,
 # BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, CLEARED_TOTAL, ROW_CREDIT,
-# LEVEL, GOLD_COUNT, SILVER_COUNT, PAUSED, GAME_OVER, the WONDER_*
-# state from lib/wonders.sh) and the USE_COLOR flag. Every line ends with ESC[K so shorter new content fully replaces
+# LEVEL, GOLD_COUNT, SILVER_COUNT, PLAY_MS, PAUSED, GAME_OVER, the
+# WONDER_* state from lib/wonders.sh) and the USE_COLOR flag. Every line ends with ESC[K so shorter new content fully replaces
 # longer old content; the frame ends with ESC[0J to wipe leftovers from
 # taller menu screens.
 draw_frame() {
@@ -169,6 +170,10 @@ draw_frame() {
     else
         side[5]="${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
     fi
+    # Elapsed play time of the running round (paused time excluded), fed
+    # by the game loop's PLAY_MS and formatted MM:SS (fmt_duration).
+    fmt_duration $(( PLAY_MS / 1000 ))
+    side[6]="Time:  ${FMT_DURATION}"
     side[7]="Next        Hold"
     render_mini "${QUEUE[0]:-}" 0
     local n1a="${RENDER_MINI}"
