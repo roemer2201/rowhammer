@@ -1,3 +1,12 @@
+rowhammer (0.17.0) unstable; urgency=medium
+
+  * Add a per-round play-time counter: the HUD shows the running round's
+    elapsed time (MM:SS, paused and pause-menu time excluded) and each
+    highscore entry now stores and displays that play time. The highscore
+    line format gains a trailing "time" field (seconds).
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 22 Jul 2026 12:00:00 +0200
+
 rowhammer (0.16.2) unstable; urgency=medium
 
   * Sync packaging with the current game (0.16.x): the main script is now

@@ -147,8 +147,19 @@ Die fuer uns relevanten Merkmale des Originals:
 - Seitenleiste: Naechste Teile, Hold, Lines (physische Reihen der
   Runde), Rows (gewertete Reihen = Punkte der Runde, siehe 3.2),
   aktuelles Wunder + Baufortschritt (Miniatur oder Prozent), Level,
-  Gold-/Silberzaehler. Eine separate Score-Zeile gibt es seit 0.16.0
-  nicht mehr.
+  Gold-/Silberzaehler sowie die Spielzeit der laufenden Runde (Time,
+  Format MM:SS; seit 0.17.0). Eine separate Score-Zeile gibt es seit
+  0.16.0 nicht mehr.
+- Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
+  aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
+  Pausenmenue) sowie der Game-Over-Bildschirm zaehlen nicht; die Zeit
+  wird im Game-Loop analog zur Fallzeit ueber `${EPOCHREALTIME}`
+  (Millisekunden, `now_ms`) akkumuliert und bei jedem Wiederaufnehmen
+  neu angesetzt (`play_clock_resume`), sodass Leerlaufphasen nie
+  mitzaehlen. Eine ueber das Pausenmenue ins Hauptmenue gelegte Runde
+  behaelt ihre bis dahin gezaehlte Zeit und setzt sie beim Fortsetzen
+  fort. Beim Rundenende wird die Spielzeit (in ganzen Sekunden) mit dem
+  Highscore-Eintrag gespeichert (siehe 4.5).
 - Nach Rundenende: Bildschirm mit dem aktuellen Wunder in seiner neuen Baustufe.
 
 ## 4. Technisches Konzept
@@ -276,11 +287,13 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gesourct wird.
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
-  `rows|lines|level|name|date|gold|silver`, absteigend nach Rows
+  `rows|lines|level|name|date|gold|silver|time`, absteigend nach Rows
   sortiert. Seit dem Punktesystem-Umbau (0.16.0) ist die gewichtete
   Reihenwertung der einzige Score: das fruehere fuehrende
   `score`-Feld entfaellt, Rows bestimmt die Rangfolge und den Rang
-  im Game-Over-Bild; alte 8-Feld-Zeilen fallen gemaess der
+  im Game-Over-Bild. Das abschliessende Feld `time` (seit 0.17.0) ist
+  die Spielzeit der Runde in ganzen Sekunden. Zeilen im falschen
+  (nicht achtfeldrigen) Format fallen gemaess der
   Arbeitsregel "keine Abwaertskompatibilitaet" bei der Validierung
   einfach heraus.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
@@ -289,13 +302,15 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Beenden der Runde, siehe 3.3; 0 Rows zaehlt nicht, gleiche Rows
   rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
   die Liste unter "Highscores" im Hauptmenue. Angezeigt werden je
-  Eintrag Rang, Name, Rows, Gold- und Silberquadrate sowie das Datum
+  Eintrag Rang, Name, Rows, Gold- und Silberquadrate, die Spielzeit
+  (Spalte "Zeit", MM:SS; seit 0.17.0) sowie das Datum
   (seit 0.14.0; die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt; Lines
   und Level bleiben gespeichert, werden aber nicht angezeigt).
-  Damit das Layout ins 48-Spalten-Minimum passt, wird der Name in
-  der Anzeige auf 13 Zeichen gekuerzt (gespeichert bleiben weiterhin
-  bis zu 16 Zeichen).
+  Damit das Layout (mit dem Zwei-Zeichen-Menue-Einzug) exakt ins
+  48-Spalten-Minimum passt, wird der Name in der Anzeige seit der
+  Zeit-Spalte (0.17.0) auf 8 Zeichen gekuerzt (vorher 13; gespeichert
+  bleiben weiterhin bis zu 16 Zeichen).
 - `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
   `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,
   nicht gesourct; eine defekte Datei faellt mit Meldung auf 0 zurueck).
@@ -438,7 +453,7 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
       atomar geschrieben, Praezedenz Standard < Config < Env < CLI
 
-### Zwischenschritt - Paketierung (deb umgesetzt, Version 0.16.2)
+### Zwischenschritt - Paketierung (deb umgesetzt, Version 0.17.0)
 
 - [x] `Makefile` mit install/uninstall (DESTDIR/PREFIX, deb/rpm-tauglich)
 - [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
@@ -516,8 +531,11 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
       naechste drei Steine oben rechts, Hold-Stein links
 - [ ] README mit Screenshots/Asciinema aktualisieren
-- [ ] Spielzeit-Counter fuer die aktuelle Runde einbauen (Anzeige im HUD,
-      Zeitmessung analog zum Game-Loop ueber `${EPOCHREALTIME}`, siehe 4.3)
+- [x] Spielzeit-Counter fuer die aktuelle Runde einbauen (Version
+      0.17.0: Anzeige im HUD als "Time" MM:SS, Zeitmessung analog zum
+      Game-Loop ueber `${EPOCHREALTIME}`/`now_ms`; nur aktive Spielzeit
+      zaehlt, Pausen und Game-Over-Bildschirm nicht; die Spielzeit wird
+      zusaetzlich mit dem Highscore-Eintrag gespeichert, siehe 3.4/4.5)
 - [x] Highscore-Liste um Anzahl erzeugter Silber- und Gold-Bloecke
       erweitern (Version 0.15.0: zusaetzliche Felder im Zeilenformat,
       siehe 4.5; bei Eintraegen ohne diese Felder gilt als
