@@ -261,7 +261,15 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   fehlzudeuten; ausserdem wird ein Byte, das Bash (beobachtet mit 5.1)
   im Timeout-Moment zusammen mit dem Timeout-Status liefert, nicht
   mehr verworfen (beides zusammen loeste ungewollte Hold-Wechsel durch
-  den Schwanz zerrissener Pfeiltasten-Sequenzen aus).
+  den Schwanz zerrissener Pfeiltasten-Sequenzen aus). Seit 0.19.0
+  behandelt der Input-Layer auch Terminal-Groessenaenderungen: ein
+  SIGWINCH-Trap (scharf ab `term_setup`) setzt nur das Flag
+  `TERM_RESIZED`; `read_key` wendet es beim naechsten Tick ueber
+  `term_resize_apply` an (neu messen mit `term_measure`, Bildschirm
+  loeschen, `REDRAW_PENDING` fuer die aufrufende Schleife setzen) und
+  blockiert bei Unterschreitung des 48x24-Minimums hinter der
+  "resize me"-Overlay, bis das Terminal wieder gross genug ist (siehe
+  Phase 4 "Anpassung an Terminalgroesse").
 - **Rendering:** pro Frame den kompletten Bildschirm in einen String puffern
   und mit **einem** `printf` ausgeben (Double-Buffering gegen Flackern);
   Cursor verstecken, alternativen Screen-Buffer nutzen (`tput smcup`/`rmcup`).
@@ -548,7 +556,23 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       (`LOCK_DELAY_MS`, 250 ms) und kann darin weiter verschoben/gedreht
       werden; der Touchdown-Timer wird nur zurueckgesetzt, wenn der Stein
       durch die Verschiebung wieder ins Fallen geraet (siehe 3.1)
-- [ ] Anpassung an Terminalgroesse
+- [x] Anpassung an Terminalgroesse (Version 0.19.0): das feste
+      Layout braucht weiterhin mindestens 48x24, aber eine
+      Groessenaenderung waehrend des Spiels wird jetzt live behandelt.
+      Ein SIGWINCH-Trap (scharf ab `term_setup`) setzt nur ein Flag
+      (`TERM_RESIZED`, signal-sicher), das `read_key` beim naechsten
+      Tick ueber `term_resize_apply` anwendet: Groesse neu messen
+      (`term_measure`), Bildschirm loeschen und die aufrufende Schleife
+      neu zeichnen lassen (`REDRAW_PENDING`). Faellt das Terminal unter
+      das Minimum, blockiert das Spiel hinter einer kompakten
+      "resize me"-Overlay (`term_too_small_screen` in `lib/render.sh`,
+      zeigt Soll- und Ist-Groesse), bis es wieder gross genug ist; im
+      Spiel-Loop werden Fall- und Spielzeituhr nach dem Resize neu
+      angesetzt (`play_clock_resume`), damit das blockierte Intervall
+      weder als Fallzeit noch als Spielzeit zaehlt. Menues und
+      Info-Bildschirme zeichnen nach einem Resize ebenfalls neu
+      (`REDRAW_PENDING` in `menu_run`, `menu_message`, `prompt_rebind`
+      und `wonder_screen`)
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
       naechste drei Steine oben rechts, Hold-Stein links
@@ -608,9 +632,14 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
   3.3). Offen bleibt: Die Reihen-Kosten je Wunder (100..6400) sind
   gegenueber dem Original bewusst herunterskaliert und sollten nach
   Playtesting ggf. nachjustiert werden (`WONDER_COSTS`).
-- Mindest-Terminalgroesse: seit 0.1.0 als 48x24 implementiert (Pruefung
-  nur beim Start). Offen: Verhalten bei Groessenaenderung waehrend des
-  Spiels (SIGWINCH) - gehoert zu Phase 4 "Anpassung an Terminalgroesse".
+- Mindest-Terminalgroesse: seit 0.1.0 als 48x24 implementiert, seit
+  0.19.0 auch waehrend des Spiels ueberwacht (SIGWINCH, siehe Phase 4
+  "Anpassung an Terminalgroesse"): ein Resize zeichnet sauber neu, ein
+  Unterschreiten des Minimums pausiert die Runde hinter einer
+  "resize me"-Overlay bis das Terminal wieder gross genug ist. Das feste
+  Layout skaliert bewusst nicht mit; groessere Terminals zeigen das
+  Spiel weiter oben links (ein zentriertes/mitwachsendes Layout ist der
+  separate Phase-4-Punkt "Layout anpassen").
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

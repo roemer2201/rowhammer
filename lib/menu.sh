@@ -15,10 +15,12 @@
 #   The pause menu (menu_pause, issue #12) opens on the quit key during
 #   a round and offers to resume, to suspend the round into the main
 #   menu (resumable via the "Fortsetzen" entry shown in the main menu
-#   and in the singleplayer menu) or to end the round.
+#   and in the singleplayer menu) or to end the round. All wait loops
+#   repaint on REDRAW_PENDING so a terminal resize (handled in read_key)
+#   does not leave a menu or info screen blank (since 0.7.0).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.6.1  (2026-07-20)
+# Version: 0.7.0  (2026-07-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -58,6 +60,12 @@ menu_run() {
             dirty=0
         fi
         read_key
+        # A terminal resize handled inside read_key clears the screen and
+        # raises REDRAW_PENDING; repaint the menu so it does not vanish.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+        fi
         case "${KEY}" in
             UP|w)        sel=$(( (sel + n - 1) % n )); dirty=1 ;;
             DOWN|s)      sel=$(( (sel + 1) % n )); dirty=1 ;;
@@ -90,6 +98,12 @@ menu_message() {
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
+        # Repaint after a resize (read_key cleared the screen); the frame
+        # is still in scope, so re-emitting it restores the message.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            screen_write "${frame}"
+        fi
     done
 }
 
@@ -215,6 +229,11 @@ prompt_rebind() {
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
+        # Repaint the prompt after a resize (read_key cleared the screen).
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            screen_write "${frame}"
+        fi
     done
     case "${KEY}" in
         ESC)

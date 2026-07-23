@@ -114,6 +114,10 @@ Umgesetzt:
 - Levelkurve (schneller je 10 Reihen)
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
   (Double-Buffering), sauberes Terminal-Restore beim Beenden
+- **Reagiert auf Groessenaenderungen des Terminals** (SIGWINCH):
+  zeichnet nach einem Resize sauber neu; wird das Terminal kleiner als
+  das benoetigte 48x24, pausiert die Runde hinter einem Hinweis, bis
+  wieder genug Platz da ist
 - **Erweiterter Farbmodus:** auf 256-Farben-Terminals (automatisch
   erkannt, umschaltbar per `--color-mode`) eine satte xterm-Palette mit
   den Guideline-Teilfarben - inklusive echtem Orange fuer das L-Teil
@@ -159,7 +163,9 @@ Spiel nach `/usr/share/rowhammer/` und legt den Starter
 ## Voraussetzungen
 
 - Bash >= 4.0 (empfohlen: Bash 5)
-- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens ca. 80x24 Zeichen
+- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens 48x24 Zeichen
+  (kleiner wird nicht gestartet; eine Verkleinerung waehrend des Spiels
+  pausiert bis wieder genug Platz da ist)
 - Keine weiteren Abhaengigkeiten ausser Coreutils
 
 ## Steuerung
