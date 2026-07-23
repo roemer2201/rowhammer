@@ -110,9 +110,9 @@ Die fuer uns relevanten Merkmale des Originals:
   1 + 2x5 = 11, 1x Silber + 1x Gold = 1 + 5 + 10 = 16, 2x Gold =
   1 + 2x10 = 21; Maximum pro Zug bleibt der Tetris durch zwei komplette
   Gold-Quadrate mit 85.
-- Original-Regel bewusst noch nicht umgesetzt: Ein "Spin Move" beim
-  Abraeumen laesst Gold-/Silber-Bloecke vorher in normale Einzelbloecke
-  zerfallen (siehe Offene Punkte).
+- Original-Regel bewusst nicht umgesetzt: Ein "Spin Move" beim Abraeumen
+  laesst Gold-/Silber-Bloecke vorher in normale Einzelbloecke zerfallen
+  (Nutzerentscheidung: soll nicht zur Anwendung kommen).
 
 ### 3.3 Weltwunder-Aufbau (umgesetzt, Version 0.8.0)
 
@@ -600,10 +600,6 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
   dem Punktesystem-Umbau in 0.16.0 ist sie zugleich der Score. Die
   frueher offene Frage nach den Punkten fuer die Quadrat-Bildung hat
   sich damit erledigt (es gibt bewusst keine Bildungs-Punkte mehr).
-- "Spin Move"-Regel des Originals umsetzen? Beim Abraeumen mit einem
-  Spin zerfallen Gold-/Silber-Bloecke vorher in normale Einzelbloecke
-  und verlieren ihren Bonus. Erfordert Erkennung, ob der letzte Zug ein
-  Spin war - Aufwand/Nutzen vor Umsetzung abwaegen.
 - Weltwunder-Liste und Baustufen sind seit 0.8.0 festgelegt (siehe
   3.3). Offen bleibt: Die Reihen-Kosten je Wunder (100..6400) sind
   gegenueber dem Original bewusst herunterskaliert und sollten nach
