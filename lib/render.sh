@@ -16,10 +16,12 @@
 #   reverse video) or extended (xterm 256-color backgrounds); "auto"
 #   detection lives in color_mode_resolve. All terminal output goes
 #   through screen_write, which mirrors every update 1:1 into the frame
-#   log when the debug mode is active (lib/debug.sh).
+#   log when the debug mode is active (lib/debug.sh). term_too_small_screen
+#   draws the compact overlay shown while the terminal is smaller than the
+#   fixed layout needs (since 0.10.0, driven by lib/input.sh on resize).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-07-22)
+# Version: 0.10.0  (2026-07-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -96,6 +98,26 @@ render_colors_init() {
 screen_write() {
     printf '%s' "${1}"
     debug_frame "${1}"
+}
+
+# term_too_small_screen
+# Draw the overlay shown while the terminal is smaller than the fixed
+# board+sidebar layout needs (MIN_TERM_* in rowhammer.sh). Called in a
+# loop by term_resize_apply (lib/input.sh) until the terminal grows back.
+# Kept deliberately tiny - short, colorless ASCII lines - so the message
+# still fits and reads correctly in a cramped terminal; \r\n resets the
+# column because the terminal is in raw mode here, where a bare \n would
+# only move down. The live "now WxH" figure gives feedback while the user
+# drags the border.
+term_too_small_screen() {
+    local frame
+    printf -v frame '\e[2J\e[H%s\r\n%s\r\n%s\r\n%s' \
+        "rowhammer" \
+        "resize:" \
+        "need ${MIN_TERM_COLS}x${MIN_TERM_ROWS}" \
+        "now ${TERM_COLS}x${TERM_ROWS}"
+    screen_write "${frame}"
+    return 0
 }
 
 # render_mini TYPE ROW

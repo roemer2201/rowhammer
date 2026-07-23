@@ -1,3 +1,16 @@
+rowhammer (0.19.0) unstable; urgency=medium
+
+  * Handle terminal resizing while the game runs (SIGWINCH). The fixed
+    board+sidebar layout still needs at least 48x24, but a resize is now
+    caught live: the screen is cleared and redrawn cleanly, and shrinking
+    the terminal below the minimum pauses the round behind a compact
+    "resize me" overlay (showing the required and current size) until the
+    terminal grows back. The gravity and play-time clocks are restarted
+    after a resize, so the interruption counts as neither fall time nor
+    play time. Menus and info screens repaint on resize as well.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 23 Jul 2026 12:00:00 +0200
+
 rowhammer (0.18.0) unstable; urgency=medium
 
   * Add a lock delay: a piece that lands is no longer locked immediately

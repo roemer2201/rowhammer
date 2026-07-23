@@ -44,12 +44,16 @@
 #   menu entry; the highscore list shows each entry's date as well.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
-#   action (see lib/debug.sh). A working multiplayer follows
-#   in a later phase (see CLAUDE.md).
+#   action (see lib/debug.sh). The fixed board+sidebar layout needs a
+#   terminal of at least 48x24; a resize during play is caught via
+#   SIGWINCH and redraws cleanly, and shrinking below the minimum pauses
+#   the round behind a "resize me" overlay until the terminal grows back.
+#   A working multiplayer follows in a later phase (see CLAUDE.md).
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
-#   2. Verify prerequisites (bash >= 4, interactive terminal, size).
+#   2. Verify prerequisites (bash >= 4, interactive terminal, minimum
+#      size; the size is rechecked live via SIGWINCH while running).
 #   3. Source the library modules (debug, config, pieces, board,
 #      squares, highscore, save, stats, wonders, input, render, menu).
 #   4. Resolve settings with precedence default < config file < env <
@@ -72,7 +76,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.18.0  (2026-07-22)
+# Version: 0.19.0  (2026-07-23)
 
 set -euo pipefail
 
@@ -86,7 +90,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.18.0"
+ROWHAMMER_VERSION="0.19.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -382,13 +386,20 @@ if [ ! -t 0 ] || [ ! -t 1 ]; then
     die "This game needs an interactive terminal (stdin/stdout must be a tty)"
 fi
 
-# The layout needs room for the board plus sidebar: at least 48x24.
+# The fixed board+sidebar layout needs at least this much room. The check
+# runs at startup (below, once the input module is sourced) and, since
+# 0.19.0, continuously while the game runs: a SIGWINCH that shrinks the
+# terminal below this pauses play behind a "resize me" overlay until it
+# grows back (see term_measure, term_resize_apply in lib/input.sh and the
+# too-small screen in lib/render.sh). TERM_RESIZED is raised by the
+# SIGWINCH handler and applied at the next read_key, so nothing is drawn
+# from inside the async signal handler.
+MIN_TERM_COLS=48
+MIN_TERM_ROWS=24
 TERM_ROWS=0
 TERM_COLS=0
-read -r TERM_ROWS TERM_COLS < <(stty size)
-if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
-    die "Terminal too small: need at least 48x24, got ${TERM_COLS}x${TERM_ROWS}"
-fi
+TERM_TOO_SMALL=0
+TERM_RESIZED=0
 
 # --- Library modules ------------------------------------------------------
 for _lib in debug config pieces board squares highscore save stats wonders input render menu; do
@@ -399,6 +410,15 @@ for _lib in debug config pieces board squares highscore save stats wonders input
     . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
 unset _lib
+
+# Terminal size check, now that term_measure (lib/input.sh) is available.
+# It fills TERM_ROWS/TERM_COLS and sets TERM_TOO_SMALL against the minimum
+# above; a too-small terminal at startup is a hard error, while one that
+# shrinks later is handled live via SIGWINCH.
+term_measure
+if [ "${TERM_TOO_SMALL}" -eq 1 ]; then
+    die "Terminal too small: need at least ${MIN_TERM_COLS}x${MIN_TERM_ROWS}, got ${TERM_COLS}x${TERM_ROWS}"
+fi
 
 # --- Settings resolution (default < config < env < CLI) -------------------
 # The config file may override the built-in defaults above.
@@ -457,6 +477,11 @@ CLEARED_TOTAL=0; ROW_CREDIT=0; LEVEL=0; FALL_MS=800
 GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
+# Raised by term_resize_apply (lib/input.sh) after a terminal resize was
+# handled, so the loops that gate their own redraw (the game loop via
+# DIRTY, menu_run and the info screens via their local dirty flag) repaint
+# the screen that the resize cleared. Every loop clears it after acting.
+REDRAW_PENDING=0
 # A round left via the pause menu's "Ins Hauptmenue" keeps its complete
 # state in the globals above; this flag marks it as waiting for the
 # "Fortsetzen" main menu entry (issue #12).
@@ -915,9 +940,20 @@ game_run() {
     fi
 
     while [ "${GAME_EXIT}" -eq 0 ]; do
-        # read_key also paces the loop via its TICK_S timeout.
+        # read_key also paces the loop via its TICK_S timeout, and it is
+        # where a pending SIGWINCH is applied (remeasure, clear, and block
+        # on the too-small overlay while the terminal is undersized).
         read_key
         handle_key
+        # A resize just happened: read_key cleared the screen (and may have
+        # blocked for a while behind the too-small overlay). Repaint and
+        # restart the gravity and play-time clocks so the resize interval
+        # counts as neither fall time nor play time - like leaving a pause.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            play_clock_resume
+            DIRTY=1
+        fi
         if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
             now_ms
             # Accumulate the play time of the segment since the last
