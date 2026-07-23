@@ -59,6 +59,20 @@ Die fuer uns relevanten Merkmale des Originals:
 - Vorschau: die naechsten 3 Teile. Hold: genau ein Teil, einmal pro Zug tauschbar.
 - Level/Geschwindigkeit: Fallgeschwindigkeit steigt mit der Zahl abgebauter
   Reihen der laufenden Runde.
+- **Lock Delay (seit 0.18.0):** Ein Stein, der nicht mehr fallen kann,
+  wird nicht sofort festgesetzt, sondern ruht ein kurzes Gnadenfenster
+  (`LOCK_DELAY_MS`, 250 ms), in dem er weiter nach links/rechts
+  verschoben und gedreht werden kann. Der Touchdown-Timer wird **nur**
+  zurueckgesetzt, wenn eine Verschiebung/Drehung den Stein wieder ins
+  Fallen bringt (dann faellt er normal weiter); eine Bewegung, die ihn
+  weiter aufliegen laesst, behaelt die urspruengliche Frist, sodass ein
+  Stein nicht endlos am Boden gehalten werden kann. Nur der
+  Transitions-Moment ins Aufliegen setzt die Frist; wiederholte
+  Gravitations-Ticks oder ein Soft-Drop auf einen bereits ruhenden Stein
+  verschieben sie nicht. Der Hard-Drop setzt weiterhin sofort fest, und
+  das Fenster laeuft weder in der Pause noch im Pausenmenue
+  (Umsetzung: `lock_touchdown`, `lock_delay_recheck`, `step_down` und der
+  Game-Loop in `rowhammer.sh`; Wert justierbar in `LOCK_DELAY_MS`).
 
 ### 3.2 Quadrat-System (Gold/Silber)
 
@@ -232,7 +246,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 ### 4.3 Game-Loop, Input, Rendering
 
 - **Game-Loop:** feste Tick-Rate; Fall-Intervall abhaengig vom Level.
-  Zeitmessung ueber `${EPOCHREALTIME}` (Bash 5) mit Fallback.
+  Zeitmessung ueber `${EPOCHREALTIME}` (Bash 5) mit Fallback. Ruht ein
+  Stein (Lock Delay scharf, `LOCK_PENDING`), pausiert die Gravitation und
+  der Loop lockt erst nach Ablauf von `LOCK_DELAY_MS` seit `TOUCHDOWN_MS`
+  (siehe 3.1).
 - **Input:** nicht-blockierend ueber `read -rsn1 -t <timeout>`;
   Escape-Sequenzen der Pfeiltasten sauber einlesen. Terminal-Modus mit `stty`
   setzen und ueber einen `trap`-Handler (EXIT/INT/TERM) garantiert
@@ -526,6 +543,11 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       bleibt ueber den Eintrag "Fortsetzen" (im Hauptmenue und im
       Einzelspieler-Menue) wieder aufnehmbar
       und wird erst beim echten Rundenende gewertet (siehe 3.1, 3.3)
+- [x] Lock Delay einbauen (Version 0.18.0): ein aufsetzender Stein wird
+      nicht sofort gelockt, sondern ruht ein Gnadenfenster
+      (`LOCK_DELAY_MS`, 250 ms) und kann darin weiter verschoben/gedreht
+      werden; der Touchdown-Timer wird nur zurueckgesetzt, wenn der Stein
+      durch die Verschiebung wieder ins Fallen geraet (siehe 3.1)
 - [ ] Anpassung an Terminalgroesse
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,

@@ -1,3 +1,15 @@
+rowhammer (0.18.0) unstable; urgency=medium
+
+  * Add a lock delay: a piece that lands is no longer locked immediately
+    but rests for a short grace window (LOCK_DELAY_MS, 250 ms), during
+    which it can still be moved left/right or rotated. The touchdown timer
+    is only reset when a move makes the piece airborne again; a move that
+    leaves it resting keeps the original deadline, so a piece cannot be
+    stalled forever on the floor. Hard drop still locks instantly, and the
+    delay does not run while paused or in the pause menu.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 22 Jul 2026 13:00:00 +0200
+
 rowhammer (0.17.0) unstable; urgency=medium
 
   * Add a per-round play-time counter: the HUD shows the running round's
