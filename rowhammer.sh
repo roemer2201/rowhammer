@@ -9,11 +9,12 @@
 #   7-bag randomizer with a 3-piece preview, a hold slot, gravity with a
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
-#   restart. Pressing the quit key (x/ESC) in a running round opens a
-#   pause menu instead of aborting: resume, suspend the round into the
-#   main menu (it stays resumable via the "Fortsetzen" entry offered in
-#   the main menu and in the singleplayer menu) or
-#   end it; a round is recorded only when it really ends.
+#   restart. Completed rows blink briefly before they are removed, so
+#   the player sees which rows scored. Pressing the quit key (x/ESC) in
+#   a running round opens a pause menu instead of aborting: resume,
+#   suspend the round into the main menu (it stays resumable via the
+#   "Fortsetzen" entry offered in the main menu and in the singleplayer
+#   menu) or end it; a round is recorded only when it really ends.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
 #   cleared rows worth bonus row credit (the "Rows" counter). Since
@@ -62,10 +63,10 @@
 #      set), load the highscore list, the savegame and the statistics
 #      and enter the alternate screen.
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
-#      (input, gravity, locking, square detection, line clearing,
-#      rendering), finished rounds are recorded in the highscore list,
-#      their row credit is banked into the wonder savegame and their
-#      counters into the statistics file,
+#      (input, gravity, locking, square detection, row flash, line
+#      clearing, rendering), finished rounds are recorded in the
+#      highscore list, their row credit is banked into the wonder
+#      savegame and their counters into the statistics file,
 #      settings changes are written back to the config file. A round
 #      suspended via the pause menu returns to the main menu
 #      unrecorded and continues via its "Fortsetzen" entry.
@@ -76,7 +77,7 @@
 #                [--color-mode auto|basic|extended] [--debug]
 #                [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.19.0  (2026-07-23)
+# Version: 0.20.0  (2026-07-24)
 
 set -euo pipefail
 
@@ -90,7 +91,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.19.0"
+ROWHAMMER_VERSION="0.20.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -524,6 +525,14 @@ LEVEL_SPEEDS=(800 720 640 560 480 410 350 300 260 220 190 160 140 120)
 # adjustable game-feel constant, like LEVEL_SPEEDS and TICK_S.
 LOCK_DELAY_MS=250
 
+# Clear animation: rows completed by a lock blink FLASH_CYCLES times
+# (highlighted / normal) with FLASH_MS milliseconds per half cycle before
+# they are actually removed, so the player sees which rows scored. The
+# defaults add up to a short 280 ms; adjustable game-feel constants like
+# LEVEL_SPEEDS and LOCK_DELAY_MS. FLASH_CYCLES=0 turns the animation off.
+FLASH_MS=70
+FLASH_CYCLES=2
+
 # now_ms: put the current time in milliseconds into the global NOW_MS.
 # Uses bash 5's EPOCHREALTIME when available (no fork); older bash falls
 # back to date. A global instead of command substitution keeps the hot
@@ -632,9 +641,47 @@ spawn_piece() {
     DIRTY=1
 }
 
-# lock_and_next: lock the active piece, detect squares, clear lines,
-# update credit/level and spawn the next piece. Square detection
-# runs before line clearing on purpose: a piece that completes a square
+# flash_rows: blink the rows that a lock just completed, before they are
+# removed from the board. The rows come from board_full_rows (FULL_ROWS);
+# the render layer draws the highlight for FLASH_ROWS whenever FLASH_STATE
+# is 1, so the animation is nothing but toggling that flag and redrawing.
+# The wait between the half cycles reuses a timed read instead of sleep:
+# no fork per frame, and key presses arriving during the animation are
+# swallowed on purpose so a burst of them cannot fire at once on the piece
+# that spawns right afterwards (same rationale as the resize overlay in
+# lib/input.sh). A pending SIGWINCH interrupts the read and is applied by
+# read_key on the next tick, as usual.
+flash_rows() {
+    if [ "${FLASH_CYCLES}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
+        return 0
+    fi
+    local y i ignore delay
+    FLASH_ROWS=()
+    for y in "${FULL_ROWS[@]}"; do
+        FLASH_ROWS["${y}"]=1
+    done
+    printf -v delay '%d.%03d' $(( FLASH_MS / 1000 )) $(( FLASH_MS % 1000 ))
+    debug_event "row flash: rows=${FULL_ROWS[*]} cycles=${FLASH_CYCLES} ms=${FLASH_MS}"
+    for (( i = 0; i < FLASH_CYCLES; i++ )); do
+        FLASH_STATE=1
+        draw_frame
+        ignore=""
+        IFS= read -rsn1 -t "${delay}" ignore || :
+        FLASH_STATE=0
+        draw_frame
+        ignore=""
+        IFS= read -rsn1 -t "${delay}" ignore || :
+    done
+    FLASH_ROWS=()
+    FLASH_STATE=0
+    return 0
+}
+
+# lock_and_next: lock the active piece, detect squares, flash and clear
+# completed rows, update credit/level and spawn the next piece. The flash
+# (flash_rows) blocks the loop for its short duration, which is intended:
+# the round waits for the animation before the next piece appears. Square
+# detection runs before line clearing on purpose: a piece that completes a square
 # and a row at once still forms the square first, so the cleared row
 # already earns the square's bonus credit. Forming a square earns no
 # instant points (only its strips pay off when their rows clear later).
@@ -651,6 +698,11 @@ lock_and_next() {
             debug_event "silver square formed: silver_total=${SILVER_COUNT}"
         fi
     fi
+    # Let completed rows blink briefly before they vanish (the square
+    # detection above already ran, so a row through a fresh gold/silver
+    # square flashes as the scoring row it is).
+    board_full_rows
+    flash_rows
     clear_lines
     if (( CLEARED > 0 )); then
         CLEARED_TOTAL=$(( CLEARED_TOTAL + CLEARED ))

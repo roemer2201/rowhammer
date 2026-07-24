@@ -145,6 +145,9 @@ Umgesetzt:
   Diese Reihenwertung ist zugleich das Punktesystem: nur abgebaute
   Reihen bringen Punkte, Drops und Quadrat-Bildung nicht
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
+- **Blinkende Reihen beim Abbau:** vollstaendige Reihen blinken kurz
+  auf (zweimal hell/normal, zusammen rund 280 ms), bevor sie
+  verschwinden und das naechste Teil erscheint
 - **Pausenmenue statt hartem Abbruch:** `Esc`/`x` unterbricht die
   Runde; sie kann ins Hauptmenue gelegt und dort ueber "Fortsetzen"
   wieder aufgenommen werden - gewertet wird erst beim echten Rundenende

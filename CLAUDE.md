@@ -73,6 +73,21 @@ Die fuer uns relevanten Merkmale des Originals:
   das Fenster laeuft weder in der Pause noch im Pausenmenue
   (Umsetzung: `lock_touchdown`, `lock_delay_recheck`, `step_down` und der
   Game-Loop in `rowhammer.sh`; Wert justierbar in `LOCK_DELAY_MS`).
+- **Blink-Effekt beim Reihenabbau (seit 0.20.0):** Vervollstaendigt ein
+  Lock eine oder mehrere Reihen, blinken diese Reihen erst kurz auf und
+  werden dann entfernt. Die Reihen werden vor dem Abbau ermittelt
+  (`board_full_rows` in `lib/board.sh`), die Animation wechselt
+  `FLASH_CYCLES`-mal zwischen hell hervorgehobener und normaler
+  Darstellung (`FLASH_ROWS`/`FLASH_STATE` in `lib/render.sh`, gesteuert
+  von `flash_rows` in `rowhammer.sh`; Standard 2 Zyklen a 2x70 ms =
+  rund 280 ms, justierbar in `FLASH_MS`/`FLASH_CYCLES`,
+  `FLASH_CYCLES=0` schaltet die Animation ab). Die Quadrat-Erkennung
+  laeuft vorher, sodass eine Reihe durch ein frisch gebildetes Quadrat
+  bereits in ihrer Gold-/Silber-Wertigkeit blinkt. Die Animation haelt
+  den Game-Loop fuer ihre Dauer an (das naechste Teil erscheint erst
+  danach); Tastendruecke waehrend des Blinkens werden bewusst verworfen,
+  damit sie nicht gesammelt auf dem neuen Stein losgehen. Das Warten
+  nutzt wie der uebrige Loop ein `read` mit Timeout (kein `sleep`-Fork).
 
 ### 3.2 Quadrat-System (Gold/Silber)
 
@@ -174,6 +189,8 @@ Die fuer uns relevanten Merkmale des Originals:
   behaelt ihre bis dahin gezaehlte Zeit und setzt sie beim Fortsetzen
   fort. Beim Rundenende wird die Spielzeit (in ganzen Sekunden) mit dem
   Highscore-Eintrag gespeichert (siehe 4.5).
+- Reihenabbau: die betroffenen Reihen blinken kurz auf, bevor sie
+  verschwinden (siehe 3.1).
 - Nach Rundenende: Bildschirm mit dem aktuellen Wunder in seiner neuen Baustufe.
 
 ## 4. Technisches Konzept
@@ -573,6 +590,10 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Info-Bildschirme zeichnen nach einem Resize ebenfalls neu
       (`REDRAW_PENDING` in `menu_run`, `menu_message`, `prompt_rebind`
       und `wonder_screen`)
+- [x] Blinkeffekt beim Reihenabbau (Version 0.20.0): abgebaute Reihen
+      blinken kurz auf, bevor sie entfernt werden und das naechste Teil
+      erscheint (`board_full_rows`, `flash_rows`, `FLASH_ROWS`/
+      `FLASH_STATE`; Dauer ueber `FLASH_MS`/`FLASH_CYCLES`, siehe 3.1)
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
       naechste drei Steine oben rechts, Hold-Stein links
