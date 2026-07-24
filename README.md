@@ -18,7 +18,9 @@ Kurze, echte Spielsequenzen - aufgenommen mit
 [asciinema](https://asciinema.org/) und als GIF eingebettet. Die
 zugehoerigen `.cast`-Dateien liegen unter [`docs/demo/`](docs/demo) und
 lassen sich im Terminal abspielen, z. B.
-`asciinema play docs/demo/gold.cast`.
+`asciinema play docs/demo/gold.cast`. Neu erzeugen (aus echtem Spiel,
+gegen das Debug-Log verifiziert) lassen sie sich mit der Toolchain unter
+[`tools/demo/`](tools/demo): `python3 tools/demo/make_demos.py`.
 
 <table>
   <tr>
