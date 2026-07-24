@@ -576,7 +576,12 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 - [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
 - [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
       naechste drei Steine oben rechts, Hold-Stein links
-- [ ] README mit Screenshots/Asciinema aktualisieren
+- [x] README mit Screenshots/Asciinema aktualisieren (Abschnitt
+      "Vorschau" im README): vier kurze, echte Spielsequenzen als
+      asciinema-Aufnahmen (`.cast`) und GIF unter `docs/demo/` - Tetris
+      (Vierfach-Abbau), Silber-Quadrat (vier gemischte Teile),
+      Gold-Quadrat (vier gleiche Teile) und die Weltwunder-Baustelle.
+      Die Clips sind mit festem `--seed` reproduzierbar aufgenommen
 - [x] Spielzeit-Counter fuer die aktuelle Runde einbauen (Version
       0.17.0: Anzeige im HUD als "Time" MM:SS, Zeitmessung analog zum
       Game-Loop ueber `${EPOCHREALTIME}`/`now_ms`; nur aktive Spielzeit
