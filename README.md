@@ -12,6 +12,43 @@ Abbau kraeftige Bonus-Reihen liefern.
 Der Name ist ein Wortspiel: Hier werden Reihen (rows) gehaemmert - mit dem
 gleichnamigen Hardware-Angriff hat das Spiel nichts zu tun.
 
+## Vorschau
+
+Kurze, echte Spielsequenzen - aufgenommen mit
+[asciinema](https://asciinema.org/) und als GIF eingebettet. Die
+zugehoerigen `.cast`-Dateien liegen unter [`docs/demo/`](docs/demo) und
+lassen sich im Terminal abspielen, z. B.
+`asciinema play docs/demo/gold.cast`. Neu erzeugen (aus echtem Spiel,
+gegen das Debug-Log verifiziert) lassen sie sich mit der Toolchain unter
+[`tools/demo/`](tools/demo): `python3 tools/demo/make_demos.py`.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <b>Tetris - vier Reihen auf einmal</b><br>
+      <img src="docs/demo/tetris.gif" alt="Tetris: vier Reihen auf einmal werden abgebaut" width="420"><br>
+      <sub>Neun Spalten fuellen, die Luecke rechts lassen - der stehende I-Stein raeumt vier Reihen (+1 Bonuszeile).</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>Silber-Quadrat</b><br>
+      <img src="docs/demo/silver.gif" alt="Ein Silber-Quadrat entsteht aus vier gemischten Teilen" width="420"><br>
+      <sub>Vier <em>gemischte</em> Teile fuellen ein 4x4-Feld - es wird zum Silber-Quadrat (+5 je Reihe beim Abbau).</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>Gold-Quadrat</b><br>
+      <img src="docs/demo/gold.gif" alt="Ein Gold-Quadrat entsteht aus vier gleichen Teilen" width="420"><br>
+      <sub>Vier <em>gleiche</em> Teile (hier vier O) im 4x4-Feld - das Gold-Quadrat bringt +10 je Reihe.</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>Weltwunder-Baustelle</b><br>
+      <img src="docs/demo/wonder.gif" alt="Die Weltwunder-Baustelle mit der fast fertigen Sphinx" width="420"><br>
+      <sub>Der ueber alle Runden gesammelte Reihenstand baut Stueck fuer Stueck ein Weltwunder auf.</sub>
+    </td>
+  </tr>
+</table>
+
 ## Status
 
 **Phasen 1 bis 3 sind umgesetzt** (spielbarer Kern, Startmenue, die
