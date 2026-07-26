@@ -29,7 +29,7 @@
 #   rowhammer.sh (defaults/env/CLI blocks); this module only reads them.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-07-19)
+# Version: 0.3.1  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -82,8 +82,8 @@ debug_init() {
         printf '# terminal: TERM=%s size=%sx%s tick=%ss\n' \
             "${TERM:-unset}" "${TERM_COLS}" "${TERM_ROWS}" "${TICK_S}"
         printf '# seed:     %s\n' "${SEED:-unset (random)}"
-        printf '# player:   %s  color=%s mode=%s\n' \
-            "${PLAYER_NAME}" "${USE_COLOR}" "${COLOR_MODE}"
+        printf '# player:   %s  color=%s mode=%s theme=%s\n' \
+            "${PLAYER_NAME}" "${USE_COLOR}" "${COLOR_MODE}" "${COLOR_THEME}"
         printf '# keys:     %s\n' "${keys}"
         printf '# data:     %s\n' "${DATA_DIR}"
         printf '# config:   %s\n' "${CONFIG_LOADED_FILES:-none}"

@@ -1,3 +1,16 @@
+rowhammer (0.21.0) unstable; urgency=medium
+
+  * Add configurable colors via named color themes. A theme maps every
+    piece type and the gold/silver squares to symbolic color names, each
+    carrying a basic (8/16-color ANSI) and an extended (xterm 256-color)
+    meaning. Four themes ship: "guideline" (the previous default look,
+    unchanged), "classic", "mono" and "colorblind" (deuteranopia-friendly).
+    Selectable in the settings menu (with a live per-theme color swatch),
+    via --color-theme NAME and the ROWHAMMER_COLOR_THEME environment
+    variable, and persisted to the user config file (COLOR_THEME).
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 26 Jul 2026 12:00:00 +0200
+
 rowhammer (0.20.0) unstable; urgency=medium
 
   * Cleared rows now blink before they vanish: when a lock completes one
