@@ -18,6 +18,10 @@
 #   payload as key presses: X10 mouse reports, OSC/DCS terminal replies,
 #   8-bit CSI, over-long CSI sequences and bracketed paste. Bytes that are
 #   not printable ASCII are discarded rather than reported.
+#   Callers that pause the game and throw input away (the row-clear
+#   flash, the "resize me" overlay) use key_drain rather than reading
+#   bytes raw, so a discarded sequence is discarded whole instead of
+#   leaving its tail behind for the next read.
 #   Enter is reported as ENTER so the menu system can use it as "select".
 #   In debug mode every received key press is recorded (raw bytes plus
 #   mapped symbol) via debug_input from lib/debug.sh. Terminal resizing is
@@ -28,7 +32,7 @@
 #   overlay until it grows back.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.6.0  (2026-07-26)
+# Version: 0.7.0  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -157,12 +161,11 @@ term_resize_apply() {
     # interrupts it, so the live "now WxH" figure updates promptly while
     # the user drags the terminal border. Keys pressed meanwhile are
     # swallowed on purpose - they must not leak into the game once play
-    # resumes.
-    local ignore=""
+    # resumes. The wait goes through key_drain rather than a raw read so
+    # a half-consumed escape sequence cannot leave its tail behind.
     while [ "${TERM_TOO_SMALL}" -eq 1 ]; do
         term_too_small_screen
-        ignore=""
-        IFS= read -rsn1 -t 0.2 ignore || :
+        key_drain 200
         if [ "${TERM_RESIZED}" -eq 1 ]; then
             TERM_RESIZED=0
             term_measure
@@ -483,6 +486,50 @@ key_feed() {
         mouse) key_in_mouse "${b}" ;;
         paste) key_in_paste "${b}" ;;
     esac
+}
+
+# key_drain MS
+# Wait about MS milliseconds while throwing away everything the user
+# types - but route the bytes through the escape parser instead of
+# reading them raw. Callers that deliberately pause the game (the
+# row-clear flash in rowhammer.sh, the "resize me" overlay above) used to
+# read single bytes directly, which reintroduced issue #7 behind the
+# parser's back: a raw read that swallows only the ESC of an arrow key
+# leaves "[C" in the buffer, and the next read_key applies the "C" as the
+# hold key "c". Feeding the bytes to key_feed keeps a sequence atomic, so
+# either all of it is discarded or none of it.
+# Keys that do resolve are dropped on purpose - they must not fire on the
+# piece that appears after the animation. A sequence still in flight when
+# the window closes keeps its parser state and is finished by the next
+# read_key, which is better than losing its tail.
+key_drain() {
+    local ms="${1}" left b rc timeout
+    now_ms
+    local deadline=$(( NOW_MS + ms ))
+    while :; do
+        now_ms
+        left=$(( deadline - NOW_MS ))
+        if [ "${left}" -le 0 ]; then
+            return 0
+        fi
+        printf -v timeout '%d.%03d' $(( left / 1000 )) $(( left % 1000 ))
+        b=""
+        rc=0
+        IFS= read -rsn1 -t "${timeout}" b || rc=$?
+        if [ "${rc}" -gt 128 ]; then
+            # Timeout, or a signal (SIGWINCH) interrupted the read. A byte
+            # handed over together with the timeout status is still valid
+            # and must be parsed, see read_key.
+            if [ -z "${b}" ]; then
+                return 0
+            fi
+        elif [ "${rc}" -ne 0 ]; then
+            die "Input stream closed (stdin is gone)"
+        fi
+        key_feed "${b}"
+        KEY=""
+        KEY_EXTRA=""
+    done
 }
 
 # read_key

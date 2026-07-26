@@ -87,7 +87,15 @@ Die fuer uns relevanten Merkmale des Originals:
   den Game-Loop fuer ihre Dauer an (das naechste Teil erscheint erst
   danach); Tastendruecke waehrend des Blinkens werden bewusst verworfen,
   damit sie nicht gesammelt auf dem neuen Stein losgehen. Das Warten
-  nutzt wie der uebrige Loop ein `read` mit Timeout (kein `sleep`-Fork).
+  nutzt wie der uebrige Loop ein `read` mit Timeout (kein `sleep`-Fork),
+  seit 0.22.0 aber ueber `key_drain` (`lib/input.sh`) statt eines rohen
+  `read`: ein Roh-Read verwarf einzelne Bytes und konnte damit genau die
+  Haelfte einer Escape-Sequenz schlucken - blieb `[C` einer Pfeiltaste
+  liegen, wurde das `C` danach als Hold-Taste `c` angewandt (Issue #7 an
+  der Eingabeschicht vorbei). `key_drain` schickt die Bytes durch
+  denselben Zustandsautomaten und verwirft nur die fertig erkannten
+  Tasten, sodass eine Sequenz entweder ganz oder gar nicht geschluckt
+  wird. Dieselbe Funktion nutzt die "resize me"-Overlay.
 
 ### 3.2 Quadrat-System (Gold/Silber)
 

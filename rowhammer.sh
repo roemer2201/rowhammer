@@ -695,22 +695,19 @@ flash_rows() {
     if [ "${FLASH_CYCLES}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
         return 0
     fi
-    local y i ignore delay
+    local y i
     FLASH_ROWS=()
     for y in "${FULL_ROWS[@]}"; do
         FLASH_ROWS["${y}"]=1
     done
-    printf -v delay '%d.%03d' $(( FLASH_MS / 1000 )) $(( FLASH_MS % 1000 ))
     debug_event "row flash: rows=${FULL_ROWS[*]} cycles=${FLASH_CYCLES} ms=${FLASH_MS}"
     for (( i = 0; i < FLASH_CYCLES; i++ )); do
         FLASH_STATE=1
         draw_frame
-        ignore=""
-        IFS= read -rsn1 -t "${delay}" ignore || :
+        key_drain "${FLASH_MS}"
         FLASH_STATE=0
         draw_frame
-        ignore=""
-        IFS= read -rsn1 -t "${delay}" ignore || :
+        key_drain "${FLASH_MS}"
     done
     FLASH_ROWS=()
     FLASH_STATE=0

@@ -22,10 +22,19 @@ rowhammer (0.22.0) unstable; urgency=medium
     running program are switched off at startup.
   * A deliberate Esc followed quickly by another key is no longer
     swallowed as an Alt chord: both keys are reported.
+  * The row-clear flash and the "resize me" overlay no longer wait on a
+    raw single-byte read. Discarding bytes that way could swallow just
+    the head of an escape sequence and leave its tail for the next read,
+    which applied the "C" of a right arrow as the hold key "c" - issue #7
+    reintroduced behind the parser's back, and not visible to a test that
+    drives read_key alone. Both now wait via key_drain, which feeds the
+    bytes through the same state machine and discards only fully resolved
+    keys, so a sequence is swallowed whole or not at all.
   * New tools/key-scan.sh replays 72 terminal byte sequences through the
     game's own read_key and checks the mapped key, with an optional
-    per-byte gap to reproduce split delivery. Findings and the fix
-    proposals are documented in docs/input-analysis.md.
+    per-byte gap to reproduce split delivery, and a --drain option that
+    exercises the discard path above. Findings and the fix proposals are
+    documented in docs/input-analysis.md.
 
  -- roemer2201 <r.oliver@web.de>  Sun, 26 Jul 2026 12:00:00 +0200
 

@@ -5,7 +5,7 @@ Analysiert am 2026-07-26 gegen Code-Stand 0.20.0 (`lib/input.sh` 0.5.0).
 Ausloeser: Nach dem Fix fuer Issue #7 (Version 0.16.1) gab es weiterhin den
 Verdacht, dass andere Tastenkombinationen falsche Aktionen ausloesen.
 
-> **Status: umgesetzt in Version 0.22.0** (`lib/input.sh` 0.6.0). Die
+> **Status: umgesetzt in Version 0.22.0** (`lib/input.sh` 0.7.0). Die
 > Vorschlaege L1 bis L6 aus Abschnitt 3 sind eingebaut, L7 bewusst nicht.
 > Die Befunde in Abschnitt 2 beschreiben den Zustand *vor* dem Umbau;
 > Abschnitt 5 haelt fest, was danach messbar ist.
@@ -161,6 +161,31 @@ Aktion gebunden sind. Kein Spielfehler, aber sie sollten sauber
 verworfen werden, damit kuenftige Tastenbelegungen nicht versehentlich
 darauf treffen.
 
+### J. Nachtrag: `flash_rows` und die Resize-Overlay lasen roh
+
+Gefunden erst nach dem Umbau, beim Nachgehen einer Spielbeobachtung
+("ein Tastenanschlag wurde verschluckt"). Zwei Stellen warteten mit
+einem eigenen `read -rsn1` statt ueber die Eingabeschicht:
+`flash_rows` (`rowhammer.sh`) waehrend des Reihen-Blinkens und die
+"resize me"-Overlay in `term_resize_apply`. Beide verwarfen **einzelne
+Bytes** - und damit moeglicherweise nur den Kopf einer Sequenz:
+
+    Rechts-Pfeiltaste waehrend des Blinkens, Roh-Read frisst das ESC
+    -> Rest "[C" geht an read_key -> "[" wirkungslos, "C" -> "c" = HOLD
+
+Der Zustandsautomat aus L1 half hier nicht, weil die Bytes gar nicht
+erst bei ihm ankamen. Gemessen mit einem Nachbau der Schleife: bei einem
+oder zwei bereits verbrauchten Roh-Reads loeste die Pfeiltaste einen
+Hold-Wechsel aus, bei drei oder vier verschwand sie ersatzlos. Das
+erklaert beide Symptome - den falschen Hold und den verschluckten
+Anschlag.
+
+Behoben mit `key_drain MS` (`lib/input.sh` 0.7.0): die Wartezeit liest
+weiter byteweise, schickt die Bytes aber durch `key_feed` und verwirft
+nur die fertig erkannten Tasten. Eine Sequenz wird damit entweder ganz
+oder gar nicht geschluckt. Beide Aufrufstellen nutzen die Funktion.
+Regressionstest: `tools/key-scan.sh --drain MS`.
+
 ### I. Geprueft und unauffaellig
 
 Funktionstasten (SS3 und CSI, inklusive der Linux-Konsolen-Form
@@ -267,6 +292,7 @@ Messwerte:
 | --- | --- |
 | `tools/key-scan.sh` | 0 von 72 Folgen loesen eine falsche Aktion aus, 0 wirkungslose Durchreicher |
 | `-g 0.03` / `-g 0.06` / `-g 0.1` / `-g 0.2` | jeweils 0 Befunde (die drei Alt-Chord-Faelle werden uebersprungen, siehe unten) |
+| `-d 30` / `-d 70` / `-d 140` (Blink-/Overlay-Pfad, Befund J) | jeweils 0 falsche Aktionen; die geschluckten Sequenzen erscheinen als `warn`, was dem gewollten Verwerfen entspricht |
 | Locale `C` und `C.UTF-8` | identisch, keine Abweichung |
 
 Zusaetzlich im echten Spiel gegengeprueft (`--debug`, Pfeiltasten

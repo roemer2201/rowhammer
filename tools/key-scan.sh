@@ -33,14 +33,15 @@
 #      per case and a summary; exit non-zero if any case deviated.
 #
 # Usage:
-#   tools/key-scan.sh [-g SEC] [-o NAME] [-l] [-s|-v] [-h]
+#   tools/key-scan.sh [-g SEC] [-d MS] [-o NAME] [-l] [-s|-v] [-h]
 #
-# Version: 1.1.0  (2026-07-26)
+# Version: 1.2.0  (2026-07-26)
 
 set -u
 
 # --- Defaults (lowest precedence; overridden by env, then by CLI) ---------
 GAP="${ROWHAMMER_KEYSCAN_GAP:-0}"
+DRAIN="${ROWHAMMER_KEYSCAN_DRAIN:-0}"
 ONLY="${ROWHAMMER_KEYSCAN_ONLY:-}"
 LIST_ONLY="${ROWHAMMER_KEYSCAN_LIST:-0}"
 SILENT="${ROWHAMMER_KEYSCAN_SILENT:-0}"
@@ -63,6 +64,13 @@ Options (environment variable in brackets; CLI wins over environment):
                     split delivery of issue #7 (SSH, tmux, load).
                     Default: 0 (whole sequence at once)
                     [ROWHAMMER_KEYSCAN_GAP]
+  -d, --drain MS    Run key_drain for MS milliseconds before reading, to
+                    exercise the paths that pause the game and throw
+                    input away (the row-clear flash, the resize overlay).
+                    A swallowed sequence is fine (warn); a leaked tail
+                    that triggers an action is not (FAIL).
+                    Default: 0 (no drain)
+                    [ROWHAMMER_KEYSCAN_DRAIN]
   -o, --only NAME   Run only cases whose name contains NAME (substring,
                     case sensitive). Default: all cases
                     [ROWHAMMER_KEYSCAN_ONLY]
@@ -257,6 +265,11 @@ run_replay() {
     MIN_TERM_COLS=48
     # shellcheck source=/dev/null
     source "${REPO_ROOT}/lib/input.sh"
+    # Exercise the discard path first when asked: whatever it consumes
+    # must be consumed whole, never leaving a sequence tail behind.
+    if [ "${KEYSCAN_DRAIN:-0}" -gt 0 ]; then
+        key_drain "${KEYSCAN_DRAIN}"
+    fi
     local out=""
     while :; do
         KEY=""
@@ -358,7 +371,8 @@ run_case() {
     fi
     KEYSCAN_OUT="$(mktemp)"
     export KEYSCAN_OUT
-    feed "${bytes}" "${hold}" | KEYSCAN_REPLAY=1 "${BASH}" "${SCRIPT_DIR}/${SCRIPT_NAME}" --replay
+    feed "${bytes}" "${hold}" | KEYSCAN_REPLAY=1 KEYSCAN_DRAIN="${DRAIN}" \
+        "${BASH}" "${SCRIPT_DIR}/${SCRIPT_NAME}" --replay
     got="$(cat "${KEYSCAN_OUT}")"
     rm -f "${KEYSCAN_OUT}"
     if [ "${got}" = "${expected}" ]; then
@@ -402,6 +416,14 @@ while [ "$#" -gt 0 ]; do
             GAP="${2}"
             shift
             ;;
+        -d|--drain)
+            if [ "$#" -lt 2 ]; then
+                err "Option ${1} needs a value (milliseconds)"
+                exit 2
+            fi
+            DRAIN="${2}"
+            shift
+            ;;
         -o|--only)
             if [ "$#" -lt 2 ]; then
                 err "Option ${1} needs a value (case name substring)"
@@ -434,6 +456,10 @@ if [ "${SILENT}" -eq 1 ]; then
 fi
 if ! [[ "${GAP}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     err "Invalid --gap value: '${GAP}' (expected seconds, e.g. 0.06)"
+    exit 2
+fi
+if ! [[ "${DRAIN}" =~ ^[0-9]+$ ]]; then
+    err "Invalid --drain value: '${DRAIN}' (expected whole milliseconds)"
     exit 2
 fi
 if [ ! -r "${REPO_ROOT}/lib/input.sh" ]; then
