@@ -1022,6 +1022,20 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 - [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
       Tastenbelegung ist seit 0.2.0 umgesetzt)
+- [ ] Umschaltbar zwischen Voll-Frame- und Partial-Rendering: seit
+      0.21.0 zeichnet `render_flush` (`lib/render.sh`) standardmaessig
+      nur die tatsaechlich geaenderten Zeilen (siehe 4.3); fuer
+      Terminals/Multiplexer, bei denen sich das inkrementelle Update
+      falsch darstellt (Debugging-Fall, Kompatibilitaets-Fallback),
+      soll ein Schalter zurueck auf den alten Voll-Neuaufbau jeder
+      Zeile erlauben - **Partial-Rendering bleibt der Standard**.
+      Umsetzung nach dem Muster von `--color-mode`
+      (`--render-mode full|partial`, `ROWHAMMER_RENDER_MODE`, Standard
+      `partial`): ein globales Flag, das `render_flush` vor der
+      Zeilen-Diff-Pruefung abfragt und im Full-Modus `RENDER_FULL`
+      dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
+      der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
+      dem ersten Frame wieder freizugeben.
 - [ ] "rowhammer"-Zaehler einbauen: zaehlt, wie oft vier Reihen auf
       einmal abgebaut wurden (der Tetris, hier nach dem Projekt benannt).
       Die Stelle steht schon fest - `clear_lines` (`lib/board.sh`) kennt
