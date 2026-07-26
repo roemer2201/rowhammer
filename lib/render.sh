@@ -12,14 +12,17 @@
 #   on the game over screen) into one string and prints it
 #   with a single printf - classic double buffering, which keeps the
 #   terminal flicker-free. Blocks are drawn with per-piece SGR sequences
-#   precomputed for the resolved color mode: basic (8/16-color ANSI,
-#   reverse video) or extended (xterm 256-color backgrounds); "auto"
-#   detection lives in color_mode_resolve. All terminal output goes
+#   precomputed by render_colors_init from the active color theme
+#   (COLOR_THEME, lib/pieces.sh) for the resolved color mode: basic
+#   (8/16-color ANSI, reverse video) or extended (xterm 256-color
+#   backgrounds); "auto" detection lives in color_mode_resolve. The
+#   settings color picker previews each theme via render_theme_swatch.
+#   All terminal output goes
 #   through screen_write, which mirrors every update 1:1 into the frame
 #   log when the debug mode is active (lib/debug.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-07-22)
+# Version: 0.10.0  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -65,24 +68,70 @@ color_mode_resolve() {
 }
 
 # render_colors_init
-# Build the block SGR lookup for the resolved color mode. Basic mode
-# keeps the original look (reverse video on the 8-color foreground);
-# extended mode paints xterm 256-color backgrounds and gives the squares
-# richer gold/grey tones instead of plain yellow/white.
+# Build the block SGR lookup for the active color theme (COLOR_THEME) and
+# the resolved color mode. The theme (lib/pieces.sh) maps every piece type
+# and the gold/silver squares to a symbolic color name; this turns those
+# names into final SGR sequences. Basic mode keeps the classic look
+# (reverse video on the 8-color foreground for pieces, black text on the
+# matching background for squares); extended mode paints xterm 256-color
+# backgrounds. Called at startup and again whenever the settings menu
+# switches the theme, so a change takes effect immediately.
 render_colors_init() {
-    local t
+    local t name gname sname
+    for t in "${PIECE_TYPES[@]}"; do
+        name="${THEME_COLOR[${COLOR_THEME}:${t}]}"
+        if [ "${COLOR_MODE}" = "extended" ]; then
+            PIECE_SGR["${t}"]=$'\e[48;5;'"${COLOR_EXT[${name}]}m"
+        else
+            PIECE_SGR["${t}"]=$'\e[7;'"${COLOR_BASIC[${name}]}m"
+        fi
+    done
+    gname="${THEME_COLOR[${COLOR_THEME}:GOLD]}"
+    sname="${THEME_COLOR[${COLOR_THEME}:SILVER]}"
     if [ "${COLOR_MODE}" = "extended" ]; then
-        for t in "${PIECE_TYPES[@]}"; do
-            PIECE_SGR["${t}"]=$'\e[48;5;'"${PIECE_COLOR_EXT[${t}]}m"
-        done
-        SQ_GOLD_SGR=$'\e[38;5;16;48;5;178m'
-        SQ_SILVER_SGR=$'\e[38;5;16;48;5;250m'
+        SQ_GOLD_SGR=$'\e[38;5;16;48;5;'"${COLOR_EXT[${gname}]}m"
+        SQ_SILVER_SGR=$'\e[38;5;16;48;5;'"${COLOR_EXT[${sname}]}m"
     else
-        for t in "${PIECE_TYPES[@]}"; do
-            PIECE_SGR["${t}"]=$'\e[7;'"${PIECE_COLOR[${t}]}m"
-        done
-        SQ_GOLD_SGR=$'\e[30;43m'
-        SQ_SILVER_SGR=$'\e[30;47m'
+        # Basic squares are black text on the color's background (fg + 10).
+        # The array element is expanded before the arithmetic so the name
+        # in gname/sname is used as the key, not evaluated as a variable.
+        SQ_GOLD_SGR=$'\e[30;'"$(( ${COLOR_BASIC[${gname}]} + 10 ))m"
+        SQ_SILVER_SGR=$'\e[30;'"$(( ${COLOR_BASIC[${sname}]} + 10 ))m"
+    fi
+    return 0
+}
+
+# render_theme_swatch THEME
+# Build a one-line color sample into the global RENDER_SWATCH: a two-cell
+# block per piece type in that theme's color, then the gold and silver
+# square looks. The settings color picker (menu_colors) shows one swatch
+# per theme so the player sees each palette while browsing, without
+# touching the active PIECE_SGR/SQ_* globals. Honors USE_COLOR and the
+# resolved COLOR_MODE exactly like render_colors_init; with colors off it
+# degrades to the piece letters.
+render_theme_swatch() {
+    local theme="${1}" t name gname sname
+    if [ "${USE_COLOR}" -eq 0 ]; then
+        RENDER_SWATCH="I O T S Z J L"
+        return 0
+    fi
+    RENDER_SWATCH=""
+    for t in "${PIECE_TYPES[@]}"; do
+        name="${THEME_COLOR[${theme}:${t}]}"
+        if [ "${COLOR_MODE}" = "extended" ]; then
+            RENDER_SWATCH+=$'\e[48;5;'"${COLOR_EXT[${name}]}m""  ${RESET_SGR}"
+        else
+            RENDER_SWATCH+=$'\e[7;'"${COLOR_BASIC[${name}]}m""  ${RESET_SGR}"
+        fi
+    done
+    gname="${THEME_COLOR[${theme}:GOLD]}"
+    sname="${THEME_COLOR[${theme}:SILVER]}"
+    if [ "${COLOR_MODE}" = "extended" ]; then
+        RENDER_SWATCH+=$'\e[38;5;16;48;5;'"${COLOR_EXT[${gname}]}m""##${RESET_SGR}"
+        RENDER_SWATCH+=$'\e[38;5;16;48;5;'"${COLOR_EXT[${sname}]}m""##${RESET_SGR}"
+    else
+        RENDER_SWATCH+=$'\e[30;'"$(( ${COLOR_BASIC[${gname}]} + 10 ))m""##${RESET_SGR}"
+        RENDER_SWATCH+=$'\e[30;'"$(( ${COLOR_BASIC[${sname}]} + 10 ))m""##${RESET_SGR}"
     fi
     return 0
 }

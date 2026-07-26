@@ -25,11 +25,13 @@
 #   world wonders of the Wonders mode: the current wonder rises as ASCII
 #   art, revealed bottom-up with every invested row, shown live in the
 #   HUD, after every round and via the "Weltwunder" main menu entry.
-#   Player name and key bindings are
+#   Player name, color theme and key bindings are
 #   configurable in the settings menu and persisted to a user config
 #   file. Blocks render in the basic 8/16-color ANSI palette or, when
 #   the terminal supports it (auto-detected, overridable via
-#   --color-mode), in an extended xterm 256-color palette. All game data (config, persistent top-10 highscore list,
+#   --color-mode), in an extended xterm 256-color palette; the color
+#   theme (--color-theme: guideline, classic, mono, colorblind) picks
+#   which colors the pieces and gold/silver squares use. All game data (config, persistent top-10 highscore list,
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
 #   ~/.config/rowhammer. Finished rounds enter the highscore list, which the
@@ -69,10 +71,11 @@
 #
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
-#                [--color-mode auto|basic|extended] [--debug]
-#                [--debug-dir DIR] [-h|--help]
+#                [--color-mode auto|basic|extended]
+#                [--color-theme guideline|classic|mono|colorblind]
+#                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.18.0  (2026-07-22)
+# Version: 0.19.0  (2026-07-26)
 
 set -euo pipefail
 
@@ -86,7 +89,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.18.0"
+ROWHAMMER_VERSION="0.19.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -113,6 +116,11 @@ DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 # no migration of the old path per the no-backward-compatibility rule.
 DATA_DIR="${ROWHAMMER_DATA_DIR:-${HOME}/.config/rowhammer}"
 PLAYER_NAME="Player"
+# Color theme: maps piece and gold/silver colors to a named scheme
+# (COLOR_THEMES in lib/pieces.sh). Like the key bindings it is a
+# config-driven setting, so it starts from this default and is then
+# overridden by config_load and the env/CLI blocks after sourcing.
+COLOR_THEME="guideline"
 KEY_LEFT="a"
 KEY_RIGHT="d"
 KEY_ROT_CW="e"
@@ -125,6 +133,7 @@ KEY_HOLD="c"
 # CLI values are parked here and applied after config_load so the
 # command line keeps the highest precedence.
 CLI_PLAYER_NAME=""
+CLI_COLOR_THEME=""
 
 # Print usage information.
 usage() {
@@ -156,6 +165,11 @@ Options:
                 forces the xterm 256-color palette (guideline piece
                 colors incl. a real orange L, richer gold/silver).
                 Env: ROWHAMMER_COLOR_MODE   Default: auto
+  --color-theme NAME
+                Color scheme mapping piece and gold/silver colors:
+                "guideline" (default), "classic", "mono" or "colorblind".
+                Also selectable in the settings menu and persisted there.
+                Env: ROWHAMMER_COLOR_THEME  Default: guideline
   --debug       Enable the debug/trace mode: the session is recorded
                 into log files (see below). Logs can grow to several
                 megabytes in long sessions.
@@ -304,6 +318,18 @@ while [ "$#" -gt 0 ]; do
             COLOR_MODE="${1#*=}"
             shift
             ;;
+        --color-theme)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            CLI_COLOR_THEME="${2}"
+            shift 2
+            ;;
+        --color-theme=*)
+            CLI_COLOR_THEME="${1#*=}"
+            shift
+            ;;
         --debug)
             DEBUG_OPT=1
             shift
@@ -406,6 +432,7 @@ config_load
 
 # Environment variables override the config file.
 PLAYER_NAME="${ROWHAMMER_PLAYER_NAME:-${PLAYER_NAME}}"
+COLOR_THEME="${ROWHAMMER_COLOR_THEME:-${COLOR_THEME}}"
 KEY_LEFT="${ROWHAMMER_KEY_LEFT:-${KEY_LEFT}}"
 KEY_RIGHT="${ROWHAMMER_KEY_RIGHT:-${KEY_RIGHT}}"
 KEY_ROT_CW="${ROWHAMMER_KEY_ROT_CW:-${KEY_ROT_CW}}"
@@ -420,6 +447,9 @@ KEY_HOLD="${ROWHAMMER_KEY_HOLD:-${KEY_HOLD}}"
 if [ -n "${CLI_PLAYER_NAME}" ]; then
     PLAYER_NAME="${CLI_PLAYER_NAME}"
 fi
+if [ -n "${CLI_COLOR_THEME}" ]; then
+    COLOR_THEME="${CLI_COLOR_THEME}"
+fi
 
 # Validate the resolved settings; the config file and env vars are user
 # input too. The name charset also keeps the sourced config file safe
@@ -427,6 +457,16 @@ fi
 _name_re='^[A-Za-z0-9_ -]{1,16}$'
 if ! [[ "${PLAYER_NAME}" =~ ${_name_re} ]]; then
     die "Invalid player name: '${PLAYER_NAME}' (allowed: max. 16 characters from A-Z a-z 0-9 space _ -)"
+fi
+_theme_ok=0
+for _theme in "${COLOR_THEMES[@]}"; do
+    if [ "${_theme}" = "${COLOR_THEME}" ]; then
+        _theme_ok=1
+        break
+    fi
+done
+if [ "${_theme_ok}" -eq 0 ]; then
+    die "Invalid color theme: '${COLOR_THEME}' (allowed: ${COLOR_THEMES[*]})"
 fi
 _key_re='^([a-z0-9]|SPACE)$'
 for _var in "${KEY_ACTIONS[@]}"; do
@@ -439,7 +479,7 @@ for _var in "${KEY_ACTIONS[@]}"; do
         fi
     done
 done
-unset _name_re _key_re _var _other
+unset _name_re _key_re _var _other _theme _theme_ok
 
 # Seeding RANDOM makes the 7-bag shuffle sequence reproducible.
 if [ -n "${SEED}" ]; then

@@ -186,9 +186,25 @@ Die fuer uns relevanten Merkmale des Originals:
 - Farben ueber ANSI-Escape-Sequenzen (8/16 Farben als Basis, 256-Farben als
   Verbesserung wenn verfuegbar). Umgesetzt seit 0.9.0: `--color-mode`
   mit `auto` (Erkennung ueber `tput colors`, `TERM`, `COLORTERM`),
-  `basic` und `extended`; die 256-Farben-Palette liegt in
-  `lib/pieces.sh` (`PIECE_COLOR_EXT`), die vorberechneten SGR-Sequenzen
+  `basic` und `extended`; die vorberechneten SGR-Sequenzen
   baut `render_colors_init` in `lib/render.sh`.
+- **Konfigurierbare Farben ueber benannte Farbschemata (Themes,
+  seit 0.19.0):** Farben werden ueber symbolische Namen (z. B. `cyan`,
+  `orange`, `gold`) adressiert; jeder Name traegt eine Basic- (ANSI-
+  Vordergrund, Tabelle `COLOR_BASIC`) und eine Extended-Bedeutung
+  (256er-Index, `COLOR_EXT`), beide in `lib/pieces.sh`. Ein Theme
+  (`THEME_COLOR`, Liste `COLOR_THEMES`) bildet jede Steinsorte und die
+  Gold-/Silber-Quadrate auf einen solchen Namen ab. Das loest das
+  Zwei-Paletten-Problem sauber: eine rohe SGR-Zahl gilt nur in einem
+  Modus, ein Name in beiden. Vier Schemata: `guideline` (bisheriges
+  Standard-Aussehen, unveraendert reproduziert), `classic`, `mono` und
+  `colorblind` (deuteranopie-tauglich, meidet das Rot/Gruen-Paar).
+  Auswahl im Einstellungsmenue (mit Live-Farbvorschau je Theme,
+  `render_theme_swatch`), per `--color-theme NAME`
+  (`ROWHAMMER_COLOR_THEME`, Standard `guideline`) und gespeichert in der
+  Config (`COLOR_THEME`). `--no-color` hat weiterhin Vorrang und schaltet
+  Farben ganz ab. `render_colors_init` liest das aktive Theme und baut
+  daraus die finalen SGR-Sequenzen fuer den aufgeloesten Farbmodus.
 
 ### 4.2 Architektur und Dateistruktur
 
@@ -239,6 +255,9 @@ fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
 `--no-color` (`ROWHAMMER_NO_COLOR`), `--color-mode auto|basic|extended`
 (`ROWHAMMER_COLOR_MODE`, Standard `auto`; `--no-color` gewinnt),
+`--color-theme guideline|classic|mono|colorblind`
+(`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
+Einstellungsmenue waehlbar und in der Config gespeichert),
 `--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
@@ -299,9 +318,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${HOME}/rowhammer`).
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
-  (Spielername, Tastenbelegung) schreibt `${DATA_DIR}/rowhammer.conf`;
+  (Spielername, Farbschema seit 0.19.0, Tastenbelegung) schreibt
+  `${DATA_DIR}/rowhammer.conf`;
   Werte werden validiert und single-quoted geschrieben, da die Datei
-  gesourct wird.
+  gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
+  und beim Laden gegen die bekannten Schemata validiert (unbekannt =
+  Abbruch mit Meldung).
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
   `rows|lines|level|name|date|gold|silver|time`, absteigend nach Rows
@@ -518,8 +540,12 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 ### Phase 4 - Politur
 
-- [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
-      Tastenbelegung ist seit 0.2.0 umgesetzt)
+- [x] Konfigurierbare Farben (Version 0.19.0: benannte Farbschemata
+      `guideline`/`classic`/`mono`/`colorblind`, Auswahl im
+      Einstellungsmenue mit Live-Vorschau, `--color-theme` bzw.
+      `ROWHAMMER_COLOR_THEME`, gespeichert als `COLOR_THEME` in der
+      Config; symbolische Farbnamen mit Basic- und Extended-Bedeutung,
+      siehe 4.1)
 - [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
       `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
       im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und

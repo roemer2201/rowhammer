@@ -5,7 +5,7 @@
 # Description:
 #   Menu system for rowhammer: a generic list-selection widget plus the
 #   application menus (main menu, singleplayer, multiplayer placeholder,
-#   settings with key bindings and player name). Menu labels are German
+#   settings with key bindings, color theme and player name). Menu labels are German
 #   on purpose (requested UI language); code and comments stay English
 #   per the script conventions. All screen output goes through
 #   screen_write (lib/render.sh) and selections, rebinds and name
@@ -18,7 +18,7 @@
 #   and in the singleplayer menu) or to end the round.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.6.1  (2026-07-20)
+# Version: 0.7.0  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -172,12 +172,69 @@ menu_settings() {
     while :; do
         menu_run "Einstellungen" \
             "Tasten konfigurieren" \
+            "Farbschema (aktuell: ${COLOR_THEME_LABEL[${COLOR_THEME}]})" \
             "Spielername aendern (aktuell: ${PLAYER_NAME})" \
             "Zurueck"
         case "${MENU_CHOICE}" in
             0) menu_keys ;;
-            1) prompt_player_name ;;
+            1) menu_colors ;;
+            2) prompt_player_name ;;
             *) return 0 ;;
+        esac
+    done
+}
+
+# menu_colors: pick the color theme (lib/pieces.sh). Lists every theme
+# with a live color swatch (render_theme_swatch) so the palette is
+# visible while browsing; the active theme is marked with "*". Selecting
+# applies the theme at once (render_colors_init) and persists it. ESC
+# leaves the current theme unchanged. Its own selection loop instead of
+# menu_run, because the entries carry raw SGR swatches menu_run would not
+# render.
+menu_colors() {
+    local n sel=0 i dirty=1 frame mark label
+    n="${#COLOR_THEMES[@]}"
+    for (( i = 0; i < n; i++ )); do
+        if [ "${COLOR_THEMES[i]}" = "${COLOR_THEME}" ]; then
+            sel="${i}"
+        fi
+    done
+    while :; do
+        if [ "${dirty}" -eq 1 ]; then
+            frame=$'\e[H\n'"  Farbschema waehlen"$'\e[K\n\e[K\n'
+            for (( i = 0; i < n; i++ )); do
+                if [ "${COLOR_THEMES[i]}" = "${COLOR_THEME}" ]; then
+                    mark="*"
+                else
+                    mark=" "
+                fi
+                printf -v label '%s %-11s' "${mark}" \
+                    "${COLOR_THEME_LABEL[${COLOR_THEMES[i]}]}"
+                render_theme_swatch "${COLOR_THEMES[i]}"
+                if (( i == sel )); then
+                    frame+=$'  \e[7m '"${label}"$' \e[0m  '"${RENDER_SWATCH}"$'\e[K\n'
+                else
+                    frame+="   ${label}  ${RENDER_SWATCH}"$'\e[K\n'
+                fi
+            done
+            frame+=$'\e[K\n'"  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck"$'\e[K\n\e[J'
+            screen_write "${frame}"
+            dirty=0
+        fi
+        read_key
+        case "${KEY}" in
+            UP|w)   sel=$(( (sel + n - 1) % n )); dirty=1 ;;
+            DOWN|s) sel=$(( (sel + 1) % n )); dirty=1 ;;
+            ENTER|SPACE)
+                COLOR_THEME="${COLOR_THEMES[sel]}"
+                render_colors_init
+                debug_event "color theme set: ${COLOR_THEME}"
+                config_save
+                return 0
+                ;;
+            ESC|x)
+                return 0
+                ;;
         esac
     done
 }
