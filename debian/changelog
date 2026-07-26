@@ -1,3 +1,34 @@
+rowhammer (0.21.0) unstable; urgency=medium
+
+  * Harden the keyboard input layer (follow-up to issue #7). Escape
+    sequences are now parsed by a state machine whose state survives
+    across read_key calls and game ticks, so a sequence the terminal
+    delivers in pieces - over SSH, inside tmux/screen or under load - is
+    still assembled into one sequence however large the gap between its
+    bytes. The 0.16.1 fix had only widened the continuation window from
+    20 ms to 50 ms; above roughly 45 ms of byte spacing an arrow key
+    still tore apart, and its trailing byte was applied as a key press
+    (right arrow -> "c" -> hold swap, plus a pause menu from the leading
+    ESC since 0.12.0).
+  * The same parser now consumes the sequence classes that used to leak
+    their payload as key presses: X10 mouse reports (three raw bytes
+    after ESC [ M, so every click was a hard drop plus whatever the
+    column byte mapped to), OSC and DCS terminal replies, 8-bit CSI
+    (0x9b) and CSI sequences beyond the length cap. Bytes outside
+    printable ASCII are discarded instead of reported.
+  * Bracketed paste is enabled in term_setup and its payload discarded,
+    so an accidental middle-click paste no longer runs the pasted text
+    as game commands; mouse reporting modes left on by a previously
+    running program are switched off at startup.
+  * A deliberate Esc followed quickly by another key is no longer
+    swallowed as an Alt chord: both keys are reported.
+  * New tools/key-scan.sh replays 72 terminal byte sequences through the
+    game's own read_key and checks the mapped key, with an optional
+    per-byte gap to reproduce split delivery. Findings and the fix
+    proposals are documented in docs/input-analysis.md.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 26 Jul 2026 12:00:00 +0200
+
 rowhammer (0.20.0) unstable; urgency=medium
 
   * Cleared rows now blink before they vanish: when a lock completes one

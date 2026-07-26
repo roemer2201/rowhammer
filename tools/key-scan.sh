@@ -35,7 +35,7 @@
 # Usage:
 #   tools/key-scan.sh [-g SEC] [-o NAME] [-l] [-s|-v] [-h]
 #
-# Version: 1.0.0  (2026-07-26)
+# Version: 1.1.0  (2026-07-26)
 
 set -u
 
@@ -112,6 +112,8 @@ say() {
 #   EXPECTED  space separated symbolic keys read_key should report; empty
 #             means the sequence must be swallowed without any key press
 #   BYTES     printf %b escapes of what the terminal sends
+#   FLAG      optional; "gap0" marks a case whose expectation only holds
+#             for instant delivery, so --gap skips it
 # The expectations describe the *correct* behaviour, not today's - a
 # deviation is exactly what this script is meant to surface.
 CASES=(
@@ -188,7 +190,9 @@ CASES=(
     "reply OSC 52 clipboard|:none:|\\e]52;c;d3dhc2Q=\\a"
     "reply DCS DECRPSS|:none:|\\eP1\$r0m\\e\\\\"
     "reply DCS XTVERSION|:none:|\\eP>|XTerm(388)\\e\\\\"
-    "reply 8-bit CSI up|:none:|\\x9bA"
+    # 8-bit CSI: a terminal in 8-bit mode sends 0x9b instead of "ESC [",
+    # so this is a genuine arrow key press and must map like one.
+    "8-bit CSI arrow up|UP|\\x9bA"
 
     # Bracketed paste: the wrapper is a CSI sequence, the payload is not.
     # A middle-click paste during play must not run the pasted text as
@@ -197,9 +201,14 @@ CASES=(
     "paste bracketed sentence|:none:|\\e[200~hello world\\e[201~"
 
     # Alt chords: ESC plus the plain byte of the key.
-    "alt chord alt-c|:none:|\\ec"
-    "alt chord alt-x|:none:|\\ex"
-    "alt chord alt-2|:none:|\\e2"
+    # Alt chords are only recognisable as one chord while ESC and the
+    # byte arrive together (ESC_ALT_MS in lib/input.sh). Torn further
+    # apart they are deliberately read as a real Esc plus a key, which is
+    # the trade-off that keeps a deliberate Esc from being swallowed - so
+    # these cases are meaningful without an artificial gap only.
+    "alt chord alt-c|:none:|\\ec|gap0"
+    "alt chord alt-x|:none:|\\ex|gap0"
+    "alt chord alt-2|:none:|\\e2|gap0"
 
     # Control characters. Enter arrives as LF once the tty translated it.
     "ctrl NUL (ctrl-space)|:none:|\\x00"
@@ -232,6 +241,13 @@ run_replay() {
     debug_event() { :; }
     screen_write() { :; }
     term_too_small_screen() { :; }
+    # The escape parser timestamps a pending ESC; now_ms lives in
+    # rowhammer.sh, so provide the same contract here.
+    now_ms() {
+        local t="${EPOCHREALTIME/,/.}"
+        local usec="${t#*.}"
+        NOW_MS=$(( ${t%.*} * 1000 + 10#${usec:0:3} ))
+    }
     TERM_RESIZED=0
     TERM_TOO_SMALL=0
     REDRAW_PENDING=0
@@ -284,22 +300,32 @@ actions_for() {
     printf '%s' "${out:--}"
 }
 
-# feed BYTES
+# How long the feeder holds the pipe open after a sequence that can leave
+# a lone ESC pending. read_key only reports ESC once ESC_LONE_MS has
+# passed without a continuation byte, so closing stdin right away would
+# never let that timer fire. Kept above lib/input.sh's ESC_LONE_MS.
+HOLD_S="0.4"
+
+# feed BYTES HOLD
 # Write the sequence to stdout, either in one go or byte by byte with the
 # configured gap. The gap path is what tears a sequence apart the way a
-# slow SSH link or a loaded host does.
+# slow SSH link or a loaded host does. With HOLD set to 1 the pipe stays
+# open afterwards long enough for the lone-ESC timer to fire.
 feed() {
-    local bytes="${1}" raw i len
+    local bytes="${1}" hold="${2}" raw i len
     if [ "${GAP}" = "0" ]; then
         printf '%b' "${bytes}"
-        return 0
+    else
+        printf -v raw '%b' "${bytes}"
+        len="${#raw}"
+        for (( i = 0; i < len; i++ )); do
+            printf '%s' "${raw:i:1}"
+            sleep "${GAP}"
+        done
     fi
-    printf -v raw '%b' "${bytes}"
-    len="${#raw}"
-    for (( i = 0; i < len; i++ )); do
-        printf '%s' "${raw:i:1}"
-        sleep "${GAP}"
-    done
+    if [ "${hold}" -eq 1 ]; then
+        sleep "${HOLD_S}"
+    fi
 }
 
 # triggers_action KEYS
@@ -322,13 +348,17 @@ triggers_action() {
 # against the expectation. Sets CASE_STATUS to ok, warn (deviates but
 # triggers nothing) or fail (deviates and triggers a game action).
 run_case() {
-    local name="${1}" expected="${2}" bytes="${3}" got=""
+    local name="${1}" expected="${2}" bytes="${3}" got="" hold=0
     if [ "${expected}" = ":none:" ]; then
         expected=""
     fi
+    # A case that expects an ESC needs the lone-ESC timer to run out.
+    if [[ "${expected}" == *ESC* ]]; then
+        hold=1
+    fi
     KEYSCAN_OUT="$(mktemp)"
     export KEYSCAN_OUT
-    feed "${bytes}" | KEYSCAN_REPLAY=1 "${BASH}" "${SCRIPT_DIR}/${SCRIPT_NAME}" --replay
+    feed "${bytes}" "${hold}" | KEYSCAN_REPLAY=1 "${BASH}" "${SCRIPT_DIR}/${SCRIPT_NAME}" --replay
     got="$(cat "${KEYSCAN_OUT}")"
     rm -f "${KEYSCAN_OUT}"
     if [ "${got}" = "${expected}" ]; then
@@ -417,8 +447,12 @@ failed=0
 warned=0
 CASE_STATUS="ok"
 for entry in "${CASES[@]}"; do
-    IFS='|' read -r case_name case_expect case_bytes <<<"${entry}"
+    IFS='|' read -r case_name case_expect case_bytes case_flag <<<"${entry}"
     if [ -n "${ONLY}" ] && [[ "${case_name}" != *"${ONLY}"* ]]; then
+        continue
+    fi
+    if [ "${case_flag}" = "gap0" ] && [ "${GAP}" != "0" ] && [ "${LIST_ONLY}" -eq 0 ]; then
+        say "$(printf 'skip %-32s -> expectation holds for instant delivery only' "${case_name}")"
         continue
     fi
     if [ "${LIST_ONLY}" -eq 1 ]; then

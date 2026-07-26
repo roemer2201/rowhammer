@@ -1,9 +1,14 @@
 # Analyse der Tastatureingabe (Nachfassen zu Issue #7)
 
-Stand: 2026-07-26, Code-Stand 0.20.0 (`lib/input.sh` 0.5.0)
+Analysiert am 2026-07-26 gegen Code-Stand 0.20.0 (`lib/input.sh` 0.5.0).
 
 Ausloeser: Nach dem Fix fuer Issue #7 (Version 0.16.1) gab es weiterhin den
 Verdacht, dass andere Tastenkombinationen falsche Aktionen ausloesen.
+
+> **Status: umgesetzt in Version 0.21.0** (`lib/input.sh` 0.6.0). Die
+> Vorschlaege L1 bis L6 aus Abschnitt 3 sind eingebaut, L7 bewusst nicht.
+> Die Befunde in Abschnitt 2 beschreiben den Zustand *vor* dem Umbau;
+> Abschnitt 5 haelt fest, was danach messbar ist.
 
 ## 1. Vorgehen
 
@@ -249,3 +254,41 @@ in `term_setup`/`term_restore`. L7 vorerst weglassen.
 
 Danach muss `tools/key-scan.sh` ohne `FAIL` durchlaufen - sowohl ohne
 Luecke als auch mit `-g 0.06` und `-g 0.2`.
+
+## 5. Ergebnis nach dem Umbau (Version 0.21.0)
+
+L1 bis L6 sind umgesetzt, L7 nicht (die Burst-Bremse haette auch
+legitimes Autorepeat beschnitten). Der Umbau blieb auf `lib/input.sh`
+beschraenkt; kein anderes Modul und keine Persistenzdatei war betroffen.
+
+Messwerte:
+
+| Lauf | Ergebnis |
+| --- | --- |
+| `tools/key-scan.sh` | 0 von 72 Folgen loesen eine falsche Aktion aus, 0 wirkungslose Durchreicher |
+| `-g 0.03` / `-g 0.06` / `-g 0.1` / `-g 0.2` | jeweils 0 Befunde (die drei Alt-Chord-Faelle werden uebersprungen, siehe unten) |
+| Locale `C` und `C.UTF-8` | identisch, keine Abweichung |
+
+Zusaetzlich im echten Spiel gegengeprueft (`--debug`, Pfeiltasten
+byteweise ueber ein Pseudoterminal eingespeist): bei 60, 150 und 300 ms
+Byte-Abstand meldet `input.log` durchgaengig `raw=$'\E[C' key=RIGHT`,
+`events.log` zeigt nur `move`-Eintraege - kein einziger Hold-Wechsel und
+kein Pausenmenue.
+
+Zwei bewusste Rest-Verhalten, beide dokumentiert und im Test abgebildet:
+
+1. **Alt-Chords ab 30 ms Byte-Abstand** (`ESC_ALT_MS`) werden als echtes
+   `Esc` plus Taste gemeldet statt als Chord verschluckt. Das ist die
+   Kehrseite der Behebung von Befund G: ein absichtlich gedruecktes
+   `Esc` darf nicht verlorengehen, nur weil schnell eine zweite Taste
+   folgt. Alt-Chords sind im Spiel an nichts gebunden, das Fehlverhalten
+   beschraenkt sich also auf ein Pausenmenue. Die drei Alt-Chord-Faelle
+   im Testwerkzeug tragen deshalb die Markierung `gap0` und werden bei
+   kuenstlicher Luecke uebersprungen.
+2. **Byte-Abstaende jenseits von `ESC_LONE_MS`** (300 ms, also ueber
+   0,9 s fuer eine Pfeiltaste) melden das fuehrende `Esc` und oeffnen
+   das Pausenmenue. Der Sequenzschwanz wird aber weiterhin geschluckt
+   (Zustand `esc_late`) - gemessen bei 500 ms Abstand kommt exakt `ESC`
+   heraus und **nicht** `ESC c`. Der Hold-Wechsel aus Issue #7 ist damit
+   auch im Extremfall ausgeschlossen; uebrig bleibt ein sichtbares,
+   umkehrbares Pausenmenue.

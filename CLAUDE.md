@@ -276,15 +276,33 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - **Input:** nicht-blockierend ueber `read -rsn1 -t <timeout>`;
   Escape-Sequenzen der Pfeiltasten sauber einlesen. Terminal-Modus mit `stty`
   setzen und ueber einen `trap`-Handler (EXIT/INT/TERM) garantiert
-  wiederherstellen. Seit 0.16.1 (Issue #7) werden Escape-Sequenzen
-  byteweise bis zu ihrem Endbyte gelesen (grosszuegigeres
-  Fortsetzungs-Timeout `ESC_SUFFIX_T`, 50 ms): laengere Sequenzen
-  (Shift-/Ctrl-Pfeile, Entf, F-Tasten, Alt-Chords) werden komplett
-  konsumiert und verworfen statt Restbytes als Tastendruecke
-  fehlzudeuten; ausserdem wird ein Byte, das Bash (beobachtet mit 5.1)
-  im Timeout-Moment zusammen mit dem Timeout-Status liefert, nicht
-  mehr verworfen (beides zusammen loeste ungewollte Hold-Wechsel durch
-  den Schwanz zerrissener Pfeiltasten-Sequenzen aus). Seit 0.19.0
+  wiederherstellen. Escape-Sequenzen laufen seit 0.21.0 (Issue #7,
+  Analyse in `docs/input-analysis.md`) durch einen **Zustandsautomaten**
+  (`key_feed` und die `key_in_*`-Helfer in `lib/input.sh`), dessen
+  Zustand in Globals liegt und damit ueber `read_key`-Aufrufe und
+  Spiel-Ticks hinweg erhalten bleibt: eine vom Terminal in Stuecken
+  zugestellte Sequenz (SSH, tmux/screen, Last) wird unabhaengig von der
+  Luecke zwischen ihren Bytes als eine Sequenz zusammengesetzt. Bis
+  0.20.0 musste die Entscheidung innerhalb eines Aufrufs fallen, und
+  spaet eintreffende Bytes wurden als eigene Tastendruecke angewandt
+  (der Schwanz `C` einer Rechts-Pfeiltaste wurde zur Hold-Taste `c`);
+  das Hochsetzen des Fortsetzungs-Timeouts auf 50 ms in 0.16.1 hatte
+  das nur unwahrscheinlicher gemacht, ab rund 45 ms Byte-Abstand riss
+  eine Pfeiltaste weiterhin auseinander. Derselbe Automat konsumiert
+  die Sequenzklassen, die zuvor ihre Nutzlast als Tastendruecke
+  durchreichten: X10-Mausmeldungen (drei Rohbytes nach `ESC [ M`),
+  OSC-/DCS-Terminalantworten, 8-Bit-CSI (`0x9b`), ueberlange
+  CSI-Sequenzen und Bracketed Paste (in `term_setup` eingeschaltet,
+  Mausmeldungen werden dort zugleich abgeschaltet). Bytes ausserhalb
+  des druckbaren ASCII werden verworfen statt gemeldet. Zeitabhaengig
+  ist nur noch, wann ein einzelnes `Esc` gemeldet wird
+  (`ESC_LONE_MS`, 300 ms); trifft der Rest der Sequenz danach doch noch
+  ein, faengt ihn der Zustand `esc_late` ab, sodass auch dann kein
+  Schwanz-Byte zur Taste wird. Ein Byte, das Bash (beobachtet mit 5.1)
+  im Timeout-Moment zusammen mit dem Timeout-Status liefert, wird
+  weiterhin ausgewertet statt verworfen. Regressionstest:
+  `tools/key-scan.sh` (72 Faelle, auch mit kuenstlicher Byte-Luecke
+  ueber `--gap`). Seit 0.19.0
   behandelt der Input-Layer auch Terminal-Groessenaenderungen: ein
   SIGWINCH-Trap (scharf ab `term_setup`) setzt nur das Flag
   `TERM_RESIZED`; `read_key` wendet es beim naechsten Tick ueber
@@ -1057,21 +1075,27 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Escape-Sequenzen jetzt byteweise bis zum Endbyte mit
       grosszuegigerem Timeout und wertet auch ein im Timeout-Moment
       geliefertes Byte aus (siehe 4.3)
-- [ ] Eingabeschicht haerten (Nachfassen zu Issue #7, Analyse in
-      `docs/input-analysis.md`): eine Vermessung aller Byte-Folgen, die
-      ein Terminal senden kann (neues Werkzeug `tools/key-scan.sh`,
-      72 Faelle), zeigt 12 Folgen, die eine falsche Spielaktion
-      ausloesen. Der 0.16.1-Fix hat das Fortsetzungs-Fenster nur von
-      20 ms auf 50 ms vergroessert - ab rund 45 ms Byte-Abstand reisst
-      eine Pfeiltaste weiterhin auseinander (`ESC` oeffnet seit 0.12.0
-      zusaetzlich das Pausenmenue). Dazu kommen: X10-Mausklicks (drei
-      Rohbytes nach `ESC [ M`, jeder Klick ist ein Hard-Drop),
-      OSC-/DCS-Antworten des Terminals (ganze Nutzlast als Tasten),
-      8-Bit-CSI (`0x9b`), CSI-Sequenzen ueber der 16-Byte-Bremse und
-      eingefuegter Text (Mittelklick-Paste). Loesungsvorschlaege L1-L7
-      im Analyse-Dokument; empfohlen ist ein Escape-Zustandsautomat
-      ueber Tick-Grenzen hinweg statt der Timeout-Entscheidung im
-      Lesevorgang. `tools/key-scan.sh` dient als Regressionstest
+- [x] Eingabeschicht gehaertet (Version 0.21.0, Nachfassen zu Issue #7,
+      Analyse in `docs/input-analysis.md`): eine Vermessung aller
+      Byte-Folgen, die ein Terminal senden kann (neues Werkzeug
+      `tools/key-scan.sh`, 72 Faelle), zeigte 12 Folgen, die eine
+      falsche Spielaktion ausloesten - zerrissene Pfeiltasten ab rund
+      45 ms Byte-Abstand (der 0.16.1-Fix hatte das Fenster nur von
+      20 ms auf 50 ms vergroessert, und `ESC` oeffnet seit 0.12.0
+      zusaetzlich das Pausenmenue), X10-Mausklicks (drei Rohbytes nach
+      `ESC [ M`, jeder Klick ein Hard-Drop), OSC-/DCS-Antworten des
+      Terminals (ganze Nutzlast als Tasten), 8-Bit-CSI (`0x9b`),
+      CSI-Sequenzen ueber der 16-Byte-Bremse und eingefuegter Text
+      (Mittelklick-Paste). Umgesetzt sind die Vorschlaege L1-L6 aus dem
+      Analyse-Dokument (Zustandsautomat ueber Tick-Grenzen, OSC/DCS,
+      X10-Maus, Bracketed Paste, 8-Bit-CSI und groessere Laengenbremse,
+      Verwerfen wirkungsloser Bytes; siehe 4.3). L7 (Burst-Bremse)
+      wurde bewusst weggelassen, weil sie auch legitimes Autorepeat
+      beschneiden wuerde. `tools/key-scan.sh` laeuft ohne Befund durch,
+      auch mit `--gap 0.2`; jenseits von `ESC_LONE_MS` (300 ms
+      Byte-Abstand) wird ein `Esc` gemeldet, der Sequenzschwanz aber
+      weiterhin geschluckt - der Hold-Wechsel aus Issue #7 kann nicht
+      mehr auftreten
 - [x] Punktesystem-Umbau (Version 0.16.0, Nutzerentscheidung):
       abgebaute Reihen sind die einzige Punktquelle, der Score ist
       identisch mit der gewichteten Reihenwertung "Rows" (1 je Reihe,
