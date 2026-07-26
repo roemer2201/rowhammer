@@ -1057,6 +1057,21 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Escape-Sequenzen jetzt byteweise bis zum Endbyte mit
       grosszuegigerem Timeout und wertet auch ein im Timeout-Moment
       geliefertes Byte aus (siehe 4.3)
+- [ ] Eingabeschicht haerten (Nachfassen zu Issue #7, Analyse in
+      `docs/input-analysis.md`): eine Vermessung aller Byte-Folgen, die
+      ein Terminal senden kann (neues Werkzeug `tools/key-scan.sh`,
+      72 Faelle), zeigt 12 Folgen, die eine falsche Spielaktion
+      ausloesen. Der 0.16.1-Fix hat das Fortsetzungs-Fenster nur von
+      20 ms auf 50 ms vergroessert - ab rund 45 ms Byte-Abstand reisst
+      eine Pfeiltaste weiterhin auseinander (`ESC` oeffnet seit 0.12.0
+      zusaetzlich das Pausenmenue). Dazu kommen: X10-Mausklicks (drei
+      Rohbytes nach `ESC [ M`, jeder Klick ist ein Hard-Drop),
+      OSC-/DCS-Antworten des Terminals (ganze Nutzlast als Tasten),
+      8-Bit-CSI (`0x9b`), CSI-Sequenzen ueber der 16-Byte-Bremse und
+      eingefuegter Text (Mittelklick-Paste). Loesungsvorschlaege L1-L7
+      im Analyse-Dokument; empfohlen ist ein Escape-Zustandsautomat
+      ueber Tick-Grenzen hinweg statt der Timeout-Entscheidung im
+      Lesevorgang. `tools/key-scan.sh` dient als Regressionstest
 - [x] Punktesystem-Umbau (Version 0.16.0, Nutzerentscheidung):
       abgebaute Reihen sind die einzige Punktquelle, der Score ist
       identisch mit der gewichteten Reihenwertung "Rows" (1 je Reihe,
