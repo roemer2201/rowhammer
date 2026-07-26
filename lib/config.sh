@@ -3,7 +3,8 @@
 # lib/config.sh
 #
 # Description:
-#   User configuration for rowhammer: player name and key bindings.
+#   User configuration for rowhammer: player name, color theme and key
+#   bindings.
 #   The config file lives at ${DATA_DIR}/rowhammer.conf (default
 #   ~/.config/rowhammer/rowhammer.conf), the shared game data directory that
 #   also holds the highscore list (lib/highscore.sh). Saving from the
@@ -15,7 +16,7 @@
 #   debug_init); saves are logged as debug events at runtime.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.1  (2026-07-20)
+# Version: 0.5.0  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -74,6 +75,7 @@ config_save() {
         printf '# rowhammer user configuration.\n'
         printf '# Written by the in-game settings menu; sourced on startup.\n'
         printf "PLAYER_NAME='%s'\n" "${PLAYER_NAME}"
+        printf "COLOR_THEME='%s'\n" "${COLOR_THEME}"
         for var in "${KEY_ACTIONS[@]}"; do
             printf "%s='%s'\n" "${var}" "${!var}"
         done
