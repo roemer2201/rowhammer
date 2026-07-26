@@ -11,11 +11,13 @@
 #   "G" gold). Line clears mark the instances they run through as cut
 #   (INSTANCE_CUT), which disqualifies them from forming squares, and
 #   report weighted row credit based on the ROWS_* values from
-#   lib/squares.sh. The two top rows are hidden spawn rows. In debug
+#   lib/squares.sh. board_full_rows reports the full rows before they
+#   are removed, so the caller can flash them first (see flash_rows in
+#   rowhammer.sh). The two top rows are hidden spawn rows. In debug
 #   mode every cleared row is logged with its credit breakdown.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.1  (2026-07-20)
+# Version: 0.5.0  (2026-07-24)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -94,6 +96,30 @@ lock_piece() {
         BOARD[idx]="${type}"
         BOARD_ID[idx]="${id}"
     done
+}
+
+# board_full_rows
+# Collect the y coordinates of all currently full rows into the global
+# array FULL_ROWS (top to bottom, empty when nothing is complete). Runs
+# before clear_lines so the caller can flash the rows that are about to
+# vanish; the board itself is not touched here.
+FULL_ROWS=()
+board_full_rows() {
+    local y x row_full
+    FULL_ROWS=()
+    for (( y = 0; y < BOARD_H; y++ )); do
+        row_full=1
+        for (( x = 0; x < BOARD_W; x++ )); do
+            if [ "${BOARD[y * BOARD_W + x]}" = "${EMPTY_CELL}" ]; then
+                row_full=0
+                break
+            fi
+        done
+        if [ "${row_full}" -eq 1 ]; then
+            FULL_ROWS+=( "${y}" )
+        fi
+    done
+    return 0
 }
 
 # clear_lines

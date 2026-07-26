@@ -11,10 +11,15 @@
 #   completely instead of leaking tail bytes as fake key presses (issue #7).
 #   Enter is reported as ENTER so the menu system can use it as "select".
 #   In debug mode every received key press is recorded (raw bytes plus
-#   mapped symbol) via debug_input from lib/debug.sh.
+#   mapped symbol) via debug_input from lib/debug.sh. Terminal resizing is
+#   handled here too (since 0.5.0): a SIGWINCH trap armed by term_setup
+#   flags the resize, and read_key applies it via term_resize_apply -
+#   remeasure (term_measure), clear and let the caller repaint, and while
+#   the terminal is too small for the fixed layout, block on a "resize me"
+#   overlay until it grows back.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-07-20)
+# Version: 0.5.0  (2026-07-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -37,22 +42,90 @@ ESC_SUFFIX_T="0.05"
 SAVED_STTY=""
 TERM_ACTIVE=0
 
+# term_measure
+# Read the current terminal size into TERM_ROWS/TERM_COLS and set the
+# TERM_TOO_SMALL flag against the MIN_TERM_* minimum the fixed layout
+# needs. Used at startup (rowhammer.sh) and after every resize. stty size
+# reports "rows cols"; a failed or malformed read leaves the previous
+# values untouched so a transient hiccup never fakes a zero-size terminal.
+term_measure() {
+    local size
+    size="$(stty size 2>/dev/null)" || size=""
+    if [[ "${size}" =~ ^([0-9]+)[[:space:]]+([0-9]+)$ ]]; then
+        TERM_ROWS="${BASH_REMATCH[1]}"
+        TERM_COLS="${BASH_REMATCH[2]}"
+    fi
+    if (( TERM_ROWS < MIN_TERM_ROWS || TERM_COLS < MIN_TERM_COLS )); then
+        TERM_TOO_SMALL=1
+    else
+        TERM_TOO_SMALL=0
+    fi
+}
+
+# term_resize_apply
+# Apply a pending SIGWINCH (TERM_RESIZED, set asynchronously by the
+# handler installed in term_setup). Called from read_key - the one funnel
+# every game and menu loop polls through - so no drawing ever happens from
+# inside the async signal handler. A resize typically garbles or reflows
+# the alternate screen, so the screen is wiped and REDRAW_PENDING is
+# raised for the caller to repaint. While the terminal is too small for
+# the fixed 48x24 layout the function blocks on the "resize me" overlay
+# (term_too_small_screen) until it grows back, so the game never tries to
+# draw a torn board.
+term_resize_apply() {
+    TERM_RESIZED=0
+    term_measure
+    screen_write $'\e[2J\e[H'
+    REDRAW_PENDING=1
+    local was_too_small="${TERM_TOO_SMALL}"
+    if [ "${TERM_TOO_SMALL}" -eq 1 ]; then
+        debug_event "terminal resized to ${TERM_COLS}x${TERM_ROWS} (too small, minimum ${MIN_TERM_COLS}x${MIN_TERM_ROWS})"
+    else
+        debug_event "terminal resized to ${TERM_COLS}x${TERM_ROWS}"
+    fi
+    # Hold here until the terminal is big enough again. A short blocking
+    # read paces the wait without busy-looping; the SIGWINCH trap
+    # interrupts it, so the live "now WxH" figure updates promptly while
+    # the user drags the terminal border. Keys pressed meanwhile are
+    # swallowed on purpose - they must not leak into the game once play
+    # resumes.
+    local ignore=""
+    while [ "${TERM_TOO_SMALL}" -eq 1 ]; do
+        term_too_small_screen
+        ignore=""
+        IFS= read -rsn1 -t 0.2 ignore || :
+        if [ "${TERM_RESIZED}" -eq 1 ]; then
+            TERM_RESIZED=0
+            term_measure
+            screen_write $'\e[2J\e[H'
+        fi
+    done
+    if [ "${was_too_small}" -eq 1 ]; then
+        debug_event "terminal size ok again: ${TERM_COLS}x${TERM_ROWS}"
+    fi
+}
+
 # Enter the alternate screen buffer, clear it and hide the cursor. The
 # current stty state is saved first so term_restore can bring the terminal
-# back exactly as it was.
+# back exactly as it was. A SIGWINCH trap is armed here so a resize during
+# play is noticed: the handler only flags TERM_RESIZED (signal-safe), and
+# read_key applies it via term_resize_apply on the next tick.
 term_setup() {
     SAVED_STTY="$(stty -g)"
     screen_write $'\e[?1049h\e[2J\e[H\e[?25l'
+    trap 'TERM_RESIZED=1' WINCH
     TERM_ACTIVE=1
-    debug_event "terminal: alternate screen on, cursor hidden"
+    debug_event "terminal: alternate screen on, cursor hidden, resize watch armed"
 }
 
 # Restore cursor, screen buffer and stty state. Idempotent on purpose: it
 # serves both the EXIT/INT/TERM trap and the regular quit path, and must
-# not garble the screen when it runs twice.
+# not garble the screen when it runs twice. The SIGWINCH trap is dropped
+# so no resize handling runs once the game has left the alternate screen.
 term_restore() {
     if [ "${TERM_ACTIVE}" -eq 1 ]; then
         debug_event "terminal: restoring screen and stty state"
+        trap - WINCH
         screen_write $'\e[?25h\e[?1049l'
         if [ -n "${SAVED_STTY}" ]; then
             stty "${SAVED_STTY}" || stty sane
@@ -68,6 +141,14 @@ term_restore() {
 # stdin is treated as a fatal error so the loop cannot spin at full speed.
 read_key() {
     KEY=""
+    # A SIGWINCH sets TERM_RESIZED asynchronously; the handler only flags
+    # it so nothing is drawn from inside the signal. Apply it here, before
+    # reading, so every game and menu loop that polls through read_key
+    # handles a resize the same way (remeasure, clear, block while too
+    # small). term_resize_apply raises REDRAW_PENDING for the caller.
+    if [ "${TERM_RESIZED}" -eq 1 ]; then
+        term_resize_apply
+    fi
     local c="" rest="" b="" n=0 ord=0 rc=0
     IFS= read -rsn1 -t "${TICK_S}" c || rc=$?
     if [ "${rc}" -gt 128 ]; then

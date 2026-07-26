@@ -1,4 +1,4 @@
-rowhammer (0.19.0) unstable; urgency=medium
+rowhammer (0.21.0) unstable; urgency=medium
 
   * Add configurable colors via named color themes. A theme maps every
     piece type and the gold/silver squares to symbolic color names, each
@@ -10,6 +10,33 @@ rowhammer (0.19.0) unstable; urgency=medium
     variable, and persisted to the user config file (COLOR_THEME).
 
  -- roemer2201 <r.oliver@web.de>  Sat, 26 Jul 2026 12:00:00 +0200
+
+rowhammer (0.20.0) unstable; urgency=medium
+
+  * Cleared rows now blink before they vanish: when a lock completes one
+    or more rows, those rows flash twice (highlighted / normal, about
+    280 ms in total) and only then are removed and the next piece
+    spawns. The rows are collected before the clear (board_full_rows),
+    the renderer highlights them via FLASH_ROWS/FLASH_STATE and
+    flash_rows drives the animation; duration and cycle count are
+    adjustable via FLASH_MS/FLASH_CYCLES (FLASH_CYCLES=0 disables it).
+    Square detection still runs first, so a row through a freshly built
+    gold/silver square flashes at its full value.
+
+ -- roemer2201 <r.oliver@web.de>  Fri, 24 Jul 2026 12:00:00 +0200
+
+rowhammer (0.19.0) unstable; urgency=medium
+
+  * Handle terminal resizing while the game runs (SIGWINCH). The fixed
+    board+sidebar layout still needs at least 48x24, but a resize is now
+    caught live: the screen is cleared and redrawn cleanly, and shrinking
+    the terminal below the minimum pauses the round behind a compact
+    "resize me" overlay (showing the required and current size) until the
+    terminal grows back. The gravity and play-time clocks are restarted
+    after a resize, so the interruption counts as neither fall time nor
+    play time. Menus and info screens repaint on resize as well.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 23 Jul 2026 12:00:00 +0200
 
 rowhammer (0.18.0) unstable; urgency=medium
 

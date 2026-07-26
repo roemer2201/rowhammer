@@ -19,10 +19,15 @@
 #   settings color picker previews each theme via render_theme_swatch.
 #   All terminal output goes
 #   through screen_write, which mirrors every update 1:1 into the frame
-#   log when the debug mode is active (lib/debug.sh).
+#   log when the debug mode is active (lib/debug.sh). term_too_small_screen
+#   draws the compact overlay shown while the terminal is smaller than the
+#   fixed layout needs (since 0.10.0, driven by lib/input.sh on resize).
+#   Rows about to be cleared can be drawn highlighted (FLASH_ROWS /
+#   FLASH_STATE, since 0.11.0), which is what the clear animation in
+#   rowhammer.sh toggles to make them blink.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.10.0  (2026-07-26)
+# Version: 0.12.0  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -40,7 +45,16 @@ declare -A OVERLAY=()
 declare -A PIECE_SGR=()
 SQ_GOLD_SGR=""
 SQ_SILVER_SGR=""
+FLASH_SGR=""
 RESET_SGR=$'\e[0m'
+
+# Clear animation (2026-07-24): the rows a lock completed blink once
+# before they are removed. FLASH_ROWS holds those board rows keyed by
+# their y coordinate, FLASH_STATE switches the highlight on (1) and off
+# (0); with FLASH_ROWS empty draw_frame renders exactly as before. Both
+# are driven by flash_rows in rowhammer.sh.
+declare -A FLASH_ROWS=()
+FLASH_STATE=0
 
 # color_mode_resolve
 # Resolve COLOR_MODE=auto into basic or extended by probing the
@@ -91,12 +105,16 @@ render_colors_init() {
     if [ "${COLOR_MODE}" = "extended" ]; then
         SQ_GOLD_SGR=$'\e[38;5;16;48;5;'"${COLOR_EXT[${gname}]}m"
         SQ_SILVER_SGR=$'\e[38;5;16;48;5;'"${COLOR_EXT[${sname}]}m"
+        # Clear flash: the brightest white the palette offers, so a
+        # flashing row clearly stands out from every block color.
+        FLASH_SGR=$'\e[38;5;16;48;5;231m'
     else
         # Basic squares are black text on the color's background (fg + 10).
         # The array element is expanded before the arithmetic so the name
         # in gname/sname is used as the key, not evaluated as a variable.
         SQ_GOLD_SGR=$'\e[30;'"$(( ${COLOR_BASIC[${gname}]} + 10 ))m"
         SQ_SILVER_SGR=$'\e[30;'"$(( ${COLOR_BASIC[${sname}]} + 10 ))m"
+        FLASH_SGR=$'\e[1;30;47m'
     fi
     return 0
 }
@@ -145,6 +163,26 @@ render_theme_swatch() {
 screen_write() {
     printf '%s' "${1}"
     debug_frame "${1}"
+}
+
+# term_too_small_screen
+# Draw the overlay shown while the terminal is smaller than the fixed
+# board+sidebar layout needs (MIN_TERM_* in rowhammer.sh). Called in a
+# loop by term_resize_apply (lib/input.sh) until the terminal grows back.
+# Kept deliberately tiny - short, colorless ASCII lines - so the message
+# still fits and reads correctly in a cramped terminal; \r\n resets the
+# column because the terminal is in raw mode here, where a bare \n would
+# only move down. The live "now WxH" figure gives feedback while the user
+# drags the border.
+term_too_small_screen() {
+    local frame
+    printf -v frame '\e[2J\e[H%s\r\n%s\r\n%s\r\n%s' \
+        "rowhammer" \
+        "resize:" \
+        "need ${MIN_TERM_COLS}x${MIN_TERM_ROWS}" \
+        "now ${TERM_COLS}x${TERM_ROWS}"
+    screen_write "${frame}"
+    return 0
 }
 
 # render_mini TYPE ROW
@@ -259,9 +297,26 @@ draw_frame() {
     frame+=$'\e[H'
     frame+="  R O W H A M M E R"$'\e[K\n'
     frame+="${border}"$'\e[K\n'
+    local flash_row
     for (( y = HIDDEN_ROWS; y < BOARD_H; y++ )); do
         line="|"
+        # A row of the running clear animation, drawn fully highlighted
+        # in the "on" half of the blink. Checked per row (not per cell)
+        # and before the active-piece overlay, so the piece that just
+        # completed the row cannot paint over the highlight.
+        flash_row=0
+        if [ "${FLASH_STATE}" -eq 1 ] && [ -n "${FLASH_ROWS[${y}]:-}" ]; then
+            flash_row=1
+        fi
         for (( x = 0; x < BOARD_W; x++ )); do
+            if [ "${flash_row}" -eq 1 ]; then
+                if [ "${USE_COLOR}" -eq 1 ]; then
+                    line+="${FLASH_SGR}  ${RESET_SGR}"
+                else
+                    line+="=="
+                fi
+                continue
+            fi
             cell="${OVERLAY["${x},${y}"]:-}"
             if [ -n "${cell}" ]; then
                 # Active piece cell.

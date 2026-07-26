@@ -9,11 +9,12 @@
 #   7-bag randomizer with a 3-piece preview, a hold slot, gravity with a
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
-#   restart. Pressing the quit key (x/ESC) in a running round opens a
-#   pause menu instead of aborting: resume, suspend the round into the
-#   main menu (it stays resumable via the "Fortsetzen" entry offered in
-#   the main menu and in the singleplayer menu) or
-#   end it; a round is recorded only when it really ends.
+#   restart. Completed rows blink briefly before they are removed, so
+#   the player sees which rows scored. Pressing the quit key (x/ESC) in
+#   a running round opens a pause menu instead of aborting: resume,
+#   suspend the round into the main menu (it stays resumable via the
+#   "Fortsetzen" entry offered in the main menu and in the singleplayer
+#   menu) or end it; a round is recorded only when it really ends.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
 #   cleared rows worth bonus row credit (the "Rows" counter). Since
@@ -46,12 +47,16 @@
 #   menu entry; the highscore list shows each entry's date as well.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
-#   action (see lib/debug.sh). A working multiplayer follows
-#   in a later phase (see CLAUDE.md).
+#   action (see lib/debug.sh). The fixed board+sidebar layout needs a
+#   terminal of at least 48x24; a resize during play is caught via
+#   SIGWINCH and redraws cleanly, and shrinking below the minimum pauses
+#   the round behind a "resize me" overlay until the terminal grows back.
+#   A working multiplayer follows in a later phase (see CLAUDE.md).
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
-#   2. Verify prerequisites (bash >= 4, interactive terminal, size).
+#   2. Verify prerequisites (bash >= 4, interactive terminal, minimum
+#      size; the size is rechecked live via SIGWINCH while running).
 #   3. Source the library modules (debug, config, pieces, board,
 #      squares, highscore, save, stats, wonders, input, render, menu).
 #   4. Resolve settings with precedence default < config file < env <
@@ -60,10 +65,10 @@
 #      set), load the highscore list, the savegame and the statistics
 #      and enter the alternate screen.
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
-#      (input, gravity, locking, square detection, line clearing,
-#      rendering), finished rounds are recorded in the highscore list,
-#      their row credit is banked into the wonder savegame and their
-#      counters into the statistics file,
+#      (input, gravity, locking, square detection, row flash, line
+#      clearing, rendering), finished rounds are recorded in the
+#      highscore list, their row credit is banked into the wonder
+#      savegame and their counters into the statistics file,
 #      settings changes are written back to the config file. A round
 #      suspended via the pause menu returns to the main menu
 #      unrecorded and continues via its "Fortsetzen" entry.
@@ -75,7 +80,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.19.0  (2026-07-26)
+# Version: 0.21.0  (2026-07-26)
 
 set -euo pipefail
 
@@ -89,7 +94,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.19.0"
+ROWHAMMER_VERSION="0.21.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -408,13 +413,20 @@ if [ ! -t 0 ] || [ ! -t 1 ]; then
     die "This game needs an interactive terminal (stdin/stdout must be a tty)"
 fi
 
-# The layout needs room for the board plus sidebar: at least 48x24.
+# The fixed board+sidebar layout needs at least this much room. The check
+# runs at startup (below, once the input module is sourced) and, since
+# 0.19.0, continuously while the game runs: a SIGWINCH that shrinks the
+# terminal below this pauses play behind a "resize me" overlay until it
+# grows back (see term_measure, term_resize_apply in lib/input.sh and the
+# too-small screen in lib/render.sh). TERM_RESIZED is raised by the
+# SIGWINCH handler and applied at the next read_key, so nothing is drawn
+# from inside the async signal handler.
+MIN_TERM_COLS=48
+MIN_TERM_ROWS=24
 TERM_ROWS=0
 TERM_COLS=0
-read -r TERM_ROWS TERM_COLS < <(stty size)
-if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
-    die "Terminal too small: need at least 48x24, got ${TERM_COLS}x${TERM_ROWS}"
-fi
+TERM_TOO_SMALL=0
+TERM_RESIZED=0
 
 # --- Library modules ------------------------------------------------------
 for _lib in debug config pieces board squares highscore save stats wonders input render menu; do
@@ -425,6 +437,15 @@ for _lib in debug config pieces board squares highscore save stats wonders input
     . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
 unset _lib
+
+# Terminal size check, now that term_measure (lib/input.sh) is available.
+# It fills TERM_ROWS/TERM_COLS and sets TERM_TOO_SMALL against the minimum
+# above; a too-small terminal at startup is a hard error, while one that
+# shrinks later is handled live via SIGWINCH.
+term_measure
+if [ "${TERM_TOO_SMALL}" -eq 1 ]; then
+    die "Terminal too small: need at least ${MIN_TERM_COLS}x${MIN_TERM_ROWS}, got ${TERM_COLS}x${TERM_ROWS}"
+fi
 
 # --- Settings resolution (default < config < env < CLI) -------------------
 # The config file may override the built-in defaults above.
@@ -497,6 +518,11 @@ CLEARED_TOTAL=0; ROW_CREDIT=0; LEVEL=0; FALL_MS=800
 GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
+# Raised by term_resize_apply (lib/input.sh) after a terminal resize was
+# handled, so the loops that gate their own redraw (the game loop via
+# DIRTY, menu_run and the info screens via their local dirty flag) repaint
+# the screen that the resize cleared. Every loop clears it after acting.
+REDRAW_PENDING=0
 # A round left via the pause menu's "Ins Hauptmenue" keeps its complete
 # state in the globals above; this flag marks it as waiting for the
 # "Fortsetzen" main menu entry (issue #12).
@@ -538,6 +564,14 @@ LEVEL_SPEEDS=(800 720 640 560 480 410 350 300 260 220 190 160 140 120)
 # deadline, so a piece cannot be kept alive forever on the floor. An
 # adjustable game-feel constant, like LEVEL_SPEEDS and TICK_S.
 LOCK_DELAY_MS=250
+
+# Clear animation: rows completed by a lock blink FLASH_CYCLES times
+# (highlighted / normal) with FLASH_MS milliseconds per half cycle before
+# they are actually removed, so the player sees which rows scored. The
+# defaults add up to a short 280 ms; adjustable game-feel constants like
+# LEVEL_SPEEDS and LOCK_DELAY_MS. FLASH_CYCLES=0 turns the animation off.
+FLASH_MS=70
+FLASH_CYCLES=2
 
 # now_ms: put the current time in milliseconds into the global NOW_MS.
 # Uses bash 5's EPOCHREALTIME when available (no fork); older bash falls
@@ -647,9 +681,47 @@ spawn_piece() {
     DIRTY=1
 }
 
-# lock_and_next: lock the active piece, detect squares, clear lines,
-# update credit/level and spawn the next piece. Square detection
-# runs before line clearing on purpose: a piece that completes a square
+# flash_rows: blink the rows that a lock just completed, before they are
+# removed from the board. The rows come from board_full_rows (FULL_ROWS);
+# the render layer draws the highlight for FLASH_ROWS whenever FLASH_STATE
+# is 1, so the animation is nothing but toggling that flag and redrawing.
+# The wait between the half cycles reuses a timed read instead of sleep:
+# no fork per frame, and key presses arriving during the animation are
+# swallowed on purpose so a burst of them cannot fire at once on the piece
+# that spawns right afterwards (same rationale as the resize overlay in
+# lib/input.sh). A pending SIGWINCH interrupts the read and is applied by
+# read_key on the next tick, as usual.
+flash_rows() {
+    if [ "${FLASH_CYCLES}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
+        return 0
+    fi
+    local y i ignore delay
+    FLASH_ROWS=()
+    for y in "${FULL_ROWS[@]}"; do
+        FLASH_ROWS["${y}"]=1
+    done
+    printf -v delay '%d.%03d' $(( FLASH_MS / 1000 )) $(( FLASH_MS % 1000 ))
+    debug_event "row flash: rows=${FULL_ROWS[*]} cycles=${FLASH_CYCLES} ms=${FLASH_MS}"
+    for (( i = 0; i < FLASH_CYCLES; i++ )); do
+        FLASH_STATE=1
+        draw_frame
+        ignore=""
+        IFS= read -rsn1 -t "${delay}" ignore || :
+        FLASH_STATE=0
+        draw_frame
+        ignore=""
+        IFS= read -rsn1 -t "${delay}" ignore || :
+    done
+    FLASH_ROWS=()
+    FLASH_STATE=0
+    return 0
+}
+
+# lock_and_next: lock the active piece, detect squares, flash and clear
+# completed rows, update credit/level and spawn the next piece. The flash
+# (flash_rows) blocks the loop for its short duration, which is intended:
+# the round waits for the animation before the next piece appears. Square
+# detection runs before line clearing on purpose: a piece that completes a square
 # and a row at once still forms the square first, so the cleared row
 # already earns the square's bonus credit. Forming a square earns no
 # instant points (only its strips pay off when their rows clear later).
@@ -666,6 +738,11 @@ lock_and_next() {
             debug_event "silver square formed: silver_total=${SILVER_COUNT}"
         fi
     fi
+    # Let completed rows blink briefly before they vanish (the square
+    # detection above already ran, so a row through a fresh gold/silver
+    # square flashes as the scoring row it is).
+    board_full_rows
+    flash_rows
     clear_lines
     if (( CLEARED > 0 )); then
         CLEARED_TOTAL=$(( CLEARED_TOTAL + CLEARED ))
@@ -955,9 +1032,20 @@ game_run() {
     fi
 
     while [ "${GAME_EXIT}" -eq 0 ]; do
-        # read_key also paces the loop via its TICK_S timeout.
+        # read_key also paces the loop via its TICK_S timeout, and it is
+        # where a pending SIGWINCH is applied (remeasure, clear, and block
+        # on the too-small overlay while the terminal is undersized).
         read_key
         handle_key
+        # A resize just happened: read_key cleared the screen (and may have
+        # blocked for a while behind the too-small overlay). Repaint and
+        # restart the gravity and play-time clocks so the resize interval
+        # counts as neither fall time nor play time - like leaving a pause.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            play_clock_resume
+            DIRTY=1
+        fi
         if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
             now_ms
             # Accumulate the play time of the segment since the last

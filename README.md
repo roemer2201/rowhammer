@@ -12,6 +12,43 @@ Abbau kraeftige Bonus-Reihen liefern.
 Der Name ist ein Wortspiel: Hier werden Reihen (rows) gehaemmert - mit dem
 gleichnamigen Hardware-Angriff hat das Spiel nichts zu tun.
 
+## Vorschau
+
+Kurze, echte Spielsequenzen - aufgenommen mit
+[asciinema](https://asciinema.org/) und als GIF eingebettet. Die
+zugehoerigen `.cast`-Dateien liegen unter [`docs/demo/`](docs/demo) und
+lassen sich im Terminal abspielen, z. B.
+`asciinema play docs/demo/gold.cast`. Neu erzeugen (aus echtem Spiel,
+gegen das Debug-Log verifiziert) lassen sie sich mit der Toolchain unter
+[`tools/demo/`](tools/demo): `python3 tools/demo/make_demos.py`.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <b>Tetris - vier Reihen auf einmal</b><br>
+      <img src="docs/demo/tetris.gif" alt="Tetris: vier Reihen auf einmal werden abgebaut" width="420"><br>
+      <sub>Neun Spalten fuellen, die Luecke rechts lassen - der stehende I-Stein raeumt vier Reihen (+1 Bonuszeile).</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>Silber-Quadrat</b><br>
+      <img src="docs/demo/silver.gif" alt="Ein Silber-Quadrat entsteht aus vier gemischten Teilen" width="420"><br>
+      <sub>Vier <em>gemischte</em> Teile fuellen ein 4x4-Feld - es wird zum Silber-Quadrat (+5 je Reihe beim Abbau).</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>Gold-Quadrat</b><br>
+      <img src="docs/demo/gold.gif" alt="Ein Gold-Quadrat entsteht aus vier gleichen Teilen" width="420"><br>
+      <sub>Vier <em>gleiche</em> Teile (hier vier O) im 4x4-Feld - das Gold-Quadrat bringt +10 je Reihe.</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>Weltwunder-Baustelle</b><br>
+      <img src="docs/demo/wonder.gif" alt="Die Weltwunder-Baustelle mit der fast fertigen Sphinx" width="420"><br>
+      <sub>Der ueber alle Runden gesammelte Reihenstand baut Stueck fuer Stueck ein Weltwunder auf.</sub>
+    </td>
+  </tr>
+</table>
+
 ## Status
 
 **Phasen 1 bis 3 sind umgesetzt** (spielbarer Kern, Startmenue, die
@@ -108,12 +145,19 @@ Umgesetzt:
   Diese Reihenwertung ist zugleich das Punktesystem: nur abgebaute
   Reihen bringen Punkte, Drops und Quadrat-Bildung nicht
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
+- **Blinkende Reihen beim Abbau:** vollstaendige Reihen blinken kurz
+  auf (zweimal hell/normal, zusammen rund 280 ms), bevor sie
+  verschwinden und das naechste Teil erscheint
 - **Pausenmenue statt hartem Abbruch:** `Esc`/`x` unterbricht die
   Runde; sie kann ins Hauptmenue gelegt und dort ueber "Fortsetzen"
   wieder aufgenommen werden - gewertet wird erst beim echten Rundenende
 - Levelkurve (schneller je 10 Reihen)
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
   (Double-Buffering), sauberes Terminal-Restore beim Beenden
+- **Reagiert auf Groessenaenderungen des Terminals** (SIGWINCH):
+  zeichnet nach einem Resize sauber neu; wird das Terminal kleiner als
+  das benoetigte 48x24, pausiert die Runde hinter einem Hinweis, bis
+  wieder genug Platz da ist
 - **Erweiterter Farbmodus:** auf 256-Farben-Terminals (automatisch
   erkannt, umschaltbar per `--color-mode`) eine satte xterm-Palette mit
   den Guideline-Teilfarben - inklusive echtem Orange fuer das L-Teil
@@ -159,7 +203,9 @@ Spiel nach `/usr/share/rowhammer/` und legt den Starter
 ## Voraussetzungen
 
 - Bash >= 4.0 (empfohlen: Bash 5)
-- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens ca. 80x24 Zeichen
+- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens 48x24 Zeichen
+  (kleiner wird nicht gestartet; eine Verkleinerung waehrend des Spiels
+  pausiert bis wieder genug Platz da ist)
 - Keine weiteren Abhaengigkeiten ausser Coreutils
 
 ## Steuerung
