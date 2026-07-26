@@ -15,12 +15,15 @@
 #   The pause menu (menu_pause, issue #12) opens on the quit key during
 #   a round and offers to resume, to suspend the round into the main
 #   menu (resumable via the "Fortsetzen" entry shown in the main menu
-#   and in the singleplayer menu) or to end the round. All wait loops
+#   and in the singleplayer menu) or to end the round. menu_confirm
+#   (since 0.8.0) asks a yes/no question with the declining option
+#   preselected; it guards leaving the game while a round is still
+#   suspended. All wait loops
 #   repaint on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave a menu or info screen blank (since 0.7.0).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.7.0  (2026-07-23)
+# Version: 0.8.0  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -40,6 +43,11 @@ MENU_CHOICE=-1
 # Enter or space selects, ESC (or x) goes back. The chosen entry index
 # lands in MENU_CHOICE, -1 means "back". Redraws only after a key press;
 # read_key's timeout paces the loop, so the menu does not busy-wait.
+# CHANGE 2026-07-26: every screen here starts with \e[H\e[K instead of
+# plain \e[H, because homing and then moving down with \n leaves the
+# first screen line untouched - it kept showing the top line of whatever
+# was drawn before (with the centered play screen that is the hold/next
+# header row, which looked like a rendering glitch).
 menu_run() {
     local title="${1}"
     shift
@@ -47,7 +55,7 @@ menu_run() {
     local n="${#entries[@]}" sel=0 dirty=1 frame i
     while :; do
         if [ "${dirty}" -eq 1 ]; then
-            frame=$'\e[H\n'"  ${title}"$'\e[K\n\e[K\n'
+            frame=$'\e[H\e[K\n'"  ${title}"$'\e[K\n\e[K\n'
             for (( i = 0; i < n; i++ )); do
                 if (( i == sel )); then
                     frame+=$'  \e[7m '"${entries[i]}"$' \e[0m\e[K\n'
@@ -89,7 +97,7 @@ menu_message() {
     local title="${1}"
     shift
     local frame line
-    frame=$'\e[H\n'"  ${title}"$'\e[K\n\e[K\n'
+    frame=$'\e[H\e[K\n'"  ${title}"$'\e[K\n\e[K\n'
     for line in "$@"; do
         frame+="  ${line}"$'\e[K\n'
     done
@@ -104,6 +112,59 @@ menu_message() {
             REDRAW_PENDING=0
             screen_write "${frame}"
         fi
+    done
+}
+
+# menu_confirm TITLE YES_LABEL NO_LABEL LINE...
+# Ask a yes/no question: TITLE and the explanatory LINEs are shown above
+# a two-entry selection. Returns 0 for "yes", 1 for "no". The declining
+# entry is listed first, so it is preselected, and ESC counts as "no" too
+# - a confirmation must never be the path of least resistance. Navigation
+# and redraw behaviour match menu_run (arrows/w/s, repaint on
+# REDRAW_PENDING after a terminal resize).
+menu_confirm() {
+    local title="${1}" yes_label="${2}" no_label="${3}"
+    shift 3
+    local -a body=("$@")
+    local sel=0 dirty=1 frame line
+    while :; do
+        if [ "${dirty}" -eq 1 ]; then
+            frame=$'\e[H\e[K\n'"  ${title}"$'\e[K\n\e[K\n'
+            for line in "${body[@]}"; do
+                frame+="  ${line}"$'\e[K\n'
+            done
+            frame+=$'\e[K\n'
+            if [ "${sel}" -eq 0 ]; then
+                frame+=$'  \e[7m '"${no_label}"$' \e[0m\e[K\n'
+                frame+="   ${yes_label} "$'\e[K\n'
+            else
+                frame+="   ${no_label} "$'\e[K\n'
+                frame+=$'  \e[7m '"${yes_label}"$' \e[0m\e[K\n'
+            fi
+            frame+=$'\e[K\n'"  Pfeile/w/s: waehlen   Enter: OK   ESC: abbrechen"$'\e[K\n\e[J'
+            screen_write "${frame}"
+            dirty=0
+        fi
+        read_key
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+        fi
+        case "${KEY}" in
+            UP|DOWN|w|s) sel=$(( 1 - sel )); dirty=1 ;;
+            ENTER|SPACE)
+                if [ "${sel}" -eq 1 ]; then
+                    debug_event "confirm '${title}': yes"
+                    return 0
+                fi
+                debug_event "confirm '${title}': no"
+                return 1
+                ;;
+            ESC|x)
+                debug_event "confirm '${title}': cancelled"
+                return 1
+                ;;
+        esac
     done
 }
 
@@ -223,7 +284,7 @@ menu_keys() {
 # bound to another action, then persists the new binding.
 prompt_rebind() {
     local var="${1}" label="${2}" other frame
-    printf -v frame '\e[H\n  Tasten konfigurieren\e[K\n\e[K\n  Neue Taste fuer "%s" druecken\e[K\n  (aktuell: %s, ESC = abbrechen)\e[K\n\e[J' \
+    printf -v frame '\e[H\e[K\n  Tasten konfigurieren\e[K\n\e[K\n  Neue Taste fuer "%s" druecken\e[K\n  (aktuell: %s, ESC = abbrechen)\e[K\n\e[J' \
         "${label}" "${!var}"
     screen_write "${frame}"
     KEY=""
@@ -265,6 +326,8 @@ prompt_rebind() {
     done
     printf -v "${var}" '%s' "${KEY}"
     debug_event "key rebind: ${var}=${KEY}"
+    # The HUD key legend is built once from the bindings, not per frame.
+    hud_keys_build
     config_save
     return 0
 }
@@ -274,7 +337,7 @@ prompt_rebind() {
 # An empty input keeps the current name; valid input is persisted.
 prompt_player_name() {
     local frame name=""
-    printf -v frame '\e[H\n  Spielername\e[K\n\e[K\n  Aktueller Name: %s\e[K\n\e[K\n  Neuer Name (leer = unveraendert, max. 16 Zeichen,\e[K\n  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)\e[K\n\e[J\n  > ' \
+    printf -v frame '\e[H\e[K\n  Spielername\e[K\n\e[K\n  Aktueller Name: %s\e[K\n\e[K\n  Neuer Name (leer = unveraendert, max. 16 Zeichen,\e[K\n  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)\e[K\n\e[J\n  > ' \
         "${PLAYER_NAME}"
     screen_write "${frame}"
     # Show the cursor while typing, hide it again afterwards.

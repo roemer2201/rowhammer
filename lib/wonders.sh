@@ -15,13 +15,15 @@
 #   wonder_screen renders the construction site screen shown after every
 #   round and from the "Weltwunder" main menu entry; its wait loop
 #   repaints on REDRAW_PENDING so a terminal resize (handled in read_key)
-#   does not leave it blank (since 0.1.1). Wonder names,
+#   does not leave it blank (since 0.1.1). Like the menus, the screen
+#   clears the first line explicitly (\e[H\e[K) so nothing of the play
+#   screen shows through above the title. Wonder names,
 #   sequence and row costs live in the tables below; costs double per
 #   wonder like the roughly geometric line requirements of the original,
 #   but are scaled down to fit single-machine play.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.1  (2026-07-23)
+# Version: 0.1.2  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -122,7 +124,7 @@ wonder_screen() {
     wonder_art_load "${WONDER_INDEX}"
     stages="${#WONDER_ART[@]}"
     reveal=$(( WONDER_DONE * stages / WONDER_COST ))
-    frame=$'\e[H\n'
+    frame=$'\e[H\e[K\n'
     if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
         frame+="  Alle Weltwunder sind errichtet!"$'\e[K\n\e[K\n'
     else

@@ -150,10 +150,21 @@ Umgesetzt:
   verschwinden und das naechste Teil erscheint
 - **Pausenmenue statt hartem Abbruch:** `Esc`/`x` unterbricht die
   Runde; sie kann ins Hauptmenue gelegt und dort ueber "Fortsetzen"
-  wieder aufgenommen werden - gewertet wird erst beim echten Rundenende
+  wieder aufgenommen werden - gewertet wird erst beim echten Rundenende.
+  Wer das Spiel verlaesst, waehrend noch eine pausierte Runde wartet,
+  wird vorher gefragt
 - Levelkurve (schneller je 10 Reihen)
-- Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
-  (Double-Buffering), sauberes Terminal-Restore beim Beenden
+- **Zentriertes Spielfeld-Layout:** ein festes 48x24-Feld, mittig im
+  Terminal ausgerichtet - Hold-Stein und Tastenlegende links, das
+  Spielfeld in der Mitte, die naechsten drei Steine oben rechts, die
+  Rundenzaehler auf den zwei unteren Zeilen; Pause und Game Over
+  erscheinen als Kasten ueber dem Spielfeld
+- Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering,
+  sauberes Terminal-Restore beim Beenden
+- **Inkrementelles Rendering:** je Frame werden nur die tatsaechlich
+  geaenderten Zeilen neu geschrieben, unveraenderte Spielfeldreihen
+  kommen aus einem Cache - rund 2x schnellerer Frame-Aufbau und ein
+  Bruchteil der Terminal-Ausgabe gegenueber dem Voll-Frame
 - **Reagiert auf Groessenaenderungen des Terminals** (SIGWINCH):
   zeichnet nach einem Resize sauber neu; wird das Terminal kleiner als
   das benoetigte 48x24, pausiert die Runde hinter einem Hinweis, bis
