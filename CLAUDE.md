@@ -1022,6 +1022,29 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 - [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
       Tastenbelegung ist seit 0.2.0 umgesetzt)
+- [ ] "rowhammer"-Zaehler einbauen: zaehlt, wie oft vier Reihen auf
+      einmal abgebaut wurden (der Tetris, hier nach dem Projekt benannt).
+      Die Stelle steht schon fest - `clear_lines` (`lib/board.sh`) kennt
+      den Fall bereits ueber `CLEARED -eq 4`, wo heute nur `ROWS_TETRIS`
+      addiert wird; von dort einen Rundenzaehler (analog zu
+      `GOLD_COUNT`/`SILVER_COUNT` in `rowhammer.sh`, Reset in
+      `game_reset`) hochzaehlen.
+      Aufnahme in die Statistik (Nutzerfrage, bejaht): passt ohne
+      Bruch in `lib/stats.sh` -
+      neuer Gesamtzaehler `rowhammers` als weitere `key=value`-Zeile
+      (Muster `STATS_LINE_RE` erweitern, `STATS_ROWHAMMERS`,
+      Parameter an `stats_add_round`, Aufruf in `record_round`) und eine
+      eigene Zeile im "Statistik"-Bildschirm bei Gold-/Silberbloecken.
+      Zusaetzlich je Runde in der `recent=`-Liste waere moeglich, bricht
+      aber deren Format (`lines|bonus|gold|silver|date` ->
+      `...|rowhammers|date`; alte Zeilen fallen gemaess der Arbeitsregel
+      "keine Abwaertskompatibilitaet" beim Laden einfach heraus) und die
+      Tabelle der letzten Spiele ist mit 42 + 2 Spalten Einzug schon
+      nahe am 48-Spalten-Minimum - eine Spalte mehr geht nur, wenn eine
+      vorhandene Ueberschrift gekuerzt wird. Offen ausserdem: ob der
+      Zaehler auch ins HUD soll (die zwei Statuszeilen sind mit je 48
+      Zeichen voll belegt, siehe 3.4) und ob er zusaetzlich in die
+      Highscore-Zeile wandert.
 - [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
       `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
       im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und
