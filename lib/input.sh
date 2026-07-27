@@ -4,7 +4,9 @@
 #
 # Description:
 #   Terminal setup and non-blocking keyboard input for rowhammer. Switches
-#   to the alternate screen buffer, hides the cursor and provides a
+#   to the alternate screen buffer, hides the cursor, turns autowrap off
+#   (the centered game block fills a 48x24 terminal down to its last cell)
+#   and provides a
 #   single-key reader that understands the arrow-key escape sequences.
 #   Escape sequences are parsed byte by byte up to their final byte, so
 #   longer sequences (modified arrows, Delete, function keys) are consumed
@@ -14,12 +16,13 @@
 #   mapped symbol) via debug_input from lib/debug.sh. Terminal resizing is
 #   handled here too (since 0.5.0): a SIGWINCH trap armed by term_setup
 #   flags the resize, and read_key applies it via term_resize_apply -
-#   remeasure (term_measure), clear and let the caller repaint, and while
+#   remeasure (term_measure), recenter the game block (layout_update),
+#   clear and let the caller repaint, and while
 #   the terminal is too small for the fixed layout, block on a "resize me"
 #   overlay until it grows back.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.5.0  (2026-07-23)
+# Version: 0.5.1  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -75,6 +78,10 @@ term_measure() {
 term_resize_apply() {
     TERM_RESIZED=0
     term_measure
+    # Recenter the fixed game block on the new size and force a full
+    # repaint (the diff renderer must not compare against lines that now
+    # sit at different coordinates).
+    layout_update
     screen_write $'\e[2J\e[H'
     REDRAW_PENDING=1
     local was_too_small="${TERM_TOO_SMALL}"
@@ -97,6 +104,7 @@ term_resize_apply() {
         if [ "${TERM_RESIZED}" -eq 1 ]; then
             TERM_RESIZED=0
             term_measure
+            layout_update
             screen_write $'\e[2J\e[H'
         fi
     done
@@ -112,7 +120,12 @@ term_resize_apply() {
 # read_key applies it via term_resize_apply on the next tick.
 term_setup() {
     SAVED_STTY="$(stty -g)"
-    screen_write $'\e[?1049h\e[2J\e[H\e[?25l'
+    # Autowrap off (\e[?7l) alongside the alternate screen: the centered
+    # game block fills the terminal exactly at the 48x24 minimum, so its
+    # bottom right character lands in the very last cell. With autowrap on
+    # that cell can push the screen up one line on some terminals; with it
+    # off the write simply stays put. term_restore turns it back on.
+    screen_write $'\e[?1049h\e[?7l\e[2J\e[H\e[?25l'
     trap 'TERM_RESIZED=1' WINCH
     TERM_ACTIVE=1
     debug_event "terminal: alternate screen on, cursor hidden, resize watch armed"
@@ -126,7 +139,7 @@ term_restore() {
     if [ "${TERM_ACTIVE}" -eq 1 ]; then
         debug_event "terminal: restoring screen and stty state"
         trap - WINCH
-        screen_write $'\e[?25h\e[?1049l'
+        screen_write $'\e[?25h\e[?7h\e[?1049l'
         if [ -n "${SAVED_STTY}" ]; then
             stty "${SAVED_STTY}" || stty sane
         fi

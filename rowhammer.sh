@@ -10,7 +10,13 @@
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
 #   restart. Completed rows blink briefly before they are removed, so
-#   the player sees which rows scored. Pressing the quit key (x/ESC) in
+#   the player sees which rows scored. The play screen is one fixed
+#   48x24 block centered in the terminal: hold piece and key legend on
+#   the left, the board in the middle, the three upcoming pieces top
+#   right and the round counters on the two bottom lines; pause and game
+#   over appear as a box over the board. Frames are pushed out
+#   incrementally - only the lines that changed are rewritten (see
+#   lib/render.sh). Pressing the quit key (x/ESC) in
 #   a running round opens a pause menu instead of aborting: resume,
 #   suspend the round into the main menu (it stays resumable via the
 #   "Fortsetzen" entry offered in the main menu and in the singleplayer
@@ -47,7 +53,7 @@
 #   menu entry; the highscore list shows each entry's date as well.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
-#   action (see lib/debug.sh). The fixed board+sidebar layout needs a
+#   action (see lib/debug.sh). The fixed play screen needs a
 #   terminal of at least 48x24; a resize during play is caught via
 #   SIGWINCH and redraws cleanly, and shrinking below the minimum pauses
 #   the round behind a "resize me" overlay until the terminal grows back.
@@ -71,7 +77,8 @@
 #      savegame and their counters into the statistics file,
 #      settings changes are written back to the config file. A round
 #      suspended via the pause menu returns to the main menu
-#      unrecorded and continues via its "Fortsetzen" entry.
+#      unrecorded and continues via its "Fortsetzen" entry; leaving the
+#      game while such a round waits asks for confirmation first.
 #   7. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
@@ -80,7 +87,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.21.0  (2026-07-26)
+# Version: 0.22.0  (2026-07-27)
 
 set -euo pipefail
 
@@ -94,7 +101,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.21.0"
+ROWHAMMER_VERSION="0.22.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -511,6 +518,11 @@ fi
 # precompute the block SGR sequences for the renderer (lib/render.sh).
 color_mode_resolve
 render_colors_init
+# Center the fixed game block on the measured terminal and compose the
+# key legend of the left pane; both only change on a resize respectively
+# a rebind, so they are built once here instead of per frame.
+layout_update
+hud_keys_build
 
 # --- Game state and helpers -----------------------------------------------
 CUR_TYPE=""; CUR_ROT=0; CUR_X=0; CUR_Y=0
@@ -941,11 +953,13 @@ handle_key() {
             debug_event "pause menu opened"
             menu_pause
             # The menu overdrew the game screen and consumed time: force
-            # a redraw and restart the gravity and play-time clocks (the
-            # time spent in the menu is not play time). Return so the
+            # a full repaint (the diff renderer cannot know what the menu
+            # put on screen) and restart the gravity and play-time clocks
+            # (the time spent in the menu is not play time). Return so the
             # menu's confirmation key (Enter/space) is not applied to the
             # game as well.
             play_clock_resume
+            RENDER_FULL=1
             DIRTY=1
             return 0
             ;;
@@ -1012,6 +1026,8 @@ game_reset() {
 game_run() {
     local mode="${1:-new}"
     GAME_EXIT=0
+    # The screen still holds a menu: the first frame must repaint it all.
+    RENDER_FULL=1
     if [ "${mode}" = "resume" ] && [ "${GAME_SUSPENDED}" -eq 1 ]; then
         GAME_SUSPENDED=0
         PAUSED=1
@@ -1044,6 +1060,7 @@ game_run() {
         if [ "${REDRAW_PENDING}" -eq 1 ]; then
             REDRAW_PENDING=0
             play_clock_resume
+            RENDER_FULL=1
             DIRTY=1
         fi
         if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
@@ -1159,9 +1176,22 @@ main() {
                 ;;
             *)
                 # "Beenden" or ESC on the top level leaves the game. A
-                # round still suspended here ends now; recording it
-                # keeps its row credit (aborted rounds count).
+                # round still suspended here would end unnoticed, so ask
+                # first (it is easy to hit ESC twice and lose a round one
+                # only meant to park). Declining returns to the menu, where
+                # "Fortsetzen" still picks the round up; confirming ends it
+                # and records it, which keeps its row credit (aborted
+                # rounds count, see CLAUDE.md).
                 if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                    if ! menu_confirm "Wirklich beenden?" \
+                        "Ja, beenden" "Nein, zurueck" \
+                        "Eine pausierte Runde wartet noch:" \
+                        "${CLEARED_TOTAL} Lines, ${ROW_CREDIT} Rows, Level ${LEVEL}." \
+                        "" \
+                        "Beim Beenden wird sie gewertet und ist danach" \
+                        "nicht mehr fortsetzbar."; then
+                        continue
+                    fi
                     GAME_SUSPENDED=0
                     record_round
                 fi

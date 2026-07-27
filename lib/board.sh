@@ -14,10 +14,13 @@
 #   lib/squares.sh. board_full_rows reports the full rows before they
 #   are removed, so the caller can flash them first (see flash_rows in
 #   rowhammer.sh). The two top rows are hidden spawn rows. In debug
-#   mode every cleared row is logged with its credit breakdown.
+#   mode every cleared row is logged with its credit breakdown. Every
+#   function that changes the board calls render_board_dirty
+#   (lib/render.sh) so the renderer's settled-row cache is rebuilt on the
+#   next frame.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.5.0  (2026-07-24)
+# Version: 0.6.0  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -53,6 +56,7 @@ board_init() {
         BOARD_ID[i]=0
         BOARD_SQ[i]=""
     done
+    render_board_dirty
 }
 
 # can_place TYPE ROT X Y
@@ -96,6 +100,7 @@ lock_piece() {
         BOARD[idx]="${type}"
         BOARD_ID[idx]="${id}"
     done
+    render_board_dirty
 }
 
 # board_full_rows
@@ -197,4 +202,5 @@ clear_lines() {
     if [ "${CLEARED}" -eq 4 ]; then
         CLEARED_CREDIT=$(( CLEARED_CREDIT + ROWS_TETRIS ))
     fi
+    render_board_dirty
 }
