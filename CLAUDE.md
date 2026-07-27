@@ -172,7 +172,7 @@ Die fuer uns relevanten Merkmale des Originals:
 
 ### 3.4 Anzeige / HUD
 
-- **Layout (seit 0.21.0):** Der Spielbildschirm ist ein fester Block
+- **Layout (seit 0.22.0):** Der Spielbildschirm ist ein fester Block
   von 48x24 Zeichen, der **mittig im Terminal** ausgerichtet wird
   (`layout_update` in `lib/render.sh` berechnet aus `TERM_ROWS`/
   `TERM_COLS` die linke obere Ecke; ein Resize richtet ihn neu aus).
@@ -224,9 +224,25 @@ Die fuer uns relevanten Merkmale des Originals:
 - Farben ueber ANSI-Escape-Sequenzen (8/16 Farben als Basis, 256-Farben als
   Verbesserung wenn verfuegbar). Umgesetzt seit 0.9.0: `--color-mode`
   mit `auto` (Erkennung ueber `tput colors`, `TERM`, `COLORTERM`),
-  `basic` und `extended`; die 256-Farben-Palette liegt in
-  `lib/pieces.sh` (`PIECE_COLOR_EXT`), die vorberechneten SGR-Sequenzen
+  `basic` und `extended`; die vorberechneten SGR-Sequenzen
   baut `render_colors_init` in `lib/render.sh`.
+- **Konfigurierbare Farben ueber benannte Farbschemata (Themes,
+  seit 0.21.0):** Farben werden ueber symbolische Namen (z. B. `cyan`,
+  `orange`, `gold`) adressiert; jeder Name traegt eine Basic- (ANSI-
+  Vordergrund, Tabelle `COLOR_BASIC`) und eine Extended-Bedeutung
+  (256er-Index, `COLOR_EXT`), beide in `lib/pieces.sh`. Ein Theme
+  (`THEME_COLOR`, Liste `COLOR_THEMES`) bildet jede Steinsorte und die
+  Gold-/Silber-Quadrate auf einen solchen Namen ab. Das loest das
+  Zwei-Paletten-Problem sauber: eine rohe SGR-Zahl gilt nur in einem
+  Modus, ein Name in beiden. Vier Schemata: `guideline` (bisheriges
+  Standard-Aussehen, unveraendert reproduziert), `classic`, `mono` und
+  `colorblind` (deuteranopie-tauglich, meidet das Rot/Gruen-Paar).
+  Auswahl im Einstellungsmenue (mit Live-Farbvorschau je Theme,
+  `render_theme_swatch`), per `--color-theme NAME`
+  (`ROWHAMMER_COLOR_THEME`, Standard `guideline`) und gespeichert in der
+  Config (`COLOR_THEME`). `--no-color` hat weiterhin Vorrang und schaltet
+  Farben ganz ab. `render_colors_init` liest das aktive Theme und baut
+  daraus die finalen SGR-Sequenzen fuer den aufgeloesten Farbmodus.
 
 ### 4.2 Architektur und Dateistruktur
 
@@ -261,7 +277,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.21.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.22.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
@@ -284,6 +300,9 @@ fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
 `--no-color` (`ROWHAMMER_NO_COLOR`), `--color-mode auto|basic|extended`
 (`ROWHAMMER_COLOR_MODE`, Standard `auto`; `--no-color` gewinnt),
+`--color-theme guideline|classic|mono|colorblind`
+(`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
+Einstellungsmenue waehlbar und in der Config gespeichert),
 `--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
@@ -315,7 +334,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   blockiert bei Unterschreitung des 48x24-Minimums hinter der
   "resize me"-Overlay, bis das Terminal wieder gross genug ist (siehe
   Phase 4 "Anpassung an Terminalgroesse").
-- **Rendering (inkrementell seit 0.21.0):** `draw_frame` baut den
+- **Rendering (inkrementell seit 0.22.0):** `draw_frame` baut den
   Spielbildschirm zeilenweise in das Array `FRAME_LINES`; `render_flush`
   vergleicht es mit dem zuletzt ausgegebenen Stand (`PREV_LINES`) und
   schreibt **nur die tatsaechlich geaenderten Zeilen**, jede mit eigener
@@ -371,9 +390,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${HOME}/rowhammer`).
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
-  (Spielername, Tastenbelegung) schreibt `${DATA_DIR}/rowhammer.conf`;
+  (Spielername, Farbschema seit 0.21.0, Tastenbelegung) schreibt
+  `${DATA_DIR}/rowhammer.conf`;
   Werte werden validiert und single-quoted geschrieben, da die Datei
-  gesourct wird.
+  gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
+  und beim Laden gegen die bekannten Schemata validiert (unbekannt =
+  Abbruch mit Meldung).
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
   `rows|lines|level|name|date|gold|silver|time`, absteigend nach Rows
@@ -444,7 +466,7 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
     ANSI-Sequenzen). Moeglich durch den zentralen Ausgabe-Trichter
     `screen_write` in `lib/render.sh`, durch den seit 0.6.0 alle Module
     (Spiel, Menues, Prompts, Terminal-Setup) schreiben. Seit dem
-    inkrementellen Rendering (0.21.0) enthaelt eine Spiel-Ausgabe nur
+    inkrementellen Rendering (0.22.0) enthaelt eine Spiel-Ausgabe nur
     noch die geaenderten Zeilen samt ihrer Cursor-Positionierung, nicht
     mehr den ganzen Bildschirm - die Datei bleibt damit die exakte
     Kopie dessen, was ans Terminal ging, wird aber deutlich kleiner.
@@ -748,7 +770,7 @@ jede Stelle, die Empfangenes anfasst:
 
 Das bestehende Layout ist fest: linke Spalte 12 + 1 Abstand + Feld 22 +
 1 Abstand + rechte Spalte 12 = 48 Spalten, 24 Zeilen Minimum (seit
-0.21.0 zentriert, siehe 3.4). Die Mitspieler kommen **rechts daneben**,
+0.22.0 zentriert, siehe 3.4). Die Mitspieler kommen **rechts daneben**,
 das eigene Feld bleibt unveraendert an seinem Platz; der Block wird dann
 entsprechend breiter zentriert. Wo unten "Seitenleiste" steht, ist die
 rechte Spalte samt den beiden Statuszeilen gemeint.
@@ -881,7 +903,7 @@ Zuordnung auch ohne Namenslesen funktioniert.
 
 - **Rendering-Performance:** mit bis zu 6 Feldern reicht ein
   "kompletter Frame als String" nicht. Der Phase-4-Punkt "nur
-  geaenderte Zellen zeichnen" war damit Voraussetzung und ist mit 0.21.0
+  geaenderte Zellen zeichnen" war damit Voraussetzung und ist mit 0.22.0
   erledigt (Zeilen-Diff plus Cache der liegenden Feldreihen, siehe 4.3);
   fuer die Mini-Felder der Mitspieler ist der Diff genauso zu nutzen.
 - **Game-Loop:** pro Tick zusaetzlich Socket leeren, Peer-Puffer
@@ -1020,10 +1042,14 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 ### Phase 4 - Politur
 
-- [ ] Konfigurierbare Farben (Config-Datei nach Konvention;
-      Tastenbelegung ist seit 0.2.0 umgesetzt)
+- [x] Konfigurierbare Farben (Version 0.21.0: benannte Farbschemata
+      `guideline`/`classic`/`mono`/`colorblind`, Auswahl im
+      Einstellungsmenue mit Live-Vorschau, `--color-theme` bzw.
+      `ROWHAMMER_COLOR_THEME`, gespeichert als `COLOR_THEME` in der
+      Config; symbolische Farbnamen mit Basic- und Extended-Bedeutung,
+      siehe 4.1)
 - [ ] Umschaltbar zwischen Voll-Frame- und Partial-Rendering: seit
-      0.21.0 zeichnet `render_flush` (`lib/render.sh`) standardmaessig
+      0.22.0 zeichnet `render_flush` (`lib/render.sh`) standardmaessig
       nur die tatsaechlich geaenderten Zeilen (siehe 4.3); fuer
       Terminals/Multiplexer, bei denen sich das inkrementelle Update
       falsch darstellt (Debugging-Fall, Kompatibilitaets-Fallback),
@@ -1108,7 +1134,7 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       blinken kurz auf, bevor sie entfernt werden und das naechste Teil
       erscheint (`board_full_rows`, `flash_rows`, `FLASH_ROWS`/
       `FLASH_STATE`; Dauer ueber `FLASH_MS`/`FLASH_CYCLES`, siehe 3.1)
-- [x] Performance-Optimierung des Renderings (Version 0.21.0): der
+- [x] Performance-Optimierung des Renderings (Version 0.22.0): der
       Frame wird in `FRAME_LINES` gebaut, `render_flush` schreibt nur
       die geaenderten Zeilen mit eigener Cursor-Positionierung, und die
       liegenden Feldreihen liegen in einem Cache, der nur nach echten
@@ -1116,7 +1142,7 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Stein kostet damit hoechstens vier Reihen statt aller 200 Zellen;
       gemessen rund halbe Frame-Zeit und ein Vierzehntel der
       Terminal-Ausgabe (siehe 4.3)
-- [x] Layout anpassen (Version 0.21.0): der feste 48x24-Block wird
+- [x] Layout anpassen (Version 0.22.0): der feste 48x24-Block wird
       mittig im Terminal ausgerichtet (`layout_update`), Hold-Stein und
       Tastenlegende stehen links, das Spielfeld in der Mitte, die
       naechsten drei Steine oben rechts und die Rundenzaehler auf den
@@ -1141,7 +1167,7 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       entfernt - der Score bleibt gespeichert und bestimmt weiterhin
       die Rangfolge)
 - [x] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
-      (Version 0.21.0): liegt beim Verlassen ueber "Beenden" oder `Esc`
+      (Version 0.22.0): liegt beim Verlassen ueber "Beenden" oder `Esc`
       im Hauptmenue noch eine pausierte Runde im Zwischenspeicher, fragt
       `menu_confirm` (lib/menu.sh) vorher nach und zeigt deren Stand
       (Lines/Rows/Level); die ablehnende Antwort ist vorausgewaehlt und
@@ -1177,7 +1203,7 @@ Details stehen jeweils im genannten Unterabschnitt.
       Rundenlogik ohne Rendering/Input lauffaehig machen (`game_reset`,
       `step_down`, `lock_and_next`, `try_move`, `try_rotate`, `hold_piece`
       zeichnen nicht mehr selbst; `record_round` trennt Verbuchen und
-      Anzeigen). Der Render-Teil dieses Schritts ist mit 0.21.0 erledigt
+      Anzeigen). Der Render-Teil dieses Schritts ist mit 0.22.0 erledigt
       (Zeilen-Diff `FRAME_LINES`/`PREV_LINES` in `render_flush` plus
       Cache der liegenden Feldreihen, siehe 4.3); `screen_write` bleibt
       der einzige Ausgabekanal (Debug-Log!). Offen bleibt die
@@ -1262,7 +1288,7 @@ Details stehen jeweils im genannten Unterabschnitt.
   "Anpassung an Terminalgroesse"): ein Resize zeichnet sauber neu, ein
   Unterschreiten des Minimums pausiert die Runde hinter einer
   "resize me"-Overlay bis das Terminal wieder gross genug ist. Das feste
-  Layout skaliert bewusst nicht mit, wird aber seit 0.21.0 mittig im
+  Layout skaliert bewusst nicht mit, wird aber seit 0.22.0 mittig im
   Terminal ausgerichtet (siehe 3.4); groessere Terminals zeigen das
   Spiel also zentriert statt oben links. Ein mitwachsendes Layout (z. B.
   breitere Zellen oder mehr Vorschau auf grossen Terminals) ist bewusst

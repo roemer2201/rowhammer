@@ -1,4 +1,4 @@
-rowhammer (0.21.0) unstable; urgency=medium
+rowhammer (0.22.0) unstable; urgency=medium
 
   * New play screen layout: the fixed 48x24 block is now centered in the
     terminal instead of hugging the top left corner. The hold piece and
@@ -21,7 +21,20 @@ rowhammer (0.21.0) unstable; urgency=medium
     48x24 minimum the layout fills the very last terminal cell, which
     could otherwise scroll the screen on some terminals.
 
- -- roemer2201 <r.oliver@web.de>  Sun, 26 Jul 2026 12:00:00 +0200
+ -- roemer2201 <r.oliver@web.de>  Mon, 27 Jul 2026 12:00:00 +0200
+
+rowhammer (0.21.0) unstable; urgency=medium
+
+  * Add configurable colors via named color themes. A theme maps every
+    piece type and the gold/silver squares to symbolic color names, each
+    carrying a basic (8/16-color ANSI) and an extended (xterm 256-color)
+    meaning. Four themes ship: "guideline" (the previous default look,
+    unchanged), "classic", "mono" and "colorblind" (deuteranopia-friendly).
+    Selectable in the settings menu (with a live per-theme color swatch),
+    via --color-theme NAME and the ROWHAMMER_COLOR_THEME environment
+    variable, and persisted to the user config file (COLOR_THEME).
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 26 Jul 2026 12:00:00 +0200
 
 rowhammer (0.20.0) unstable; urgency=medium
 
