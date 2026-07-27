@@ -88,7 +88,7 @@ Die fuer uns relevanten Merkmale des Originals:
   danach); Tastendruecke waehrend des Blinkens werden bewusst verworfen,
   damit sie nicht gesammelt auf dem neuen Stein losgehen. Das Warten
   nutzt wie der uebrige Loop ein `read` mit Timeout (kein `sleep`-Fork),
-  seit 0.22.0 aber ueber `key_drain` (`lib/input.sh`) statt eines rohen
+  seit 0.23.0 aber ueber `key_drain` (`lib/input.sh`) statt eines rohen
   `read`: ein Roh-Read verwarf einzelne Bytes und konnte damit genau die
   Haelfte einer Escape-Sequenz schlucken - blieb `[C` einer Pfeiltaste
   liegen, wurde das `C` danach als Hold-Taste `c` angewandt (Issue #7 an
@@ -180,13 +180,34 @@ Die fuer uns relevanten Merkmale des Originals:
 
 ### 3.4 Anzeige / HUD
 
-- Hauptbereich: Spielfeld mit Rahmen.
-- Seitenleiste: Naechste Teile, Hold, Lines (physische Reihen der
-  Runde), Rows (gewertete Reihen = Punkte der Runde, siehe 3.2),
-  aktuelles Wunder + Baufortschritt (Miniatur oder Prozent), Level,
-  Gold-/Silberzaehler sowie die Spielzeit der laufenden Runde (Time,
-  Format MM:SS; seit 0.17.0). Eine separate Score-Zeile gibt es seit
-  0.16.0 nicht mehr.
+- **Layout (seit 0.22.0):** Der Spielbildschirm ist ein fester Block
+  von 48x24 Zeichen, der **mittig im Terminal** ausgerichtet wird
+  (`layout_update` in `lib/render.sh` berechnet aus `TERM_ROWS`/
+  `TERM_COLS` die linke obere Ecke; ein Resize richtet ihn neu aus).
+  Der Block ist in Spalten gegliedert: linke Spalte 12 Zeichen, Luecke
+  1, Spielfeld 22 (10 Zellen a 2 Zeichen plus Rahmen), Luecke 1, rechte
+  Spalte 12. In Zeilen: Zeile 0 obere Feldkante, 1-20 die sichtbaren
+  Feldreihen, 21 untere Feldkante, 22-23 die Statuszeilen.
+  - **Links:** der Hold-Stein (Ueberschrift "Hold") und darunter die
+    Tastenlegende, aus der aktuellen Belegung gebaut (`hud_keys_build`,
+    nur bei Aenderung neu erzeugt, nicht je Frame).
+  - **Mitte:** das Spielfeld mit Rahmen.
+  - **Oben rechts:** die naechsten drei Steine (Ueberschrift "Next").
+  - **Unten:** zwei Statuszeilen mit Spielername, Lines (physische
+    Reihen der Runde), Rows (gewertete Reihen = Punkte der Runde, siehe
+    3.2), Level, Gold-/Silberzaehler, Spielzeit (Time, MM:SS; seit
+    0.17.0) und aktuellem Wunder + Baufortschritt in Prozent. Eine
+    separate Score-Zeile gibt es seit 0.16.0 nicht mehr.
+  - **Pause und Game Over** erscheinen als Kasten **ueber dem
+    Spielfeld** (`render_status_box`), das Game-Over-Bild mit dem
+    erreichten Highscore-Rang und den Tasten fuers Neustarten bzw.
+    Verlassen. Damit bleiben die Statuszeilen den Zaehlern vorbehalten.
+  - Jede Blockzeile wird auf **exakt 48 sichtbare Spalten** gebaut. Das
+    ist die Voraussetzung fuer das inkrementelle Rendering (siehe 4.3):
+    eine neu geschriebene Zeile ueberdeckt ihre Vorgaengerin immer
+    vollstaendig, es braucht keine Loesch-Sequenzen. Ein Spielbildschirm-
+    Titel entfaellt dafuer - die 24 Zeilen sind vom Feld (22) und den
+    Statuszeilen (2) restlos belegt.
 - Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
   aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
   Pausenmenue) sowie der Game-Over-Bildschirm zaehlen nicht; die Zeit
@@ -242,7 +263,7 @@ rowhammer/
     board.sh           # Spielfeld-Zustand, Kollision, Reihenabbau
     pieces.sh          # Tetromino-Definitionen und Rotationstabellen
     squares.sh         # Erkennung und Verwaltung von Gold-/Silber-Quadraten
-    render.sh          # Rendering (Double-Buffering, ANSI)
+    render.sh          # Rendering (Layout, Zeilen-Diff, ANSI)
     input.sh           # Nicht-blockierende Tastatureingabe
     menu.sh            # Startmenue (Einzel-/Mehrspieler, Einstellungen)
     config.sh          # Laden/Speichern der Nutzer-Konfiguration
@@ -264,7 +285,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.16.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.23.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
@@ -277,7 +298,8 @@ erster Stelle, ebenso im Einzelspieler-Untermenue); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
-Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
+Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der Statuszeilen-
+Zaehler
 "Rows" ist die gewichtete Reihenwertung (1/5/10), die den
 Weltwunder-Fortschritt speist und seit 0.16.0 zugleich der Score der
 Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
@@ -303,7 +325,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - **Input:** nicht-blockierend ueber `read -rsn1 -t <timeout>`;
   Escape-Sequenzen der Pfeiltasten sauber einlesen. Terminal-Modus mit `stty`
   setzen und ueber einen `trap`-Handler (EXIT/INT/TERM) garantiert
-  wiederherstellen. Escape-Sequenzen laufen seit 0.22.0 (Issue #7,
+  wiederherstellen. Escape-Sequenzen laufen seit 0.23.0 (Issue #7,
   Analyse in `docs/input-analysis.md`) durch einen **Zustandsautomaten**
   (`key_feed` und die `key_in_*`-Helfer in `lib/input.sh`), dessen
   Zustand in Globals liegt und damit ueber `read_key`-Aufrufe und
@@ -338,9 +360,28 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   blockiert bei Unterschreitung des 48x24-Minimums hinter der
   "resize me"-Overlay, bis das Terminal wieder gross genug ist (siehe
   Phase 4 "Anpassung an Terminalgroesse").
-- **Rendering:** pro Frame den kompletten Bildschirm in einen String puffern
-  und mit **einem** `printf` ausgeben (Double-Buffering gegen Flackern);
-  Cursor verstecken, alternativen Screen-Buffer nutzen (`tput smcup`/`rmcup`).
+- **Rendering (inkrementell seit 0.22.0):** `draw_frame` baut den
+  Spielbildschirm zeilenweise in das Array `FRAME_LINES`; `render_flush`
+  vergleicht es mit dem zuletzt ausgegebenen Stand (`PREV_LINES`) und
+  schreibt **nur die tatsaechlich geaenderten Zeilen**, jede mit eigener
+  Cursor-Positionierung, in einem einzigen `printf` (Double-Buffering
+  gegen Flackern). Weil jede Zeile exakt `LAYOUT_W` sichtbare Spalten
+  breit ist (siehe 3.4), ueberdeckt eine neue Zeile ihre Vorgaengerin
+  immer vollstaendig. `RENDER_FULL` erzwingt einen Voll-Neuaufbau
+  (Bildschirm loeschen, alle Zeilen schreiben) nach Menues, Resize und
+  zum Rundenstart.
+  Zusaetzlich sind die **liegenden Feldreihen gecacht**
+  (`BOARD_ROW_CACHE`): sie werden nur nach einer echten Brettaenderung
+  neu gebaut (`render_board_dirty`, aufgerufen aus `board_init`,
+  `lock_piece`, `clear_lines` und der Quadrat-Markierung in
+  `lib/squares.sh`). Ein bloss bewegter Stein kostet damit die
+  hoechstens vier Reihen unter dem Stein statt aller 200 Zellen.
+  Gemessen gegen den frueheren Voll-Frame-Renderer: rund die Haelfte der
+  Zeit je Frame und etwa ein Vierzehntel der Terminal-Ausgabe.
+  Cursor verstecken, alternativen Screen-Buffer nutzen, und im
+  Alternate-Screen ist der **Auto-Wrap abgeschaltet** (`\e[?7l`): bei
+  exakt 48x24 fuellt das Layout die letzte Bildschirmzelle, was mit
+  Auto-Wrap auf manchen Terminals scrollen wuerde.
 - **Datenmodell:** Spielfeld als eindimensionales Bash-Array (Index
   `y * Breite + x`); Zelle enthaelt Sorte, Stein-Instanz-ID und
   Quadrat-Status (keins/Silber/Gold), damit `squares.sh` und die
@@ -450,7 +491,11 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   - `frames.log`: jede Terminal-Ausgabe 1:1 (Byte fuer Byte, inklusive
     ANSI-Sequenzen). Moeglich durch den zentralen Ausgabe-Trichter
     `screen_write` in `lib/render.sh`, durch den seit 0.6.0 alle Module
-    (Spiel, Menues, Prompts, Terminal-Setup) schreiben.
+    (Spiel, Menues, Prompts, Terminal-Setup) schreiben. Seit dem
+    inkrementellen Rendering (0.22.0) enthaelt eine Spiel-Ausgabe nur
+    noch die geaenderten Zeilen samt ihrer Cursor-Positionierung, nicht
+    mehr den ganzen Bildschirm - die Datei bleibt damit die exakte
+    Kopie dessen, was ans Terminal ging, wird aber deutlich kleiner.
   - `input.log`: jeder Tastendruck mit Rohbytes (`printf %q`-quotiert)
     und gemapptem Symbol; auch nicht zuordenbare Escape-Sequenzen.
   - `events.log`: Session-Header (Version, Bash, Terminal, Seed,
@@ -749,9 +794,12 @@ jede Stelle, die Empfangenes anfasst:
 
 ### 5.6 Darstellung der Mitspieler
 
-Das bestehende Layout ist fest: Feld 22 Spalten + 2 Abstand + Seitenleiste
-24 Spalten = 48 Spalten, 24 Zeilen Minimum. Die Mitspieler kommen
-**rechts daneben**, das eigene Feld bleibt unveraendert links.
+Das bestehende Layout ist fest: linke Spalte 12 + 1 Abstand + Feld 22 +
+1 Abstand + rechte Spalte 12 = 48 Spalten, 24 Zeilen Minimum (seit
+0.22.0 zentriert, siehe 3.4). Die Mitspieler kommen **rechts daneben**,
+das eigene Feld bleibt unveraendert an seinem Platz; der Block wird dann
+entsprechend breiter zentriert. Wo unten "Seitenleiste" steht, ist die
+rechte Spalte samt den beiden Statuszeilen gemeint.
 
 Drei Detailstufen, automatisch nach verfuegbarer Terminalgroesse und
 Spielerzahl gewaehlt (`--mp-view auto|full|compact|score` erzwingt eine
@@ -879,10 +927,11 @@ Zuordnung auch ohne Namenslesen funktioniert.
 
 ### 5.9 Auswirkungen auf bestehende Systeme
 
-- **Rendering-Performance:** mit bis zu 6 Feldern reicht das heutige
-  "kompletter Frame als String" nicht mehr. Der bestehende
-  Phase-4-Punkt "nur geaenderte Zellen zeichnen" wird damit zur
-  **Voraussetzung** und in der Reihenfolge vorgezogen.
+- **Rendering-Performance:** mit bis zu 6 Feldern reicht ein
+  "kompletter Frame als String" nicht. Der Phase-4-Punkt "nur
+  geaenderte Zellen zeichnen" war damit Voraussetzung und ist mit 0.22.0
+  erledigt (Zeilen-Diff plus Cache der liegenden Feldreihen, siehe 4.3);
+  fuer die Mini-Felder der Mitspieler ist der Diff genauso zu nutzen.
 - **Game-Loop:** pro Tick zusaetzlich Socket leeren, Peer-Puffer
   aktualisieren, eigenen Zustand senden (nur bei Aenderung). Der
   Sendepfad darf nie blockieren (voller Socketpuffer -> Nachricht
@@ -1025,6 +1074,43 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       `ROWHAMMER_COLOR_THEME`, gespeichert als `COLOR_THEME` in der
       Config; symbolische Farbnamen mit Basic- und Extended-Bedeutung,
       siehe 4.1)
+- [ ] Umschaltbar zwischen Voll-Frame- und Partial-Rendering: seit
+      0.22.0 zeichnet `render_flush` (`lib/render.sh`) standardmaessig
+      nur die tatsaechlich geaenderten Zeilen (siehe 4.3); fuer
+      Terminals/Multiplexer, bei denen sich das inkrementelle Update
+      falsch darstellt (Debugging-Fall, Kompatibilitaets-Fallback),
+      soll ein Schalter zurueck auf den alten Voll-Neuaufbau jeder
+      Zeile erlauben - **Partial-Rendering bleibt der Standard**.
+      Umsetzung nach dem Muster von `--color-mode`
+      (`--render-mode full|partial`, `ROWHAMMER_RENDER_MODE`, Standard
+      `partial`): ein globales Flag, das `render_flush` vor der
+      Zeilen-Diff-Pruefung abfragt und im Full-Modus `RENDER_FULL`
+      dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
+      der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
+      dem ersten Frame wieder freizugeben.
+- [ ] "rowhammer"-Zaehler einbauen: zaehlt, wie oft vier Reihen auf
+      einmal abgebaut wurden (der Tetris, hier nach dem Projekt benannt).
+      Die Stelle steht schon fest - `clear_lines` (`lib/board.sh`) kennt
+      den Fall bereits ueber `CLEARED -eq 4`, wo heute nur `ROWS_TETRIS`
+      addiert wird; von dort einen Rundenzaehler (analog zu
+      `GOLD_COUNT`/`SILVER_COUNT` in `rowhammer.sh`, Reset in
+      `game_reset`) hochzaehlen.
+      Aufnahme in die Statistik (Nutzerfrage, bejaht): passt ohne
+      Bruch in `lib/stats.sh` -
+      neuer Gesamtzaehler `rowhammers` als weitere `key=value`-Zeile
+      (Muster `STATS_LINE_RE` erweitern, `STATS_ROWHAMMERS`,
+      Parameter an `stats_add_round`, Aufruf in `record_round`) und eine
+      eigene Zeile im "Statistik"-Bildschirm bei Gold-/Silberbloecken.
+      Zusaetzlich je Runde in der `recent=`-Liste waere moeglich, bricht
+      aber deren Format (`lines|bonus|gold|silver|date` ->
+      `...|rowhammers|date`; alte Zeilen fallen gemaess der Arbeitsregel
+      "keine Abwaertskompatibilitaet" beim Laden einfach heraus) und die
+      Tabelle der letzten Spiele ist mit 42 + 2 Spalten Einzug schon
+      nahe am 48-Spalten-Minimum - eine Spalte mehr geht nur, wenn eine
+      vorhandene Ueberschrift gekuerzt wird. Offen ausserdem: ob der
+      Zaehler auch ins HUD soll (die zwei Statuszeilen sind mit je 48
+      Zeichen voll belegt, siehe 3.4) und ob er zusaetzlich in die
+      Highscore-Zeile wandert.
 - [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
       `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
       im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und
@@ -1074,9 +1160,20 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       blinken kurz auf, bevor sie entfernt werden und das naechste Teil
       erscheint (`board_full_rows`, `flash_rows`, `FLASH_ROWS`/
       `FLASH_STATE`; Dauer ueber `FLASH_MS`/`FLASH_CYCLES`, siehe 3.1)
-- [ ] Performance-Optimierung des Renderings (nur geaenderte Zellen zeichnen)
-- [ ] Layout anpassen: Rendering zentriert im Terminal; Stats unten,
-      naechste drei Steine oben rechts, Hold-Stein links
+- [x] Performance-Optimierung des Renderings (Version 0.22.0): der
+      Frame wird in `FRAME_LINES` gebaut, `render_flush` schreibt nur
+      die geaenderten Zeilen mit eigener Cursor-Positionierung, und die
+      liegenden Feldreihen liegen in einem Cache, der nur nach echten
+      Brettaenderungen verfaellt (`render_board_dirty`). Ein bewegter
+      Stein kostet damit hoechstens vier Reihen statt aller 200 Zellen;
+      gemessen rund halbe Frame-Zeit und ein Vierzehntel der
+      Terminal-Ausgabe (siehe 4.3)
+- [x] Layout anpassen (Version 0.22.0): der feste 48x24-Block wird
+      mittig im Terminal ausgerichtet (`layout_update`), Hold-Stein und
+      Tastenlegende stehen links, das Spielfeld in der Mitte, die
+      naechsten drei Steine oben rechts und die Rundenzaehler auf den
+      zwei unteren Statuszeilen; Pause und Game Over erscheinen als
+      Kasten ueber dem Spielfeld (siehe 3.4)
 - [x] README mit Screenshots/Asciinema aktualisieren (Abschnitt
       "Vorschau" im README): vier kurze, echte Spielsequenzen als
       asciinema-Aufnahmen (`.cast`) und GIF unter `docs/demo/` - Tetris
@@ -1095,8 +1192,13 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Score-Spalte ist dafuer auf Nutzerwunsch aus der Anzeige
       entfernt - der Score bleibt gespeichert und bestimmt weiterhin
       die Rangfolge)
-- [ ] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
-      einbauen, falls noch eine laufende Runde im Zwischenspeicher liegt
+- [x] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
+      (Version 0.22.0): liegt beim Verlassen ueber "Beenden" oder `Esc`
+      im Hauptmenue noch eine pausierte Runde im Zwischenspeicher, fragt
+      `menu_confirm` (lib/menu.sh) vorher nach und zeigt deren Stand
+      (Lines/Rows/Level); die ablehnende Antwort ist vorausgewaehlt und
+      `Esc` gilt ebenfalls als Ablehnung. Erst nach Bestaetigung wird die
+      Runde beendet und gewertet
 - [x] Anzeige des Datums in der Highscore-Liste nachruesten (Version
       0.14.0: das gespeicherte Feld `date` wird als eigene Spalte
       angezeigt, Name in der Anzeige auf 14 Zeichen gekuerzt; die
@@ -1109,7 +1211,7 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       Escape-Sequenzen jetzt byteweise bis zum Endbyte mit
       grosszuegigerem Timeout und wertet auch ein im Timeout-Moment
       geliefertes Byte aus (siehe 4.3)
-- [x] Eingabeschicht gehaertet (Version 0.22.0, Nachfassen zu Issue #7,
+- [x] Eingabeschicht gehaertet (Version 0.23.0, Nachfassen zu Issue #7,
       Analyse in `docs/input-analysis.md`): eine Vermessung aller
       Byte-Folgen, die ein Terminal senden kann (neues Werkzeug
       `tools/key-scan.sh`, 72 Faelle), zeigte 12 Folgen, die eine
@@ -1148,11 +1250,11 @@ Details stehen jeweils im genannten Unterabschnitt.
       Rundenlogik ohne Rendering/Input lauffaehig machen (`game_reset`,
       `step_down`, `lock_and_next`, `try_move`, `try_rotate`, `hold_piece`
       zeichnen nicht mehr selbst; `record_round` trennt Verbuchen und
-      Anzeigen), und den Phase-4-Punkt "nur geaenderte Zellen zeichnen"
-      vorziehen - mit bis zu sechs Feldern reicht der Voll-Frame nicht.
-      Loesungsweg: Diff gegen den zuletzt gesendeten Frame-Puffer je
-      Zelle, Cursor-Positionierung nur fuer geaenderte Bereiche;
-      `screen_write` bleibt der einzige Ausgabekanal (Debug-Log!).
+      Anzeigen). Der Render-Teil dieses Schritts ist mit 0.22.0 erledigt
+      (Zeilen-Diff `FRAME_LINES`/`PREV_LINES` in `render_flush` plus
+      Cache der liegenden Feldreihen, siehe 4.3); `screen_write` bleibt
+      der einzige Ausgabekanal (Debug-Log!). Offen bleibt die
+      Entkopplung der Rundenlogik.
       Abnahme: Einzelspieler unveraendert spielbar, Frame-Kosten messbar
       gesunken.
 - [ ] **Schritt 2 - Transportschicht `lib/net.sh`** (siehe 5.2, 5.3).
@@ -1233,9 +1335,11 @@ Details stehen jeweils im genannten Unterabschnitt.
   "Anpassung an Terminalgroesse"): ein Resize zeichnet sauber neu, ein
   Unterschreiten des Minimums pausiert die Runde hinter einer
   "resize me"-Overlay bis das Terminal wieder gross genug ist. Das feste
-  Layout skaliert bewusst nicht mit; groessere Terminals zeigen das
-  Spiel weiter oben links (ein zentriertes/mitwachsendes Layout ist der
-  separate Phase-4-Punkt "Layout anpassen").
+  Layout skaliert bewusst nicht mit, wird aber seit 0.22.0 mittig im
+  Terminal ausgerichtet (siehe 3.4); groessere Terminals zeigen das
+  Spiel also zentriert statt oben links. Ein mitwachsendes Layout (z. B.
+  breitere Zellen oder mehr Vorschau auf grossen Terminals) ist bewusst
+  nicht vorgesehen.
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

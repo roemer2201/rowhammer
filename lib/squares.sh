@@ -14,7 +14,7 @@
 #   the four consumed instance ids.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.1  (2026-07-20)
+# Version: 0.3.2  (2026-07-26)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -98,6 +98,9 @@ square_check_at() {
     for id in "${!ids[@]}"; do
         INSTANCE_SQUARED["${id}"]=1
     done
+    # The square repainted board cells: drop the renderer's settled-row
+    # cache so the next frame picks up the gold/silver look.
+    render_board_dirty
     SQUARE_RESULT="${mark}"
     debug_event "square formed: ${mark} at ${x0},${y0} instance_ids=${!ids[*]}"
     return 0

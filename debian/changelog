@@ -1,4 +1,4 @@
-rowhammer (0.22.0) unstable; urgency=medium
+rowhammer (0.23.0) unstable; urgency=medium
 
   * Harden the keyboard input layer (follow-up to issue #7). Escape
     sequences are now parsed by a state machine whose state survives
@@ -36,7 +36,32 @@ rowhammer (0.22.0) unstable; urgency=medium
     exercises the discard path above. Findings and the fix proposals are
     documented in docs/input-analysis.md.
 
- -- roemer2201 <r.oliver@web.de>  Sun, 26 Jul 2026 12:00:00 +0200
+ -- roemer2201 <r.oliver@web.de>  Mon, 27 Jul 2026 18:00:00 +0200
+
+rowhammer (0.22.0) unstable; urgency=medium
+
+  * New play screen layout: the fixed 48x24 block is now centered in the
+    terminal instead of hugging the top left corner. The hold piece and
+    a key legend sit in the left pane, the board in the middle, the
+    three upcoming pieces in the top right pane, and the round counters
+    (name, lines, rows, level, gold/silver, play time, wonder progress)
+    on the two bottom status lines. Pause and game over are drawn as a
+    box over the board, the latter carrying the highscore rank.
+  * Rendering is incremental: draw_frame assembles the screen into
+    FRAME_LINES and render_flush writes only the lines that actually
+    changed, each with its own cursor positioning. Settled board rows
+    are cached and rebuilt only after the board really changed, so a
+    moving piece costs a handful of rows instead of all 200 cells.
+    Measured against the previous full-frame renderer: about half the
+    time per frame and roughly a fourteenth of the terminal output.
+  * Leaving the game while a round is still suspended in the pause menu
+    now asks for confirmation ("Wirklich beenden?", declining option
+    preselected) instead of silently ending and recording that round.
+  * Autowrap is turned off while the alternate screen is active: at the
+    48x24 minimum the layout fills the very last terminal cell, which
+    could otherwise scroll the screen on some terminals.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 27 Jul 2026 12:00:00 +0200
 
 rowhammer (0.21.0) unstable; urgency=medium
 

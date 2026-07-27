@@ -5,7 +5,7 @@ Analysiert am 2026-07-26 gegen Code-Stand 0.20.0 (`lib/input.sh` 0.5.0).
 Ausloeser: Nach dem Fix fuer Issue #7 (Version 0.16.1) gab es weiterhin den
 Verdacht, dass andere Tastenkombinationen falsche Aktionen ausloesen.
 
-> **Status: umgesetzt in Version 0.22.0** (`lib/input.sh` 0.7.0). Die
+> **Status: umgesetzt in Version 0.23.0** (`lib/input.sh` 0.7.0). Die
 > Vorschlaege L1 bis L6 aus Abschnitt 3 sind eingebaut, L7 bewusst nicht.
 > Die Befunde in Abschnitt 2 beschreiben den Zustand *vor* dem Umbau;
 > Abschnitt 5 haelt fest, was danach messbar ist.
@@ -280,7 +280,7 @@ in `term_setup`/`term_restore`. L7 vorerst weglassen.
 Danach muss `tools/key-scan.sh` ohne `FAIL` durchlaufen - sowohl ohne
 Luecke als auch mit `-g 0.06` und `-g 0.2`.
 
-## 5. Ergebnis nach dem Umbau (Version 0.22.0)
+## 5. Ergebnis nach dem Umbau (Version 0.23.0)
 
 L1 bis L6 sind umgesetzt, L7 nicht (die Burst-Bremse haette auch
 legitimes Autorepeat beschnitten). Der Umbau blieb auf `lib/input.sh`
