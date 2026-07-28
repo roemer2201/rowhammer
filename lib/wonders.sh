@@ -23,7 +23,7 @@
 #   but are scaled down to fit single-machine play.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.2  (2026-07-26)
+# Version: 0.1.3  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -49,9 +49,13 @@ WONDER_NAMES_HUD=("Mayan Temple" "Stonehenge" "Sphinx" "Pantheon"
                   "Great Wall" "Taj Mahal" "St Basils")
 WONDER_COSTS=(100 200 400 800 1600 3200 6400)
 
-# State computed by wonders_update from a row total; the HUD and the
-# wonder screen only read these. WONDER_PREV_INDEX tracks completions
+# State computed by wonders_update from a row total; only the wonder
+# screen reads these. WONDER_PREV_INDEX tracks completions
 # across calls so finishing a wonder is logged exactly once.
+# The "HUD" in WONDER_NAMES_HUD/WONDER_HUD_NAME is historical: it is
+# the short name, once shown on the HUD status line until 0.25.0 gave
+# that slot to the rowhammer counter, and now the heading of the
+# construction site screen.
 WONDER_INDEX=0
 WONDER_DONE=0
 WONDER_COST=0

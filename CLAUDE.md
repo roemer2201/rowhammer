@@ -174,9 +174,13 @@ Die fuer uns relevanten Merkmale des Originals:
   Original). Eine ueber das Pausenmenue ins Hauptmenue gelegte Runde
   ist noch nicht beendet und wird nicht verbucht (seit 0.12.0, Issue
   #12). Anzeige:
-  im HUD laufend (aktuelles Wunder + Prozent, inkl. der laufenden
-  Runde), als Baustellen-Bildschirm nach jedem Spiel beim Verlassen ins
-  Menue sowie jederzeit ueber den Hauptmenuepunkt "Weltwunder".
+  als Baustellen-Bildschirm nach jedem Spiel beim Verlassen ins
+  Menue sowie jederzeit ueber den Hauptmenuepunkt "Weltwunder". Im HUD
+  stand der Baufortschritt bis 0.24.0 laufend mit; seit 0.25.0 gehoert
+  dieser Platz dem Rowhammer-Zaehler (Nutzerentscheidung, siehe 3.4).
+  Der Wunder-Zustand wird deshalb nicht mehr je Reihenabbau
+  nachgerechnet, sondern nur noch beim Rundenende (`record_round`) und
+  beim Anzeigen des Wunder-Bildschirms (`wonder_screen` rechnet selbst).
 
 ### 3.4 Anzeige / HUD
 
@@ -196,8 +200,14 @@ Die fuer uns relevanten Merkmale des Originals:
   - **Unten:** zwei Statuszeilen mit Spielername, Lines (physische
     Reihen der Runde), Rows (gewertete Reihen = Punkte der Runde, siehe
     3.2), Level, Gold-/Silberzaehler, Spielzeit (Time, MM:SS; seit
-    0.17.0) und aktuellem Wunder + Baufortschritt in Prozent. Eine
-    separate Score-Zeile gibt es seit 0.16.0 nicht mehr.
+    0.17.0) und dem Rowhammer-Zaehler der Runde (Rowhammer, seit
+    0.25.0: vier Reihen auf einmal). Eine
+    separate Score-Zeile gibt es seit 0.16.0 nicht mehr. Die beiden
+    Statuszeilen sind mit je 48 Zeichen restlos belegt - ein neuer
+    Zaehler kommt nur hinein, wenn ein alter geht: der
+    Weltwunder-Fortschritt hat 0.25.0 seinen Platz an den
+    Rowhammer-Zaehler abgegeben (Nutzerentscheidung) und steht
+    weiterhin auf dem Weltwunder-Bildschirm.
   - **Pause und Game Over** erscheinen als Kasten **ueber dem
     Spielfeld** (`render_status_box`), das Game-Over-Bild mit dem
     erreichten Highscore-Rang und den Tasten fuers Neustarten bzw.
@@ -424,13 +434,15 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Abbruch mit Meldung).
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
-  `rows|lines|level|name|date|gold|silver|time`, absteigend nach Rows
+  `rows|lines|level|name|date|gold|silver|time|rowhammers`,
+  absteigend nach Rows
   sortiert. Seit dem Punktesystem-Umbau (0.16.0) ist die gewichtete
   Reihenwertung der einzige Score: das fruehere fuehrende
   `score`-Feld entfaellt, Rows bestimmt die Rangfolge und den Rang
-  im Game-Over-Bild. Das abschliessende Feld `time` (seit 0.17.0) ist
-  die Spielzeit der Runde in ganzen Sekunden. Zeilen im falschen
-  (nicht achtfeldrigen) Format fallen gemaess der
+  im Game-Over-Bild. Das Feld `time` (seit 0.17.0) ist
+  die Spielzeit der Runde in ganzen Sekunden, das abschliessende Feld
+  `rowhammers` (seit 0.25.0) die Zahl der Vierfach-Abbaeue der Runde.
+  Zeilen im falschen (nicht neunfeldrigen) Format fallen gemaess der
   Arbeitsregel "keine Abwaertskompatibilitaet" bei der Validierung
   einfach heraus.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
@@ -439,15 +451,19 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Beenden der Runde, siehe 3.3; 0 Rows zaehlt nicht, gleiche Rows
   rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
   die Liste unter "Highscores" im Hauptmenue. Angezeigt werden je
-  Eintrag Rang, Name, Rows, Gold- und Silberquadrate, die Spielzeit
+  Eintrag Rang, Name, Rows, Gold- und Silberquadrate (Spalten "Gold"
+  und "Silb"), die Rowhammer der Runde (Spalte "RH", seit 0.25.0), die
+  Spielzeit
   (Spalte "Zeit", MM:SS; seit 0.17.0) sowie das Datum
   (seit 0.14.0; die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt; Lines
   und Level bleiben gespeichert, werden aber nicht angezeigt).
   Damit das Layout (mit dem Zwei-Zeichen-Menue-Einzug) exakt ins
-  48-Spalten-Minimum passt, wird der Name in der Anzeige seit der
-  Zeit-Spalte (0.17.0) auf 8 Zeichen gekuerzt (vorher 13; gespeichert
-  bleiben weiterhin bis zu 16 Zeichen).
+  48-Spalten-Minimum passt, zahlt jede neue Spalte eine vorhandene:
+  der Name wurde mit der Zeit-Spalte (0.17.0) von 13 auf 8 Zeichen
+  gekuerzt und mit der RH-Spalte (0.25.0) auf 6, ausserdem heisst die
+  Silber-Spalte seither "Silb" (gespeichert bleiben weiterhin bis zu
+  16 Namenszeichen).
 - `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
   `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,
   nicht gesourct; eine defekte Datei faellt mit Meldung auf 0 zurueck).
@@ -465,8 +481,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   abgebaut wurden (hochgezaehlt in `clear_lines` an der Stelle, die
   den Tetris-Bonus vergibt; Rundenzaehler `ROWHAMMER_COUNT` in
   `rowhammer.sh`). Seit 0.11.0 zusaetzlich die Ergebnisse der
-  letzten drei Runden (`recent=`-Zeilen, neueste zuerst; seit 0.16.0
-  im Format `lines|bonus|gold|silver|date` mit dem Spieldatum
+  letzten drei Runden (`recent=`-Zeilen, neueste zuerst; seit 0.25.0
+  im Format `lines|bonus|gold|silver|rowhammers|date` mit dem Spieldatum
   als `YYYY-MM-DD` - das fruehere fuehrende `score`-Feld entfiel mit
   dem Punktesystem-Umbau, die Punkte einer Runde sind Lines + Bonus
   und werden bei der Anzeige abgeleitet statt gespeichert; alte
@@ -478,10 +494,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `record_round`); Anzeige ueber den Hauptmenuepunkt
   "Statistik", inklusive der gewichteten Gesamtsumme
   (Lines + Bonus), des Rowhammer-Zaehlers und der letzten drei Spiele
-  samt Datum. Der Rowhammer-Zaehler ist bewusst nur ein Gesamtzaehler:
-  die `recent=`-Zeilen behalten ihr Format
-  `lines|bonus|gold|silver|date`, weil deren Tabelle im
-  48-Spalten-Minimum keine weitere Spalte mehr hergibt.
+  samt Datum. Die Tabelle der letzten Spiele hat seit 0.25.0 eine
+  Spalte "RH" (Rowhammer der Runde) und belegt damit exakt die 46
+  Zeichen, die der Zwei-Zeichen-Einzug vom 48-Spalten-Minimum
+  uebriglaesst.
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -1096,14 +1112,11 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
-- [ ] Weltwunder-Fortschritt aus der Ingame-Statusanzeige entfernen: die
-      untere Statuszeile zeigt laut 3.4 laufend aktuelles Wunder +
-      Baufortschritt in Prozent; das soll aus dem HUD verschwinden. Der
-      Baustellen-Bildschirm nach Rundenende und der Hauptmenuepunkt
-      "Weltwunder" bleiben unveraendert die Anzeige fuer den Fortschritt.
-      Betrifft die HUD-Statuszeilen in `lib/render.sh` (siehe 3.4) sowie
-      die entsprechende Beschreibung in Abschnitt 3.4, die nach der
-      Umsetzung anzupassen ist.
+- [x] Weltwunder-Fortschritt aus der Ingame-Statusanzeige entfernen:
+      umgesetzt als Teil des Rowhammer-Zaehlers in Version 0.25.0 (siehe
+      naechster Punkt) - der freigewordene Platz auf der zweiten
+      Statuszeile ist genau der Grund, warum der Zaehler dort Platz
+      fand.
 - [x] "rowhammer"-Zaehler einbauen (Version 0.24.0): zaehlt, wie oft
       vier Reihen auf einmal abgebaut wurden (der Tetris, hier nach dem
       Projekt benannt). Hochgezaehlt wird er dort, wo `clear_lines`
@@ -1118,12 +1131,28 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       fuenfter Parameter an `stats_add_round`, uebergeben in
       `record_round`) und eine eigene Zeile "Rowhammer (4 Reihen)" im
       "Statistik"-Bildschirm unter den Gold-/Silberbloecken.
-      Bewusst **nicht** umgesetzt und weiterhin offen (siehe
-      Abschnitt 8): der Zaehler je Runde in der `recent=`-Liste (haette
-      deren Format gebrochen, und die Tabelle der letzten Spiele ist mit
-      42 + 2 Spalten Einzug schon nahe am 48-Spalten-Minimum), der
-      Zaehler im HUD (die zwei Statuszeilen sind mit je 48 Zeichen voll
-      belegt, siehe 3.4) und der Zaehler in der Highscore-Zeile.
+      Mit 0.25.0 (Nutzerentscheidung) kam der Zaehler an die drei
+      Stellen, die 0.24.0 noch offen gelassen hatte - jede davon
+      bezahlt mit vorhandenem Platz, weil alle drei Layouts am
+      48-Spalten-Minimum sitzen:
+      - **HUD:** der Weltwunder-Fortschritt raeumt seinen Platz auf der
+        zweiten Statuszeile (`render_status` in `lib/render.sh`, Feld
+        unveraendert 17 Zeichen breit); das Wunder bleibt auf dem
+        Weltwunder-Bildschirm. Der Wunder-Zustand wird dadurch nicht
+        mehr je Reihenabbau nachgerechnet (`wonders_update` faellt in
+        `lock_and_next` weg, siehe 3.3).
+      - **`recent=`-Liste:** neues Feld vor dem Datum
+        (`lines|bonus|gold|silver|rowhammers|date`, `STATS_RECENT_RE`
+        auf vier Zahlenfelder erweitert), Anzeige als Spalte "RH" aus
+        den letzten vier freien Spalten der Tabelle.
+      - **Highscore:** neues Feld am Zeilenende
+        (`...|time|rowhammers`, `HS_LINE_RE` um ein Zahlenfeld
+        erweitert), Anzeige als Spalte "RH"; dafuer wurde der Name in
+        der Anzeige von 8 auf 6 Zeichen gekuerzt und "Silber" zu
+        "Silb".
+      Alte Highscore- und `recent=`-Zeilen fallen gemaess der
+      Arbeitsregel "keine Abwaertskompatibilitaet" bei der Validierung
+      heraus.
 - [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
       `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
       im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und
@@ -1353,14 +1382,13 @@ Details stehen jeweils im genannten Unterabschnitt.
   Spiel also zentriert statt oben links. Ein mitwachsendes Layout (z. B.
   breitere Zellen oder mehr Vorschau auf grossen Terminals) ist bewusst
   nicht vorgesehen.
-- Rowhammer-Zaehler (seit 0.24.0, siehe 4.5): umgesetzt sind der
-  Rundenzaehler und der Gesamtzaehler in der Statistik. Offen bleibt,
-  ob er zusaetzlich ins HUD (die zwei Statuszeilen sind mit je 48
-  Zeichen voll belegt, siehe 3.4), in die `recent=`-Liste der letzten
-  Spiele (bricht deren Format, und die Tabelle sitzt schon am
-  48-Spalten-Minimum) und in die Highscore-Zeile soll. Alle drei
-  brauchen vorher eine Entscheidung, welche vorhandene Spalte dafuer
-  weicht.
+- Rowhammer-Zaehler: erledigt. 0.24.0 brachte Rundenzaehler und
+  Gesamtstatistik, 0.25.0 auf Nutzerentscheidung auch HUD,
+  `recent=`-Liste und Highscore-Zeile - im HUD anstelle des
+  Weltwunder-Fortschritts, in den beiden Tabellen zulasten der
+  Namensspalte bzw. der letzten freien Spalten (siehe 3.4 und 4.5).
+  Die drei Layouts sind damit wieder randvoll: ein weiterer Zaehler
+  braucht erneut eine Entscheidung, was dafuer weicht.
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

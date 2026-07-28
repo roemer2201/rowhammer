@@ -30,8 +30,11 @@
 #   is no separate score. The credit
 #   accumulates across all rounds in a savegame and builds the seven
 #   world wonders of the Wonders mode: the current wonder rises as ASCII
-#   art, revealed bottom-up with every invested row, shown live in the
-#   HUD, after every round and via the "Weltwunder" main menu entry.
+#   art, revealed bottom-up with every invested row, shown after every
+#   round and via the "Weltwunder" main menu entry. It left the HUD in
+#   0.25.0 (user decision) so the rowhammer counter - four rows cleared
+#   in one move, the namesake of the game - could take its slot on the
+#   status line.
 #   Player name, color theme and key bindings are
 #   configurable in the settings menu and persisted to a user config
 #   file. Blocks render in the basic 8/16-color ANSI palette or, when
@@ -42,15 +45,14 @@
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
 #   ~/.config/rowhammer. Finished rounds enter the highscore list, which the
-#   main menu shows (rows, gold/silver squares, play time and date per
-#   entry) and
+#   main menu shows (rows, gold/silver squares, rowhammers, play time
+#   and date per entry) and
 #   whose rank appears on the game over screen; the row credit decides
 #   the ranking. The HUD also shows the running round's play time (paused
 #   time excluded).
 #   Every round also feeds persistent statistics (cleared rows, bonus
-#   rows, gold/silver squares built, rowhammers - four rows cleared in
-#   one move, the namesake of the game - plus the results of the last
-#   three rounds with their play date), shown via the "Statistik" main
+#   rows, gold/silver squares built and rowhammers, plus the results of
+#   the last three rounds with their play date), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
@@ -88,7 +90,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.24.0  (2026-07-28)
+# Version: 0.25.0  (2026-07-28)
 
 set -euo pipefail
 
@@ -102,7 +104,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.24.0"
+ROWHAMMER_VERSION="0.25.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -660,10 +662,11 @@ record_round() {
         return 0
     fi
     ROUND_RECORDED=1
-    # Round play time in whole seconds; stored with the highscore entry.
+    # Round play time in whole seconds and the round's four-row clears;
+    # both are stored with the highscore entry.
     highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
         "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
-        "$(( PLAY_MS / 1000 ))"
+        "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}"
     # Every cleared row counts toward the wonder, even from an aborted
     # round - like the original, where all modes feed the line total.
     if [ "${ROW_CREDIT}" -gt 0 ]; then
@@ -766,10 +769,12 @@ lock_and_next() {
         CLEARED_TOTAL=$(( CLEARED_TOTAL + CLEARED ))
         ROW_CREDIT=$(( ROW_CREDIT + CLEARED_CREDIT ))
         update_speed
-        # The HUD wonder line tracks the running round live: banked
-        # total plus the credit earned so far in this round.
-        wonders_update $(( TOTAL_ROW_CREDIT + ROW_CREDIT ))
-        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} fall_ms=${FALL_MS} wonder=${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
+        # CHANGE 2026-07-28: the wonder state is no longer refreshed per
+        # clear. It used to feed the HUD's live wonder line, which gave
+        # up its slot to the rowhammer counter (see render_status in
+        # lib/render.sh); record_round and wonder_screen each recompute
+        # it from the row total, so nothing reads a stale value.
+        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} fall_ms=${FALL_MS} rowhammers=${ROWHAMMER_COUNT}"
     fi
     debug_board_snapshot
     # The hold slot unlocks again once a piece has locked.
@@ -1120,8 +1125,8 @@ main() {
     # Load the persistent highscore list once; rounds update it in
     # memory and rewrite the file when they enter the list.
     highscore_load
-    # Load the wonder savegame and derive the initial wonder state for
-    # the HUD before the first frame is drawn.
+    # Load the wonder savegame and derive the wonder state once, so the
+    # "Weltwunder" screen and record_round start from a valid state.
     save_load
     wonders_update "${TOTAL_ROW_CREDIT}"
     # Load the all-time statistics; rounds extend them via
