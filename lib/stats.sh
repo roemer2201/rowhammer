@@ -6,12 +6,17 @@
 #   Persistent all-time game statistics for rowhammer: cleared rows
 #   (physical lines), earned bonus rows (the weighted row credit beyond
 #   the physical lines, i.e. gold/silver/Tetris bonuses) and the number
-#   of gold and silver squares built - plus the results of the last
+#   of gold and silver squares built, plus the rowhammers (four rows
+#   cleared in one move, the namesake of the game) - plus the results
+#   of the last
 #   three rounds (lines, bonus rows, gold/silver squares and the
 #   date the round was played; newest
 #   first). Since the scoring rebuild (0.4.0) the row credit is the
 #   game's only score, so the recent rounds no longer store a separate
-#   score field - the round's points are lines + bonus.
+#   score field - the round's points are lines + bonus. The rowhammer
+#   count is an all-time counter only: the recent-rounds line keeps its
+#   format because its table already sits close to the 48-column
+#   minimum width.
 #   Everything is kept in ${DATA_DIR}/stats (default
 #   ~/.config/rowhammer/stats) as "key=value" lines
 #   plus comment lines. The file is parsed and validated, not sourced:
@@ -25,7 +30,7 @@
 #   entry via menu_message (lib/menu.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-07-20)
+# Version: 0.5.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -42,7 +47,7 @@ fi
 # leading score field) are simply dropped on load
 # (project rule: no backward compatibility, formats may just break).
 STATS_FILE_NAME="stats"
-STATS_LINE_RE='^(lines|bonus_rows|gold_squares|silver_squares)=([0-9]{1,15})$'
+STATS_LINE_RE='^(lines|bonus_rows|gold_squares|silver_squares|rowhammers)=([0-9]{1,15})$'
 STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){3}\|[0-9]{4}-[0-9]{2}-[0-9]{2})$'
 
 # How many recent rounds are kept and shown.
@@ -56,6 +61,7 @@ STATS_LINES=0
 STATS_BONUS_ROWS=0
 STATS_GOLD=0
 STATS_SILVER=0
+STATS_ROWHAMMERS=0
 STATS_RECENT=()
 
 # stats_load
@@ -70,6 +76,7 @@ stats_load() {
     STATS_BONUS_ROWS=0
     STATS_GOLD=0
     STATS_SILVER=0
+    STATS_ROWHAMMERS=0
     STATS_RECENT=()
     local f="${DATA_DIR}/${STATS_FILE_NAME}" line found=0
     if [ ! -e "${f}" ]; then
@@ -89,6 +96,7 @@ stats_load() {
                 bonus_rows)     STATS_BONUS_ROWS=$(( 10#${BASH_REMATCH[2]} )) ;;
                 gold_squares)   STATS_GOLD=$(( 10#${BASH_REMATCH[2]} )) ;;
                 silver_squares) STATS_SILVER=$(( 10#${BASH_REMATCH[2]} )) ;;
+                rowhammers)     STATS_ROWHAMMERS=$(( 10#${BASH_REMATCH[2]} )) ;;
             esac
         elif [[ "${line}" =~ ${STATS_RECENT_RE} ]]; then
             found=1
@@ -101,7 +109,7 @@ stats_load() {
         printf '%s: statistics file has no valid counter line, starting at 0: %s\n' \
             "${SCRIPT_NAME}" "${f}" >&2
     fi
-    debug_event "stats: loaded lines=${STATS_LINES} bonus=${STATS_BONUS_ROWS} gold=${STATS_GOLD} silver=${STATS_SILVER} recent=${#STATS_RECENT[@]} from ${f}"
+    debug_event "stats: loaded lines=${STATS_LINES} bonus=${STATS_BONUS_ROWS} gold=${STATS_GOLD} silver=${STATS_SILVER} rowhammers=${STATS_ROWHAMMERS} recent=${#STATS_RECENT[@]} from ${f}"
     return 0
 }
 
@@ -121,6 +129,7 @@ stats_write() {
         printf 'bonus_rows=%d\n' "${STATS_BONUS_ROWS}"
         printf 'gold_squares=%d\n' "${STATS_GOLD}"
         printf 'silver_squares=%d\n' "${STATS_SILVER}"
+        printf 'rowhammers=%d\n' "${STATS_ROWHAMMERS}"
         # Newest round first; format lines|bonus|gold|silver|date.
         # The length guard keeps bash < 4.4 happy under set -u.
         if [ "${#STATS_RECENT[@]}" -gt 0 ]; then
@@ -128,20 +137,24 @@ stats_write() {
         fi
     } > "${tmp}"
     mv -f -- "${tmp}" "${f}"
-    debug_event "stats: wrote lines=${STATS_LINES} bonus=${STATS_BONUS_ROWS} gold=${STATS_GOLD} silver=${STATS_SILVER} recent=${#STATS_RECENT[@]} to ${f}"
+    debug_event "stats: wrote lines=${STATS_LINES} bonus=${STATS_BONUS_ROWS} gold=${STATS_GOLD} silver=${STATS_SILVER} rowhammers=${STATS_ROWHAMMERS} recent=${#STATS_RECENT[@]} to ${f}"
     return 0
 }
 
-# stats_add_round LINES BONUS GOLD SILVER
+# stats_add_round LINES BONUS GOLD SILVER ROWHAMMERS
 # Bank one finished round into the all-time counters, prepend it to the
 # recent round list (capped at STATS_RECENT_MAX) and persist both. The
 # round is stamped with today's date, the same way the highscore list
-# dates its entries. A
+# dates its entries. ROWHAMMERS is the round's number of four-row
+# clears; it only feeds the all-time counter, the recent list keeps its
+# format. A
 # round without any progress at all (no lines, no bonus, no squares)
 # leaves the counters, the list and the file
-# untouched, so idle rounds cause no disk writes.
+# untouched, so idle rounds cause no disk writes (a rowhammer implies
+# cleared lines, so it needs no own guard).
 stats_add_round() {
     local lines="${1}" bonus="${2}" gold="${3}" silver="${4}"
+    local rowhammers="${5}"
     local entry
     if (( lines == 0 && bonus == 0 && gold == 0 && silver == 0 )); then
         return 0
@@ -150,6 +163,7 @@ stats_add_round() {
     STATS_BONUS_ROWS=$(( STATS_BONUS_ROWS + bonus ))
     STATS_GOLD=$(( STATS_GOLD + gold ))
     STATS_SILVER=$(( STATS_SILVER + silver ))
+    STATS_ROWHAMMERS=$(( STATS_ROWHAMMERS + rowhammers ))
     entry="${lines}|${bonus}|${gold}|${silver}|$(date +%Y-%m-%d)"
     # Prepend the round; slicing an empty array errors under set -u on
     # bash < 4.4, hence the guard.
@@ -159,7 +173,7 @@ stats_add_round() {
     else
         STATS_RECENT=("${entry}")
     fi
-    debug_event "stats: round banked +${lines} lines +${bonus} bonus +${gold} gold +${silver} silver"
+    debug_event "stats: round banked +${lines} lines +${bonus} bonus +${gold} gold +${silver} silver +${rowhammers} rowhammers"
     stats_write
     return 0
 }
@@ -187,6 +201,10 @@ stats_screen() {
     printf -v line '%-26s %10d' "Goldbloecke:" "${STATS_GOLD}"
     body+=("${line}")
     printf -v line '%-26s %10d' "Silberbloecke:" "${STATS_SILVER}"
+    body+=("${line}")
+    # The namesake move: four rows cleared in one go.
+    printf -v line '%-26s %10d' "Rowhammer (4 Reihen):" \
+        "${STATS_ROWHAMMERS}"
     body+=("${line}")
     body+=("")
     body+=("Letzte Spiele (neueste zuerst):")

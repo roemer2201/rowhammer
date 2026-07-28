@@ -97,8 +97,8 @@ Das Startmenue bietet:
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
 - **Statistik** - Gesamtzaehler ueber alle Runden: abgebaute Reihen,
-  Bonusreihen sowie gebaute Gold- und Silberbloecke; dazu die
-  Ergebnisse der letzten drei Spiele
+  Bonusreihen, gebaute Gold- und Silberbloecke sowie die "Rowhammer"
+  (vier Reihen auf einmal); dazu die Ergebnisse der letzten drei Spiele
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`)
@@ -179,7 +179,9 @@ Umgesetzt:
   `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
-  Reihenwertung) und gebaute Gold-/Silberbloecke sowie die Ergebnisse
+  Reihenwertung), gebaute Gold-/Silberbloecke und die Zahl der
+  "Rowhammer" (vier Reihen auf einmal - der Namensgeber des Spiels)
+  sowie die Ergebnisse
   der letzten drei Spiele, einsehbar im
   Hauptmenue
 - **Weltwunder-Modus:** der "Rows"-Zaehler baut ueber alle Runden

@@ -1,3 +1,17 @@
+rowhammer (0.24.0) unstable; urgency=medium
+
+  * Add the "rowhammer" counter the project is named after: clearing
+    four rows in one move now raises a per-round counter, incremented
+    in clear_lines (lib/board.sh) right where the Tetris bonus is paid
+    and reset per round in game_reset.
+  * The counter is banked into the all-time statistics as the new
+    "rowhammers" key in ~/.config/rowhammer/stats and shown as its own
+    line below the gold/silver squares on the "Statistik" screen. The
+    recent-rounds list keeps its format on purpose: its table already
+    sits close to the 48-column minimum terminal width.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 12:00:00 +0200
+
 rowhammer (0.23.0) unstable; urgency=medium
 
   * Harden the keyboard input layer (follow-up to issue #7). Escape
