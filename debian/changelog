@@ -1,3 +1,28 @@
+rowhammer (0.27.0) unstable; urgency=medium
+
+  * Count the pieces a round places and show them as "Pieces" in the
+    HUD, below the play time (user request).
+  * Highscore list and statistics gain the piece count ("PCS") and the
+    placement rate derived from it and the play time ("PPM", pieces per
+    minute); the statistics also show the all-time pieces, the total
+    play time and the resulting rate.
+  * Both tables were exactly at the 48-column minimum width, so an
+    entry now spans two lines (explicitly allowed by the user). That
+    gives the highscore name 12 characters again instead of 6, and it
+    makes the screens taller than a 22-row terminal: the highscore list
+    is paged (five entries per page, table head repeated), and the
+    statistics split into all-time counters and recent rounds.
+  * File formats change accordingly (no backward compatibility, per the
+    project rule - old lines simply fail validation and are dropped):
+    highscore entries gain a trailing "pieces" field, recent-round
+    entries gain "pieces" and "time" before the date, and the
+    statistics file gains the "pieces" and "play_time" counters.
+  * A round without a single cleared row is banked into the statistics
+    from now on: it still carries pieces and play time, which the
+    all-time placement rate needs.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 21:30:00 +0200
+
 rowhammer (0.26.0) unstable; urgency=medium
 
   * Move the round counters from the two status lines below the board

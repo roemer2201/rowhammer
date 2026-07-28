@@ -46,13 +46,15 @@
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
 #   ~/.config/rowhammer. Finished rounds enter the highscore list, which the
-#   main menu shows (rows, gold/silver squares, rowhammers, play time
-#   and date per entry) and
+#   main menu shows (two lines per entry: rows, gold/silver squares,
+#   rowhammers, pieces placed and their rate in pieces per minute, play
+#   time and date) and
 #   whose rank appears on the game over screen; the row credit decides
 #   the ranking. The HUD also shows the running round's play time (paused
-#   time excluded).
+#   time excluded) and the pieces it has placed.
 #   Every round also feeds persistent statistics (cleared rows, bonus
-#   rows, gold/silver squares built and rowhammers, plus the results of
+#   rows, gold/silver squares built, rowhammers, pieces placed and time
+#   played, plus the results of
 #   the last three rounds with their play date), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
 #   A debug mode (--debug) traces the whole session into log
@@ -91,7 +93,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.26.0  (2026-07-28)
+# Version: 0.27.0  (2026-07-28)
 
 set -euo pipefail
 
@@ -105,7 +107,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.26.0"
+ROWHAMMER_VERSION="0.27.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -542,6 +544,14 @@ GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
 # by record_round. Round state, not one of the ROWHAMMER_* settings
 # variables that carry the environment overrides.
 ROWHAMMER_COUNT=0
+# Round counter of pieces actually placed ("Pieces" in the HUD, "PCS" in
+# the tables). Raised in lock_and_next where a piece really settles - a
+# piece put into the hold slot or one still falling has not been placed
+# yet - reset per round in game_reset and banked into the highscore entry
+# and the all-time statistics by record_round. Together with the round's
+# play time it yields the pieces per minute the statistics and highscore
+# screens show (fmt_ppm).
+PIECE_COUNT=0
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 # Raised by term_resize_apply (lib/input.sh) after a terminal resize was
@@ -625,6 +635,24 @@ fmt_duration() {
     printf -v FMT_DURATION '%02d:%02d' $(( s / 60 )) $(( s % 60 ))
 }
 
+# fmt_ppm PIECES SECONDS: format a placement rate as pieces per minute
+# with one decimal into the global FMT_PPM ("-" while no play time has
+# been measured yet, which is the only division-by-zero case). Bash has
+# no floating point, so the value is computed in tenths and split for
+# printing. Shared by the highscore and the statistics screen so both
+# read identically.
+FMT_PPM="-"
+fmt_ppm() {
+    local pieces="${1}" secs="${2}" tenths
+    if [ "${secs}" -le 0 ]; then
+        FMT_PPM="-"
+        return 0
+    fi
+    tenths=$(( pieces * 600 / secs ))
+    printf -v FMT_PPM '%d.%d' "$(( tenths / 10 ))" "$(( tenths % 10 ))"
+    return 0
+}
+
 # play_clock_resume: mark "now" as the start of a fresh play-time segment
 # (also restarting the gravity timer, which every resume point already
 # did). Called wherever the round returns to active play after an idle
@@ -667,11 +695,12 @@ record_round() {
         return 0
     fi
     ROUND_RECORDED=1
-    # Round play time in whole seconds and the round's four-row clears;
-    # both are stored with the highscore entry.
+    # Round play time in whole seconds, the round's four-row clears and
+    # the pieces it placed; all three are stored with the highscore entry
+    # (play time and pieces are what its PCS/min column is computed from).
     highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
         "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
-        "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}"
+        "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
     # Every cleared row counts toward the wonder, even from an aborted
     # round - like the original, where all modes feed the line total.
     if [ "${ROW_CREDIT}" -gt 0 ]; then
@@ -681,11 +710,13 @@ record_round() {
     wonders_update "${TOTAL_ROW_CREDIT}"
     # All-time statistics: the round's physical lines, the bonus
     # part of the row credit (credit minus physical lines), the
-    # squares built and its four-row clears; the round also enters the
-    # recent-rounds list.
+    # squares built, its four-row clears, the pieces it placed and its
+    # play time in whole seconds; the round also enters the
+    # recent-rounds list. Pieces and play time are the pair the
+    # statistics screen derives its PCS/min figures from.
     stats_add_round "${CLEARED_TOTAL}" \
         "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}" \
-        "${ROWHAMMER_COUNT}"
+        "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "$(( PLAY_MS / 1000 ))"
     return 0
 }
 
@@ -753,8 +784,12 @@ flash_rows() {
 # instant points (only its strips pay off when their rows clear later).
 lock_and_next() {
     lock_piece "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"
+    # One more piece placed this round: this is the only spot where a
+    # piece really settles, so it is where the HUD's "Pieces" counter
+    # grows (a held or still falling piece is not placed).
+    PIECE_COUNT=$(( PIECE_COUNT + 1 ))
     # lock_piece consumed the id it stamped into the board.
-    debug_event "lock ${CUR_TYPE} rot=${CUR_ROT} at ${CUR_X},${CUR_Y} id=$(( NEXT_INSTANCE_ID - 1 ))"
+    debug_event "lock ${CUR_TYPE} rot=${CUR_ROT} at ${CUR_X},${CUR_Y} id=$(( NEXT_INSTANCE_ID - 1 )) pieces=${PIECE_COUNT}"
     if detect_square "${CUR_X}" "${CUR_Y}"; then
         if [ "${SQUARE_RESULT}" = "G" ]; then
             GOLD_COUNT=$(( GOLD_COUNT + 1 ))
@@ -1019,6 +1054,7 @@ game_reset() {
     GOLD_COUNT=0
     SILVER_COUNT=0
     ROWHAMMER_COUNT=0
+    PIECE_COUNT=0
     HOLD_TYPE=""
     HOLD_USED=0
     PAUSED=0

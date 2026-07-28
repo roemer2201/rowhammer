@@ -18,12 +18,14 @@
 #   and in the singleplayer menu) or to end the round. menu_confirm
 #   (since 0.8.0) asks a yes/no question with the declining option
 #   preselected; it guards leaving the game while a round is still
-#   suspended. All wait loops
+#   suspended. menu_pages (since 0.10.0) shows a table that outgrew one
+#   screen as a sequence of info screens with a repeated table head, which
+#   is what the two-line highscore entries need. All wait loops
 #   repaint on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave a menu or info screen blank (since 0.7.0).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.1  (2026-07-28)
+# Version: 0.10.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -113,6 +115,58 @@ menu_message() {
             screen_write "${frame}"
         fi
     done
+}
+
+# Body lines an info screen may use. menu_message spends five terminal
+# rows on its frame (leading blank, title, blank, blank, footer), and the
+# smallest supported terminal is MIN_TERM_ROWS high (rowhammer.sh), so
+# anything beyond this would scroll off the bottom on such a terminal.
+# A fixed budget on purpose: paging computed from the live TERM_ROWS
+# would renumber the pages under the player's hands on every resize.
+MENU_BODY_MAX=$(( MIN_TERM_ROWS - 5 ))
+
+# menu_pages TITLE HEAD PAGE LINE...
+# Show a table too tall for one screen as a sequence of info screens.
+# The first HEAD lines are the table head and are repeated on every page,
+# the remaining lines are dealt out PAGE at a time; the title carries a
+# "Seite p/n" marker as soon as there is more than one page. Each page
+# waits for a key like menu_message does. Callers pick PAGE as a whole
+# multiple of their entry height, so an entry is never torn apart, and
+# keep HEAD + PAGE within MENU_BODY_MAX.
+# Added 0.27.0: the highscore list grew a second line per entry (pieces
+# and PCS/min) and no longer fits a single 22-row screen.
+menu_pages() {
+    local title="${1}" head="${2}" page="${3}"
+    shift 3
+    local -a lines=("$@")
+    local -a body=()
+    local total rest pages p from i
+    total="${#lines[@]}"
+    rest=$(( total - head ))
+    if [ "${rest}" -lt 0 ]; then
+        rest=0
+    fi
+    # Ceiling division; a head-only call still shows one page.
+    pages=$(( (rest + page - 1) / page ))
+    if [ "${pages}" -lt 1 ]; then
+        pages=1
+    fi
+    for (( p = 0; p < pages; p++ )); do
+        body=()
+        for (( i = 0; i < head; i++ )); do
+            body+=("${lines[i]}")
+        done
+        from=$(( head + p * page ))
+        for (( i = from; i < from + page && i < total; i++ )); do
+            body+=("${lines[i]}")
+        done
+        if [ "${pages}" -gt 1 ]; then
+            menu_message "${title} (Seite $(( p + 1 ))/${pages})" "${body[@]}"
+        else
+            menu_message "${title}" "${body[@]}"
+        fi
+    done
+    return 0
 }
 
 # menu_confirm TITLE YES_LABEL NO_LABEL LINE...
