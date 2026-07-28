@@ -112,7 +112,7 @@ Optionen:
 | Option           | Umgebungsvariable        | Wirkung                                  |
 |------------------|--------------------------|------------------------------------------|
 | `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
-| `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
+| `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername fuer die Highscore-Liste     |
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, Bloecke als `[]`      |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
@@ -154,11 +154,11 @@ Umgesetzt:
   Wer das Spiel verlaesst, waehrend noch eine pausierte Runde wartet,
   wird vorher gefragt
 - Levelkurve (schneller je 10 Reihen)
-- **Zentriertes Spielfeld-Layout:** ein festes 48x24-Feld, mittig im
-  Terminal ausgerichtet - Hold-Stein und Tastenlegende links, das
-  Spielfeld in der Mitte, die naechsten drei Steine oben rechts, die
-  Rundenzaehler auf den zwei unteren Zeilen; Pause und Game Over
-  erscheinen als Kasten ueber dem Spielfeld
+- **Zentriertes Spielfeld-Layout:** ein festes 48x22-Feld, mittig im
+  Terminal ausgerichtet - links der Hold-Stein und darunter die
+  Rundenzaehler (Lines, Rows, Level, Gold, Silber, Rowhammer, Zeit),
+  das Spielfeld in der Mitte, die naechsten drei Steine oben rechts;
+  Pause und Game Over erscheinen als Kasten ueber dem Spielfeld
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering,
   sauberes Terminal-Restore beim Beenden
 - **Inkrementelles Rendering:** je Frame werden nur die tatsaechlich
@@ -167,7 +167,7 @@ Umgesetzt:
   Bruchteil der Terminal-Ausgabe gegenueber dem Voll-Frame
 - **Reagiert auf Groessenaenderungen des Terminals** (SIGWINCH):
   zeichnet nach einem Resize sauber neu; wird das Terminal kleiner als
-  das benoetigte 48x24, pausiert die Runde hinter einem Hinweis, bis
+  das benoetigte 48x22, pausiert die Runde hinter einem Hinweis, bis
   wieder genug Platz da ist
 - **Erweiterter Farbmodus:** auf 256-Farben-Terminals (automatisch
   erkannt, umschaltbar per `--color-mode`) eine satte xterm-Palette mit
@@ -216,7 +216,7 @@ Spiel nach `/usr/share/rowhammer/` und legt den Starter
 ## Voraussetzungen
 
 - Bash >= 4.0 (empfohlen: Bash 5)
-- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens 48x24 Zeichen
+- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens 48x22 Zeichen
   (kleiner wird nicht gestartet; eine Verkleinerung waehrend des Spiels
   pausiert bis wieder genug Platz da ist)
 - Keine weiteren Abhaengigkeiten ausser Coreutils
@@ -226,7 +226,8 @@ Spiel nach `/usr/share/rowhammer/` und legt den Starter
 Standardbelegung; die Buchstabentasten (`w`, `e`, `c` usw.) sind im
 Einstellungsmenue aenderbar, waehrend die Pfeiltasten sowie Leertaste
 (Hard-Drop) und `2` (Hold) als feste Sekundaerbelegung immer aktiv
-bleiben:
+bleiben. Der Spielbildschirm zeigt die Belegung nicht mehr an - dort
+stehen jetzt die Rundenzaehler:
 
 | Taste                     | Aktion                      |
 |---------------------------|-----------------------------|

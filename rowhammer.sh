@@ -11,9 +11,9 @@
 #   landing piece still be slid or rotated, pause and game over with
 #   restart. Completed rows blink briefly before they are removed, so
 #   the player sees which rows scored. The play screen is one fixed
-#   48x24 block centered in the terminal: hold piece and key legend on
-#   the left, the board in the middle, the three upcoming pieces top
-#   right and the round counters on the two bottom lines; pause and game
+#   48x22 block centered in the terminal: the hold piece with the round
+#   counters below it on the left, the board in the middle and the three
+#   upcoming pieces top right; pause and game
 #   over appear as a box over the board. Frames are pushed out
 #   incrementally - only the lines that changed are rewritten (see
 #   lib/render.sh). Pressing the quit key (x/ESC) in
@@ -33,8 +33,9 @@
 #   art, revealed bottom-up with every invested row, shown after every
 #   round and via the "Weltwunder" main menu entry. It left the HUD in
 #   0.25.0 (user decision) so the rowhammer counter - four rows cleared
-#   in one move, the namesake of the game - could take its slot on the
-#   status line.
+#   in one move, the namesake of the game - could take its slot; since
+#   0.26.0 all counters live in the left pane and the HUD has no status
+#   lines left to hold it.
 #   Player name, color theme and key bindings are
 #   configurable in the settings menu and persisted to a user config
 #   file. Blocks render in the basic 8/16-color ANSI palette or, when
@@ -57,7 +58,7 @@
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
 #   action (see lib/debug.sh). The fixed play screen needs a
-#   terminal of at least 48x24; a resize during play is caught via
+#   terminal of at least 48x22; a resize during play is caught via
 #   SIGWINCH and redraws cleanly, and shrinking below the minimum pauses
 #   the round behind a "resize me" overlay until the terminal grows back.
 #   A working multiplayer follows in a later phase (see CLAUDE.md).
@@ -90,7 +91,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.25.0  (2026-07-28)
+# Version: 0.26.0  (2026-07-28)
 
 set -euo pipefail
 
@@ -104,7 +105,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.25.0"
+ROWHAMMER_VERSION="0.26.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -162,8 +163,8 @@ statistics and settings.
 Options:
   --seed N      Seed the piece randomizer for a reproducible sequence.
                 Env: ROWHAMMER_SEED         Default: (random)
-  --name NAME   Player name shown in the HUD (max. 16 characters from
-                A-Z a-z 0-9 space _ -).
+  --name NAME   Player name recorded with highscore entries (max. 16
+                characters from A-Z a-z 0-9 space _ -).
                 Env: ROWHAMMER_PLAYER_NAME  Default: Player
   --data-dir DIR
                 Directory for all persistent game data: the config file
@@ -432,7 +433,13 @@ fi
 # SIGWINCH handler and applied at the next read_key, so nothing is drawn
 # from inside the async signal handler.
 MIN_TERM_COLS=48
-MIN_TERM_ROWS=24
+# CHANGE 2026-07-28: 24 down to 22 rows. The two status lines below the
+# board are gone (their counters now sit in the left pane, see
+# render_pane_left in lib/render.sh), so the game block is two rows
+# shorter and the game runs in correspondingly smaller terminals. The
+# menu and info screens fit as well: the tallest of them, the wonder
+# construction site, needs 20 lines.
+MIN_TERM_ROWS=22
 TERM_ROWS=0
 TERM_COLS=0
 TERM_TOO_SMALL=0
@@ -521,11 +528,9 @@ fi
 # precompute the block SGR sequences for the renderer (lib/render.sh).
 color_mode_resolve
 render_colors_init
-# Center the fixed game block on the measured terminal and compose the
-# key legend of the left pane; both only change on a resize respectively
-# a rebind, so they are built once here instead of per frame.
+# Center the fixed game block on the measured terminal; its position
+# only changes on a resize, so it is computed once here, not per frame.
 layout_update
-hud_keys_build
 
 # --- Game state and helpers -----------------------------------------------
 CUR_TYPE=""; CUR_ROT=0; CUR_X=0; CUR_Y=0
@@ -654,9 +659,9 @@ update_speed() {
 # per round: enter it into the highscore list, bank its row credit
 # into the persistent wonder counter (savegame) and its counters into
 # the all-time statistics (lib/stats.sh). Runs right when the
-# game over triggers, so the game over sidebar can show the achieved
-# rank (HS_LAST_RANK) and the HUD the updated wonder progress, and again
-# as a catch-all when the player quits a running round to the menu.
+# game over triggers, so the game over box can show the achieved
+# rank (HS_LAST_RANK), and again as a catch-all when the player quits a
+# running round to the menu.
 record_round() {
     if [ "${ROUND_RECORDED}" -eq 1 ]; then
         return 0

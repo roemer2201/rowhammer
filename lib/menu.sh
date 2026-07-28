@@ -23,7 +23,7 @@
 #   does not leave a menu or info screen blank (since 0.7.0).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-07-27)
+# Version: 0.9.1  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -393,8 +393,6 @@ prompt_rebind() {
     done
     printf -v "${var}" '%s' "${KEY}"
     debug_event "key rebind: ${var}=${KEY}"
-    # The HUD key legend is built once from the bindings, not per frame.
-    hud_keys_build
     config_save
     return 0
 }

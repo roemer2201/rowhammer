@@ -20,20 +20,25 @@ import trim
 # One spec per clip drives all three stages.
 #   play scenarios: seed + planner + recording pace + render/trim markers
 #   wonder:         a pre-seeded savegame and menu navigation
+# The start/end markers are matched against the rendered screen, so they
+# have to spell the HUD exactly. Since 0.26.0 the counters sit in the
+# left pane as "<label><value right aligned in 5>" and the player name
+# is gone from the play screen, which is why "Hold" (the pane heading,
+# unique to the play screen) marks the start now.
 SCEN = {
     "tetris": dict(kind="play", seed=13, plan="tetris",
                    settle=0.42, tail=1.4, predrop=1.3,
-                   start_text="Player:", end_text="Lines: 4",
+                   start_text="Hold", end_text="Lines     4",
                    speed=1.1, hold=1.8,
                    verify=[r"cleared 4 row", r"credit=\+5"]),
     "silver": dict(kind="play", seed=121, plan="silver",
                    settle=0.5, tail=1.6, predrop=1.3,
-                   start_text="Player:", end_text="Silver: 1",
+                   start_text="Hold", end_text="Silver    1",
                    speed=1.0, hold=1.8,
                    verify=[r"silver square formed"]),
     "gold":   dict(kind="play", seed=16, plan="gold",
                    settle=0.30, tail=1.8, predrop=1.3,
-                   start_text="Player:", end_text="Gold: 1",
+                   start_text="Hold", end_text="Gold      1",
                    speed=1.5, hold=1.8,
                    verify=[r"gold square formed"]),
     "wonder": dict(kind="wonder", seed=7, save_total=690, menu_down=3,

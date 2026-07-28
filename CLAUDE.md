@@ -184,40 +184,50 @@ Die fuer uns relevanten Merkmale des Originals:
 
 ### 3.4 Anzeige / HUD
 
-- **Layout (seit 0.22.0):** Der Spielbildschirm ist ein fester Block
-  von 48x24 Zeichen, der **mittig im Terminal** ausgerichtet wird
+- **Layout (seit 0.22.0, umgestellt in 0.26.0):** Der Spielbildschirm
+  ist ein fester Block
+  von 48x22 Zeichen, der **mittig im Terminal** ausgerichtet wird
   (`layout_update` in `lib/render.sh` berechnet aus `TERM_ROWS`/
   `TERM_COLS` die linke obere Ecke; ein Resize richtet ihn neu aus).
   Der Block ist in Spalten gegliedert: linke Spalte 12 Zeichen, Luecke
   1, Spielfeld 22 (10 Zellen a 2 Zeichen plus Rahmen), Luecke 1, rechte
   Spalte 12. In Zeilen: Zeile 0 obere Feldkante, 1-20 die sichtbaren
-  Feldreihen, 21 untere Feldkante, 22-23 die Statuszeilen.
+  Feldreihen, 21 untere Feldkante - der Block ist damit genau so hoch
+  wie das Spielfeld.
   - **Links:** der Hold-Stein (Ueberschrift "Hold") und darunter die
-    Tastenlegende, aus der aktuellen Belegung gebaut (`hud_keys_build`,
-    nur bei Aenderung neu erzeugt, nicht je Frame).
+    Rundenzaehler (seit 0.26.0, Nutzerentscheidung): Lines (physische
+    Reihen der Runde), Rows (gewertete Reihen = Punkte der Runde, siehe
+    3.2), Level, Gold-/Silberzaehler, Rowhammer der Runde (Label
+    "Hammer", vier Reihen auf einmal) und die Spielzeit (Time, MM:SS;
+    seit 0.17.0). Die zwoelf Spalten der Seitenleiste teilen sich je
+    Zaehler in 1 Einzug + 6 Label + 5 rechtsbuendiger Wert
+    (`pane_stat`); die Zeile wird anschliessend hart auf `PANE_W`
+    gekappt, damit ein ungewoehnlich langer Wert die Blockbreite nicht
+    sprengt. Die **Tastenlegende** ist dafuer entfallen (samt
+    `hud_keys_build`), ebenso der **Spielername** - ein Name darf 16
+    Zeichen haben und waere in 12 Spalten nur als Stummel zu sehen; er
+    steht weiterhin in der Highscore-Liste.
   - **Mitte:** das Spielfeld mit Rahmen.
   - **Oben rechts:** die naechsten drei Steine (Ueberschrift "Next").
-  - **Unten:** zwei Statuszeilen mit Spielername, Lines (physische
-    Reihen der Runde), Rows (gewertete Reihen = Punkte der Runde, siehe
-    3.2), Level, Gold-/Silberzaehler, Spielzeit (Time, MM:SS; seit
-    0.17.0) und dem Rowhammer-Zaehler der Runde (Rowhammer, seit
-    0.25.0: vier Reihen auf einmal). Eine
-    separate Score-Zeile gibt es seit 0.16.0 nicht mehr. Die beiden
-    Statuszeilen sind mit je 48 Zeichen restlos belegt - ein neuer
-    Zaehler kommt nur hinein, wenn ein alter geht: der
-    Weltwunder-Fortschritt hat 0.25.0 seinen Platz an den
-    Rowhammer-Zaehler abgegeben (Nutzerentscheidung) und steht
-    weiterhin auf dem Weltwunder-Bildschirm.
+  - **Unten:** nichts mehr. Die beiden Statuszeilen unter dem Feld sind
+    mit ihren Zaehlern in die linke Spalte umgezogen (0.26.0,
+    Nutzerentscheidung); der Block wurde dadurch zwei Zeilen kuerzer,
+    und mit ihm das Terminal-Minimum (`MIN_TERM_ROWS` 24 -> 22). Eine
+    separate Score-Zeile gibt es seit 0.16.0 nicht mehr, der
+    Weltwunder-Fortschritt hat den HUD in 0.25.0 verlassen und steht
+    auf dem Weltwunder-Bildschirm.
   - **Pause und Game Over** erscheinen als Kasten **ueber dem
     Spielfeld** (`render_status_box`), das Game-Over-Bild mit dem
     erreichten Highscore-Rang und den Tasten fuers Neustarten bzw.
-    Verlassen. Damit bleiben die Statuszeilen den Zaehlern vorbehalten.
+    Verlassen - dauerhaften Platz kostet keiner von beiden.
   - Jede Blockzeile wird auf **exakt 48 sichtbare Spalten** gebaut. Das
     ist die Voraussetzung fuer das inkrementelle Rendering (siehe 4.3):
     eine neu geschriebene Zeile ueberdeckt ihre Vorgaengerin immer
     vollstaendig, es braucht keine Loesch-Sequenzen. Ein Spielbildschirm-
-    Titel entfaellt dafuer - die 24 Zeilen sind vom Feld (22) und den
-    Statuszeilen (2) restlos belegt.
+    Titel entfaellt dafuer - die 22 Zeilen gehoeren restlos dem Feld.
+  - Platzreserve: die linke Spalte hat unter den Zaehlern noch neun
+    freie Zeilen (Zeile 13-21). Ein weiterer Zaehler muss also nichts
+    mehr verdraengen, solange sein Label in sechs Zeichen passt.
 - Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
   aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
   Pausenmenue) sowie der Game-Over-Bildschirm zaehlen nicht; die Zeit
@@ -308,8 +318,7 @@ erster Stelle, ebenso im Einzelspieler-Untermenue); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
-Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der Statuszeilen-
-Zaehler
+Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
 "Rows" ist die gewichtete Reihenwertung (1/5/10), die den
 Weltwunder-Fortschritt speist und seit 0.16.0 zugleich der Score der
 Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
@@ -367,7 +376,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `TERM_RESIZED`; `read_key` wendet es beim naechsten Tick ueber
   `term_resize_apply` an (neu messen mit `term_measure`, Bildschirm
   loeschen, `REDRAW_PENDING` fuer die aufrufende Schleife setzen) und
-  blockiert bei Unterschreitung des 48x24-Minimums hinter der
+  blockiert bei Unterschreitung des 48x22-Minimums hinter der
   "resize me"-Overlay, bis das Terminal wieder gross genug ist (siehe
   Phase 4 "Anpassung an Terminalgroesse").
 - **Rendering (inkrementell seit 0.22.0):** `draw_frame` baut den
@@ -390,7 +399,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Zeit je Frame und etwa ein Vierzehntel der Terminal-Ausgabe.
   Cursor verstecken, alternativen Screen-Buffer nutzen, und im
   Alternate-Screen ist der **Auto-Wrap abgeschaltet** (`\e[?7l`): bei
-  exakt 48x24 fuellt das Layout die letzte Bildschirmzelle, was mit
+  exakt 48x22 fuellt das Layout die letzte Bildschirmzelle, was mit
   Auto-Wrap auf manchen Terminals scrollen wuerde.
 - **Datenmodell:** Spielfeld als eindimensionales Bash-Array (Index
   `y * Breite + x`); Zelle enthaelt Sorte, Stein-Instanz-ID und
@@ -819,11 +828,13 @@ jede Stelle, die Empfangenes anfasst:
 ### 5.6 Darstellung der Mitspieler
 
 Das bestehende Layout ist fest: linke Spalte 12 + 1 Abstand + Feld 22 +
-1 Abstand + rechte Spalte 12 = 48 Spalten, 24 Zeilen Minimum (seit
-0.22.0 zentriert, siehe 3.4). Die Mitspieler kommen **rechts daneben**,
+1 Abstand + rechte Spalte 12 = 48 Spalten, 22 Zeilen Minimum (seit
+0.22.0 zentriert, seit 0.26.0 ohne Statuszeilen, siehe 3.4). Die
+Mitspieler kommen **rechts daneben**,
 das eigene Feld bleibt unveraendert an seinem Platz; der Block wird dann
 entsprechend breiter zentriert. Wo unten "Seitenleiste" steht, ist die
-rechte Spalte samt den beiden Statuszeilen gemeint.
+rechte Spalte gemeint (die linke traegt seit 0.26.0 Hold und die
+eigenen Rundenzaehler und ist damit belegt).
 
 Drei Detailstufen, automatisch nach verfuegbarer Terminalgroesse und
 Spielerzahl gewaehlt (`--mp-view auto|full|compact|score` erzwingt eine
@@ -840,20 +851,20 @@ Stufe):
   Gegner zwei Zeilen in der Seitenleiste:
   `<name8> R<rows> L<lines>` und ein 10 Zeichen breiter Stapelhoehen-
   Balken plus Markierung fuer eingehende Garbage und KO-Status. Passt in
-  die vorhandenen 24 Spalten der Seitenleiste, kostet dort aber Platz:
-  ab 3 Gegnern entfaellt die Vorschau des dritten Next-Steins.
+  die vorhandenen 12 Spalten der rechten Seitenleiste, kostet dort aber
+  Platz: ab 3 Gegnern entfaellt die Vorschau des dritten Next-Steins.
   Bedarf: unveraendert 48 Spalten, aber 2 Zeilen je Gegner.
 - **Stufe 0 "score" - Scoreboard.** Eine Zeile je Gegner:
   `<platz> <name8> <rows>`, sortiert nach Rows, KO-Spieler grau und
-  ans Ende. Braucht 1 Zeile je Gegner und passt immer in 48x24.
+  ans Ende. Braucht 1 Zeile je Gegner und passt immer in 48x22.
 
 Auswahlregel fuer `auto` (bei jedem Resize neu ausgewertet, der
 SIGWINCH-Pfad aus 0.19.0 ruft sie mit auf):
 
-1. Reicht `48 + n*13` Spalten und 24 Zeilen -> Stufe 2.
-2. Sonst: reichen `24 - belegte Seitenleistenzeilen` fuer `2*n` Zeilen
+1. Reicht `48 + n*13` Spalten und 22 Zeilen -> Stufe 2.
+2. Sonst: reichen `22 - belegte Seitenleistenzeilen` fuer `2*n` Zeilen
    -> Stufe 1.
-3. Sonst -> Stufe 0. Unter 48x24 greift weiterhin die bestehende
+3. Sonst -> Stufe 0. Unter 48x22 greift weiterhin die bestehende
    "resize me"-Overlay.
 
 Nur in Stufe 2 sendet ein Client Feld-Snapshots; der Hub schaltet das je
@@ -1225,6 +1236,19 @@ Feature-Branch oder Pull Request.
       naechsten drei Steine oben rechts und die Rundenzaehler auf den
       zwei unteren Statuszeilen; Pause und Game Over erscheinen als
       Kasten ueber dem Spielfeld (siehe 3.4)
+- [x] HUD-Zaehler in die linke Spalte verlegen (Version 0.26.0,
+      Nutzerentscheidung): die Rundenzaehler stehen jetzt untereinander
+      unter dem Hold-Stein (`pane_stat`/`render_pane_left` in
+      `lib/render.sh`, Label 6 Zeichen + Wert 5 Zeichen), die
+      Tastenlegende ist ersatzlos entfallen (`hud_keys_build` samt
+      seinen Aufrufen in `rowhammer.sh` und `prompt_rebind`), ebenso
+      der Spielername (12 Spalten sind fuer bis zu 16 Namenszeichen zu
+      schmal; er bleibt in der Highscore-Liste). Damit fallen die zwei
+      Statuszeilen unter dem Feld weg (`render_status`, `STATUS_ROW_*`):
+      der Block ist nur noch 22 Zeilen hoch (`LAYOUT_H`), und das
+      Terminal-Minimum sinkt entsprechend auf 48x22 (`MIN_TERM_ROWS`;
+      der hoechste Menuebildschirm, die Weltwunder-Baustelle, braucht
+      20 Zeilen) (siehe 3.4)
 - [x] README mit Screenshots/Asciinema aktualisieren (Abschnitt
       "Vorschau" im README): vier kurze, echte Spielsequenzen als
       asciinema-Aufnahmen (`.cast`) und GIF unter `docs/demo/` - Tetris
@@ -1334,7 +1358,7 @@ Details stehen jeweils im genannten Unterabschnitt.
       `PEER`-Zustaende puffern, Scoreboard- und Kompaktansicht in der
       Seitenleiste, Detailstufen-Auswahl inklusive Neuberechnung beim
       Resize, `--mp-view`. Erstes sichtbares Mehrspieler-Erlebnis, laeuft
-      im 48x24-Minimum. Abnahme: vier Spieler sehen gegenseitig ihre
+      im 48x22-Minimum. Abnahme: vier Spieler sehen gegenseitig ihre
       Rows/Lines live.
 - [ ] **Schritt 6 - Mitspieler-Anzeige Stufe 2 (Mini-Felder)** (siehe 5.4, 5.6).
       Feld-Snapshot in 200 Zeichen kodieren/dekodieren, `NEEDBOARD`-
@@ -1381,7 +1405,8 @@ Details stehen jeweils im genannten Unterabschnitt.
   3.3). Offen bleibt: Die Reihen-Kosten je Wunder (100..6400) sind
   gegenueber dem Original bewusst herunterskaliert und sollten nach
   Playtesting ggf. nachjustiert werden (`WONDER_COSTS`).
-- Mindest-Terminalgroesse: seit 0.1.0 als 48x24 implementiert, seit
+- Mindest-Terminalgroesse: seit 0.26.0 48x22 (vorher 48x24 - die zwei
+  Statuszeilen sind mit dem HUD-Umbau entfallen, siehe 3.4), seit
   0.19.0 auch waehrend des Spiels ueberwacht (SIGWINCH, siehe Phase 4
   "Anpassung an Terminalgroesse"): ein Resize zeichnet sauber neu, ein
   Unterschreiten des Minimums pausiert die Runde hinter einer
@@ -1396,8 +1421,11 @@ Details stehen jeweils im genannten Unterabschnitt.
   `recent=`-Liste und Highscore-Zeile - im HUD anstelle des
   Weltwunder-Fortschritts, in den beiden Tabellen zulasten der
   Namensspalte bzw. der letzten freien Spalten (siehe 3.4 und 4.5).
-  Die drei Layouts sind damit wieder randvoll: ein weiterer Zaehler
-  braucht erneut eine Entscheidung, was dafuer weicht.
+  Die beiden Tabellen (Highscore, letzte Spiele) sind damit randvoll:
+  eine weitere Spalte braucht erneut eine Entscheidung, was dafuer
+  weicht. Fuer den HUD gilt das seit 0.26.0 nicht mehr - die Zaehler
+  stehen jetzt untereinander in der linken Spalte und haben dort noch
+  neun freie Zeilen (siehe 3.4).
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach
