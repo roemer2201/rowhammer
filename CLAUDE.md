@@ -193,7 +193,9 @@ Die fuer uns relevanten Merkmale des Originals:
   1, Spielfeld 22 (10 Zellen a 2 Zeichen plus Rahmen), Luecke 1, rechte
   Spalte 12. In Zeilen: Zeile 0 obere Feldkante, 1-20 die sichtbaren
   Feldreihen, 21 untere Feldkante - der Block ist damit genau so hoch
-  wie das Spielfeld.
+  wie das Spielfeld. Seit 0.28.0 sind auch Menues, Info-Bildschirme und
+  der Weltwunder-Bildschirm zentriert, buendig zur linken Kante des
+  Spielblocks (`render_menu_frame`, siehe 4.3).
   - **Links:** der Hold-Stein (Ueberschrift "Hold") und darunter die
     Rundenzaehler (seit 0.26.0, Nutzerentscheidung): Lines (physische
     Reihen der Runde), Rows (gewertete Reihen = Punkte der Runde, siehe
@@ -405,6 +407,27 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Alternate-Screen ist der **Auto-Wrap abgeschaltet** (`\e[?7l`): bei
   exakt 48x22 fuellt das Layout die letzte Bildschirmzelle, was mit
   Auto-Wrap auf manchen Terminals scrollen wuerde.
+- **Menue- und Info-Bildschirme (zentriert seit 0.28.0):** Menues,
+  Info-Bildschirme, Abfragen und der Weltwunder-Bildschirm werden nicht
+  mehr als ein Block ab `\e[H` geschrieben, sondern als Liste reiner
+  Inhaltszeilen an `render_menu_frame` (`lib/render.sh`) uebergeben.
+  Die Funktion positioniert jede Zeile einzeln: **linke Kante wie der
+  Spielblock** (dieselbe Zentrierung von `LAYOUT_W`, damit Menue und
+  Spielbildschirm buendig sind) und **vertikal nach der eigenen Hoehe
+  zentriert**, weil die Bildschirme unterschiedlich lang sind. Jede
+  geschriebene Zeile endet mit `\e[K`, sodass eine kuerzere Zeile keinen
+  Rest ihrer Vorgaengerin stehen laesst; die sichtbare Breite wird nie
+  gemessen (die Zeilen enthalten SGR-Sequenzen). Zwischen zwei Menues
+  werden nur die Zeilen geloescht, die der vorherige Block belegte und
+  der neue nicht mehr abdeckt - ein Voll-Loeschen je Tastendruck wuerde
+  beim Blaettern flackern. Das Flag `MENU_FULL` merkt sich dagegen, dass
+  ein **anderer** Bildschirm zuletzt dran war (Spielblock ueber
+  `render_flush`, "resize me"-Overlay, Resize ueber `layout_update`, die
+  echoende Namensabfrage ueber `render_menu_dirty`); dann loescht der
+  naechste Menue-Frame zuerst den ganzen Bildschirm. Nach einem Resize
+  bauen die Warteschleifen ihren Frame neu auf, statt den gespeicherten
+  erneut auszugeben - er traegt absolute Cursor-Positionen der alten
+  Terminalgroesse.
 - **Datenmodell:** Spielfeld als eindimensionales Bash-Array (Index
   `y * Breite + x`); Zelle enthaelt Sorte, Stein-Instanz-ID und
   Quadrat-Status (keins/Silber/Gold), damit `squares.sh` und die
@@ -525,9 +548,11 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   des Rowhammer-Zaehlers, der abgelegten Teile, der Gesamtspielzeit als
   H:MM:SS und der daraus berechneten Steine/Minute), dann die letzten
   drei Spiele mit je zwei Zeilen (Datum, Rows, Reihen, Bonus / Gold,
-  Silb, RH, PCS, PPM). Beides zusammen passt nicht mehr in die 17
+  Silb, RH, PCS, PPM). Beides zusammen passt nicht mehr in die 18
   Zeilen, die ein 22-Zeilen-Terminal einem Info-Bildschirm laesst
-  (`MENU_BODY_MAX` in `lib/menu.sh`) - deshalb der Schnitt statt
+  (`MENU_BODY_MAX` in `lib/menu.sh`; bis 0.27.0 waren es 17 - die
+  zentrierten Bildschirme aus 0.28.0 brauchen keine Zeile mehr fuers
+  Freiraeumen der obersten Bildschirmzeile) - deshalb der Schnitt statt
   gestrichener Spalten. Jede Zeile bleibt in den 46 Zeichen, die der
   Zwei-Zeichen-Einzug vom 48-Spalten-Minimum uebriglaesst.
 
@@ -1150,11 +1175,20 @@ Feature-Branch oder Pull Request.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
-- [ ] Hauptmenue ebenfalls zentriert darstellen: das Spielfeld-Layout
-      wird seit 0.22.0 per `layout_update` mittig im Terminal
-      ausgerichtet (siehe 3.4, 4.3), das Hauptmenue (`lib/menu.sh`)
-      aber weiterhin oben links gezeichnet - nachziehen, damit Menue
-      und Spielbildschirm konsistent zentriert erscheinen.
+- [x] Hauptmenue ebenfalls zentriert darstellen (Version 0.28.0): das
+      Spielfeld-Layout wird seit 0.22.0 per `layout_update` mittig im
+      Terminal ausgerichtet (siehe 3.4, 4.3), das Hauptmenue
+      (`lib/menu.sh`) blieb aber oben links. Umgesetzt ueber
+      `render_menu_frame` (`lib/render.sh`): jeder Menue-, Info- und
+      Eingabebildschirm wird jetzt als Liste reiner Inhaltszeilen
+      gebaut und von dieser einen Funktion platziert - linke Kante wie
+      der Spielblock (Zentrierung von `LAYOUT_W`), vertikal nach der
+      eigenen Hoehe zentriert. Betroffen sind alle Bildschirme aus
+      `lib/menu.sh` (`menu_run`, `menu_message`/`menu_pages`,
+      `menu_confirm`, `menu_colors`, `prompt_rebind`,
+      `prompt_player_name`) und der Weltwunder-Bildschirm
+      (`wonder_screen` in `lib/wonders.sh`), damit nicht ausgerechnet
+      der Bildschirm nach jeder Runde aus der Reihe faellt (siehe 4.3).
 - [x] Weltwunder-Fortschritt aus der Ingame-Statusanzeige entfernen:
       umgesetzt als Teil des Rowhammer-Zaehlers in Version 0.25.0 (siehe
       naechster Punkt) - der freigewordene Platz auf der zweiten
@@ -1454,7 +1488,8 @@ Details stehen jeweils im genannten Unterabschnitt.
   Unterschreiten des Minimums pausiert die Runde hinter einer
   "resize me"-Overlay bis das Terminal wieder gross genug ist. Das feste
   Layout skaliert bewusst nicht mit, wird aber seit 0.22.0 mittig im
-  Terminal ausgerichtet (siehe 3.4); groessere Terminals zeigen das
+  Terminal ausgerichtet (siehe 3.4) - seit 0.28.0 ebenso die Menue- und
+  Info-Bildschirme (siehe 4.3); groessere Terminals zeigen das
   Spiel also zentriert statt oben links. Ein mitwachsendes Layout (z. B.
   breitere Zellen oder mehr Vorschau auf grossen Terminals) ist bewusst
   nicht vorgesehen.
@@ -1472,8 +1507,8 @@ Details stehen jeweils im genannten Unterabschnitt.
   gesprengt; auf Nutzerentscheidung ist ein Eintrag jetzt zwei Zeilen
   breit, seitenweise angezeigt (`menu_pages`). Weitere Werte kosten
   damit keine vorhandene Spalte mehr, sondern Zeilen - und irgendwann
-  eine weitere Seite: pro Info-Bildschirm passen 17 Zeilen
-  (`MENU_BODY_MAX`), die Highscore-Liste zeigt fuenf Eintraege je
+  eine weitere Seite: pro Info-Bildschirm passen 18 Zeilen
+  (`MENU_BODY_MAX`, seit 0.28.0 eine mehr), die Highscore-Liste zeigt fuenf Eintraege je
   Seite, die Statistik teilt sich in Gesamtzaehler und letzte Spiele.
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine

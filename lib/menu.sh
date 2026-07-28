@@ -23,9 +23,14 @@
 #   is what the two-line highscore entries need. All wait loops
 #   repaint on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave a menu or info screen blank (since 0.7.0).
+#   Since 0.11.0 every screen here is built as an array of plain content
+#   lines and handed to render_menu_frame (lib/render.sh), which draws it
+#   centered like the play screen instead of into the top left corner;
+#   the repaint after a resize rebuilds the frame, because its cursor
+#   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.10.0  (2026-07-28)
+# Version: 0.11.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -45,28 +50,36 @@ MENU_CHOICE=-1
 # Enter or space selects, ESC (or x) goes back. The chosen entry index
 # lands in MENU_CHOICE, -1 means "back". Redraws only after a key press;
 # read_key's timeout paces the loop, so the menu does not busy-wait.
-# CHANGE 2026-07-26: every screen here starts with \e[H\e[K instead of
-# plain \e[H, because homing and then moving down with \n leaves the
-# first screen line untouched - it kept showing the top line of whatever
-# was drawn before (with the centered play screen that is the hold/next
-# header row, which looked like a rendering glitch).
+# CHANGE 2026-07-28: the screen is no longer written as one homed block of
+# lines but handed to render_menu_frame (lib/render.sh), which places it
+# centered like the game block - the play screen has been centered since
+# 0.22.0 and the menus looked disconnected in the top left corner. Every
+# screen in this file is built the same way now, as an array of plain
+# content lines; positioning, erasing and the leading screen clear all
+# live in the renderer. That also replaced the explicit \e[H\e[K of
+# 2026-07-26 (homing and moving down with \n left the first screen line
+# untouched, showing the top line of whatever was drawn before): the
+# renderer erases every line it writes and clears the whole screen
+# whenever a non-menu screen was there before.
 menu_run() {
     local title="${1}"
     shift
     local -a entries=("$@")
-    local n="${#entries[@]}" sel=0 dirty=1 frame i
+    local -a lines
+    local n="${#entries[@]}" sel=0 dirty=1 i
     while :; do
         if [ "${dirty}" -eq 1 ]; then
-            frame=$'\e[H\e[K\n'"  ${title}"$'\e[K\n\e[K\n'
+            lines=("  ${title}" "")
             for (( i = 0; i < n; i++ )); do
                 if (( i == sel )); then
-                    frame+=$'  \e[7m '"${entries[i]}"$' \e[0m\e[K\n'
+                    lines+=($'  \e[7m '"${entries[i]}"$' \e[0m')
                 else
-                    frame+="   ${entries[i]} "$'\e[K\n'
+                    lines+=("   ${entries[i]} ")
                 fi
             done
-            frame+=$'\e[K\n'"  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck"$'\e[K\n\e[J'
-            screen_write "${frame}"
+            lines+=("" "  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
             dirty=0
         fi
         read_key
@@ -98,32 +111,37 @@ menu_run() {
 menu_message() {
     local title="${1}"
     shift
-    local frame line
-    frame=$'\e[H\e[K\n'"  ${title}"$'\e[K\n\e[K\n'
+    local -a lines
+    local line
+    lines=("  ${title}" "")
     for line in "$@"; do
-        frame+="  ${line}"$'\e[K\n'
+        lines+=("  ${line}")
     done
-    frame+=$'\e[K\n'"  Beliebige Taste druecken..."$'\e[K\n\e[J'
-    screen_write "${frame}"
+    lines+=("" "  Beliebige Taste druecken...")
+    render_menu_frame "${lines[@]}"
+    screen_write "${RENDER_MENU_FRAME}"
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
-        # Repaint after a resize (read_key cleared the screen); the frame
-        # is still in scope, so re-emitting it restores the message.
+        # Repaint after a resize (read_key cleared the screen). The frame
+        # is rebuilt rather than re-emitted: it carries absolute cursor
+        # positions computed for the old terminal size.
         if [ "${REDRAW_PENDING}" -eq 1 ]; then
             REDRAW_PENDING=0
-            screen_write "${frame}"
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
         fi
     done
 }
 
-# Body lines an info screen may use. menu_message spends five terminal
-# rows on its frame (leading blank, title, blank, blank, footer), and the
-# smallest supported terminal is MIN_TERM_ROWS high (rowhammer.sh), so
-# anything beyond this would scroll off the bottom on such a terminal.
+# Body lines an info screen may use. menu_message spends four terminal
+# rows on its frame (title, blank, blank, footer), and the smallest
+# supported terminal is MIN_TERM_ROWS high (rowhammer.sh), so anything
+# beyond this would not fit on such a terminal (the frame is centered, so
+# it would be cut off at both ends rather than scroll off the bottom).
 # A fixed budget on purpose: paging computed from the live TERM_ROWS
 # would renumber the pages under the player's hands on every resize.
-MENU_BODY_MAX=$(( MIN_TERM_ROWS - 5 ))
+MENU_BODY_MAX=$(( MIN_TERM_ROWS - 4 ))
 
 # menu_pages TITLE HEAD PAGE LINE...
 # Show a table too tall for one screen as a sequence of info screens.
@@ -180,23 +198,25 @@ menu_confirm() {
     local title="${1}" yes_label="${2}" no_label="${3}"
     shift 3
     local -a body=("$@")
-    local sel=0 dirty=1 frame line
+    local -a lines
+    local sel=0 dirty=1 line
     while :; do
         if [ "${dirty}" -eq 1 ]; then
-            frame=$'\e[H\e[K\n'"  ${title}"$'\e[K\n\e[K\n'
+            lines=("  ${title}" "")
             for line in "${body[@]}"; do
-                frame+="  ${line}"$'\e[K\n'
+                lines+=("  ${line}")
             done
-            frame+=$'\e[K\n'
+            lines+=("")
             if [ "${sel}" -eq 0 ]; then
-                frame+=$'  \e[7m '"${no_label}"$' \e[0m\e[K\n'
-                frame+="   ${yes_label} "$'\e[K\n'
+                lines+=($'  \e[7m '"${no_label}"$' \e[0m')
+                lines+=("   ${yes_label} ")
             else
-                frame+="   ${no_label} "$'\e[K\n'
-                frame+=$'  \e[7m '"${yes_label}"$' \e[0m\e[K\n'
+                lines+=("   ${no_label} ")
+                lines+=($'  \e[7m '"${yes_label}"$' \e[0m')
             fi
-            frame+=$'\e[K\n'"  Pfeile/w/s: waehlen   Enter: OK   ESC: abbrechen"$'\e[K\n\e[J'
-            screen_write "${frame}"
+            lines+=("" "  Pfeile/w/s: waehlen   Enter: OK   ESC: abbrechen")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
             dirty=0
         fi
         read_key
@@ -320,12 +340,13 @@ menu_settings() {
 # leaves the current theme unchanged. Its own selection loop instead of
 # menu_run, because the entries carry raw SGR swatches menu_run would not
 # render.
-# CHANGE 2026-07-27 (merge): start the frame with \e[H\e[K like every
-# other screen in this file, and repaint on REDRAW_PENDING - this loop
-# had neither, so a stale top line or a resize could leave the picker
-# blank, unlike every sibling menu here.
+# CHANGE 2026-07-27 (merge): repaint on REDRAW_PENDING - this loop did
+# not, so a resize could leave the picker blank, unlike every sibling
+# menu here. Its stale-first-line guard became obsolete on 2026-07-28
+# when the screens moved to render_menu_frame (see menu_run).
 menu_colors() {
-    local n sel=0 i dirty=1 frame mark label
+    local -a lines
+    local n sel=0 i dirty=1 mark label
     n="${#COLOR_THEMES[@]}"
     for (( i = 0; i < n; i++ )); do
         if [ "${COLOR_THEMES[i]}" = "${COLOR_THEME}" ]; then
@@ -334,7 +355,7 @@ menu_colors() {
     done
     while :; do
         if [ "${dirty}" -eq 1 ]; then
-            frame=$'\e[H\e[K\n'"  Farbschema waehlen"$'\e[K\n\e[K\n'
+            lines=("  Farbschema waehlen" "")
             for (( i = 0; i < n; i++ )); do
                 if [ "${COLOR_THEMES[i]}" = "${COLOR_THEME}" ]; then
                     mark="*"
@@ -345,13 +366,14 @@ menu_colors() {
                     "${COLOR_THEME_LABEL[${COLOR_THEMES[i]}]}"
                 render_theme_swatch "${COLOR_THEMES[i]}"
                 if (( i == sel )); then
-                    frame+=$'  \e[7m '"${label}"$' \e[0m  '"${RENDER_SWATCH}"$'\e[K\n'
+                    lines+=($'  \e[7m '"${label}"$' \e[0m  '"${RENDER_SWATCH}")
                 else
-                    frame+="   ${label}  ${RENDER_SWATCH}"$'\e[K\n'
+                    lines+=("   ${label}  ${RENDER_SWATCH}")
                 fi
             done
-            frame+=$'\e[K\n'"  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck"$'\e[K\n\e[J'
-            screen_write "${frame}"
+            lines+=("" "  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
             dirty=0
         fi
         read_key
@@ -404,17 +426,22 @@ menu_keys() {
 # stays reserved for the game over restart. Refuses keys that are already
 # bound to another action, then persists the new binding.
 prompt_rebind() {
-    local var="${1}" label="${2}" other frame
-    printf -v frame '\e[H\e[K\n  Tasten konfigurieren\e[K\n\e[K\n  Neue Taste fuer "%s" druecken\e[K\n  (aktuell: %s, ESC = abbrechen)\e[K\n\e[J' \
-        "${label}" "${!var}"
-    screen_write "${frame}"
+    local var="${1}" label="${2}" other
+    local -a lines
+    lines=("  Tasten konfigurieren" ""
+           "  Neue Taste fuer \"${label}\" druecken"
+           "  (aktuell: ${!var}, ESC = abbrechen)")
+    render_menu_frame "${lines[@]}"
+    screen_write "${RENDER_MENU_FRAME}"
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
-        # Repaint the prompt after a resize (read_key cleared the screen).
+        # Repaint the prompt after a resize (read_key cleared the screen);
+        # rebuilt, because the frame holds absolute cursor positions.
         if [ "${REDRAW_PENDING}" -eq 1 ]; then
             REDRAW_PENDING=0
-            screen_write "${frame}"
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
         fi
     done
     case "${KEY}" in
@@ -455,14 +482,24 @@ prompt_rebind() {
 # Line-based name input (canonical mode, so backspace editing works).
 # An empty input keeps the current name; valid input is persisted.
 prompt_player_name() {
-    local frame name=""
-    printf -v frame '\e[H\e[K\n  Spielername\e[K\n\e[K\n  Aktueller Name: %s\e[K\n\e[K\n  Neuer Name (leer = unveraendert, max. 16 Zeichen,\e[K\n  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)\e[K\n\e[J\n  > ' \
-        "${PLAYER_NAME}"
-    screen_write "${frame}"
+    local -a lines
+    local name=""
+    # The input line is the last one of the frame, so the cursor ends up
+    # right behind the prompt where the typed name appears.
+    lines=("  Spielername" ""
+           "  Aktueller Name: ${PLAYER_NAME}" ""
+           "  Neuer Name (leer = unveraendert, max. 16 Zeichen,"
+           "  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)" ""
+           "  > ")
+    render_menu_frame "${lines[@]}"
+    screen_write "${RENDER_MENU_FRAME}"
     # Show the cursor while typing, hide it again afterwards.
     screen_write $'\e[?25h'
     IFS= read -r name || name=""
     screen_write $'\e[?25l'
+    # The echoed input is on screen but not part of any menu frame; let
+    # the next one clear the terminal rather than draw around it.
+    render_menu_dirty
     if [ -z "${name}" ]; then
         return 0
     fi

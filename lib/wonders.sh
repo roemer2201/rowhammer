@@ -15,15 +15,17 @@
 #   wonder_screen renders the construction site screen shown after every
 #   round and from the "Weltwunder" main menu entry; its wait loop
 #   repaints on REDRAW_PENDING so a terminal resize (handled in read_key)
-#   does not leave it blank (since 0.1.1). Like the menus, the screen
-#   clears the first line explicitly (\e[H\e[K) so nothing of the play
-#   screen shows through above the title. Wonder names,
+#   does not leave it blank (since 0.1.1). Like the menus, the screen is
+#   handed to render_menu_frame (lib/render.sh) since 0.2.0, so it appears
+#   centered like the play screen and starts on a cleared terminal - the
+#   explicit \e[H\e[K it used to carry against a bleeding-through first
+#   line is part of that helper now. Wonder names,
 #   sequence and row costs live in the tables below; costs double per
 #   wonder like the roughly geometric line requirements of the original,
 #   but are scaled down to fit single-machine play.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.3  (2026-07-28)
+# Version: 0.2.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -123,42 +125,44 @@ wonder_art_load() {
 # stable. Waits for any key, like menu_message.
 wonder_screen() {
     local total="${1}"
-    local frame line stages reveal i
+    local -a lines
+    local stages reveal i
     wonders_update "${total}"
     wonder_art_load "${WONDER_INDEX}"
     stages="${#WONDER_ART[@]}"
     reveal=$(( WONDER_DONE * stages / WONDER_COST ))
-    frame=$'\e[H\e[K\n'
     if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
-        frame+="  Alle Weltwunder sind errichtet!"$'\e[K\n\e[K\n'
+        lines=("  Alle Weltwunder sind errichtet!" "")
     else
-        frame+="  Weltwunder $(( WONDER_INDEX + 1 ))/${#WONDER_FILES[@]}: ${WONDER_NAMES_DE[WONDER_INDEX]}"$'\e[K\n\e[K\n'
+        lines=("  Weltwunder $(( WONDER_INDEX + 1 ))/${#WONDER_FILES[@]}: ${WONDER_NAMES_DE[WONDER_INDEX]}" "")
     fi
     for (( i = 0; i < stages; i++ )); do
         if (( i >= stages - reveal )); then
-            frame+="  ${WONDER_ART[i]}"$'\e[K\n'
+            lines+=("  ${WONDER_ART[i]}")
         else
-            frame+=$'\e[K\n'
+            lines+=("")
         fi
     done
-    frame+=$'\e[K\n'
+    lines+=("")
     if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
-        frame+="  ${WONDER_NAMES_DE[WONDER_INDEX]} ist fertig."$'\e[K\n'
+        lines+=("  ${WONDER_NAMES_DE[WONDER_INDEX]} ist fertig.")
     else
-        frame+="  Baustufe ${reveal}/${stages} - ${WONDER_DONE}/${WONDER_COST} Reihen (${WONDER_PERCENT}%)"$'\e[K\n'
+        lines+=("  Baustufe ${reveal}/${stages} - ${WONDER_DONE}/${WONDER_COST} Reihen (${WONDER_PERCENT}%)")
     fi
-    frame+="  Reihen gesamt: ${total}"$'\e[K\n\e[K\n'
-    frame+="  Beliebige Taste druecken..."$'\e[K\n\e[J'
-    screen_write "${frame}"
+    lines+=("  Reihen gesamt: ${total}" "" "  Beliebige Taste druecken...")
+    render_menu_frame "${lines[@]}"
+    screen_write "${RENDER_MENU_FRAME}"
     debug_event "wonder screen shown: index=${WONDER_INDEX} stage=${reveal}/${stages} done=${WONDER_DONE}/${WONDER_COST} total=${total}"
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
-        # Repaint after a terminal resize (read_key cleared the screen);
-        # the frame is still in scope, so re-emitting it restores it.
+        # Repaint after a terminal resize (read_key cleared the screen).
+        # The frame is rebuilt, not re-emitted: it carries absolute cursor
+        # positions computed for the terminal size before the resize.
         if [ "${REDRAW_PENDING}" -eq 1 ]; then
             REDRAW_PENDING=0
-            screen_write "${frame}"
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
         fi
     done
     return 0

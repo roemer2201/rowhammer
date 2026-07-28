@@ -30,7 +30,11 @@
 #   detection lives in color_mode_resolve. The settings color picker
 #   previews each theme via render_theme_swatch. All terminal output goes
 #   through screen_write, which mirrors every update 1:1 into the frame log
-#   when the debug mode is active (lib/debug.sh). term_too_small_screen
+#   when the debug mode is active (lib/debug.sh). Menus, info screens and
+#   prompts (lib/menu.sh, lib/wonders.sh) hand their lines to
+#   render_menu_frame, which places them centered like the game block
+#   (since 0.17.0) instead of drawing them into the top left corner.
+#   term_too_small_screen
 #   draws the compact overlay shown while the terminal is smaller than the
 #   fixed layout needs (since 0.10.0, driven by lib/input.sh on resize).
 #   Rows about to be cleared can be drawn highlighted (FLASH_ROWS /
@@ -38,7 +42,7 @@
 #   rowhammer.sh toggles to make them blink.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.16.0  (2026-07-28)
+# Version: 0.17.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -228,6 +232,86 @@ layout_update() {
     LAYOUT_ROW="${row}"
     LAYOUT_COL="${col}"
     RENDER_FULL=1
+    # A resize invalidates the coordinates a menu frame was built from,
+    # and the callers clear the screen right after this - the next menu
+    # frame must start from scratch as well.
+    MENU_FULL=1
+    return 0
+}
+
+# --- Menu screen placement ------------------------------------------------
+# Menus, info screens and prompts (lib/menu.sh, lib/wonders.sh) are placed
+# by render_menu_frame, so they appear centered like the game block instead
+# of clinging to the top left corner. Their left edge is the game block's
+# left edge (same centering of LAYOUT_W), which is what makes a menu and
+# the play screen look like the same screen; vertically each screen is
+# centered on its own height, because menus differ in length.
+#
+# MENU_FULL marks that something other than a menu owns the screen (the
+# game block, the resize overlay, an echoed prompt), so the next menu frame
+# has to clear the terminal first. While one menu follows another, only the
+# rows the previous block used and the new block no longer covers are
+# erased - a full clear per key press would make the menu flicker while
+# browsing it.
+MENU_FULL=1
+MENU_FRAME_ROW=1
+MENU_FRAME_LINES=0
+RENDER_MENU_FRAME=""
+
+# render_menu_frame LINE...
+# Compose a menu/info screen from the given lines and leave the ready made
+# frame in RENDER_MENU_FRAME (a global, so no subshell is needed). Every
+# line is positioned individually and closed with an erase-to-end-of-line,
+# so a shorter line never leaves the tail of its predecessor behind. Lines
+# may carry SGR sequences; their visible width is never measured, which is
+# why the erase is per line instead of padding to a fixed width.
+# Callers rebuild the frame instead of re-emitting a stored one after a
+# resize - the coordinates computed here are only valid for the terminal
+# size they were computed from.
+render_menu_frame() {
+    local -a lines=("$@")
+    local n="${#lines[@]}"
+    local row col i pos frame=""
+    col=$(( (TERM_COLS - LAYOUT_W) / 2 + 1 ))
+    if [ "${col}" -lt 1 ]; then
+        col=1
+    fi
+    row=$(( (TERM_ROWS - n) / 2 + 1 ))
+    if [ "${row}" -lt 1 ]; then
+        row=1
+    fi
+    if [ "${MENU_FULL}" -eq 1 ]; then
+        frame=$'\e[2J'
+    else
+        # Erase what the previous menu block wrote outside the new one;
+        # the rows both blocks cover are overwritten below anyway.
+        for (( i = MENU_FRAME_ROW; i < MENU_FRAME_ROW + MENU_FRAME_LINES; i++ )); do
+            if (( i >= row && i < row + n )); then
+                continue
+            fi
+            printf -v pos '\e[%d;1H' "${i}"
+            frame+="${pos}"$'\e[2K'
+        done
+    fi
+    for (( i = 0; i < n; i++ )); do
+        printf -v pos '\e[%d;%dH' "$(( row + i ))" "${col}"
+        frame+="${pos}${lines[i]}"$'\e[K'
+    done
+    MENU_FRAME_ROW="${row}"
+    MENU_FRAME_LINES="${n}"
+    MENU_FULL=0
+    RENDER_MENU_FRAME="${frame}"
+    return 0
+}
+
+# render_menu_dirty
+# Declare the screen taken over by something that is not a menu frame, so
+# the next one clears the terminal before drawing. Called wherever such a
+# screen appears: the game block (render_flush), the resize overlay
+# (term_too_small_screen), a resize (layout_update) and the echoed name
+# prompt (lib/menu.sh).
+render_menu_dirty() {
+    MENU_FULL=1
     return 0
 }
 
@@ -302,6 +386,9 @@ term_too_small_screen() {
         "resize:" \
         "need ${MIN_TERM_COLS}x${MIN_TERM_ROWS}" \
         "now ${TERM_COLS}x${TERM_ROWS}"
+    # The overlay owns the screen now; the menu that was interrupted has
+    # to repaint on a cleared terminal once the resize is over.
+    MENU_FULL=1
     screen_write "${frame}"
     return 0
 }
@@ -534,6 +621,9 @@ render_flush() {
     PREV_LINES=("${FRAME_LINES[@]}")
     RENDER_FULL=0
     if [ -n "${out}" ]; then
+        # The game block now owns the screen: a menu opened from here
+        # (pause menu, game over follow-ups) has to clear it first.
+        MENU_FULL=1
         screen_write "${out}"
     fi
     return 0

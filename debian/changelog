@@ -1,3 +1,23 @@
+rowhammer (0.28.0) unstable; urgency=medium
+
+  * Center the main menu and every other menu, info screen and prompt in
+    the terminal, so they line up with the play screen (centered since
+    0.22.0) instead of clinging to the top left corner.
+  * All those screens are now built as plain content lines and placed by
+    render_menu_frame (lib/render.sh): it aligns them with the left edge
+    of the game block, centers them vertically on their own height and
+    erases what a previous screen left behind. A menu following another
+    menu only rewrites the rows involved, so browsing a menu does not
+    flicker; a menu following the play screen, the resize overlay or the
+    echoed name prompt clears the terminal first.
+  * A resize repaints menus and info screens from their lines instead of
+    re-emitting the stored frame, which now carries absolute cursor
+    positions valid only for the size they were computed from.
+  * Info screens gained one body line (MENU_BODY_MAX), because the
+    frames no longer spend a row on clearing the top screen line.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 23:15:00 +0200
+
 rowhammer (0.27.0) unstable; urgency=medium
 
   * Count the pieces a round places and show them as "Pieces" in the
