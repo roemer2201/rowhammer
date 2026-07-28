@@ -198,8 +198,11 @@ Die fuer uns relevanten Merkmale des Originals:
     Rundenzaehler (seit 0.26.0, Nutzerentscheidung): Lines (physische
     Reihen der Runde), Rows (gewertete Reihen = Punkte der Runde, siehe
     3.2), Level, Gold-/Silberzaehler, Rowhammer der Runde (Label
-    "Hammer", vier Reihen auf einmal) und die Spielzeit (Time, MM:SS;
-    seit 0.17.0). Die zwoelf Spalten der Seitenleiste teilen sich je
+    "Hammer", vier Reihen auf einmal), die Spielzeit (Time, MM:SS;
+    seit 0.17.0) und die abgelegten Teile (Pieces, seit 0.27.0 -
+    hochgezaehlt in `lock_and_next`, wo ein Stein wirklich festgesetzt
+    wird; zusammen mit der Spielzeit ergibt sich daraus die
+    PCS/Minute, die Statistik und Highscore ausweisen). Die zwoelf Spalten der Seitenleiste teilen sich je
     Zaehler in 1 Einzug + 6 Label + 5 rechtsbuendiger Wert
     (`pane_stat`); die Zeile wird anschliessend hart auf `PANE_W`
     gekappt, damit ein ungewoehnlich langer Wert die Blockbreite nicht
@@ -225,8 +228,9 @@ Die fuer uns relevanten Merkmale des Originals:
     eine neu geschriebene Zeile ueberdeckt ihre Vorgaengerin immer
     vollstaendig, es braucht keine Loesch-Sequenzen. Ein Spielbildschirm-
     Titel entfaellt dafuer - die 22 Zeilen gehoeren restlos dem Feld.
-  - Platzreserve: die linke Spalte hat unter den Zaehlern noch neun
-    freie Zeilen (Zeile 13-21). Ein weiterer Zaehler muss also nichts
+  - Platzreserve: die linke Spalte hat unter den Zaehlern noch acht
+    freie Zeilen (Zeile 14-21; Zeile 13 hat der Pieces-Zaehler aus
+    0.27.0 belegt). Ein weiterer Zaehler muss also nichts
     mehr verdraengen, solange sein Label in sechs Zeichen passt.
 - Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
   aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
@@ -443,15 +447,17 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Abbruch mit Meldung).
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
-  `rows|lines|level|name|date|gold|silver|time|rowhammers`,
+  `rows|lines|level|name|date|gold|silver|time|rowhammers|pieces`,
   absteigend nach Rows
   sortiert. Seit dem Punktesystem-Umbau (0.16.0) ist die gewichtete
   Reihenwertung der einzige Score: das fruehere fuehrende
   `score`-Feld entfaellt, Rows bestimmt die Rangfolge und den Rang
   im Game-Over-Bild. Das Feld `time` (seit 0.17.0) ist
-  die Spielzeit der Runde in ganzen Sekunden, das abschliessende Feld
-  `rowhammers` (seit 0.25.0) die Zahl der Vierfach-Abbaeue der Runde.
-  Zeilen im falschen (nicht neunfeldrigen) Format fallen gemaess der
+  die Spielzeit der Runde in ganzen Sekunden, `rowhammers` (seit
+  0.25.0) die Zahl der Vierfach-Abbaeue der Runde und das
+  abschliessende Feld `pieces` (seit 0.27.0) die Zahl der abgelegten
+  Teile.
+  Zeilen im falschen (nicht zehnfeldrigen) Format fallen gemaess der
   Arbeitsregel "keine Abwaertskompatibilitaet" bei der Validierung
   einfach heraus.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
@@ -459,20 +465,27 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
   Beenden der Runde, siehe 3.3; 0 Rows zaehlt nicht, gleiche Rows
   rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
-  die Liste unter "Highscores" im Hauptmenue. Angezeigt werden je
-  Eintrag Rang, Name, Rows, Gold- und Silberquadrate (Spalten "Gold"
-  und "Silb"), die Rowhammer der Runde (Spalte "RH", seit 0.25.0), die
-  Spielzeit
-  (Spalte "Zeit", MM:SS; seit 0.17.0) sowie das Datum
-  (seit 0.14.0; die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
-  der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt; Lines
-  und Level bleiben gespeichert, werden aber nicht angezeigt).
-  Damit das Layout (mit dem Zwei-Zeichen-Menue-Einzug) exakt ins
-  48-Spalten-Minimum passt, zahlt jede neue Spalte eine vorhandene:
-  der Name wurde mit der Zeit-Spalte (0.17.0) von 13 auf 8 Zeichen
-  gekuerzt und mit der RH-Spalte (0.25.0) auf 6, ausserdem heisst die
-  Silber-Spalte seither "Silb" (gespeichert bleiben weiterhin bis zu
-  16 Namenszeichen).
+  die Liste unter "Highscores" im Hauptmenue. Angezeigt wird je
+  Eintrag seit 0.27.0 ein **Zwei-Zeilen-Block** (Nutzerentscheidung:
+  die Anzeige darf dafuer mehrzeilig werden): erste Zeile Rang, Name,
+  Rows, Spielzeit (Spalte "Zeit", MM:SS; seit 0.17.0) und Datum (seit
+  0.14.0), zweite Zeile die Gold- und Silberquadrate ("Gold"/"Silb"),
+  die Rowhammer der Runde ("RH", seit 0.25.0), die abgelegten Teile
+  ("PCS") und die daraus mit der Spielzeit berechnete Ablegerate
+  ("PPM", Teile je Minute, `fmt_ppm` in `rowhammer.sh`).
+  Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
+  die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
+  der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
+  Bis 0.26.0 war ein Eintrag eine Zeile, und weil das Layout (mit dem
+  Zwei-Zeichen-Menue-Einzug) exakt ins 48-Spalten-Minimum passte,
+  zahlte jede neue Spalte eine vorhandene: der Name schrumpfte mit der
+  Zeit-Spalte (0.17.0) von 13 auf 8 Zeichen und mit der RH-Spalte
+  (0.25.0) auf 6. Fuer PCS und PPM war kein Platz mehr uebrig; der
+  Zeilenumbruch gibt dem Namen dafuer 12 Zeichen zurueck (gespeichert
+  bleiben weiterhin bis zu 16). Die Liste ist damit zu hoch fuer einen
+  22-Zeilen-Bildschirm und wird von `menu_pages` (`lib/menu.sh`)
+  seitenweise gezeigt - fuenf Eintraege je Seite, Tabellenkopf auf
+  jeder Seite wiederholt, Seitenzaehler im Titel.
 - `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
   `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,
   nicht gesourct; eine defekte Datei faellt mit Meldung auf 0 zurueck).
@@ -489,9 +502,13 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Namensgebung: `rowhammers` zaehlt, wie oft vier Reihen auf einmal
   abgebaut wurden (hochgezaehlt in `clear_lines` an der Stelle, die
   den Tetris-Bonus vergibt; Rundenzaehler `ROWHAMMER_COUNT` in
-  `rowhammer.sh`). Seit 0.11.0 zusaetzlich die Ergebnisse der
-  letzten drei Runden (`recent=`-Zeilen, neueste zuerst; seit 0.25.0
-  im Format `lines|bonus|gold|silver|rowhammers|date` mit dem Spieldatum
+  `rowhammer.sh`). Seit 0.27.0 zusaetzlich die abgelegten Teile
+  (`pieces`, Rundenzaehler `PIECE_COUNT`, hochgezaehlt in
+  `lock_and_next`) und die gespielte Zeit (`play_time`, Sekunden) -
+  beide zusammen ergeben die Ablegerate in Teilen je Minute.
+  Seit 0.11.0 zusaetzlich die Ergebnisse der
+  letzten drei Runden (`recent=`-Zeilen, neueste zuerst; seit 0.27.0
+  im Format `lines|bonus|gold|silver|rowhammers|pieces|time|date` mit dem Spieldatum
   als `YYYY-MM-DD` - das fruehere fuehrende `score`-Feld entfiel mit
   dem Punktesystem-Umbau, die Punkte einer Runde sind Lines + Bonus
   und werden bei der Anzeige abgeleitet statt gespeichert; alte
@@ -500,13 +517,19 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Eine Runde wird
   beim Rundenende genau einmal
   verbucht (gemeinsam mit Highscore und Savegame in
-  `record_round`); Anzeige ueber den Hauptmenuepunkt
-  "Statistik", inklusive der gewichteten Gesamtsumme
-  (Lines + Bonus), des Rowhammer-Zaehlers und der letzten drei Spiele
-  samt Datum. Die Tabelle der letzten Spiele hat seit 0.25.0 eine
-  Spalte "RH" (Rowhammer der Runde) und belegt damit exakt die 46
-  Zeichen, die der Zwei-Zeichen-Einzug vom 48-Spalten-Minimum
-  uebriglaesst.
+  `record_round`); seit 0.27.0 auch eine Runde ganz ohne Reihenabbau,
+  weil sie Teile und Spielzeit beisteuert (frueher fiel sie durch die
+  Null-Pruefung). Anzeige ueber den Hauptmenuepunkt
+  "Statistik", seit 0.27.0 auf **zwei Bildschirmen**: erst die
+  Gesamtzaehler (inklusive der gewichteten Gesamtsumme Lines + Bonus,
+  des Rowhammer-Zaehlers, der abgelegten Teile, der Gesamtspielzeit als
+  H:MM:SS und der daraus berechneten Steine/Minute), dann die letzten
+  drei Spiele mit je zwei Zeilen (Datum, Rows, Reihen, Bonus / Gold,
+  Silb, RH, PCS, PPM). Beides zusammen passt nicht mehr in die 17
+  Zeilen, die ein 22-Zeilen-Terminal einem Info-Bildschirm laesst
+  (`MENU_BODY_MAX` in `lib/menu.sh`) - deshalb der Schnitt statt
+  gestrichener Spalten. Jede Zeile bleibt in den 46 Zeichen, die der
+  Zwei-Zeichen-Einzug vom 48-Spalten-Minimum uebriglaesst.
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -1173,6 +1196,25 @@ Feature-Branch oder Pull Request.
       Alte Highscore- und `recent=`-Zeilen fallen gemaess der
       Arbeitsregel "keine Abwaertskompatibilitaet" bei der Validierung
       heraus.
+- [x] Zaehler der abgelegten Teile einbauen (Version 0.27.0,
+      Nutzerentscheidung): Rundenzaehler `PIECE_COUNT` in
+      `rowhammer.sh`, hochgezaehlt in `lock_and_next` - der einzigen
+      Stelle, an der ein Stein wirklich festgesetzt wird - und in
+      `game_reset` zurueckgesetzt. Anzeige im HUD als "Pieces" in der
+      linken Spalte unter der Spielzeit (Zeile 13, siehe 3.4); in
+      Statistik und Highscore zusammen mit der Spielzeit als PCS und
+      PCS/Minute (`fmt_ppm` rechnet in Zehnteln, weil Bash keine
+      Fliesskommazahlen kennt). Dateiformate wachsen entsprechend
+      (siehe 4.5): Highscore-Zeile um ein abschliessendes `pieces`,
+      `recent=`-Zeile um `pieces` und `time` vor dem Datum, Statistik
+      um die Gesamtzaehler `pieces` und `play_time`; alte Zeilen fallen
+      gemaess der Arbeitsregel "keine Abwaertskompatibilitaet" bei der
+      Validierung heraus. Beide Tabellen waren am 48-Spalten-Minimum
+      randvoll, deshalb (Nutzerentscheidung: die Anzeige darf
+      mehrzeilig werden) je Eintrag zwei Zeilen - und weil das die
+      17 Zeilen eines 22-Zeilen-Terminals sprengt, zeigt `menu_pages`
+      (`lib/menu.sh`) die Highscore-Liste seitenweise und die
+      Statistik auf zwei Bildschirmen.
 - [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
       `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
       im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und
@@ -1421,11 +1463,18 @@ Details stehen jeweils im genannten Unterabschnitt.
   `recent=`-Liste und Highscore-Zeile - im HUD anstelle des
   Weltwunder-Fortschritts, in den beiden Tabellen zulasten der
   Namensspalte bzw. der letzten freien Spalten (siehe 3.4 und 4.5).
-  Die beiden Tabellen (Highscore, letzte Spiele) sind damit randvoll:
-  eine weitere Spalte braucht erneut eine Entscheidung, was dafuer
-  weicht. Fuer den HUD gilt das seit 0.26.0 nicht mehr - die Zaehler
+  Die beiden Tabellen (Highscore, letzte Spiele) waren damit randvoll.
+  Fuer den HUD gilt das seit 0.26.0 nicht mehr - die Zaehler
   stehen jetzt untereinander in der linken Spalte und haben dort noch
-  neun freie Zeilen (siehe 3.4).
+  acht freie Zeilen (siehe 3.4).
+- Tabellenbreite: erledigt fuer den naechsten Zuwachs. Der
+  Pieces-Zaehler (0.27.0) hat die Ein-Zeilen-Grenze der beiden Tabellen
+  gesprengt; auf Nutzerentscheidung ist ein Eintrag jetzt zwei Zeilen
+  breit, seitenweise angezeigt (`menu_pages`). Weitere Werte kosten
+  damit keine vorhandene Spalte mehr, sondern Zeilen - und irgendwann
+  eine weitere Seite: pro Info-Bildschirm passen 17 Zeilen
+  (`MENU_BODY_MAX`), die Highscore-Liste zeigt fuenf Eintraege je
+  Seite, die Statistik teilt sich in Gesamtzaehler und letzte Spiele.
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

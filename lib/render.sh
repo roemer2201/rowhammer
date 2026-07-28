@@ -7,7 +7,7 @@
 #   LAYOUT_W x LAYOUT_H characters, centered in the terminal (layout_update):
 #   the hold piece sits at the top of the left pane with the round
 #   counters (lines, rows, level, gold/silver, the rowhammers - four-row
-#   clears - and the play time) below it, the board in the middle and
+#   clears -, the play time and the pieces placed) below it, the board in the middle and
 #   the three upcoming pieces in the top right pane. The wonder progress
 #   is not part of the HUD; it is shown on the "Weltwunder" screen
 #   instead. Pause
@@ -38,7 +38,7 @@
 #   rowhammer.sh toggles to make them blink.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.15.0  (2026-07-28)
+# Version: 0.16.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -440,6 +440,10 @@ render_pane_left() {
     # by the game loop's PLAY_MS and formatted MM:SS (fmt_duration).
     fmt_duration $(( PLAY_MS / 1000 ))
     pane_stat 12 "Time" "${FMT_DURATION}"
+    # Pieces placed this round, right below the play time: the two
+    # together are what the statistics and highscore screens turn into a
+    # PCS/min rate. "Pieces" fills the pane's six label columns exactly.
+    pane_stat 13 "Pieces" "${PIECE_COUNT}"
     return 0
 }
 
@@ -538,8 +542,8 @@ render_flush() {
 # draw_frame
 # Render the complete game screen. Reads the game state globals (BOARD,
 # BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, CLEARED_TOTAL, ROW_CREDIT, LEVEL,
-# GOLD_COUNT, SILVER_COUNT, ROWHAMMER_COUNT, PLAY_MS, PAUSED,
-# GAME_OVER)
+# GOLD_COUNT, SILVER_COUNT, ROWHAMMER_COUNT, PIECE_COUNT, PLAY_MS,
+# PAUSED, GAME_OVER)
 # and the USE_COLOR flag, assembles the block into
 # FRAME_LINES and lets render_flush emit the difference.
 draw_frame() {

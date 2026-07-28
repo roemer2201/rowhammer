@@ -91,14 +91,18 @@ Das Startmenue bietet:
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
 - **Einzelspieler** - vorerst nur "Normales Spiel"
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
-- **Highscores** - die besten 10 Runden mit Name, Rows (die Punkte
-  der Runde), Gold-/Silberquadraten, Rowhammern ("RH"), Spielzeit und
-  Datum; ein Game Over zeigt den erreichten Rang direkt an
+- **Highscores** - die besten 10 Runden, je Eintrag zwei Zeilen und
+  seitenweise geblaettert: Name, Rows (die Punkte der Runde), Spielzeit
+  und Datum in der ersten, Gold-/Silberquadrate, Rowhammer ("RH"),
+  abgelegte Teile ("PCS") und Teile je Minute ("PPM") in der zweiten;
+  ein Game Over zeigt den erreichten Rang direkt an
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
-- **Statistik** - Gesamtzaehler ueber alle Runden: abgebaute Reihen,
-  Bonusreihen, gebaute Gold- und Silberbloecke sowie die "Rowhammer"
-  (vier Reihen auf einmal); dazu die Ergebnisse der letzten drei Spiele
+- **Statistik** - auf zwei Bildschirmen: Gesamtzaehler ueber alle
+  Runden (abgebaute Reihen, Bonusreihen, gebaute Gold- und
+  Silberbloecke, die "Rowhammer" - vier Reihen auf einmal -, die
+  abgelegten Teile, die Gesamtspielzeit und die daraus berechneten
+  Steine/Minute), danach die Ergebnisse der letzten drei Spiele
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`)
@@ -156,7 +160,8 @@ Umgesetzt:
 - Levelkurve (schneller je 10 Reihen)
 - **Zentriertes Spielfeld-Layout:** ein festes 48x22-Feld, mittig im
   Terminal ausgerichtet - links der Hold-Stein und darunter die
-  Rundenzaehler (Lines, Rows, Level, Gold, Silber, Rowhammer, Zeit),
+  Rundenzaehler (Lines, Rows, Level, Gold, Silber, Rowhammer, Zeit,
+  abgelegte Teile),
   das Spielfeld in der Mitte, die naechsten drei Steine oben rechts;
   Pause und Game Over erscheinen als Kasten ueber dem Spielfeld
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering,
@@ -179,9 +184,10 @@ Umgesetzt:
   `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
-  Reihenwertung), gebaute Gold-/Silberbloecke und die Zahl der
+  Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der
   "Rowhammer" (vier Reihen auf einmal - der Namensgeber des Spiels)
-  sowie die Ergebnisse
+  sowie abgelegte Teile und Spielzeit (daraus die Ablegerate in
+  Teilen je Minute); dazu die Ergebnisse
   der letzten drei Spiele, einsehbar im
   Hauptmenue
 - **Weltwunder-Modus:** der "Rows"-Zaehler baut ueber alle Runden
