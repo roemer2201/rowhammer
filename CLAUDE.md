@@ -1021,6 +1021,10 @@ sequenziell entwickelt und war nie anderswo installiert; Migrationslogik
 fuer alte Config-/Savegame-Formate oder alte Schnittstellen ist unnoetig
 und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
+Arbeitsregel: **Aenderungen an der ToDo-Liste (Abschnitt 7) duerfen
+direkt auf dem `main`-Branch vorgenommen werden**, auch ohne eigenen
+Feature-Branch oder Pull Request.
+
 ## 7. Roadmap / Todo-Liste
 
 ### Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
