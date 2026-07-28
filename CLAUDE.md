@@ -460,7 +460,11 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Reihen (`lines`), Bonusreihen (`bonus_rows`, der Gold-/Silber-/
   Tetris-Anteil der Reihenwertung, also Rows minus Lines) sowie
   gebaute Gold- (`gold_squares`) und Silberquadrate
-  (`silver_squares`). Seit 0.11.0 zusaetzlich die Ergebnisse der
+  (`silver_squares`). Seit 0.24.0 zusaetzlich die "rowhammer" der
+  Namensgebung: `rowhammers` zaehlt, wie oft vier Reihen auf einmal
+  abgebaut wurden (hochgezaehlt in `clear_lines` an der Stelle, die
+  den Tetris-Bonus vergibt; Rundenzaehler `ROWHAMMER_COUNT` in
+  `rowhammer.sh`). Seit 0.11.0 zusaetzlich die Ergebnisse der
   letzten drei Runden (`recent=`-Zeilen, neueste zuerst; seit 0.16.0
   im Format `lines|bonus|gold|silver|date` mit dem Spieldatum
   als `YYYY-MM-DD` - das fruehere fuehrende `score`-Feld entfiel mit
@@ -473,7 +477,11 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   verbucht (gemeinsam mit Highscore und Savegame in
   `record_round`); Anzeige ueber den Hauptmenuepunkt
   "Statistik", inklusive der gewichteten Gesamtsumme
-  (Lines + Bonus) und der letzten drei Spiele samt Datum.
+  (Lines + Bonus), des Rowhammer-Zaehlers und der letzten drei Spiele
+  samt Datum. Der Rowhammer-Zaehler ist bewusst nur ein Gesamtzaehler:
+  die `recent=`-Zeilen behalten ihr Format
+  `lines|bonus|gold|silver|date`, weil deren Tabelle im
+  48-Spalten-Minimum keine weitere Spalte mehr hergibt.
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -1088,29 +1096,26 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
-- [ ] "rowhammer"-Zaehler einbauen: zaehlt, wie oft vier Reihen auf
-      einmal abgebaut wurden (der Tetris, hier nach dem Projekt benannt).
-      Die Stelle steht schon fest - `clear_lines` (`lib/board.sh`) kennt
-      den Fall bereits ueber `CLEARED -eq 4`, wo heute nur `ROWS_TETRIS`
-      addiert wird; von dort einen Rundenzaehler (analog zu
-      `GOLD_COUNT`/`SILVER_COUNT` in `rowhammer.sh`, Reset in
-      `game_reset`) hochzaehlen.
-      Aufnahme in die Statistik (Nutzerfrage, bejaht): passt ohne
-      Bruch in `lib/stats.sh` -
-      neuer Gesamtzaehler `rowhammers` als weitere `key=value`-Zeile
-      (Muster `STATS_LINE_RE` erweitern, `STATS_ROWHAMMERS`,
-      Parameter an `stats_add_round`, Aufruf in `record_round`) und eine
-      eigene Zeile im "Statistik"-Bildschirm bei Gold-/Silberbloecken.
-      Zusaetzlich je Runde in der `recent=`-Liste waere moeglich, bricht
-      aber deren Format (`lines|bonus|gold|silver|date` ->
-      `...|rowhammers|date`; alte Zeilen fallen gemaess der Arbeitsregel
-      "keine Abwaertskompatibilitaet" beim Laden einfach heraus) und die
-      Tabelle der letzten Spiele ist mit 42 + 2 Spalten Einzug schon
-      nahe am 48-Spalten-Minimum - eine Spalte mehr geht nur, wenn eine
-      vorhandene Ueberschrift gekuerzt wird. Offen ausserdem: ob der
-      Zaehler auch ins HUD soll (die zwei Statuszeilen sind mit je 48
-      Zeichen voll belegt, siehe 3.4) und ob er zusaetzlich in die
-      Highscore-Zeile wandert.
+- [x] "rowhammer"-Zaehler einbauen (Version 0.24.0): zaehlt, wie oft
+      vier Reihen auf einmal abgebaut wurden (der Tetris, hier nach dem
+      Projekt benannt). Hochgezaehlt wird er dort, wo `clear_lines`
+      (`lib/board.sh`) den Fall ohnehin ueber `CLEARED -eq 4` erkennt
+      und `ROWS_TETRIS` addiert; der Rundenzaehler `ROWHAMMER_COUNT`
+      liegt bei `GOLD_COUNT`/`SILVER_COUNT` in `rowhammer.sh` und wird
+      in `game_reset` zurueckgesetzt (Rundenzustand - kein
+      `ROWHAMMER_*`-Einstellungsparameter, trotz des Namens).
+      Aufnahme in die Statistik (Nutzerfrage, bejaht): neuer
+      Gesamtzaehler `rowhammers` als weitere `key=value`-Zeile in
+      `lib/stats.sh` (`STATS_LINE_RE` erweitert, `STATS_ROWHAMMERS`,
+      fuenfter Parameter an `stats_add_round`, uebergeben in
+      `record_round`) und eine eigene Zeile "Rowhammer (4 Reihen)" im
+      "Statistik"-Bildschirm unter den Gold-/Silberbloecken.
+      Bewusst **nicht** umgesetzt und weiterhin offen (siehe
+      Abschnitt 8): der Zaehler je Runde in der `recent=`-Liste (haette
+      deren Format gebrochen, und die Tabelle der letzten Spiele ist mit
+      42 + 2 Spalten Einzug schon nahe am 48-Spalten-Minimum), der
+      Zaehler im HUD (die zwei Statuszeilen sind mit je 48 Zeichen voll
+      belegt, siehe 3.4) und der Zaehler in der Highscore-Zeile.
 - [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
       `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
       im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und
@@ -1340,6 +1345,14 @@ Details stehen jeweils im genannten Unterabschnitt.
   Spiel also zentriert statt oben links. Ein mitwachsendes Layout (z. B.
   breitere Zellen oder mehr Vorschau auf grossen Terminals) ist bewusst
   nicht vorgesehen.
+- Rowhammer-Zaehler (seit 0.24.0, siehe 4.5): umgesetzt sind der
+  Rundenzaehler und der Gesamtzaehler in der Statistik. Offen bleibt,
+  ob er zusaetzlich ins HUD (die zwei Statuszeilen sind mit je 48
+  Zeichen voll belegt, siehe 3.4), in die `recent=`-Liste der letzten
+  Spiele (bricht deren Format, und die Tabelle sitzt schon am
+  48-Spalten-Minimum) und in die Highscore-Zeile soll. Alle drei
+  brauchen vorher eine Entscheidung, welche vorhandene Spalte dafuer
+  weicht.
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

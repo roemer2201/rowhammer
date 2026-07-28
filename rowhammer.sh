@@ -48,8 +48,9 @@
 #   the ranking. The HUD also shows the running round's play time (paused
 #   time excluded).
 #   Every round also feeds persistent statistics (cleared rows, bonus
-#   rows, gold/silver squares built, plus the results of the last three
-#   rounds with their play date), shown via the "Statistik" main
+#   rows, gold/silver squares built, rowhammers - four rows cleared in
+#   one move, the namesake of the game - plus the results of the last
+#   three rounds with their play date), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
@@ -87,7 +88,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.23.0  (2026-07-27)
+# Version: 0.24.0  (2026-07-28)
 
 set -euo pipefail
 
@@ -101,7 +102,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.23.0"
+ROWHAMMER_VERSION="0.24.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -528,6 +529,12 @@ hud_keys_build
 CUR_TYPE=""; CUR_ROT=0; CUR_X=0; CUR_Y=0
 CLEARED_TOTAL=0; ROW_CREDIT=0; LEVEL=0; FALL_MS=800
 GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
+# Round counter of four-row clears, the move this game is named after.
+# Raised in clear_lines (lib/board.sh) where the Tetris bonus is paid,
+# reset per round in game_reset and banked into the all-time statistics
+# by record_round. Round state, not one of the ROWHAMMER_* settings
+# variables that carry the environment overrides.
+ROWHAMMER_COUNT=0
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 # Raised by term_resize_apply (lib/input.sh) after a terminal resize was
@@ -665,10 +672,12 @@ record_round() {
     fi
     wonders_update "${TOTAL_ROW_CREDIT}"
     # All-time statistics: the round's physical lines, the bonus
-    # part of the row credit (credit minus physical lines) and the
-    # squares built; the round also enters the recent-rounds list.
+    # part of the row credit (credit minus physical lines), the
+    # squares built and its four-row clears; the round also enters the
+    # recent-rounds list.
     stats_add_round "${CLEARED_TOTAL}" \
-        "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}"
+        "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}" \
+        "${ROWHAMMER_COUNT}"
     return 0
 }
 
@@ -999,6 +1008,7 @@ game_reset() {
     ROW_CREDIT=0
     GOLD_COUNT=0
     SILVER_COUNT=0
+    ROWHAMMER_COUNT=0
     HOLD_TYPE=""
     HOLD_USED=0
     PAUSED=0
