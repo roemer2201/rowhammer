@@ -1,3 +1,18 @@
+rowhammer (0.26.0) unstable; urgency=medium
+
+  * Move the round counters from the two status lines below the board
+    into the left pane, right under the hold piece (user decision).
+  * Drop the key legend and the player name from the play screen: the
+    pane is 12 columns wide, which is too narrow for a name of up to 16
+    characters, and the bindings are documented in the settings menu
+    and the README. The name is still recorded with highscore entries.
+  * The play screen is two rows shorter as a result (48x22 instead of
+    48x24), so the game now runs in terminals of at least 22 rows. All
+    menu and info screens fit that height; the tallest of them, the
+    wonder construction site, needs 20 lines.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 20:00:00 +0200
+
 rowhammer (0.25.0) unstable; urgency=medium
 
   * Show the rowhammer counter in all three places it was still missing

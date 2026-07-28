@@ -261,7 +261,7 @@ run_replay() {
     REDRAW_PENDING=0
     TERM_ROWS=40
     TERM_COLS=120
-    MIN_TERM_ROWS=24
+    MIN_TERM_ROWS=22
     MIN_TERM_COLS=48
     # shellcheck source=/dev/null
     source "${REPO_ROOT}/lib/input.sh"

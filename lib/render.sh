@@ -5,12 +5,12 @@
 # Description:
 #   Screen rendering for rowhammer. The game screen is one fixed block of
 #   LAYOUT_W x LAYOUT_H characters, centered in the terminal (layout_update):
-#   the hold piece and the key legend sit in the left pane, the board in
-#   the middle, the three upcoming pieces in the top right pane and the
-#   round counters (name, lines, rows, level, gold/silver, play time and
-#   the rowhammers, i.e. four-row clears) on the two bottom status
-#   lines - the wonder progress left the HUD for that counter and is
-#   shown on the "Weltwunder" screen instead. Pause
+#   the hold piece sits at the top of the left pane with the round
+#   counters (lines, rows, level, gold/silver, the rowhammers - four-row
+#   clears - and the play time) below it, the board in the middle and
+#   the three upcoming pieces in the top right pane. The wonder progress
+#   is not part of the HUD; it is shown on the "Weltwunder" screen
+#   instead. Pause
 #   and game over are drawn as a box over the board, the latter with the
 #   achieved highscore rank.
 #   Since 0.12.0 frames are no longer pushed out as a whole: draw_frame
@@ -38,7 +38,7 @@
 #   rowhammer.sh toggles to make them blink.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.14.0  (2026-07-28)
+# Version: 0.15.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -49,18 +49,21 @@ fi
 # --- Layout geometry ------------------------------------------------------
 # The game screen is a fixed block; only its position follows the terminal
 # size. Widths add up exactly: pane + gap + board + gap + pane
-# (12 + 1 + 22 + 1 + 12 = 48), heights likewise: board frame + status
-# (22 + 2 = 24). Both equal the minimum terminal size (MIN_TERM_* in
-# rowhammer.sh), so the layout still fits a bare 48x24 terminal.
+# (12 + 1 + 22 + 1 + 12 = 48); the height is the board frame alone
+# (20 rows plus two borders = 22).
+# CHANGE 2026-07-28 (user decision): the two status lines below the
+# board are gone - their counters moved into the left pane, where the
+# key legend used to be. That shortens the block by two rows, which in
+# turn lowers the minimum terminal height (MIN_TERM_* in rowhammer.sh)
+# to 22; both dimensions still equal the minimum exactly, so the layout
+# fits a bare 48x22 terminal.
 LAYOUT_W=48
-LAYOUT_H=24
+LAYOUT_H=22
 PANE_W=12
 # Rows of the block: 0 = board top border, 1..20 = the visible board,
-# 21 = bottom border, 22..23 = the status lines.
+# 21 = bottom border.
 BOARD_TOP_ROW=0
 BOARD_BOTTOM_ROW=21
-STATUS_ROW_1=22
-STATUS_ROW_2=23
 
 # Top left corner of the block (1-based terminal coordinates), recomputed
 # by layout_update whenever the terminal size changes.
@@ -118,16 +121,10 @@ RENDER_FULL=1
 declare -a BOARD_ROW_CACHE=()
 BOARD_CACHE_VALID=0
 
-# Pane and status line buffers, rebuilt per frame by the helpers below.
+# Pane buffers, rebuilt per frame by the helpers below.
 declare -a PANE_LEFT=()
 declare -a PANE_RIGHT=()
 declare -A BOX_LINES=()
-STATUS_1=""
-STATUS_2=""
-
-# Key legend lines of the left pane. Built by hud_keys_build whenever the
-# bindings change (startup, rebind) instead of on every frame.
-declare -a HUD_KEYS=()
 
 # Output of render_board_row / render_mini (globals instead of command
 # substitution: the game loop must not fork a subshell per row).
@@ -240,35 +237,6 @@ layout_update() {
 # the cache, the board module only reports that it changed.
 render_board_dirty() {
     BOARD_CACHE_VALID=0
-    return 0
-}
-
-# hud_keys_build
-# Compose the key legend of the left pane from the current bindings. Only
-# needs rebuilding when a binding changes (startup, prompt_rebind), not
-# per frame. Each line is padded/truncated to the pane's usable width.
-hud_keys_build() {
-    local -a raw=()
-    local line i
-    printf -v line '%-4s %s' "${KEY_LEFT}/${KEY_RIGHT}" "move"
-    raw+=("${line}")
-    printf -v line '%-4s %s' "${KEY_ROT_CCW}/${KEY_ROT_CW}" "turn"
-    raw+=("${line}")
-    printf -v line '%-4s %s' "${KEY_SOFT}" "soft"
-    raw+=("${line}")
-    printf -v line '%-4s %s' "${KEY_HARD}" "hard"
-    raw+=("${line}")
-    printf -v line '%-4s %s' "${KEY_HOLD}" "hold"
-    raw+=("${line}")
-    printf -v line '%-4s %s' "${KEY_PAUSE}" "pause"
-    raw+=("${line}")
-    printf -v line '%-4s %s' "${KEY_QUIT}" "menu"
-    raw+=("${line}")
-    HUD_KEYS=()
-    for (( i = 0; i < ${#raw[@]}; i++ )); do
-        printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" " ${raw[i]}"
-        HUD_KEYS+=("${line}")
-    done
     return 0
 }
 
@@ -422,9 +390,29 @@ render_board_row() {
     return 0
 }
 
+# pane_stat ROW LABEL VALUE
+# Write one counter line of the left pane: LABEL left, VALUE right
+# aligned. The pane's 12 columns are split 1 + 6 + 5 (indent, label,
+# value), and the result is clamped to PANE_W afterwards, so even an
+# implausibly long value can never push the line past the width the
+# frame diff relies on (see render_flush).
+pane_stat() {
+    local line
+    printf -v line ' %-6s%5s' "${2}" "${3}"
+    printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
+    PANE_LEFT["${1}"]="${line}"
+    return 0
+}
+
 # render_pane_left
-# Left pane: the hold slot on top, the key legend below it. Every entry
-# is exactly PANE_W visible columns wide.
+# Left pane: the hold slot on top, the round counters below it. Every
+# entry is exactly PANE_W visible columns wide.
+# CHANGE 2026-07-28 (user decision): the key legend gave up this pane to
+# the counters, which moved here from the two status lines below the
+# board - those lines are gone with them. The player name did not come
+# along: names may be 16 characters long and the pane is 12 columns
+# wide, so it could only ever have been shown as a stump, and the player
+# knows their own name anyway.
 render_pane_left() {
     local i line
     PANE_LEFT=()
@@ -437,11 +425,21 @@ render_pane_left() {
     PANE_LEFT[1]=" ${RENDER_MINI}   "
     render_mini "${HOLD_TYPE}" 1
     PANE_LEFT[2]=" ${RENDER_MINI}   "
-    printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" " Keys"
-    PANE_LEFT[4]="${line}"
-    for (( i = 0; i < ${#HUD_KEYS[@]}; i++ )); do
-        PANE_LEFT[5 + i]="${HUD_KEYS[i]}"
-    done
+    # "Lines" counts physical rows (drives the level), "Rows" is the
+    # weighted credit (gold/silver bonus) that builds the wonders - and,
+    # since the scoring rebuild, the round's score.
+    pane_stat 4 "Lines" "${CLEARED_TOTAL}"
+    pane_stat 5 "Rows" "${ROW_CREDIT}"
+    pane_stat 6 "Level" "${LEVEL}"
+    pane_stat 8 "Gold" "${GOLD_COUNT}"
+    pane_stat 9 "Silver" "${SILVER_COUNT}"
+    # The move the game is named after: four rows cleared in one go.
+    # "Hammer" is the label that fits the pane's six label columns.
+    pane_stat 10 "Hammer" "${ROWHAMMER_COUNT}"
+    # Elapsed play time of the running round (paused time excluded), fed
+    # by the game loop's PLAY_MS and formatted MM:SS (fmt_duration).
+    fmt_duration $(( PLAY_MS / 1000 ))
+    pane_stat 12 "Time" "${FMT_DURATION}"
     return 0
 }
 
@@ -465,37 +463,11 @@ render_pane_right() {
     return 0
 }
 
-# render_status
-# The two bottom lines, both round counters. They are printf-built to
-# exactly LAYOUT_W columns, so they can never leave stale characters
-# behind when a number gets shorter.
-# CHANGE 2026-07-28 (user decision): the wonder under construction gave
-# up its slot on the second line to the rowhammer counter. The two
-# status lines are the only free space in the fixed 48x24 layout, so a
-# new counter can only enter if an old one leaves; the wonder progress
-# stays available on the "Weltwunder" screen shown after every round and
-# from the main menu.
-render_status() {
-    # "Lines" counts physical rows (drives the level), "Rows" is the
-    # weighted credit (gold/silver bonus) that builds the wonders - and,
-    # since the scoring rebuild, the round's score.
-    printf -v STATUS_1 '%-16.16s %-11.11s %-12.12s %-6.6s' \
-        "${PLAYER_NAME}" "Lines ${CLEARED_TOTAL}" "Rows ${ROW_CREDIT}" \
-        "Lvl ${LEVEL}"
-    # Elapsed play time of the running round (paused time excluded), fed
-    # by the game loop's PLAY_MS and formatted MM:SS (fmt_duration).
-    fmt_duration $(( PLAY_MS / 1000 ))
-    printf -v STATUS_2 '%-8.8s %-10.10s %-10.10s %-17.17s' \
-        "Gold ${GOLD_COUNT}" "Silver ${SILVER_COUNT}" \
-        "Time ${FMT_DURATION}" "Rowhammer ${ROWHAMMER_COUNT}"
-    return 0
-}
-
 # render_status_box
 # Build the pause / game over box drawn over the board, keyed by visible
 # board row (0..19). Empty when the round is running. Putting it on the
 # board instead of into a sidebar keeps the message where the player is
-# looking, and the two bottom status lines stay free for the counters.
+# looking and costs no permanent screen space.
 # Interior lines are 18 characters wide between the borders, so every
 # entry is exactly the board's 20 visible columns.
 render_status_box() {
@@ -566,7 +538,8 @@ render_flush() {
 # draw_frame
 # Render the complete game screen. Reads the game state globals (BOARD,
 # BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, CLEARED_TOTAL, ROW_CREDIT, LEVEL,
-# GOLD_COUNT, SILVER_COUNT, ROWHAMMER_COUNT, PLAY_MS, PAUSED, GAME_OVER)
+# GOLD_COUNT, SILVER_COUNT, ROWHAMMER_COUNT, PLAY_MS, PAUSED,
+# GAME_OVER)
 # and the USE_COLOR flag, assembles the block into
 # FRAME_LINES and lets render_flush emit the difference.
 draw_frame() {
@@ -601,7 +574,6 @@ draw_frame() {
     render_pane_left
     render_pane_right
     render_status_box
-    render_status
 
     FRAME_LINES=()
     FRAME_LINES[BOARD_TOP_ROW]="${PANE_LEFT[0]} ${BOARD_BORDER} ${PANE_RIGHT[0]}"
@@ -626,8 +598,6 @@ draw_frame() {
         FRAME_LINES[i]="${PANE_LEFT[i]} ${line} ${PANE_RIGHT[i]}"
     done
     FRAME_LINES[BOARD_BOTTOM_ROW]="${PANE_LEFT[BOARD_BOTTOM_ROW]} ${BOARD_BORDER} ${PANE_RIGHT[BOARD_BOTTOM_ROW]}"
-    FRAME_LINES[STATUS_ROW_1]="${STATUS_1}"
-    FRAME_LINES[STATUS_ROW_2]="${STATUS_2}"
 
     render_flush
     return 0

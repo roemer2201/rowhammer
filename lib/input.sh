@@ -5,7 +5,7 @@
 # Description:
 #   Terminal setup and non-blocking keyboard input for rowhammer. Switches
 #   to the alternate screen buffer, hides the cursor, turns autowrap off
-#   (the centered game block fills a 48x24 terminal down to its last cell)
+#   (the centered game block fills a 48x22 terminal down to its last cell)
 #   and provides a
 #   single-key reader that understands the arrow-key escape sequences.
 #   Escape sequences are parsed by a state machine (key_feed and its
@@ -145,7 +145,7 @@ term_measure() {
 # inside the async signal handler. A resize typically garbles or reflows
 # the alternate screen, so the screen is wiped and REDRAW_PENDING is
 # raised for the caller to repaint. While the terminal is too small for
-# the fixed 48x24 layout the function blocks on the "resize me" overlay
+# the fixed 48x22 layout the function blocks on the "resize me" overlay
 # (term_too_small_screen) until it grows back, so the game never tries to
 # draw a torn board.
 term_resize_apply() {
@@ -193,7 +193,7 @@ term_resize_apply() {
 term_setup() {
     SAVED_STTY="$(stty -g)"
     # Autowrap off (\e[?7l) alongside the alternate screen: the centered
-    # game block fills the terminal exactly at the 48x24 minimum, so its
+    # game block fills the terminal exactly at the 48x22 minimum, so its
     # bottom right character lands in the very last cell. With autowrap on
     # that cell can push the screen up one line on some terminals; with it
     # off the write simply stays put. term_restore turns it back on.
