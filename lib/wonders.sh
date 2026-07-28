@@ -13,13 +13,17 @@
 #   assets. wonders_update computes the current wonder, stage and
 #   percentage into WONDER_* globals (read by the HUD in lib/render.sh);
 #   wonder_screen renders the construction site screen shown after every
-#   round and from the "Weltwunder" main menu entry. Wonder names,
+#   round and from the "Weltwunder" main menu entry; its wait loop
+#   repaints on REDRAW_PENDING so a terminal resize (handled in read_key)
+#   does not leave it blank (since 0.1.1). Like the menus, the screen
+#   clears the first line explicitly (\e[H\e[K) so nothing of the play
+#   screen shows through above the title. Wonder names,
 #   sequence and row costs live in the tables below; costs double per
 #   wonder like the roughly geometric line requirements of the original,
 #   but are scaled down to fit single-machine play.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.0  (2026-07-19)
+# Version: 0.1.3  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -45,9 +49,13 @@ WONDER_NAMES_HUD=("Mayan Temple" "Stonehenge" "Sphinx" "Pantheon"
                   "Great Wall" "Taj Mahal" "St Basils")
 WONDER_COSTS=(100 200 400 800 1600 3200 6400)
 
-# State computed by wonders_update from a row total; the HUD and the
-# wonder screen only read these. WONDER_PREV_INDEX tracks completions
+# State computed by wonders_update from a row total; only the wonder
+# screen reads these. WONDER_PREV_INDEX tracks completions
 # across calls so finishing a wonder is logged exactly once.
+# The "HUD" in WONDER_NAMES_HUD/WONDER_HUD_NAME is historical: it is
+# the short name, once shown on the HUD status line until 0.25.0 gave
+# that slot to the rowhammer counter, and now the heading of the
+# construction site screen.
 WONDER_INDEX=0
 WONDER_DONE=0
 WONDER_COST=0
@@ -120,7 +128,7 @@ wonder_screen() {
     wonder_art_load "${WONDER_INDEX}"
     stages="${#WONDER_ART[@]}"
     reveal=$(( WONDER_DONE * stages / WONDER_COST ))
-    frame=$'\e[H\n'
+    frame=$'\e[H\e[K\n'
     if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
         frame+="  Alle Weltwunder sind errichtet!"$'\e[K\n\e[K\n'
     else
@@ -146,6 +154,12 @@ wonder_screen() {
     KEY=""
     while [ -z "${KEY}" ]; do
         read_key
+        # Repaint after a terminal resize (read_key cleared the screen);
+        # the frame is still in scope, so re-emitting it restores it.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            screen_write "${frame}"
+        fi
     done
     return 0
 }

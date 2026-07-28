@@ -7,12 +7,20 @@
 #   after "The New Tetris" (N64). Starts with a menu (singleplayer,
 #   multiplayer placeholder, settings); the game offers a 10x20 board,
 #   7-bag randomizer with a 3-piece preview, a hold slot, gravity with a
-#   level-based speed curve, soft/hard drop, pause and game over with
-#   restart. Pressing the quit key (x/ESC) in a running round opens a
-#   pause menu instead of aborting: resume, suspend the round into the
-#   main menu (it stays resumable via the "Fortsetzen" entry offered in
-#   the main menu and in the singleplayer menu) or
-#   end it; a round is recorded only when it really ends.
+#   level-based speed curve, soft/hard drop, a short lock delay that lets a
+#   landing piece still be slid or rotated, pause and game over with
+#   restart. Completed rows blink briefly before they are removed, so
+#   the player sees which rows scored. The play screen is one fixed
+#   48x22 block centered in the terminal: the hold piece with the round
+#   counters below it on the left, the board in the middle and the three
+#   upcoming pieces top right; pause and game
+#   over appear as a box over the board. Frames are pushed out
+#   incrementally - only the lines that changed are rewritten (see
+#   lib/render.sh). Pressing the quit key (x/ESC) in
+#   a running round opens a pause menu instead of aborting: resume,
+#   suspend the round into the main menu (it stays resumable via the
+#   "Fortsetzen" entry offered in the main menu and in the singleplayer
+#   menu) or end it; a round is recorded only when it really ends.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
 #   cleared rows worth bonus row credit (the "Rows" counter). Since
@@ -22,31 +30,48 @@
 #   is no separate score. The credit
 #   accumulates across all rounds in a savegame and builds the seven
 #   world wonders of the Wonders mode: the current wonder rises as ASCII
-#   art, revealed bottom-up with every invested row, shown live in the
-#   HUD, after every round and via the "Weltwunder" main menu entry.
-#   Player name and key bindings are
+#   art, revealed bottom-up with every invested row, shown after every
+#   round and via the "Weltwunder" main menu entry. It left the HUD in
+#   0.25.0 (user decision) so the rowhammer counter - four rows cleared
+#   in one move, the namesake of the game - could take its slot; since
+#   0.26.0 all counters live in the left pane and the HUD has no status
+#   lines left to hold it.
+#   Player name, color theme and key bindings are
 #   configurable in the settings menu and persisted to a user config
 #   file. Blocks render in the basic 8/16-color ANSI palette or, when
 #   the terminal supports it (auto-detected, overridable via
-#   --color-mode), in an extended xterm 256-color palette. All game data (config, persistent top-10 highscore list,
+#   --color-mode), in an extended xterm 256-color palette; the color
+#   theme (--color-theme: guideline, classic, mono, colorblind) picks
+#   which colors the pieces and gold/silver squares use. With colors off
+#   (--no-color / NO_COLOR) each piece type draws its own two-character
+#   glyph and the gold/silver squares use distinct non-letter glyphs, so
+#   blocks stay tellable apart. All game data (config, persistent top-10 highscore list,
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
 #   ~/.config/rowhammer. Finished rounds enter the highscore list, which the
-#   main menu shows (rows, gold/silver squares and date per entry) and
+#   main menu shows (two lines per entry: rows, gold/silver squares,
+#   rowhammers, pieces placed and their rate in pieces per minute, play
+#   time and date) and
 #   whose rank appears on the game over screen; the row credit decides
-#   the ranking.
+#   the ranking. The HUD also shows the running round's play time (paused
+#   time excluded) and the pieces it has placed.
 #   Every round also feeds persistent statistics (cleared rows, bonus
-#   rows, gold/silver squares built, plus the results of the last three
-#   rounds with their play date), shown via the "Statistik" main
+#   rows, gold/silver squares built, rowhammers, pieces placed and time
+#   played, plus the results of
+#   the last three rounds with their play date), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
-#   action (see lib/debug.sh). A working multiplayer follows
-#   in a later phase (see CLAUDE.md).
+#   action (see lib/debug.sh). The fixed play screen needs a
+#   terminal of at least 48x22; a resize during play is caught via
+#   SIGWINCH and redraws cleanly, and shrinking below the minimum pauses
+#   the round behind a "resize me" overlay until the terminal grows back.
+#   A working multiplayer follows in a later phase (see CLAUDE.md).
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
-#   2. Verify prerequisites (bash >= 4, interactive terminal, size).
+#   2. Verify prerequisites (bash >= 4, interactive terminal, minimum
+#      size; the size is rechecked live via SIGWINCH while running).
 #   3. Source the library modules (debug, config, pieces, board,
 #      squares, highscore, save, stats, wonders, input, render, menu).
 #   4. Resolve settings with precedence default < config file < env <
@@ -55,30 +80,37 @@
 #      set), load the highscore list, the savegame and the statistics
 #      and enter the alternate screen.
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
-#      (input, gravity, locking, square detection, line clearing,
-#      rendering), finished rounds are recorded in the highscore list,
-#      their row credit is banked into the wonder savegame and their
-#      counters into the statistics file,
+#      (input, gravity, locking, square detection, row flash, line
+#      clearing, rendering), finished rounds are recorded in the
+#      highscore list, their row credit is banked into the wonder
+#      savegame and their counters into the statistics file,
 #      settings changes are written back to the config file. A round
 #      suspended via the pause menu returns to the main menu
-#      unrecorded and continues via its "Fortsetzen" entry.
+#      unrecorded and continues via its "Fortsetzen" entry; leaving the
+#      game while such a round waits asks for confirmation first.
 #   7. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
-#                [--color-mode auto|basic|extended] [--debug]
-#                [--debug-dir DIR] [-h|--help]
+#                [--color-mode auto|basic|extended]
+#                [--color-theme guideline|classic|mono|colorblind]
+#                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.17.0  (2026-07-21)
+# Version: 0.28.0  (2026-07-28)
 
 set -euo pipefail
 
 SCRIPT_NAME="$(basename -- "${0}")"
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# CHANGE 2026-07-18 (reapplied 2026-07-21 after the rename to rowhammer.sh):
+# resolve symlinks before taking the directory so the packaged launcher
+# (/usr/games/rowhammer -> /usr/share/rowhammer/rowhammer.sh) finds the
+# library modules and assets next to the real script. readlink -f is part
+# of coreutils, which is already a baseline requirement.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.17.0"
+ROWHAMMER_VERSION="0.28.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -119,6 +151,11 @@ DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 # no migration of the old path per the no-backward-compatibility rule.
 DATA_DIR="${ROWHAMMER_DATA_DIR:-${HOME}/.config/rowhammer}"
 PLAYER_NAME="Player"
+# Color theme: maps piece and gold/silver colors to a named scheme
+# (COLOR_THEMES in lib/pieces.sh). Like the key bindings it is a
+# config-driven setting, so it starts from this default and is then
+# overridden by config_load and the env/CLI blocks after sourcing.
+COLOR_THEME="guideline"
 KEY_LEFT="a"
 KEY_RIGHT="d"
 KEY_ROT_CW="e"
@@ -131,6 +168,7 @@ KEY_HOLD="c"
 # CLI values are parked here and applied after config_load so the
 # command line keeps the highest precedence.
 CLI_PLAYER_NAME=""
+CLI_COLOR_THEME=""
 
 # Print usage information.
 usage() {
@@ -144,8 +182,8 @@ statistics and settings.
 Options:
   --seed N      Seed the piece randomizer for a reproducible sequence.
                 Env: ROWHAMMER_SEED         Default: (random)
-  --name NAME   Player name shown in the HUD (max. 16 characters from
-                A-Z a-z 0-9 space _ -).
+  --name NAME   Player name recorded with highscore entries (max. 16
+                characters from A-Z a-z 0-9 space _ -).
                 Env: ROWHAMMER_PLAYER_NAME  Default: Player
   --data-dir DIR
                 Directory for all persistent game data: the config file
@@ -168,6 +206,11 @@ Options:
                 forces the xterm 256-color palette (guideline piece
                 colors incl. a real orange L, richer gold/silver).
                 Env: ROWHAMMER_COLOR_MODE   Default: auto
+  --color-theme NAME
+                Color scheme mapping piece and gold/silver colors:
+                "guideline" (default), "classic", "mono" or "colorblind".
+                Also selectable in the settings menu and persisted there.
+                Env: ROWHAMMER_COLOR_THEME  Default: guideline
   --debug       Enable the debug/trace mode: the session is recorded
                 into log files (see below). Logs can grow to several
                 megabytes in long sessions.
@@ -316,6 +359,18 @@ while [ "$#" -gt 0 ]; do
             COLOR_MODE="${1#*=}"
             shift
             ;;
+        --color-theme)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            CLI_COLOR_THEME="${2}"
+            shift 2
+            ;;
+        --color-theme=*)
+            CLI_COLOR_THEME="${1#*=}"
+            shift
+            ;;
         --debug)
             DEBUG_OPT=1
             shift
@@ -394,13 +449,26 @@ if [ ! -t 0 ] || [ ! -t 1 ]; then
     die "This game needs an interactive terminal (stdin/stdout must be a tty)"
 fi
 
-# The layout needs room for the board plus sidebar: at least 48x24.
+# The fixed board+sidebar layout needs at least this much room. The check
+# runs at startup (below, once the input module is sourced) and, since
+# 0.19.0, continuously while the game runs: a SIGWINCH that shrinks the
+# terminal below this pauses play behind a "resize me" overlay until it
+# grows back (see term_measure, term_resize_apply in lib/input.sh and the
+# too-small screen in lib/render.sh). TERM_RESIZED is raised by the
+# SIGWINCH handler and applied at the next read_key, so nothing is drawn
+# from inside the async signal handler.
+MIN_TERM_COLS=48
+# CHANGE 2026-07-28: 24 down to 22 rows. The two status lines below the
+# board are gone (their counters now sit in the left pane, see
+# render_pane_left in lib/render.sh), so the game block is two rows
+# shorter and the game runs in correspondingly smaller terminals. The
+# menu and info screens fit as well: the tallest of them, the wonder
+# construction site, needs 20 lines.
+MIN_TERM_ROWS=22
 TERM_ROWS=0
 TERM_COLS=0
-read -r TERM_ROWS TERM_COLS < <(stty size)
-if (( TERM_ROWS < 24 || TERM_COLS < 48 )); then
-    die "Terminal too small: need at least 48x24, got ${TERM_COLS}x${TERM_ROWS}"
-fi
+TERM_TOO_SMALL=0
+TERM_RESIZED=0
 
 # --- Library modules ------------------------------------------------------
 for _lib in debug config pieces board squares highscore save stats wonders input render menu; do
@@ -412,12 +480,22 @@ for _lib in debug config pieces board squares highscore save stats wonders input
 done
 unset _lib
 
+# Terminal size check, now that term_measure (lib/input.sh) is available.
+# It fills TERM_ROWS/TERM_COLS and sets TERM_TOO_SMALL against the minimum
+# above; a too-small terminal at startup is a hard error, while one that
+# shrinks later is handled live via SIGWINCH.
+term_measure
+if [ "${TERM_TOO_SMALL}" -eq 1 ]; then
+    die "Terminal too small: need at least ${MIN_TERM_COLS}x${MIN_TERM_ROWS}, got ${TERM_COLS}x${TERM_ROWS}"
+fi
+
 # --- Settings resolution (default < config < env < CLI) -------------------
 # The config file may override the built-in defaults above.
 config_load
 
 # Environment variables override the config file.
 PLAYER_NAME="${ROWHAMMER_PLAYER_NAME:-${PLAYER_NAME}}"
+COLOR_THEME="${ROWHAMMER_COLOR_THEME:-${COLOR_THEME}}"
 KEY_LEFT="${ROWHAMMER_KEY_LEFT:-${KEY_LEFT}}"
 KEY_RIGHT="${ROWHAMMER_KEY_RIGHT:-${KEY_RIGHT}}"
 KEY_ROT_CW="${ROWHAMMER_KEY_ROT_CW:-${KEY_ROT_CW}}"
@@ -432,6 +510,9 @@ KEY_HOLD="${ROWHAMMER_KEY_HOLD:-${KEY_HOLD}}"
 if [ -n "${CLI_PLAYER_NAME}" ]; then
     PLAYER_NAME="${CLI_PLAYER_NAME}"
 fi
+if [ -n "${CLI_COLOR_THEME}" ]; then
+    COLOR_THEME="${CLI_COLOR_THEME}"
+fi
 
 # Validate the resolved settings; the config file and env vars are user
 # input too. The name charset also keeps the sourced config file safe
@@ -439,6 +520,16 @@ fi
 _name_re='^[A-Za-z0-9_ -]{1,16}$'
 if ! [[ "${PLAYER_NAME}" =~ ${_name_re} ]]; then
     die "Invalid player name: '${PLAYER_NAME}' (allowed: max. 16 characters from A-Z a-z 0-9 space _ -)"
+fi
+_theme_ok=0
+for _theme in "${COLOR_THEMES[@]}"; do
+    if [ "${_theme}" = "${COLOR_THEME}" ]; then
+        _theme_ok=1
+        break
+    fi
+done
+if [ "${_theme_ok}" -eq 0 ]; then
+    die "Invalid color theme: '${COLOR_THEME}' (allowed: ${COLOR_THEMES[*]})"
 fi
 _key_re='^([a-z0-9]|SPACE)$'
 for _var in "${KEY_ACTIONS[@]}"; do
@@ -451,7 +542,7 @@ for _var in "${KEY_ACTIONS[@]}"; do
         fi
     done
 done
-unset _name_re _key_re _var _other
+unset _name_re _key_re _var _other _theme _theme_ok
 
 # Seeding RANDOM makes the 7-bag shuffle sequence reproducible.
 if [ -n "${SEED}" ]; then
@@ -462,18 +553,54 @@ fi
 # precompute the block SGR sequences for the renderer (lib/render.sh).
 color_mode_resolve
 render_colors_init
+# Center the fixed game block on the measured terminal; its position
+# only changes on a resize, so it is computed once here, not per frame.
+layout_update
 
 # --- Game state and helpers -----------------------------------------------
 CUR_TYPE=""; CUR_ROT=0; CUR_X=0; CUR_Y=0
 CLEARED_TOTAL=0; ROW_CREDIT=0; LEVEL=0; FALL_MS=800
 GOLD_COUNT=0; SILVER_COUNT=0; NEXT_INSTANCE_ID=1
+# Round counter of four-row clears, the move this game is named after.
+# Raised in clear_lines (lib/board.sh) where the Tetris bonus is paid,
+# reset per round in game_reset and banked into the all-time statistics
+# by record_round. Round state, not one of the ROWHAMMER_* settings
+# variables that carry the environment overrides.
+ROWHAMMER_COUNT=0
+# Round counter of pieces actually placed ("Pieces" in the HUD, "PCS" in
+# the tables). Raised in lock_and_next where a piece really settles - a
+# piece put into the hold slot or one still falling has not been placed
+# yet - reset per round in game_reset and banked into the highscore entry
+# and the all-time statistics by record_round. Together with the round's
+# play time it yields the pieces per minute the statistics and highscore
+# screens show (fmt_ppm).
+PIECE_COUNT=0
 HOLD_TYPE=""; HOLD_USED=0
 PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
+# Raised by term_resize_apply (lib/input.sh) after a terminal resize was
+# handled, so the loops that gate their own redraw (the game loop via
+# DIRTY, menu_run and the info screens via their local dirty flag) repaint
+# the screen that the resize cleared. Every loop clears it after acting.
+REDRAW_PENDING=0
 # A round left via the pause menu's "Ins Hauptmenue" keeps its complete
 # state in the globals above; this flag marks it as waiting for the
 # "Fortsetzen" main menu entry (issue #12).
 GAME_SUSPENDED=0
 NOW_MS=0; LAST_FALL=0
+# Lock delay (2026-07-22): a piece that cannot fall is not locked on the
+# spot but rests for a short grace window (LOCK_DELAY_MS below), during
+# which the player may still slide or rotate it. LOCK_PENDING marks that
+# armed state, TOUCHDOWN_MS is the timestamp the current rest started -
+# the lock fires once the delay has elapsed (see lock_touchdown, step_down
+# and the game loop).
+LOCK_PENDING=0; TOUCHDOWN_MS=0
+# Play time of the current round in milliseconds and the timestamp the
+# currently running play segment was last accounted from. Only time spent
+# actually playing counts: pauses (the "p" toggle and the pause menu) and
+# the game over screen do not, because those states reset PLAY_LAST to
+# "now" when play resumes (play_clock_resume), so the idle interval is
+# never added. The round keeps its PLAY_MS across a suspend/resume too.
+PLAY_MS=0; PLAY_LAST=0
 # Guards record_round so one round enters the highscore list only
 # once (a round can end twice: game over, then quitting to the menu).
 ROUND_RECORDED=0
@@ -489,6 +616,22 @@ ROUND_RECORDED=0
 # formula so the curve stays easy to tune; the last entry is the cap.
 LEVEL_SPEEDS=(800 720 640 560 480 410 350 300 260 220 190 160 140 120)
 
+# Lock delay in milliseconds: the grace window a resting piece gets before
+# it locks, so a landing can still be nudged left/right or rotated. Only a
+# move that makes the piece airborne again cancels the pending lock (see
+# lock_delay_recheck); a move that leaves it resting keeps the original
+# deadline, so a piece cannot be kept alive forever on the floor. An
+# adjustable game-feel constant, like LEVEL_SPEEDS and TICK_S.
+LOCK_DELAY_MS=250
+
+# Clear animation: rows completed by a lock blink FLASH_CYCLES times
+# (highlighted / normal) with FLASH_MS milliseconds per half cycle before
+# they are actually removed, so the player sees which rows scored. The
+# defaults add up to a short 280 ms; adjustable game-feel constants like
+# LEVEL_SPEEDS and LOCK_DELAY_MS. FLASH_CYCLES=0 turns the animation off.
+FLASH_MS=70
+FLASH_CYCLES=2
+
 # now_ms: put the current time in milliseconds into the global NOW_MS.
 # Uses bash 5's EPOCHREALTIME when available (no fork); older bash falls
 # back to date. A global instead of command substitution keeps the hot
@@ -501,6 +644,53 @@ now_ms() {
         NOW_MS=$(( ${t%.*} * 1000 + 10#${usec:0:3} ))
     else
         NOW_MS=$(( $(date +%s%N) / 1000000 ))
+    fi
+}
+
+# fmt_duration SECONDS: format a whole-second duration as MM:SS into the
+# global FMT_DURATION. Minutes are not rolled into hours so the field
+# stays five characters for any realistic round (90 min -> "90:00"),
+# which keeps the HUD and the highscore column narrow. Shared by the HUD
+# (draw_frame) and the highscore screen so both read identically.
+FMT_DURATION="00:00"
+fmt_duration() {
+    local s="${1}"
+    printf -v FMT_DURATION '%02d:%02d' $(( s / 60 )) $(( s % 60 ))
+}
+
+# fmt_ppm PIECES SECONDS: format a placement rate as pieces per minute
+# with one decimal into the global FMT_PPM ("-" while no play time has
+# been measured yet, which is the only division-by-zero case). Bash has
+# no floating point, so the value is computed in tenths and split for
+# printing. Shared by the highscore and the statistics screen so both
+# read identically.
+FMT_PPM="-"
+fmt_ppm() {
+    local pieces="${1}" secs="${2}" tenths
+    if [ "${secs}" -le 0 ]; then
+        FMT_PPM="-"
+        return 0
+    fi
+    tenths=$(( pieces * 600 / secs ))
+    printf -v FMT_PPM '%d.%d' "$(( tenths / 10 ))" "$(( tenths % 10 ))"
+    return 0
+}
+
+# play_clock_resume: mark "now" as the start of a fresh play-time segment
+# (also restarting the gravity timer, which every resume point already
+# did). Called wherever the round returns to active play after an idle
+# phase - unpausing, leaving the pause menu, a new or a resumed round -
+# so the interval spent paused or in a menu is not counted as play time.
+play_clock_resume() {
+    now_ms
+    LAST_FALL="${NOW_MS}"
+    PLAY_LAST="${NOW_MS}"
+    # A piece resting with the lock delay armed must not lose that window
+    # to the idle interval (pause, pause menu, resumed round); restamp its
+    # touchdown to "now" so the delay starts over on resume instead of
+    # firing immediately from the real time elapsed while idle.
+    if [ "${LOCK_PENDING}" -eq 1 ]; then
+        TOUCHDOWN_MS="${NOW_MS}"
     fi
 }
 
@@ -520,16 +710,20 @@ update_speed() {
 # per round: enter it into the highscore list, bank its row credit
 # into the persistent wonder counter (savegame) and its counters into
 # the all-time statistics (lib/stats.sh). Runs right when the
-# game over triggers, so the game over sidebar can show the achieved
-# rank (HS_LAST_RANK) and the HUD the updated wonder progress, and again
-# as a catch-all when the player quits a running round to the menu.
+# game over triggers, so the game over box can show the achieved
+# rank (HS_LAST_RANK), and again as a catch-all when the player quits a
+# running round to the menu.
 record_round() {
     if [ "${ROUND_RECORDED}" -eq 1 ]; then
         return 0
     fi
     ROUND_RECORDED=1
+    # Round play time in whole seconds, the round's four-row clears and
+    # the pieces it placed; all three are stored with the highscore entry
+    # (play time and pieces are what its PCS/min column is computed from).
     highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
-        "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}"
+        "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
+        "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
     # Every cleared row counts toward the wonder, even from an aborted
     # round - like the original, where all modes feed the line total.
     if [ "${ROW_CREDIT}" -gt 0 ]; then
@@ -538,10 +732,14 @@ record_round() {
     fi
     wonders_update "${TOTAL_ROW_CREDIT}"
     # All-time statistics: the round's physical lines, the bonus
-    # part of the row credit (credit minus physical lines) and the
-    # squares built; the round also enters the recent-rounds list.
+    # part of the row credit (credit minus physical lines), the
+    # squares built, its four-row clears, the pieces it placed and its
+    # play time in whole seconds; the round also enters the
+    # recent-rounds list. Pieces and play time are the pair the
+    # statistics screen derives its PCS/min figures from.
     stats_add_round "${CLEARED_TOTAL}" \
-        "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}"
+        "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}" \
+        "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "$(( PLAY_MS / 1000 ))"
     return 0
 }
 
@@ -553,6 +751,9 @@ spawn_piece() {
     CUR_ROT=0
     CUR_X=3
     CUR_Y=0
+    # A freshly spawned piece starts airborne: clear any lock delay left
+    # from the piece that just locked.
+    LOCK_PENDING=0
     if ! can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"; then
         GAME_OVER=1
         debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} blocked - game over (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
@@ -563,16 +764,55 @@ spawn_piece() {
     DIRTY=1
 }
 
-# lock_and_next: lock the active piece, detect squares, clear lines,
-# update credit/level and spawn the next piece. Square detection
-# runs before line clearing on purpose: a piece that completes a square
+# flash_rows: blink the rows that a lock just completed, before they are
+# removed from the board. The rows come from board_full_rows (FULL_ROWS);
+# the render layer draws the highlight for FLASH_ROWS whenever FLASH_STATE
+# is 1, so the animation is nothing but toggling that flag and redrawing.
+# The wait between the half cycles reuses a timed read instead of sleep:
+# no fork per frame, and key presses arriving during the animation are
+# swallowed on purpose so a burst of them cannot fire at once on the piece
+# that spawns right afterwards (same rationale as the resize overlay in
+# lib/input.sh). A pending SIGWINCH interrupts the read and is applied by
+# read_key on the next tick, as usual.
+flash_rows() {
+    if [ "${FLASH_CYCLES}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
+        return 0
+    fi
+    local y i
+    FLASH_ROWS=()
+    for y in "${FULL_ROWS[@]}"; do
+        FLASH_ROWS["${y}"]=1
+    done
+    debug_event "row flash: rows=${FULL_ROWS[*]} cycles=${FLASH_CYCLES} ms=${FLASH_MS}"
+    for (( i = 0; i < FLASH_CYCLES; i++ )); do
+        FLASH_STATE=1
+        draw_frame
+        key_drain "${FLASH_MS}"
+        FLASH_STATE=0
+        draw_frame
+        key_drain "${FLASH_MS}"
+    done
+    FLASH_ROWS=()
+    FLASH_STATE=0
+    return 0
+}
+
+# lock_and_next: lock the active piece, detect squares, flash and clear
+# completed rows, update credit/level and spawn the next piece. The flash
+# (flash_rows) blocks the loop for its short duration, which is intended:
+# the round waits for the animation before the next piece appears. Square
+# detection runs before line clearing on purpose: a piece that completes a square
 # and a row at once still forms the square first, so the cleared row
 # already earns the square's bonus credit. Forming a square earns no
 # instant points (only its strips pay off when their rows clear later).
 lock_and_next() {
     lock_piece "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"
+    # One more piece placed this round: this is the only spot where a
+    # piece really settles, so it is where the HUD's "Pieces" counter
+    # grows (a held or still falling piece is not placed).
+    PIECE_COUNT=$(( PIECE_COUNT + 1 ))
     # lock_piece consumed the id it stamped into the board.
-    debug_event "lock ${CUR_TYPE} rot=${CUR_ROT} at ${CUR_X},${CUR_Y} id=$(( NEXT_INSTANCE_ID - 1 ))"
+    debug_event "lock ${CUR_TYPE} rot=${CUR_ROT} at ${CUR_X},${CUR_Y} id=$(( NEXT_INSTANCE_ID - 1 )) pieces=${PIECE_COUNT}"
     if detect_square "${CUR_X}" "${CUR_Y}"; then
         if [ "${SQUARE_RESULT}" = "G" ]; then
             GOLD_COUNT=$(( GOLD_COUNT + 1 ))
@@ -582,15 +822,22 @@ lock_and_next() {
             debug_event "silver square formed: silver_total=${SILVER_COUNT}"
         fi
     fi
+    # Let completed rows blink briefly before they vanish (the square
+    # detection above already ran, so a row through a fresh gold/silver
+    # square flashes as the scoring row it is).
+    board_full_rows
+    flash_rows
     clear_lines
     if (( CLEARED > 0 )); then
         CLEARED_TOTAL=$(( CLEARED_TOTAL + CLEARED ))
         ROW_CREDIT=$(( ROW_CREDIT + CLEARED_CREDIT ))
         update_speed
-        # The HUD wonder line tracks the running round live: banked
-        # total plus the credit earned so far in this round.
-        wonders_update $(( TOTAL_ROW_CREDIT + ROW_CREDIT ))
-        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} fall_ms=${FALL_MS} wonder=${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
+        # CHANGE 2026-07-28: the wonder state is no longer refreshed per
+        # clear. It used to feed the HUD's live wonder line, which gave
+        # up its slot to the rowhammer counter (see render_status in
+        # lib/render.sh); record_round and wonder_screen each recompute
+        # it from the row total, so nothing reads a stale value.
+        debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} fall_ms=${FALL_MS} rowhammers=${ROWHAMMER_COUNT}"
     fi
     debug_board_snapshot
     # The hold slot unlocks again once a piece has locked.
@@ -631,11 +878,31 @@ hold_piece() {
         CUR_X=3
         CUR_Y=0
         HOLD_USED=1
+        # The swapped-in piece re-enters airborne at the spawn position;
+        # drop any lock delay armed for the piece we just swapped out.
+        LOCK_PENDING=0
         DIRTY=1
     fi
     now_ms
     LAST_FALL="${NOW_MS}"
     return 0
+}
+
+# lock_delay_recheck: after a successful move or rotation of a piece whose
+# lock delay is already armed, cancel the pending lock if the repositioned
+# piece can fall again. Per the lock-delay design (see LOCK_DELAY_MS) only
+# a shift that makes the piece airborne again resets the touchdown timer -
+# it then falls under normal gravity; a move that leaves it resting keeps
+# the original deadline running, so repeated floor moves cannot stall the
+# lock forever.
+lock_delay_recheck() {
+    if [ "${LOCK_PENDING}" -eq 1 ] && \
+       can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; then
+        LOCK_PENDING=0
+        now_ms
+        LAST_FALL="${NOW_MS}"
+        debug_event "lock delay reset: piece airborne again at ${CUR_X},${CUR_Y}"
+    fi
 }
 
 # try_move DX DY: move the piece if the target position is free.
@@ -646,6 +913,7 @@ try_move() {
         CUR_Y="${ny}"
         debug_event "move ${1},${2} -> ${CUR_X},${CUR_Y}"
         DIRTY=1
+        lock_delay_recheck
         return 0
     fi
     debug_event "move ${1},${2} blocked at ${CUR_X},${CUR_Y}"
@@ -664,6 +932,7 @@ try_rotate() {
             CUR_X=$(( CUR_X + kick ))
             debug_event "rotate dir=${1} -> rot=${CUR_ROT} kick=${kick} at ${CUR_X},${CUR_Y}"
             DIRTY=1
+            lock_delay_recheck
             return 0
         fi
     done
@@ -671,16 +940,31 @@ try_rotate() {
     return 1
 }
 
-# step_down: move the piece one row down; lock it when it cannot fall.
-# Serves both gravity and soft drop; the debug input log tells the two
-# apart (a fall right after a soft-drop key press was manual).
+# lock_touchdown: the active piece cannot fall. Instead of locking on the
+# spot, arm the lock delay (LOCK_DELAY_MS) so the game loop locks it only
+# after the grace window, giving the player a moment to still slide or
+# rotate the landing. Only the transition into the pending state stamps
+# the deadline, so repeated gravity ticks against the floor (or a soft
+# drop on an already resting piece) do not keep pushing it back.
+lock_touchdown() {
+    if [ "${LOCK_PENDING}" -eq 0 ]; then
+        LOCK_PENDING=1
+        now_ms
+        TOUCHDOWN_MS="${NOW_MS}"
+        debug_event "touchdown at ${CUR_X},${CUR_Y}: lock delay ${LOCK_DELAY_MS}ms armed"
+    fi
+}
+
+# step_down: move the piece one row down; arm the lock delay when it cannot
+# fall. Serves both gravity and soft drop; the debug input log tells the
+# two apart (a fall right after a soft-drop key press was manual).
 step_down() {
     if can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y + 1 ))"; then
         CUR_Y=$(( CUR_Y + 1 ))
         debug_event "fall -> y=${CUR_Y}"
         DIRTY=1
     else
-        lock_and_next
+        lock_touchdown
     fi
     return 0
 }
@@ -729,10 +1013,10 @@ handle_key() {
             else
                 debug_event "resumed"
             fi
-            # Restart the gravity timer so a long pause is not counted
-            # as elapsed fall time.
-            now_ms
-            LAST_FALL="${NOW_MS}"
+            # Restart the gravity and play-time clocks so a long pause is
+            # counted neither as elapsed fall time nor as play time (on
+            # pausing PLAY_LAST is moot; on resuming it must be "now").
+            play_clock_resume
             DIRTY=1
             ;;
         "${KEY_QUIT}"|ESC)
@@ -742,12 +1026,14 @@ handle_key() {
             # (lib/menu.sh sets GAME_EXIT/GAME_SUSPENDED accordingly).
             debug_event "pause menu opened"
             menu_pause
-            # The menu overdrew the game screen and consumed time:
-            # force a redraw and restart the gravity timer. Return so
-            # the menu's confirmation key (Enter/space) is not applied
-            # to the game as well.
-            now_ms
-            LAST_FALL="${NOW_MS}"
+            # The menu overdrew the game screen and consumed time: force
+            # a full repaint (the diff renderer cannot know what the menu
+            # put on screen) and restart the gravity and play-time clocks
+            # (the time spent in the menu is not play time). Return so the
+            # menu's confirmation key (Enter/space) is not applied to the
+            # game as well.
+            play_clock_resume
+            RENDER_FULL=1
             DIRTY=1
             return 0
             ;;
@@ -790,15 +1076,18 @@ game_reset() {
     ROW_CREDIT=0
     GOLD_COUNT=0
     SILVER_COUNT=0
+    ROWHAMMER_COUNT=0
+    PIECE_COUNT=0
     HOLD_TYPE=""
     HOLD_USED=0
     PAUSED=0
     GAME_OVER=0
     ROUND_RECORDED=0
+    LOCK_PENDING=0
+    PLAY_MS=0
     update_speed
     spawn_piece
-    now_ms
-    LAST_FALL="${NOW_MS}"
+    play_clock_resume
     DIRTY=1
 }
 
@@ -813,12 +1102,15 @@ game_reset() {
 game_run() {
     local mode="${1:-new}"
     GAME_EXIT=0
+    # The screen still holds a menu: the first frame must repaint it all.
+    RENDER_FULL=1
     if [ "${mode}" = "resume" ] && [ "${GAME_SUSPENDED}" -eq 1 ]; then
         GAME_SUSPENDED=0
         PAUSED=1
         debug_event "round resumed from menu (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
-        now_ms
-        LAST_FALL="${NOW_MS}"
+        # The round keeps its accumulated PLAY_MS; only restart the clocks
+        # so the suspended interval is not counted (it comes back paused).
+        play_clock_resume
         DIRTY=1
     else
         # Starting a new round while another one is still suspended
@@ -832,12 +1124,36 @@ game_run() {
     fi
 
     while [ "${GAME_EXIT}" -eq 0 ]; do
-        # read_key also paces the loop via its TICK_S timeout.
+        # read_key also paces the loop via its TICK_S timeout, and it is
+        # where a pending SIGWINCH is applied (remeasure, clear, and block
+        # on the too-small overlay while the terminal is undersized).
         read_key
         handle_key
+        # A resize just happened: read_key cleared the screen (and may have
+        # blocked for a while behind the too-small overlay). Repaint and
+        # restart the gravity and play-time clocks so the resize interval
+        # counts as neither fall time nor play time - like leaving a pause.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            play_clock_resume
+            RENDER_FULL=1
+            DIRTY=1
+        fi
         if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
             now_ms
-            if (( NOW_MS - LAST_FALL >= FALL_MS )); then
+            # Accumulate the play time of the segment since the last
+            # accounted moment. play_clock_resume set PLAY_LAST to "now"
+            # at every resume, so an idle phase never lands in PLAY_MS.
+            PLAY_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
+            PLAY_LAST="${NOW_MS}"
+            if [ "${LOCK_PENDING}" -eq 1 ]; then
+                # Resting piece: lock once the grace window has elapsed.
+                # Gravity is idle here - the piece cannot fall anyway.
+                if (( NOW_MS - TOUCHDOWN_MS >= LOCK_DELAY_MS )); then
+                    debug_event "lock delay expired at ${CUR_X},${CUR_Y}"
+                    lock_and_next
+                fi
+            elif (( NOW_MS - LAST_FALL >= FALL_MS )); then
                 LAST_FALL="${NOW_MS}"
                 step_down
             fi
@@ -873,8 +1189,8 @@ main() {
     # Load the persistent highscore list once; rounds update it in
     # memory and rewrite the file when they enter the list.
     highscore_load
-    # Load the wonder savegame and derive the initial wonder state for
-    # the HUD before the first frame is drawn.
+    # Load the wonder savegame and derive the wonder state once, so the
+    # "Weltwunder" screen and record_round start from a valid state.
     save_load
     wonders_update "${TOTAL_ROW_CREDIT}"
     # Load the all-time statistics; rounds extend them via
@@ -936,9 +1252,22 @@ main() {
                 ;;
             *)
                 # "Beenden" or ESC on the top level leaves the game. A
-                # round still suspended here ends now; recording it
-                # keeps its row credit (aborted rounds count).
+                # round still suspended here would end unnoticed, so ask
+                # first (it is easy to hit ESC twice and lose a round one
+                # only meant to park). Declining returns to the menu, where
+                # "Fortsetzen" still picks the round up; confirming ends it
+                # and records it, which keeps its row credit (aborted
+                # rounds count, see CLAUDE.md).
                 if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                    if ! menu_confirm "Wirklich beenden?" \
+                        "Ja, beenden" "Nein, zurueck" \
+                        "Eine pausierte Runde wartet noch:" \
+                        "${CLEARED_TOTAL} Lines, ${ROW_CREDIT} Rows, Level ${LEVEL}." \
+                        "" \
+                        "Beim Beenden wird sie gewertet und ist danach" \
+                        "nicht mehr fortsetzbar."; then
+                        continue
+                    fi
                     GAME_SUSPENDED=0
                     record_round
                 fi

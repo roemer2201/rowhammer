@@ -1,0 +1,219 @@
+rowhammer (0.27.0) unstable; urgency=medium
+
+  * Count the pieces a round places and show them as "Pieces" in the
+    HUD, below the play time (user request).
+  * Highscore list and statistics gain the piece count ("PCS") and the
+    placement rate derived from it and the play time ("PPM", pieces per
+    minute); the statistics also show the all-time pieces, the total
+    play time and the resulting rate.
+  * Both tables were exactly at the 48-column minimum width, so an
+    entry now spans two lines (explicitly allowed by the user). That
+    gives the highscore name 12 characters again instead of 6, and it
+    makes the screens taller than a 22-row terminal: the highscore list
+    is paged (five entries per page, table head repeated), and the
+    statistics split into all-time counters and recent rounds.
+  * File formats change accordingly (no backward compatibility, per the
+    project rule - old lines simply fail validation and are dropped):
+    highscore entries gain a trailing "pieces" field, recent-round
+    entries gain "pieces" and "time" before the date, and the
+    statistics file gains the "pieces" and "play_time" counters.
+  * A round without a single cleared row is banked into the statistics
+    from now on: it still carries pieces and play time, which the
+    all-time placement rate needs.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 21:30:00 +0200
+
+rowhammer (0.26.0) unstable; urgency=medium
+
+  * Move the round counters from the two status lines below the board
+    into the left pane, right under the hold piece (user decision).
+  * Drop the key legend and the player name from the play screen: the
+    pane is 12 columns wide, which is too narrow for a name of up to 16
+    characters, and the bindings are documented in the settings menu
+    and the README. The name is still recorded with highscore entries.
+  * The play screen is two rows shorter as a result (48x22 instead of
+    48x24), so the game now runs in terminals of at least 22 rows. All
+    menu and info screens fit that height; the tallest of them, the
+    wonder construction site, needs 20 lines.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 20:00:00 +0200
+
+rowhammer (0.25.0) unstable; urgency=medium
+
+  * Show the rowhammer counter in all three places it was still missing
+    (user decision): the HUD status line, the recent-rounds table of
+    the statistics screen and the highscore list.
+  * The wonder progress leaves the HUD to make room for it - the two
+    status lines of the fixed 48x24 layout are full, so a new counter
+    can only enter if an old one leaves. The wonder is still shown
+    after every round and via the "Weltwunder" main menu entry, and its
+    state is no longer recomputed on every line clear.
+  * File formats change accordingly (no backward compatibility, per the
+    project rule - old lines simply fail validation and are dropped):
+    highscore entries gain a trailing "rowhammers" field, recent-round
+    entries gain one before the date.
+  * Both tables pay for the new "RH" column with existing space: the
+    highscore name column shrinks from 8 to 6 characters and "Silber"
+    becomes "Silb", the recent-rounds table spends its last free
+    columns.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 16:00:00 +0200
+
+rowhammer (0.24.0) unstable; urgency=medium
+
+  * Add the "rowhammer" counter the project is named after: clearing
+    four rows in one move now raises a per-round counter, incremented
+    in clear_lines (lib/board.sh) right where the Tetris bonus is paid
+    and reset per round in game_reset.
+  * The counter is banked into the all-time statistics as the new
+    "rowhammers" key in ~/.config/rowhammer/stats and shown as its own
+    line below the gold/silver squares on the "Statistik" screen. The
+    recent-rounds list keeps its format on purpose: its table already
+    sits close to the 48-column minimum terminal width.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 12:00:00 +0200
+
+rowhammer (0.23.0) unstable; urgency=medium
+
+  * Harden the keyboard input layer (follow-up to issue #7). Escape
+    sequences are now parsed by a state machine whose state survives
+    across read_key calls and game ticks, so a sequence the terminal
+    delivers in pieces - over SSH, inside tmux/screen or under load - is
+    still assembled into one sequence however large the gap between its
+    bytes. The 0.16.1 fix had only widened the continuation window from
+    20 ms to 50 ms; above roughly 45 ms of byte spacing an arrow key
+    still tore apart, and its trailing byte was applied as a key press
+    (right arrow -> "c" -> hold swap, plus a pause menu from the leading
+    ESC since 0.12.0).
+  * The same parser now consumes the sequence classes that used to leak
+    their payload as key presses: X10 mouse reports (three raw bytes
+    after ESC [ M, so every click was a hard drop plus whatever the
+    column byte mapped to), OSC and DCS terminal replies, 8-bit CSI
+    (0x9b) and CSI sequences beyond the length cap. Bytes outside
+    printable ASCII are discarded instead of reported.
+  * Bracketed paste is enabled in term_setup and its payload discarded,
+    so an accidental middle-click paste no longer runs the pasted text
+    as game commands; mouse reporting modes left on by a previously
+    running program are switched off at startup.
+  * A deliberate Esc followed quickly by another key is no longer
+    swallowed as an Alt chord: both keys are reported.
+  * The row-clear flash and the "resize me" overlay no longer wait on a
+    raw single-byte read. Discarding bytes that way could swallow just
+    the head of an escape sequence and leave its tail for the next read,
+    which applied the "C" of a right arrow as the hold key "c" - issue #7
+    reintroduced behind the parser's back, and not visible to a test that
+    drives read_key alone. Both now wait via key_drain, which feeds the
+    bytes through the same state machine and discards only fully resolved
+    keys, so a sequence is swallowed whole or not at all.
+  * New tools/key-scan.sh replays 72 terminal byte sequences through the
+    game's own read_key and checks the mapped key, with an optional
+    per-byte gap to reproduce split delivery, and a --drain option that
+    exercises the discard path above. Findings and the fix proposals are
+    documented in docs/input-analysis.md.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 27 Jul 2026 18:00:00 +0200
+
+rowhammer (0.22.0) unstable; urgency=medium
+
+  * New play screen layout: the fixed 48x24 block is now centered in the
+    terminal instead of hugging the top left corner. The hold piece and
+    a key legend sit in the left pane, the board in the middle, the
+    three upcoming pieces in the top right pane, and the round counters
+    (name, lines, rows, level, gold/silver, play time, wonder progress)
+    on the two bottom status lines. Pause and game over are drawn as a
+    box over the board, the latter carrying the highscore rank.
+  * Rendering is incremental: draw_frame assembles the screen into
+    FRAME_LINES and render_flush writes only the lines that actually
+    changed, each with its own cursor positioning. Settled board rows
+    are cached and rebuilt only after the board really changed, so a
+    moving piece costs a handful of rows instead of all 200 cells.
+    Measured against the previous full-frame renderer: about half the
+    time per frame and roughly a fourteenth of the terminal output.
+  * Leaving the game while a round is still suspended in the pause menu
+    now asks for confirmation ("Wirklich beenden?", declining option
+    preselected) instead of silently ending and recording that round.
+  * Autowrap is turned off while the alternate screen is active: at the
+    48x24 minimum the layout fills the very last terminal cell, which
+    could otherwise scroll the screen on some terminals.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 27 Jul 2026 12:00:00 +0200
+
+rowhammer (0.21.0) unstable; urgency=medium
+
+  * Add configurable colors via named color themes. A theme maps every
+    piece type and the gold/silver squares to symbolic color names, each
+    carrying a basic (8/16-color ANSI) and an extended (xterm 256-color)
+    meaning. Four themes ship: "guideline" (the previous default look,
+    unchanged), "classic", "mono" and "colorblind" (deuteranopia-friendly).
+    Selectable in the settings menu (with a live per-theme color swatch),
+    via --color-theme NAME and the ROWHAMMER_COLOR_THEME environment
+    variable, and persisted to the user config file (COLOR_THEME).
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 26 Jul 2026 12:00:00 +0200
+
+rowhammer (0.20.0) unstable; urgency=medium
+
+  * Cleared rows now blink before they vanish: when a lock completes one
+    or more rows, those rows flash twice (highlighted / normal, about
+    280 ms in total) and only then are removed and the next piece
+    spawns. The rows are collected before the clear (board_full_rows),
+    the renderer highlights them via FLASH_ROWS/FLASH_STATE and
+    flash_rows drives the animation; duration and cycle count are
+    adjustable via FLASH_MS/FLASH_CYCLES (FLASH_CYCLES=0 disables it).
+    Square detection still runs first, so a row through a freshly built
+    gold/silver square flashes at its full value.
+
+ -- roemer2201 <r.oliver@web.de>  Fri, 24 Jul 2026 12:00:00 +0200
+
+rowhammer (0.19.0) unstable; urgency=medium
+
+  * Handle terminal resizing while the game runs (SIGWINCH). The fixed
+    board+sidebar layout still needs at least 48x24, but a resize is now
+    caught live: the screen is cleared and redrawn cleanly, and shrinking
+    the terminal below the minimum pauses the round behind a compact
+    "resize me" overlay (showing the required and current size) until the
+    terminal grows back. The gravity and play-time clocks are restarted
+    after a resize, so the interruption counts as neither fall time nor
+    play time. Menus and info screens repaint on resize as well.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 23 Jul 2026 12:00:00 +0200
+
+rowhammer (0.18.0) unstable; urgency=medium
+
+  * Add a lock delay: a piece that lands is no longer locked immediately
+    but rests for a short grace window (LOCK_DELAY_MS, 250 ms), during
+    which it can still be moved left/right or rotated. The touchdown timer
+    is only reset when a move makes the piece airborne again; a move that
+    leaves it resting keeps the original deadline, so a piece cannot be
+    stalled forever on the floor. Hard drop still locks instantly, and the
+    delay does not run while paused or in the pause menu.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 22 Jul 2026 13:00:00 +0200
+
+rowhammer (0.17.0) unstable; urgency=medium
+
+  * Add a per-round play-time counter: the HUD shows the running round's
+    elapsed time (MM:SS, paused and pause-menu time excluded) and each
+    highscore entry now stores and displays that play time. The highscore
+    line format gains a trailing "time" field (seconds).
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 22 Jul 2026 12:00:00 +0200
+
+rowhammer (0.16.2) unstable; urgency=medium
+
+  * Sync packaging with the current game (0.16.x): the main script is now
+    rowhammer.sh and the wonder ASCII art in assets/wonders/ is installed
+    alongside the library modules.
+  * Reapply the symlink resolution for SCRIPT_DIR in rowhammer.sh so the
+    /usr/games/rowhammer launcher finds modules and assets.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 21 Jul 2026 12:00:00 +0200
+
+rowhammer (0.2.1) unstable; urgency=medium
+
+  * Initial Debian packaging (native package).
+  * Install the game under /usr/share/rowhammer with a /usr/games/rowhammer
+    launcher symlink; tetris.sh now resolves symlinks when locating its
+    library modules.
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 18 Jul 2026 12:00:00 +0200

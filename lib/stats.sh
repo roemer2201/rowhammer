@@ -6,12 +6,20 @@
 #   Persistent all-time game statistics for rowhammer: cleared rows
 #   (physical lines), earned bonus rows (the weighted row credit beyond
 #   the physical lines, i.e. gold/silver/Tetris bonuses) and the number
-#   of gold and silver squares built - plus the results of the last
-#   three rounds (lines, bonus rows, gold/silver squares and the
-#   date the round was played; newest
+#   of gold and silver squares built, plus the rowhammers (four rows
+#   cleared in one move, the namesake of the game), the pieces placed
+#   and the time played - plus the results
+#   of the last
+#   three rounds (lines, bonus rows, gold/silver squares, rowhammers,
+#   pieces, play time
+#   and the date the round was played; newest
 #   first). Since the scoring rebuild (0.4.0) the row credit is the
 #   game's only score, so the recent rounds no longer store a separate
-#   score field - the round's points are lines + bonus.
+#   score field - the round's points are lines + bonus. Since 0.25.0
+#   (user decision) the rowhammer count is both an all-time counter and
+#   a field of the recent-rounds line. Pieces and play time joined them
+#   in 0.27.0 (user decision): together they give the placement rate in
+#   pieces per minute, all-time and per round.
 #   Everything is kept in ${DATA_DIR}/stats (default
 #   ~/.config/rowhammer/stats) as "key=value" lines
 #   plus comment lines. The file is parsed and validated, not sourced:
@@ -22,10 +30,12 @@
 #   finished round
 #   (record_round in rowhammer.sh calls stats_add_round).
 #   stats_screen renders the statistics for the "Statistik" main menu
-#   entry via menu_message (lib/menu.sh).
+#   entry via menu_message (lib/menu.sh) on two screens: the all-time
+#   counters first, the recent rounds second (both together outgrew the
+#   22-row minimum terminal).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-07-20)
+# Version: 0.7.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -36,26 +46,34 @@ fi
 # File name below DATA_DIR and the accepted line formats. The digit
 # caps keep the arithmetic clear of bash integer overflow (same guard
 # as the savegame in lib/save.sh). A "recent" line stores one round as
-# "recent=lines|bonus|gold|silver|date" (date as YYYY-MM-DD, the
-# same shape the highscore list stores); the file keeps the newest
-# round first. Old recent lines (date-less, or with the pre-rebuild
-# leading score field) are simply dropped on load
-# (project rule: no backward compatibility, formats may just break).
+# "recent=lines|bonus|gold|silver|rowhammers|pieces|time|date" (play time
+# in whole seconds, date as YYYY-MM-DD,
+# the same shape the highscore list stores); the file keeps the newest
+# round first. Old recent lines (without the pieces and time fields,
+# without the rowhammer field, date-less,
+# or with the pre-rebuild leading score field) are simply dropped on
+# load (project rule: no backward compatibility, formats may just
+# break).
 STATS_FILE_NAME="stats"
-STATS_LINE_RE='^(lines|bonus_rows|gold_squares|silver_squares)=([0-9]{1,15})$'
-STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){3}\|[0-9]{4}-[0-9]{2}-[0-9]{2})$'
+STATS_LINE_RE='^(lines|bonus_rows|gold_squares|silver_squares|rowhammers|pieces|play_time)=([0-9]{1,15})$'
+STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){6}\|[0-9]{4}-[0-9]{2}-[0-9]{2})$'
 
 # How many recent rounds are kept and shown.
 STATS_RECENT_MAX=3
 
 # All-time counters across every round ever played, plus the recent
-# round list ("lines|bonus|gold|silver|date" per element, newest
+# round list ("lines|bonus|gold|silver|rowhammers|pieces|time|date" per
+# element, newest
 # first). Loaded on startup, extended by stats_add_round, read by
-# stats_screen.
+# stats_screen. STATS_PLAY_TIME is the summed play time in whole
+# seconds; with STATS_PIECES it yields the all-time placement rate.
 STATS_LINES=0
 STATS_BONUS_ROWS=0
 STATS_GOLD=0
 STATS_SILVER=0
+STATS_ROWHAMMERS=0
+STATS_PIECES=0
+STATS_PLAY_TIME=0
 STATS_RECENT=()
 
 # stats_load
@@ -70,6 +88,9 @@ stats_load() {
     STATS_BONUS_ROWS=0
     STATS_GOLD=0
     STATS_SILVER=0
+    STATS_ROWHAMMERS=0
+    STATS_PIECES=0
+    STATS_PLAY_TIME=0
     STATS_RECENT=()
     local f="${DATA_DIR}/${STATS_FILE_NAME}" line found=0
     if [ ! -e "${f}" ]; then
@@ -89,6 +110,9 @@ stats_load() {
                 bonus_rows)     STATS_BONUS_ROWS=$(( 10#${BASH_REMATCH[2]} )) ;;
                 gold_squares)   STATS_GOLD=$(( 10#${BASH_REMATCH[2]} )) ;;
                 silver_squares) STATS_SILVER=$(( 10#${BASH_REMATCH[2]} )) ;;
+                rowhammers)     STATS_ROWHAMMERS=$(( 10#${BASH_REMATCH[2]} )) ;;
+                pieces)         STATS_PIECES=$(( 10#${BASH_REMATCH[2]} )) ;;
+                play_time)      STATS_PLAY_TIME=$(( 10#${BASH_REMATCH[2]} )) ;;
             esac
         elif [[ "${line}" =~ ${STATS_RECENT_RE} ]]; then
             found=1
@@ -101,7 +125,7 @@ stats_load() {
         printf '%s: statistics file has no valid counter line, starting at 0: %s\n' \
             "${SCRIPT_NAME}" "${f}" >&2
     fi
-    debug_event "stats: loaded lines=${STATS_LINES} bonus=${STATS_BONUS_ROWS} gold=${STATS_GOLD} silver=${STATS_SILVER} recent=${#STATS_RECENT[@]} from ${f}"
+    debug_event "stats: loaded lines=${STATS_LINES} bonus=${STATS_BONUS_ROWS} gold=${STATS_GOLD} silver=${STATS_SILVER} rowhammers=${STATS_ROWHAMMERS} pieces=${STATS_PIECES} play_time=${STATS_PLAY_TIME} recent=${#STATS_RECENT[@]} from ${f}"
     return 0
 }
 
@@ -121,36 +145,53 @@ stats_write() {
         printf 'bonus_rows=%d\n' "${STATS_BONUS_ROWS}"
         printf 'gold_squares=%d\n' "${STATS_GOLD}"
         printf 'silver_squares=%d\n' "${STATS_SILVER}"
-        # Newest round first; format lines|bonus|gold|silver|date.
+        printf 'rowhammers=%d\n' "${STATS_ROWHAMMERS}"
+        printf 'pieces=%d\n' "${STATS_PIECES}"
+        printf 'play_time=%d\n' "${STATS_PLAY_TIME}"
+        # Newest round first;
+        # lines|bonus|gold|silver|rowhammers|pieces|time|date.
         # The length guard keeps bash < 4.4 happy under set -u.
         if [ "${#STATS_RECENT[@]}" -gt 0 ]; then
             printf 'recent=%s\n' "${STATS_RECENT[@]}"
         fi
     } > "${tmp}"
     mv -f -- "${tmp}" "${f}"
-    debug_event "stats: wrote lines=${STATS_LINES} bonus=${STATS_BONUS_ROWS} gold=${STATS_GOLD} silver=${STATS_SILVER} recent=${#STATS_RECENT[@]} to ${f}"
+    debug_event "stats: wrote lines=${STATS_LINES} bonus=${STATS_BONUS_ROWS} gold=${STATS_GOLD} silver=${STATS_SILVER} rowhammers=${STATS_ROWHAMMERS} pieces=${STATS_PIECES} play_time=${STATS_PLAY_TIME} recent=${#STATS_RECENT[@]} to ${f}"
     return 0
 }
 
-# stats_add_round LINES BONUS GOLD SILVER
+# stats_add_round LINES BONUS GOLD SILVER ROWHAMMERS PIECES TIME
 # Bank one finished round into the all-time counters, prepend it to the
 # recent round list (capped at STATS_RECENT_MAX) and persist both. The
 # round is stamped with today's date, the same way the highscore list
-# dates its entries. A
-# round without any progress at all (no lines, no bonus, no squares)
-# leaves the counters, the list and the file
-# untouched, so idle rounds cause no disk writes.
+# dates its entries. ROWHAMMERS is the round's number of four-row
+# clears, PIECES the number of pieces placed and TIME its play time in
+# whole seconds; all three feed the all-time counters and the recent
+# round entry alike. A
+# round without any progress at all (no lines, no bonus, no squares, no
+# piece placed) leaves the counters, the list and the file
+# untouched, so idle rounds cause no disk writes (a rowhammer implies
+# cleared lines, so it needs no own guard).
+# CHANGE 2026-07-28: the piece count joined that guard. A round that
+# ends without a single cleared row used to vanish silently; now it
+# still carries pieces and play time, and dropping it would bend the
+# all-time placement rate.
 stats_add_round() {
     local lines="${1}" bonus="${2}" gold="${3}" silver="${4}"
+    local rowhammers="${5}" pieces="${6}" time="${7}"
     local entry
-    if (( lines == 0 && bonus == 0 && gold == 0 && silver == 0 )); then
+    if (( lines == 0 && bonus == 0 && gold == 0 && silver == 0 \
+        && pieces == 0 )); then
         return 0
     fi
     STATS_LINES=$(( STATS_LINES + lines ))
     STATS_BONUS_ROWS=$(( STATS_BONUS_ROWS + bonus ))
     STATS_GOLD=$(( STATS_GOLD + gold ))
     STATS_SILVER=$(( STATS_SILVER + silver ))
-    entry="${lines}|${bonus}|${gold}|${silver}|$(date +%Y-%m-%d)"
+    STATS_ROWHAMMERS=$(( STATS_ROWHAMMERS + rowhammers ))
+    STATS_PIECES=$(( STATS_PIECES + pieces ))
+    STATS_PLAY_TIME=$(( STATS_PLAY_TIME + time ))
+    entry="${lines}|${bonus}|${gold}|${silver}|${rowhammers}|${pieces}|${time}|$(date +%Y-%m-%d)"
     # Prepend the round; slicing an empty array errors under set -u on
     # bash < 4.4, hence the guard.
     if [ "${#STATS_RECENT[@]}" -gt 0 ]; then
@@ -159,7 +200,7 @@ stats_add_round() {
     else
         STATS_RECENT=("${entry}")
     fi
-    debug_event "stats: round banked +${lines} lines +${bonus} bonus +${gold} gold +${silver} silver"
+    debug_event "stats: round banked +${lines} lines +${bonus} bonus +${gold} gold +${silver} silver +${rowhammers} rowhammers +${pieces} pieces +${time}s play time"
     stats_write
     return 0
 }
@@ -168,14 +209,23 @@ stats_add_round() {
 # Show the all-time statistics as a menu-style info screen and wait for
 # any key. Labels are German like the menus (ASCII, no umlauts per the
 # conventions). The weighted total (lines + bonus rows) is shown as a
-# summary line because it is the number that builds the wonders. Below
-# the counters the results of the last STATS_RECENT_MAX rounds are
-# listed, newest first and including the date they were played; the
-# column layout stays within the 48-column
-# minimum terminal width.
+# summary line because it is the number that builds the wonders, and the
+# placement rate (pieces per minute over all rounds ever played) as the
+# summary of pieces and play time. The results of the last
+# STATS_RECENT_MAX rounds follow on a second screen, newest first, two
+# lines each and including the date they were played; every line stays
+# within the 46 characters the 48-column
+# minimum terminal width leaves next to the two-column menu indent.
+# CHANGE 2026-07-28 (user decision, 0.27.0): counters and recent rounds
+# no longer share one screen. The pieces, the play time and the derived
+# rate need three more counter lines and a second line per round, which
+# together exceed the 17 body lines a 22-row terminal offers (see
+# MENU_BODY_MAX in lib/menu.sh) - so the screen was split rather than
+# columns dropped.
 stats_screen() {
     local -a body=()
-    local line entry r_lines r_bonus r_gold r_silver r_date
+    local line entry r_lines r_bonus r_gold r_silver r_hammers r_pieces
+    local r_time r_date secs
     printf -v line '%-26s %10d' "Abgebaute Reihen:" "${STATS_LINES}"
     body+=("${line}")
     printf -v line '%-26s %10d' "Bonusreihen:" "${STATS_BONUS_ROWS}"
@@ -188,28 +238,53 @@ stats_screen() {
     body+=("${line}")
     printf -v line '%-26s %10d' "Silberbloecke:" "${STATS_SILVER}"
     body+=("${line}")
+    # The namesake move: four rows cleared in one go.
+    printf -v line '%-26s %10d' "Rowhammer (4 Reihen):" \
+        "${STATS_ROWHAMMERS}"
+    body+=("${line}")
     body+=("")
+    printf -v line '%-26s %10d' "Abgelegte Steine:" "${STATS_PIECES}"
+    body+=("${line}")
+    # Total play time as H:MM:SS - fmt_duration's MM:SS is meant for a
+    # single round and would grow to four-digit minutes here.
+    secs="${STATS_PLAY_TIME}"
+    printf -v line '%-26s %10s' "Spielzeit gesamt:" \
+        "$(printf '%d:%02d:%02d' "$(( secs / 3600 ))" \
+            "$(( secs % 3600 / 60 ))" "$(( secs % 60 ))")"
+    body+=("${line}")
+    fmt_ppm "${STATS_PIECES}" "${STATS_PLAY_TIME}"
+    printf -v line '%-26s %10s' "Steine/Minute (PCS/min):" "${FMT_PPM}"
+    body+=("${line}")
+    debug_event "stats screen shown (counters)"
+    menu_message "Statistik (1/2)" "${body[@]}"
+
+    # Second screen: the recent rounds. The first line per round carries
+    # the date and the row counters, the second the squares, the
+    # rowhammers and the placement rate; the Rows column is the round's
+    # score (lines + bonus), derived instead of stored so the file can
+    # never contradict itself.
+    body=()
     body+=("Letzte Spiele (neueste zuerst):")
+    body+=("")
     if [ "${#STATS_RECENT[@]}" -eq 0 ]; then
         body+=("Noch keine Spiele.")
     else
-        # Tighter columns than before so the date fits: 42 characters
-        # plus the 2-column menu indent stay below 48. The Rows column
-        # is the round's score (lines + bonus), derived instead of
-        # stored so the file can never contradict itself.
-        printf -v line '%6s %6s %5s %4s %6s %10s' \
-            "Rows" "Reihen" "Bonus" "Gold" "Silber" "Datum"
-        body+=("${line}")
         for entry in "${STATS_RECENT[@]}"; do
-            IFS='|' read -r r_lines r_bonus r_gold r_silver r_date \
-                <<< "${entry}"
-            printf -v line '%6d %6d %5d %4d %6d %10s' \
-                "$(( r_lines + r_bonus ))" "${r_lines}" "${r_bonus}" \
-                "${r_gold}" "${r_silver}" "${r_date}"
-            body+=("${line}")
+            IFS='|' read -r r_lines r_bonus r_gold r_silver r_hammers \
+                r_pieces r_time r_date <<< "${entry}"
+            printf -v line '%10s Rows %5d Reihen %4d Bonus %4d' \
+                "${r_date}" "$(( r_lines + r_bonus ))" "${r_lines}" \
+                "${r_bonus}"
+            body+=("${line:0:46}")
+            fmt_ppm "${r_pieces}" "${r_time}"
+            printf -v line '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+                "${r_gold}" "${r_silver}" "${r_hammers}" "${r_pieces}" \
+                "${FMT_PPM}"
+            body+=("${line:0:46}")
+            body+=("")
         done
     fi
     debug_event "stats screen shown (${#STATS_RECENT[@]} recent rounds)"
-    menu_message "Statistik" "${body[@]}"
+    menu_message "Statistik (2/2)" "${body[@]}"
     return 0
 }

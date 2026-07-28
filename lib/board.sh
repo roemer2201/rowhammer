@@ -11,11 +11,18 @@
 #   "G" gold). Line clears mark the instances they run through as cut
 #   (INSTANCE_CUT), which disqualifies them from forming squares, and
 #   report weighted row credit based on the ROWS_* values from
-#   lib/squares.sh. The two top rows are hidden spawn rows. In debug
-#   mode every cleared row is logged with its credit breakdown.
+#   lib/squares.sh. A four-row clear also raises the round's rowhammer
+#   counter (ROWHAMMER_COUNT in rowhammer.sh), the move the game is
+#   named after. board_full_rows reports the full rows before they
+#   are removed, so the caller can flash them first (see flash_rows in
+#   rowhammer.sh). The two top rows are hidden spawn rows. In debug
+#   mode every cleared row is logged with its credit breakdown. Every
+#   function that changes the board calls render_board_dirty
+#   (lib/render.sh) so the renderer's settled-row cache is rebuilt on the
+#   next frame.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.1  (2026-07-20)
+# Version: 0.7.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -51,6 +58,7 @@ board_init() {
         BOARD_ID[i]=0
         BOARD_SQ[i]=""
     done
+    render_board_dirty
 }
 
 # can_place TYPE ROT X Y
@@ -94,6 +102,31 @@ lock_piece() {
         BOARD[idx]="${type}"
         BOARD_ID[idx]="${id}"
     done
+    render_board_dirty
+}
+
+# board_full_rows
+# Collect the y coordinates of all currently full rows into the global
+# array FULL_ROWS (top to bottom, empty when nothing is complete). Runs
+# before clear_lines so the caller can flash the rows that are about to
+# vanish; the board itself is not touched here.
+FULL_ROWS=()
+board_full_rows() {
+    local y x row_full
+    FULL_ROWS=()
+    for (( y = 0; y < BOARD_H; y++ )); do
+        row_full=1
+        for (( x = 0; x < BOARD_W; x++ )); do
+            if [ "${BOARD[y * BOARD_W + x]}" = "${EMPTY_CELL}" ]; then
+                row_full=0
+                break
+            fi
+        done
+        if [ "${row_full}" -eq 1 ]; then
+            FULL_ROWS+=( "${y}" )
+        fi
+    done
+    return 0
 }
 
 # clear_lines
@@ -167,8 +200,14 @@ clear_lines() {
     BOARD_ID=("${nid[@]}")
     BOARD_SQ=("${nsq[@]}")
     # Tetris bonus: clearing four rows in one move adds one extra row of
-    # credit, per the original's rules.
+    # credit, per the original's rules. That very move is what the
+    # project is named after, so it also feeds the round's rowhammer
+    # counter - kept with the other round state in rowhammer.sh (like
+    # NEXT_INSTANCE_ID, which lock_piece advances from here).
     if [ "${CLEARED}" -eq 4 ]; then
         CLEARED_CREDIT=$(( CLEARED_CREDIT + ROWS_TETRIS ))
+        ROWHAMMER_COUNT=$(( ROWHAMMER_COUNT + 1 ))
+        debug_event "rowhammer (4 rows at once): round_total=${ROWHAMMER_COUNT}"
     fi
+    render_board_dirty
 }

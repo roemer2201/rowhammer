@@ -12,6 +12,43 @@ Abbau kraeftige Bonus-Reihen liefern.
 Der Name ist ein Wortspiel: Hier werden Reihen (rows) gehaemmert - mit dem
 gleichnamigen Hardware-Angriff hat das Spiel nichts zu tun.
 
+## Vorschau
+
+Kurze, echte Spielsequenzen - aufgenommen mit
+[asciinema](https://asciinema.org/) und als GIF eingebettet. Die
+zugehoerigen `.cast`-Dateien liegen unter [`docs/demo/`](docs/demo) und
+lassen sich im Terminal abspielen, z. B.
+`asciinema play docs/demo/gold.cast`. Neu erzeugen (aus echtem Spiel,
+gegen das Debug-Log verifiziert) lassen sie sich mit der Toolchain unter
+[`tools/demo/`](tools/demo): `python3 tools/demo/make_demos.py`.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <b>Tetris - vier Reihen auf einmal</b><br>
+      <img src="docs/demo/tetris.gif" alt="Tetris: vier Reihen auf einmal werden abgebaut" width="420"><br>
+      <sub>Neun Spalten fuellen, die Luecke rechts lassen - der stehende I-Stein raeumt vier Reihen (+1 Bonuszeile).</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>Silber-Quadrat</b><br>
+      <img src="docs/demo/silver.gif" alt="Ein Silber-Quadrat entsteht aus vier gemischten Teilen" width="420"><br>
+      <sub>Vier <em>gemischte</em> Teile fuellen ein 4x4-Feld - es wird zum Silber-Quadrat (+5 je Reihe beim Abbau).</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <b>Gold-Quadrat</b><br>
+      <img src="docs/demo/gold.gif" alt="Ein Gold-Quadrat entsteht aus vier gleichen Teilen" width="420"><br>
+      <sub>Vier <em>gleiche</em> Teile (hier vier O) im 4x4-Feld - das Gold-Quadrat bringt +10 je Reihe.</sub>
+    </td>
+    <td align="center" width="50%">
+      <b>Weltwunder-Baustelle</b><br>
+      <img src="docs/demo/wonder.gif" alt="Die Weltwunder-Baustelle mit der fast fertigen Sphinx" width="420"><br>
+      <sub>Der ueber alle Runden gesammelte Reihenstand baut Stueck fuer Stueck ein Weltwunder auf.</sub>
+    </td>
+  </tr>
+</table>
+
 ## Status
 
 **Phasen 1 bis 3 sind umgesetzt** (spielbarer Kern, Startmenue, die
@@ -25,7 +62,7 @@ Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
 fuer den "Rows"-Zaehler. Dieser Zaehler baut ueber alle Runden hinweg
 sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
 unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
-und im HUD, nach jeder Runde und im Hauptmenue angezeigt. Die
+und nach jeder Runde sowie im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
 Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik und
 Einstellungen;
@@ -35,8 +72,16 @@ und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
 
 ## Spielen
 
+Direkt aus dem Repository:
+
 ```
 ./rowhammer.sh
+```
+
+Oder als Debian-Paket installieren (siehe unten), dann:
+
+```
+rowhammer
 ```
 
 Das Startmenue bietet:
@@ -46,14 +91,18 @@ Das Startmenue bietet:
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
 - **Einzelspieler** - vorerst nur "Normales Spiel"
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
-- **Highscores** - die besten 10 Runden mit Name, Rows (die Punkte
-  der Runde), Gold-/Silberquadraten und Datum; ein Game Over zeigt
-  den erreichten Rang direkt an
+- **Highscores** - die besten 10 Runden, je Eintrag zwei Zeilen und
+  seitenweise geblaettert: Name, Rows (die Punkte der Runde), Spielzeit
+  und Datum in der ersten, Gold-/Silberquadrate, Rowhammer ("RH"),
+  abgelegte Teile ("PCS") und Teile je Minute ("PPM") in der zweiten;
+  ein Game Over zeigt den erreichten Rang direkt an
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
-- **Statistik** - Gesamtzaehler ueber alle Runden: abgebaute Reihen,
-  Bonusreihen sowie gebaute Gold- und Silberbloecke; dazu die
-  Ergebnisse der letzten drei Spiele
+- **Statistik** - auf zwei Bildschirmen: Gesamtzaehler ueber alle
+  Runden (abgebaute Reihen, Bonusreihen, gebaute Gold- und
+  Silberbloecke, die "Rowhammer" - vier Reihen auf einmal -, die
+  abgelegten Teile, die Gesamtspielzeit und die daraus berechneten
+  Steine/Minute), danach die Ergebnisse der letzten drei Spiele
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`)
@@ -67,7 +116,7 @@ Optionen:
 | Option           | Umgebungsvariable        | Wirkung                                  |
 |------------------|--------------------------|------------------------------------------|
 | `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
-| `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername im HUD                       |
+| `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername fuer die Highscore-Liste     |
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen (auch Standard-`NO_COLOR`, s. u.) |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
@@ -115,12 +164,31 @@ Umgesetzt:
   Diese Reihenwertung ist zugleich das Punktesystem: nur abgebaute
   Reihen bringen Punkte, Drops und Quadrat-Bildung nicht
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
+- **Blinkende Reihen beim Abbau:** vollstaendige Reihen blinken kurz
+  auf (zweimal hell/normal, zusammen rund 280 ms), bevor sie
+  verschwinden und das naechste Teil erscheint
 - **Pausenmenue statt hartem Abbruch:** `Esc`/`x` unterbricht die
   Runde; sie kann ins Hauptmenue gelegt und dort ueber "Fortsetzen"
-  wieder aufgenommen werden - gewertet wird erst beim echten Rundenende
+  wieder aufgenommen werden - gewertet wird erst beim echten Rundenende.
+  Wer das Spiel verlaesst, waehrend noch eine pausierte Runde wartet,
+  wird vorher gefragt
 - Levelkurve (schneller je 10 Reihen)
-- Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering
-  (Double-Buffering), sauberes Terminal-Restore beim Beenden
+- **Zentriertes Spielfeld-Layout:** ein festes 48x22-Feld, mittig im
+  Terminal ausgerichtet - links der Hold-Stein und darunter die
+  Rundenzaehler (Lines, Rows, Level, Gold, Silber, Rowhammer, Zeit,
+  abgelegte Teile),
+  das Spielfeld in der Mitte, die naechsten drei Steine oben rechts;
+  Pause und Game Over erscheinen als Kasten ueber dem Spielfeld
+- Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering,
+  sauberes Terminal-Restore beim Beenden
+- **Inkrementelles Rendering:** je Frame werden nur die tatsaechlich
+  geaenderten Zeilen neu geschrieben, unveraenderte Spielfeldreihen
+  kommen aus einem Cache - rund 2x schnellerer Frame-Aufbau und ein
+  Bruchteil der Terminal-Ausgabe gegenueber dem Voll-Frame
+- **Reagiert auf Groessenaenderungen des Terminals** (SIGWINCH):
+  zeichnet nach einem Resize sauber neu; wird das Terminal kleiner als
+  das benoetigte 48x22, pausiert die Runde hinter einem Hinweis, bis
+  wieder genug Platz da ist
 - **Erweiterter Farbmodus:** auf 256-Farben-Terminals (automatisch
   erkannt, umschaltbar per `--color-mode`) eine satte xterm-Palette mit
   den Guideline-Teilfarben - inklusive echtem Orange fuer das L-Teil
@@ -131,14 +199,17 @@ Umgesetzt:
   `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
-  Reihenwertung) und gebaute Gold-/Silberbloecke sowie die Ergebnisse
+  Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der
+  "Rowhammer" (vier Reihen auf einmal - der Namensgeber des Spiels)
+  sowie abgelegte Teile und Spielzeit (daraus die Ablegerate in
+  Teilen je Minute); dazu die Ergebnisse
   der letzten drei Spiele, einsehbar im
   Hauptmenue
 - **Weltwunder-Modus:** der "Rows"-Zaehler baut ueber alle Runden
   hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,
   Chinesische Mauer, Taj Mahal, Basilius-Kathedrale) als ASCII-Art
   Baustufe fuer Baustufe von unten auf; Fortschritt persistent in
-  `~/.config/rowhammer/save`, Anzeige im HUD, nach jeder Runde und im Menue
+  `~/.config/rowhammer/save`, Anzeige nach jeder Runde und im Menue
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
   `~/.config/rowhammer/rowhammer.conf`
 
@@ -146,10 +217,29 @@ Geplant:
 
 - Spaeter: **Multiplayer** ueber das Netzwerk mit Garbage-Reihen
 
+## Installation als Debian-Paket
+
+Das Repository enthaelt eine vollstaendige Debian-Paketierung (`debian/`,
+`Makefile`). Bauen und installieren:
+
+```
+./build-deb.sh
+sudo apt install ./dist/rowhammer_*.deb
+```
+
+Benoetigt werden `dpkg-dev` und `debhelper`. Das Paket installiert das
+Spiel nach `/usr/share/rowhammer/` und legt den Starter
+`/usr/games/rowhammer` an. Alternativ geht auch der klassische Weg mit
+`dpkg-buildpackage -us -uc -b` oder eine Installation ohne Paket per
+`sudo make install` (Standard-Praefix `/usr/local`, entfernen mit
+`sudo make uninstall`). Eine RPM-Paketierung ist geplant.
+
 ## Voraussetzungen
 
 - Bash >= 4.0 (empfohlen: Bash 5)
-- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens ca. 80x24 Zeichen
+- Ein Terminal mit ANSI-Farbunterstuetzung, mindestens 48x22 Zeichen
+  (kleiner wird nicht gestartet; eine Verkleinerung waehrend des Spiels
+  pausiert bis wieder genug Platz da ist)
 - Keine weiteren Abhaengigkeiten ausser Coreutils
 
 ## Steuerung
@@ -157,7 +247,8 @@ Geplant:
 Standardbelegung; die Buchstabentasten (`w`, `e`, `c` usw.) sind im
 Einstellungsmenue aenderbar, waehrend die Pfeiltasten sowie Leertaste
 (Hard-Drop) und `2` (Hold) als feste Sekundaerbelegung immer aktiv
-bleiben:
+bleiben. Der Spielbildschirm zeigt die Belegung nicht mehr an - dort
+stehen jetzt die Rundenzaehler:
 
 | Taste                     | Aktion                      |
 |---------------------------|-----------------------------|
