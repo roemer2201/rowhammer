@@ -178,7 +178,9 @@ Umgesetzt:
   Rundenzaehler (Lines, Rows, Level, Gold, Silber, Rowhammer, Zeit,
   abgelegte Teile),
   das Spielfeld in der Mitte, die naechsten drei Steine oben rechts;
-  Pause und Game Over erscheinen als Kasten ueber dem Spielfeld
+  Pause und Game Over erscheinen als Kasten ueber dem Spielfeld.
+  Menues, Info-Bildschirme und die Weltwunder-Baustelle sind ebenfalls
+  zentriert und buendig zum Spielfeld
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering,
   sauberes Terminal-Restore beim Beenden
 - **Inkrementelles Rendering:** je Frame werden nur die tatsaechlich

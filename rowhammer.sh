@@ -16,7 +16,9 @@
 #   upcoming pieces top right; pause and game
 #   over appear as a box over the board. Frames are pushed out
 #   incrementally - only the lines that changed are rewritten (see
-#   lib/render.sh). Pressing the quit key (x/ESC) in
+#   lib/render.sh). Menus, info screens and prompts are centered the
+#   same way (render_menu_frame), so they line up with the play screen
+#   instead of sitting in the top left corner. Pressing the quit key (x/ESC) in
 #   a running round opens a pause menu instead of aborting: resume,
 #   suspend the round into the main menu (it stays resumable via the
 #   "Fortsetzen" entry offered in the main menu and in the singleplayer
@@ -463,7 +465,8 @@ MIN_TERM_COLS=48
 # render_pane_left in lib/render.sh), so the game block is two rows
 # shorter and the game runs in correspondingly smaller terminals. The
 # menu and info screens fit as well: the tallest of them, the wonder
-# construction site, needs 20 lines.
+# construction site, needs 19 lines (it lost its leading blank line when
+# the screens became centered blocks in 0.28.0).
 MIN_TERM_ROWS=22
 TERM_ROWS=0
 TERM_COLS=0
