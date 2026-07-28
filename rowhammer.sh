@@ -87,7 +87,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.22.0  (2026-07-27)
+# Version: 0.23.0  (2026-07-27)
 
 set -euo pipefail
 
@@ -101,7 +101,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.22.0"
+ROWHAMMER_VERSION="0.23.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -707,22 +707,19 @@ flash_rows() {
     if [ "${FLASH_CYCLES}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
         return 0
     fi
-    local y i ignore delay
+    local y i
     FLASH_ROWS=()
     for y in "${FULL_ROWS[@]}"; do
         FLASH_ROWS["${y}"]=1
     done
-    printf -v delay '%d.%03d' $(( FLASH_MS / 1000 )) $(( FLASH_MS % 1000 ))
     debug_event "row flash: rows=${FULL_ROWS[*]} cycles=${FLASH_CYCLES} ms=${FLASH_MS}"
     for (( i = 0; i < FLASH_CYCLES; i++ )); do
         FLASH_STATE=1
         draw_frame
-        ignore=""
-        IFS= read -rsn1 -t "${delay}" ignore || :
+        key_drain "${FLASH_MS}"
         FLASH_STATE=0
         draw_frame
-        ignore=""
-        IFS= read -rsn1 -t "${delay}" ignore || :
+        key_drain "${FLASH_MS}"
     done
     FLASH_ROWS=()
     FLASH_STATE=0
