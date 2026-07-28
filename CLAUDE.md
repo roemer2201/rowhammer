@@ -1112,6 +1112,11 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
+- [ ] Hauptmenue ebenfalls zentriert darstellen: das Spielfeld-Layout
+      wird seit 0.22.0 per `layout_update` mittig im Terminal
+      ausgerichtet (siehe 3.4, 4.3), das Hauptmenue (`lib/menu.sh`)
+      aber weiterhin oben links gezeichnet - nachziehen, damit Menue
+      und Spielbildschirm konsistent zentriert erscheinen.
 - [x] Weltwunder-Fortschritt aus der Ingame-Statusanzeige entfernen:
       umgesetzt als Teil des Rowhammer-Zaehlers in Version 0.25.0 (siehe
       naechster Punkt) - der freigewordene Platz auf der zweiten
