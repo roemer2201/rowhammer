@@ -1096,6 +1096,14 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
+- [ ] Weltwunder-Fortschritt aus der Ingame-Statusanzeige entfernen: die
+      untere Statuszeile zeigt laut 3.4 laufend aktuelles Wunder +
+      Baufortschritt in Prozent; das soll aus dem HUD verschwinden. Der
+      Baustellen-Bildschirm nach Rundenende und der Hauptmenuepunkt
+      "Weltwunder" bleiben unveraendert die Anzeige fuer den Fortschritt.
+      Betrifft die HUD-Statuszeilen in `lib/render.sh` (siehe 3.4) sowie
+      die entsprechende Beschreibung in Abschnitt 3.4, die nach der
+      Umsetzung anzupassen ist.
 - [x] "rowhammer"-Zaehler einbauen (Version 0.24.0): zaehlt, wie oft
       vier Reihen auf einmal abgebaut wurden (der Tetris, hier nach dem
       Projekt benannt). Hochgezaehlt wird er dort, wo `clear_lines`
