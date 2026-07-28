@@ -62,7 +62,7 @@ Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
 fuer den "Rows"-Zaehler. Dieser Zaehler baut ueber alle Runden hinweg
 sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
 unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
-und im HUD, nach jeder Runde und im Hauptmenue angezeigt. Die
+und nach jeder Runde sowie im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
 Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik und
 Einstellungen;
@@ -92,8 +92,8 @@ Das Startmenue bietet:
 - **Einzelspieler** - vorerst nur "Normales Spiel"
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
 - **Highscores** - die besten 10 Runden mit Name, Rows (die Punkte
-  der Runde), Gold-/Silberquadraten und Datum; ein Game Over zeigt
-  den erreichten Rang direkt an
+  der Runde), Gold-/Silberquadraten, Rowhammern ("RH"), Spielzeit und
+  Datum; ein Game Over zeigt den erreichten Rang direkt an
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
 - **Statistik** - Gesamtzaehler ueber alle Runden: abgebaute Reihen,
@@ -188,7 +188,7 @@ Umgesetzt:
   hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,
   Chinesische Mauer, Taj Mahal, Basilius-Kathedrale) als ASCII-Art
   Baustufe fuer Baustufe von unten auf; Fortschritt persistent in
-  `~/.config/rowhammer/save`, Anzeige im HUD, nach jeder Runde und im Menue
+  `~/.config/rowhammer/save`, Anzeige nach jeder Runde und im Menue
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
   `~/.config/rowhammer/rowhammer.conf`
 

@@ -9,14 +9,14 @@
 #   of gold and silver squares built, plus the rowhammers (four rows
 #   cleared in one move, the namesake of the game) - plus the results
 #   of the last
-#   three rounds (lines, bonus rows, gold/silver squares and the
-#   date the round was played; newest
+#   three rounds (lines, bonus rows, gold/silver squares, rowhammers
+#   and the date the round was played; newest
 #   first). Since the scoring rebuild (0.4.0) the row credit is the
 #   game's only score, so the recent rounds no longer store a separate
-#   score field - the round's points are lines + bonus. The rowhammer
-#   count is an all-time counter only: the recent-rounds line keeps its
-#   format because its table already sits close to the 48-column
-#   minimum width.
+#   score field - the round's points are lines + bonus. Since 0.25.0
+#   (user decision) the rowhammer count is both an all-time counter and
+#   a field of the recent-rounds line; its "RH" column spends the last
+#   free columns of the 48-column minimum width.
 #   Everything is kept in ${DATA_DIR}/stats (default
 #   ~/.config/rowhammer/stats) as "key=value" lines
 #   plus comment lines. The file is parsed and validated, not sourced:
@@ -30,7 +30,7 @@
 #   entry via menu_message (lib/menu.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.5.0  (2026-07-28)
+# Version: 0.6.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -41,14 +41,15 @@ fi
 # File name below DATA_DIR and the accepted line formats. The digit
 # caps keep the arithmetic clear of bash integer overflow (same guard
 # as the savegame in lib/save.sh). A "recent" line stores one round as
-# "recent=lines|bonus|gold|silver|date" (date as YYYY-MM-DD, the
-# same shape the highscore list stores); the file keeps the newest
-# round first. Old recent lines (date-less, or with the pre-rebuild
-# leading score field) are simply dropped on load
-# (project rule: no backward compatibility, formats may just break).
+# "recent=lines|bonus|gold|silver|rowhammers|date" (date as YYYY-MM-DD,
+# the same shape the highscore list stores); the file keeps the newest
+# round first. Old recent lines (without the rowhammer field, date-less,
+# or with the pre-rebuild leading score field) are simply dropped on
+# load (project rule: no backward compatibility, formats may just
+# break).
 STATS_FILE_NAME="stats"
 STATS_LINE_RE='^(lines|bonus_rows|gold_squares|silver_squares|rowhammers)=([0-9]{1,15})$'
-STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){3}\|[0-9]{4}-[0-9]{2}-[0-9]{2})$'
+STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){4}\|[0-9]{4}-[0-9]{2}-[0-9]{2})$'
 
 # How many recent rounds are kept and shown.
 STATS_RECENT_MAX=3
@@ -130,7 +131,7 @@ stats_write() {
         printf 'gold_squares=%d\n' "${STATS_GOLD}"
         printf 'silver_squares=%d\n' "${STATS_SILVER}"
         printf 'rowhammers=%d\n' "${STATS_ROWHAMMERS}"
-        # Newest round first; format lines|bonus|gold|silver|date.
+        # Newest round first; lines|bonus|gold|silver|rowhammers|date.
         # The length guard keeps bash < 4.4 happy under set -u.
         if [ "${#STATS_RECENT[@]}" -gt 0 ]; then
             printf 'recent=%s\n' "${STATS_RECENT[@]}"
@@ -146,8 +147,8 @@ stats_write() {
 # recent round list (capped at STATS_RECENT_MAX) and persist both. The
 # round is stamped with today's date, the same way the highscore list
 # dates its entries. ROWHAMMERS is the round's number of four-row
-# clears; it only feeds the all-time counter, the recent list keeps its
-# format. A
+# clears; it feeds the all-time counter and the recent round entry
+# alike. A
 # round without any progress at all (no lines, no bonus, no squares)
 # leaves the counters, the list and the file
 # untouched, so idle rounds cause no disk writes (a rowhammer implies
@@ -164,7 +165,7 @@ stats_add_round() {
     STATS_GOLD=$(( STATS_GOLD + gold ))
     STATS_SILVER=$(( STATS_SILVER + silver ))
     STATS_ROWHAMMERS=$(( STATS_ROWHAMMERS + rowhammers ))
-    entry="${lines}|${bonus}|${gold}|${silver}|$(date +%Y-%m-%d)"
+    entry="${lines}|${bonus}|${gold}|${silver}|${rowhammers}|$(date +%Y-%m-%d)"
     # Prepend the round; slicing an empty array errors under set -u on
     # bash < 4.4, hence the guard.
     if [ "${#STATS_RECENT[@]}" -gt 0 ]; then
@@ -189,7 +190,7 @@ stats_add_round() {
 # minimum terminal width.
 stats_screen() {
     local -a body=()
-    local line entry r_lines r_bonus r_gold r_silver r_date
+    local line entry r_lines r_bonus r_gold r_silver r_hammers r_date
     printf -v line '%-26s %10d' "Abgebaute Reihen:" "${STATS_LINES}"
     body+=("${line}")
     printf -v line '%-26s %10d' "Bonusreihen:" "${STATS_BONUS_ROWS}"
@@ -211,19 +212,21 @@ stats_screen() {
     if [ "${#STATS_RECENT[@]}" -eq 0 ]; then
         body+=("Noch keine Spiele.")
     else
-        # Tighter columns than before so the date fits: 42 characters
-        # plus the 2-column menu indent stay below 48. The Rows column
-        # is the round's score (lines + bonus), derived instead of
-        # stored so the file can never contradict itself.
-        printf -v line '%6s %6s %5s %4s %6s %10s' \
-            "Rows" "Reihen" "Bonus" "Gold" "Silber" "Datum"
+        # The row uses the last free columns: 46 characters plus the
+        # 2-column menu indent are exactly the 48-column minimum width,
+        # which is what the "RH" (rowhammer, four rows at once) column
+        # added in 0.25.0 spends. The Rows column is the round's score
+        # (lines + bonus), derived instead of stored so the file can
+        # never contradict itself.
+        printf -v line '%6s %6s %5s %4s %6s %3s %10s' \
+            "Rows" "Reihen" "Bonus" "Gold" "Silber" "RH" "Datum"
         body+=("${line}")
         for entry in "${STATS_RECENT[@]}"; do
-            IFS='|' read -r r_lines r_bonus r_gold r_silver r_date \
-                <<< "${entry}"
-            printf -v line '%6d %6d %5d %4d %6d %10s' \
+            IFS='|' read -r r_lines r_bonus r_gold r_silver r_hammers \
+                r_date <<< "${entry}"
+            printf -v line '%6d %6d %5d %4d %6d %3d %10s' \
                 "$(( r_lines + r_bonus ))" "${r_lines}" "${r_bonus}" \
-                "${r_gold}" "${r_silver}" "${r_date}"
+                "${r_gold}" "${r_silver}" "${r_hammers}" "${r_date}"
             body+=("${line}")
         done
     fi

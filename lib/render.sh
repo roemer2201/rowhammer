@@ -8,7 +8,9 @@
 #   the hold piece and the key legend sit in the left pane, the board in
 #   the middle, the three upcoming pieces in the top right pane and the
 #   round counters (name, lines, rows, level, gold/silver, play time and
-#   the wonder under construction) on the two bottom status lines. Pause
+#   the rowhammers, i.e. four-row clears) on the two bottom status
+#   lines - the wonder progress left the HUD for that counter and is
+#   shown on the "Weltwunder" screen instead. Pause
 #   and game over are drawn as a box over the board, the latter with the
 #   achieved highscore rank.
 #   Since 0.12.0 frames are no longer pushed out as a whole: draw_frame
@@ -36,7 +38,7 @@
 #   rowhammer.sh toggles to make them blink.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.13.0  (2026-07-27)
+# Version: 0.14.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -464,16 +466,16 @@ render_pane_right() {
 }
 
 # render_status
-# The two bottom lines: round counters and the wonder under construction.
-# Both are printf-built to exactly LAYOUT_W columns, so they can never
-# leave stale characters behind when a number gets shorter.
+# The two bottom lines, both round counters. They are printf-built to
+# exactly LAYOUT_W columns, so they can never leave stale characters
+# behind when a number gets shorter.
+# CHANGE 2026-07-28 (user decision): the wonder under construction gave
+# up its slot on the second line to the rowhammer counter. The two
+# status lines are the only free space in the fixed 48x24 layout, so a
+# new counter can only enter if an old one leaves; the wonder progress
+# stays available on the "Weltwunder" screen shown after every round and
+# from the main menu.
 render_status() {
-    local wonder
-    if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
-        wonder="All wonders built"
-    else
-        wonder="${WONDER_HUD_NAME} ${WONDER_PERCENT}%"
-    fi
     # "Lines" counts physical rows (drives the level), "Rows" is the
     # weighted credit (gold/silver bonus) that builds the wonders - and,
     # since the scoring rebuild, the round's score.
@@ -485,7 +487,7 @@ render_status() {
     fmt_duration $(( PLAY_MS / 1000 ))
     printf -v STATUS_2 '%-8.8s %-10.10s %-10.10s %-17.17s' \
         "Gold ${GOLD_COUNT}" "Silver ${SILVER_COUNT}" \
-        "Time ${FMT_DURATION}" "${wonder}"
+        "Time ${FMT_DURATION}" "Rowhammer ${ROWHAMMER_COUNT}"
     return 0
 }
 
@@ -564,8 +566,8 @@ render_flush() {
 # draw_frame
 # Render the complete game screen. Reads the game state globals (BOARD,
 # BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, CLEARED_TOTAL, ROW_CREDIT, LEVEL,
-# GOLD_COUNT, SILVER_COUNT, PLAY_MS, PAUSED, GAME_OVER, the WONDER_* state
-# from lib/wonders.sh) and the USE_COLOR flag, assembles the block into
+# GOLD_COUNT, SILVER_COUNT, ROWHAMMER_COUNT, PLAY_MS, PAUSED, GAME_OVER)
+# and the USE_COLOR flag, assembles the block into
 # FRAME_LINES and lets render_flush emit the difference.
 draw_frame() {
     local i y vis line

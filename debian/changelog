@@ -1,3 +1,24 @@
+rowhammer (0.25.0) unstable; urgency=medium
+
+  * Show the rowhammer counter in all three places it was still missing
+    (user decision): the HUD status line, the recent-rounds table of
+    the statistics screen and the highscore list.
+  * The wonder progress leaves the HUD to make room for it - the two
+    status lines of the fixed 48x24 layout are full, so a new counter
+    can only enter if an old one leaves. The wonder is still shown
+    after every round and via the "Weltwunder" main menu entry, and its
+    state is no longer recomputed on every line clear.
+  * File formats change accordingly (no backward compatibility, per the
+    project rule - old lines simply fail validation and are dropped):
+    highscore entries gain a trailing "rowhammers" field, recent-round
+    entries gain one before the date.
+  * Both tables pay for the new "RH" column with existing space: the
+    highscore name column shrinks from 8 to 6 characters and "Silber"
+    becomes "Silb", the recent-rounds table spends its last free
+    columns.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 28 Jul 2026 16:00:00 +0200
+
 rowhammer (0.24.0) unstable; urgency=medium
 
   * Add the "rowhammer" counter the project is named after: clearing
