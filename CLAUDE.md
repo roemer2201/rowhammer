@@ -275,6 +275,15 @@ Die fuer uns relevanten Merkmale des Originals:
   Config (`COLOR_THEME`). `--no-color` hat weiterhin Vorrang und schaltet
   Farben ganz ab. `render_colors_init` liest das aktive Theme und baut
   daraus die finalen SGR-Sequenzen fuer den aufgeloesten Farbmodus.
+- Im farblosen Modus (`--no-color`/`NO_COLOR`, seit 0.28.0) bekommt jede
+  Steinsorte ein eigenes Zwei-Zeichen-Glyph statt eines einheitlichen
+  `[]` (`PIECE_GLYPH` in `lib/pieces.sh`: `II OO TT SS ZZ JJ LL`), damit
+  abgelegte Steine unterscheidbar bleiben und Gold-/Silber-Quadrate
+  ueberhaupt planbar sind. Die Quadrate nutzen bewusst Nicht-Buchstaben-
+  Glyphen (`SQ_GOLD_GLYPH`/`SQ_SILVER_GLYPH` in `lib/render.sh`: `##`
+  fuer Gold, `%%` fuer Silber), damit ein Quadrat nie mit einer Steinsorte
+  kollidiert (insbesondere kollidiert der S-Stein `SS` so nie mit einem
+  Silber-Quadrat).
 
 ### 4.2 Architektur und Dateistruktur
 
@@ -329,7 +338,13 @@ Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
 treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
-`--no-color` (`ROWHAMMER_NO_COLOR`), `--color-mode auto|basic|extended`
+`--no-color` (`ROWHAMMER_NO_COLOR`; seit 0.28.0 wird zusaetzlich die
+De-facto-Standardvariable `NO_COLOR` [https://no-color.org/] beachtet:
+ist sie gesetzt und nicht leer, sind Farben standardmaessig aus.
+Praezedenz der Abschalt-Schalter: Standard-`NO_COLOR` < projekteigenes
+`ROWHAMMER_NO_COLOR` < `--no-color` auf der Kommandozeile, sodass ein
+global exportiertes `NO_COLOR` per `ROWHAMMER_NO_COLOR=0` fuer rowhammer
+wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
 (`ROWHAMMER_COLOR_MODE`, Standard `auto`; `--no-color` gewinnt),
 `--color-theme guideline|classic|mono|colorblind`
 (`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
@@ -1215,6 +1230,18 @@ Feature-Branch oder Pull Request.
       17 Zeilen eines 22-Zeilen-Terminals sprengt, zeigt `menu_pages`
       (`lib/menu.sh`) die Highscore-Liste seitenweise und die
       Statistik auf zwei Bildschirmen.
+- [x] Steine im farblosen Modus unterscheidbar machen (Version 0.28.0):
+      `--no-color` zeichnete zuvor jede Sorte als `[]`, sodass abgelegte
+      Steine ununterscheidbar wurden und Gold-/Silber-Quadrate nicht
+      planbar waren. Jede Sorte hat jetzt ein eigenes Zwei-Zeichen-Glyph
+      (`PIECE_GLYPH`), Gold-/Silber-Quadrate eigene Nicht-Buchstaben-
+      Glyphen (`##`/`%%`, siehe 4.1)
+- [x] Standard-`NO_COLOR`-Umgebungsvariable beachten (Version 0.28.0):
+      neben `--no-color`/`ROWHAMMER_NO_COLOR` schaltet auch das
+      De-facto-Standardsignal `NO_COLOR` (https://no-color.org/) die
+      Farben ab, wenn es gesetzt und nicht leer ist; Praezedenz
+      Standard-`NO_COLOR` < `ROWHAMMER_NO_COLOR` < `--no-color`
+      (siehe 4.2)
 - [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
       `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
       im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und

@@ -28,7 +28,11 @@
 #   lib/pieces.sh) for the resolved color mode: basic (8/16-color ANSI,
 #   reverse video) or extended (xterm 256-color backgrounds); "auto"
 #   detection lives in color_mode_resolve. The settings color picker
-#   previews each theme via render_theme_swatch. All terminal output goes
+#   previews each theme via render_theme_swatch. In the no-color mode
+#   every piece type instead draws its own two-character glyph
+#   (PIECE_GLYPH, lib/pieces.sh) and the gold/silver squares use distinct
+#   non-letter glyphs, so blocks stay tellable apart without color. All
+#   terminal output goes
 #   through screen_write, which mirrors every update 1:1 into the frame log
 #   when the debug mode is active (lib/debug.sh). term_too_small_screen
 #   draws the compact overlay shown while the terminal is smaller than the
@@ -38,7 +42,7 @@
 #   rowhammer.sh toggles to make them blink.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.16.0  (2026-07-28)
+# Version: 0.17.0  (2026-07-28)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -130,6 +134,14 @@ declare -A BOX_LINES=()
 # substitution: the game loop must not fork a subshell per row).
 RENDER_ROW=""
 RENDER_MINI=""
+
+# No-color (--no-color / NO_COLOR) glyphs for the gold/silver squares.
+# Non-letter markers so a square never collides with a per-type piece
+# glyph (PIECE_GLYPH, lib/pieces.sh) and gold reads denser than silver:
+# without color these are the only cue that tells the two square kinds
+# and the loose pieces apart.
+SQ_GOLD_GLYPH="##"
+SQ_SILVER_GLYPH="%%"
 
 # color_mode_resolve
 # Resolve COLOR_MODE=auto into basic or extended by probing the
@@ -327,7 +339,7 @@ render_mini() {
             if [ "${USE_COLOR}" -eq 1 ]; then
                 RENDER_MINI+="${PIECE_SGR[${type}]}  ${RESET_SGR}"
             else
-                RENDER_MINI+="[]"
+                RENDER_MINI+="${PIECE_GLYPH[${type}]}"
             fi
         else
             RENDER_MINI+="  "
@@ -354,7 +366,7 @@ render_board_row() {
             if [ "${USE_COLOR}" -eq 1 ]; then
                 s+="${PIECE_SGR[${cell}]}  ${RESET_SGR}"
             else
-                s+="[]"
+                s+="${PIECE_GLYPH[${cell}]}"
             fi
             continue
         fi
@@ -365,25 +377,29 @@ render_board_row() {
             continue
         fi
         # Settled cell: gold/silver squares get their own look so they
-        # stand out from normal pieces (the "##" glyph also distinguishes
-        # gold from the yellow O).
+        # stand out from normal pieces. With color the "##" glyph also
+        # distinguishes gold from the yellow O; without color the squares
+        # use distinct non-letter glyphs (## / %%) and every other piece
+        # keeps its own per-type glyph (PIECE_GLYPH), so they all stay
+        # tellable apart - in particular an S piece never looks like a
+        # silver square.
         sq="${BOARD_SQ[idx]}"
         if [ "${sq}" = "G" ]; then
             if [ "${USE_COLOR}" -eq 1 ]; then
                 s+="${SQ_GOLD_SGR}##${RESET_SGR}"
             else
-                s+="GG"
+                s+="${SQ_GOLD_GLYPH}"
             fi
         elif [ "${sq}" = "S" ]; then
             if [ "${USE_COLOR}" -eq 1 ]; then
                 s+="${SQ_SILVER_SGR}##${RESET_SGR}"
             else
-                s+="SS"
+                s+="${SQ_SILVER_GLYPH}"
             fi
         elif [ "${USE_COLOR}" -eq 1 ]; then
             s+="${PIECE_SGR[${cell}]}  ${RESET_SGR}"
         else
-            s+="[]"
+            s+="${PIECE_GLYPH[${cell}]}"
         fi
     done
     RENDER_ROW="${s}"
