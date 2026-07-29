@@ -13,9 +13,16 @@
 #   leading score field is gone and the rows field ranks the list. The
 #   time field (0.17.0) is the round's play time in whole seconds, the
 #   rowhammers field (0.25.0) the round's number of four-row
-#   clears and the trailing pieces field (0.27.0) the pieces it placed;
-#   lines that do not match the ten-field format simply fail
-#   validation and are dropped (project rule: no backward compatibility).
+#   clears and the trailing pieces field (0.27.0) the pieces it placed.
+#   Lines are accepted from any point since the 0.4.0 rebuild onward,
+#   even if they predate one or more of these trailing fields (see
+#   HS_FIELD_COUNTS and highscore_parse_line): a missing counter is
+#   filled in as 0 rather than dropping the whole round (0.8.0, user
+#   decision - this is a deliberate exception to the project's usual
+#   no-backward-compatibility rule, scoped to this append-only part of
+#   the format). Lines from before the rebuild (leading "score" field,
+#   "rows" third) are a different column order, not just a shorter
+#   version of the current one, and still fail validation.
 #   The file is parsed and validated line by line, not sourced: it is
 #   list data, not shell code, and a corrupted line must only drop that
 #   entry, never break the game. Saving is atomic (temp file + mv).
@@ -28,7 +35,7 @@
 #   second.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.7.0  (2026-07-28)
+# Version: 0.8.0  (2026-07-29)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -49,13 +56,55 @@ HS_FILE_NAME="highscore"
 HS_ENTRIES=()
 HS_LAST_RANK=0
 
-# Accepted line format for loading. The name charset matches the player
+# Per-field patterns for loading. The name charset matches the player
 # name validation in rowhammer.sh (no "|" possible), so every file this
-# game writes round-trips unchanged. All ten fields are mandatory:
-# the scoring rebuild dropped the old leading score field, play time,
-# rowhammers and pieces were appended last, and per the
-# no-backward-compatibility rule old-format lines are simply invalid.
-HS_LINE_RE='^[0-9]+\|[0-9]+\|[0-9]+\|[A-Za-z0-9_ -]{1,16}\|[0-9]{4}-[0-9]{2}-[0-9]{2}\|[0-9]+\|[0-9]+\|[0-9]+\|[0-9]+\|[0-9]+$'
+# game writes round-trips unchanged.
+HS_FIELD_NUM_RE='^[0-9]+$'
+HS_FIELD_NAME_RE='^[A-Za-z0-9_ -]{1,16}$'
+HS_FIELD_DATE_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+
+# Field counts accepted for a stored line: the mandatory "rows|lines|
+# level|name|date" prefix (5 fields), optionally extended by gold and
+# silver together (7), then time (8), then rowhammers (9), then pieces
+# (10) - exactly the order these fields were appended after the 0.4.0
+# scoring rebuild made rows the leading field. Any other count (an old
+# pre-rebuild line, or something simply broken) is rejected by
+# highscore_parse_line before it looks at individual fields.
+HS_FIELD_COUNTS=(5 7 8 9 10)
+
+# highscore_parse_line LINE
+# Validate one stored line and, on success, append its normalized
+# (always ten-field, missing counters filled in as 0) form to
+# HS_ENTRIES. See HS_FIELD_COUNTS above for which shorter, older field
+# counts are accepted and why a pre-0.4.0 line (different column order,
+# not just fewer columns) is not among them.
+highscore_parse_line() {
+    local line="${1}"
+    local -a f=()
+    local n c i ok=0
+
+    IFS='|' read -r -a f <<< "${line}"
+    n="${#f[@]}"
+    for c in "${HS_FIELD_COUNTS[@]}"; do
+        if [ "${n}" -eq "${c}" ]; then
+            ok=1
+            break
+        fi
+    done
+    [ "${ok}" -eq 1 ] || return 0
+
+    [[ "${f[0]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    [[ "${f[1]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    [[ "${f[2]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    [[ "${f[3]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
+    [[ "${f[4]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
+    for ((i = 5; i < n; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+
+    HS_ENTRIES+=("${f[0]}|${f[1]}|${f[2]}|${f[3]}|${f[4]}|${f[5]:-0}|${f[6]:-0}|${f[7]:-0}|${f[8]:-0}|${f[9]:-0}")
+    return 0
+}
 
 # highscore_load
 # Read the highscore file into HS_ENTRIES. A missing file simply means
@@ -68,9 +117,7 @@ highscore_load() {
         return 0
     fi
     while IFS= read -r line; do
-        if [[ "${line}" =~ ${HS_LINE_RE} ]]; then
-            HS_ENTRIES+=("${line}")
-        fi
+        highscore_parse_line "${line}"
         if [ "${#HS_ENTRIES[@]}" -ge "${HS_MAX}" ]; then
             break
         fi

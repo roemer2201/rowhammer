@@ -1,3 +1,21 @@
+rowhammer (0.29.0) unstable; urgency=medium
+
+  * Stop dropping highscore entries that predate a counter field (user
+    decision): loading the list used to require all ten fields and
+    discarded any shorter line outright, so every time a counter was
+    appended to the format (gold/silver in 0.4.0, play time in 0.5.0,
+    rowhammers in 0.6.0, pieces in 0.7.0) older rounds silently vanished
+    the next time the file was loaded and re-saved. highscore_load now
+    accepts the field counts the format actually passed through since
+    the 0.4.0 scoring rebuild (5, 7, 8, 9 or 10 fields) and fills in 0
+    for whichever trailing counters a line does not carry. Lines from
+    before that rebuild (leading "score" field, "rows" third) use a
+    different column order rather than a shorter version of the
+    current one and are still dropped, since reusing their fields
+    under the current layout would misassign the old score as rows.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 29 Jul 2026 14:00:00 +0200
+
 rowhammer (0.28.1) unstable; urgency=medium
 
   * Fix the key press artifacts left on screen (issue #33): the terminal
