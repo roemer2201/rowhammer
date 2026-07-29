@@ -32,10 +32,17 @@
 #   via menu_pages (lib/menu.sh), two lines per entry: rank, name, rows,
 #   play time (MM:SS) and date on the first, gold/silver squares,
 #   rowhammers, pieces placed and the resulting pieces per minute on the
-#   second.
+#   second. Since 0.9.0 the table is colored with the TXT_* SGR globals
+#   (lib/render.sh, theme-aware, empty in --no-color/NO_COLOR mode): rank
+#   1/2 in gold/silver, the rows column and other ranks in the theme's
+#   accent color, the Gold/Silb/RH figures in gold/silver/warn color. An
+#   implausibly long line (HS_FIELD_NUM_RE has no digit cap, so a
+#   hand-edited file could exceed the 46-char budget) skips coloring and
+#   falls back to the plain truncated text instead of risking a cut
+#   escape sequence.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.8.0  (2026-07-29)
+# Version: 0.9.0  (2026-07-29)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -223,8 +230,8 @@ HS_PAGE_LINES=$(( HS_PAGE_ENTRIES * 3 ))
 # so implausible values cannot wrap the screen.
 highscore_screen() {
     local -a body=()
-    local i line hs_rows hs_name hs_date hs_gold hs_silver hs_time
-    local hs_hammers hs_pieces
+    local i line plain rank rank_sgr hs_rows hs_name hs_date hs_gold
+    local hs_silver hs_time hs_hammers hs_pieces
     if [ "${#HS_ENTRIES[@]}" -eq 0 ]; then
         body+=("Noch keine Eintraege.")
         body+=("")
@@ -235,20 +242,47 @@ highscore_screen() {
     fi
     printf -v line '%2s %-12s %6s %5s %10s' \
         "Nr" "Name" "Rows" "Zeit" "Datum"
-    body+=("${line}")
+    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HS_ENTRIES[@]}"; do
         IFS='|' read -r hs_rows _ _ hs_name hs_date hs_gold hs_silver \
             hs_time hs_hammers hs_pieces <<< "${HS_ENTRIES[i]}"
         fmt_duration "${hs_time}"
-        printf -v line '%2d %-12.12s %6d %5s %10s' \
-            "$(( i + 1 ))" "${hs_name}" "${hs_rows}" "${FMT_DURATION}" \
+        rank=$(( i + 1 ))
+        printf -v plain '%2d %-12.12s %6d %5s %10s' \
+            "${rank}" "${hs_name}" "${hs_rows}" "${FMT_DURATION}" \
             "${hs_date}"
-        body+=("${line:0:46}")
+        # Color only the common case (plausible values, still within the
+        # 46-char budget); an implausibly long line (a hand-edited file -
+        # HS_FIELD_NUM_RE has no digit cap) falls back to the plain
+        # truncated text instead of risking a cut escape sequence.
+        if [ "${#plain}" -le 46 ]; then
+            rank_sgr="${TXT_ACCENT_SGR}"
+            case "${rank}" in
+                1) rank_sgr="${TXT_GOLD_SGR}" ;;
+                2) rank_sgr="${TXT_SILVER_SGR}" ;;
+            esac
+            printf -v line '%s%2d%s %-12.12s %s%6d%s %5s %10s' \
+                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hs_name}" \
+                "${TXT_ACCENT_SGR}" "${hs_rows}" "${TXT_RESET_SGR}" \
+                "${FMT_DURATION}" "${hs_date}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
         fmt_ppm "${hs_pieces}" "${hs_time}"
-        printf -v line '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+        printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
             "${hs_gold}" "${hs_silver}" "${hs_hammers}" "${hs_pieces}" \
             "${FMT_PPM}"
-        body+=("${line:0:46}")
+        if [ "${#plain}" -le 46 ]; then
+            printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+                "${TXT_GOLD_SGR}" "${hs_gold}" "${TXT_RESET_SGR}" \
+                "${TXT_SILVER_SGR}" "${hs_silver}" "${TXT_RESET_SGR}" \
+                "${TXT_WARN_SGR}" "${hs_hammers}" "${TXT_RESET_SGR}" \
+                "${hs_pieces}" "${FMT_PPM}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
         body+=("")
     done
     debug_event "highscore screen shown (${#HS_ENTRIES[@]} entries)"

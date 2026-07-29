@@ -1,3 +1,17 @@
+rowhammer (0.30.0) unstable; urgency=medium
+
+  * Color the Highscores and Statistik screens: the rank medal (gold for
+    1st, silver for 2nd), the Rows/weighted-total column, and the
+    Gold/Silber/Rowhammer figures now draw in theme-aware colors
+    (render_colors_init's new TXT_* SGR globals in lib/render.sh, reused
+    by highscore_screen and stats_screen), instead of plain text. Colors
+    follow the active color theme and mode (basic/extended) and stay off
+    entirely in --no-color/NO_COLOR mode; an implausibly long line falls
+    back to the previous plain, truncated text rather than risk cutting
+    an escape sequence in half.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 29 Jul 2026 15:00:00 +0200
+
 rowhammer (0.29.0) unstable; urgency=medium
 
   * Stop dropping highscore entries that predate a counter field (user

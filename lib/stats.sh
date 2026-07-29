@@ -32,10 +32,15 @@
 #   stats_screen renders the statistics for the "Statistik" main menu
 #   entry via menu_message (lib/menu.sh) on two screens: the all-time
 #   counters first, the recent rounds second (both together outgrew the
-#   22-row minimum terminal).
+#   22-row minimum terminal). Since 0.8.0 the weighted total, the
+#   gold/silver/rowhammer counters and the recent-round Rows/Gold/Silb/RH
+#   figures are colored with the TXT_* SGR globals (lib/render.sh,
+#   theme-aware, empty in --no-color/NO_COLOR mode); a recent-round line
+#   that would overrun the 46-char budget skips coloring and falls back
+#   to the plain truncated text instead of risking a cut escape sequence.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.7.0  (2026-07-28)
+# Version: 0.8.0  (2026-07-29)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -225,22 +230,25 @@ stats_add_round() {
 stats_screen() {
     local -a body=()
     local line entry r_lines r_bonus r_gold r_silver r_hammers r_pieces
-    local r_time r_date secs
+    local r_time r_date secs plain
     printf -v line '%-26s %10d' "Abgebaute Reihen:" "${STATS_LINES}"
     body+=("${line}")
     printf -v line '%-26s %10d' "Bonusreihen:" "${STATS_BONUS_ROWS}"
     body+=("${line}")
-    printf -v line '%-26s %10d' "Reihen gesamt (gewertet):" \
-        "$(( STATS_LINES + STATS_BONUS_ROWS ))"
+    printf -v line '%-26s %s%10d%s' "Reihen gesamt (gewertet):" \
+        "${TXT_ACCENT_SGR}" "$(( STATS_LINES + STATS_BONUS_ROWS ))" \
+        "${TXT_RESET_SGR}"
     body+=("${line}")
     body+=("")
-    printf -v line '%-26s %10d' "Goldbloecke:" "${STATS_GOLD}"
+    printf -v line '%-26s %s%10d%s' "Goldbloecke:" \
+        "${TXT_GOLD_SGR}" "${STATS_GOLD}" "${TXT_RESET_SGR}"
     body+=("${line}")
-    printf -v line '%-26s %10d' "Silberbloecke:" "${STATS_SILVER}"
+    printf -v line '%-26s %s%10d%s' "Silberbloecke:" \
+        "${TXT_SILVER_SGR}" "${STATS_SILVER}" "${TXT_RESET_SGR}"
     body+=("${line}")
     # The namesake move: four rows cleared in one go.
-    printf -v line '%-26s %10d' "Rowhammer (4 Reihen):" \
-        "${STATS_ROWHAMMERS}"
+    printf -v line '%-26s %s%10d%s' "Rowhammer (4 Reihen):" \
+        "${TXT_WARN_SGR}" "${STATS_ROWHAMMERS}" "${TXT_RESET_SGR}"
     body+=("${line}")
     body+=("")
     printf -v line '%-26s %10d' "Abgelegte Steine:" "${STATS_PIECES}"
@@ -272,15 +280,37 @@ stats_screen() {
         for entry in "${STATS_RECENT[@]}"; do
             IFS='|' read -r r_lines r_bonus r_gold r_silver r_hammers \
                 r_pieces r_time r_date <<< "${entry}"
-            printf -v line '%10s Rows %5d Reihen %4d Bonus %4d' \
+            printf -v plain '%10s Rows %5d Reihen %4d Bonus %4d' \
                 "${r_date}" "$(( r_lines + r_bonus ))" "${r_lines}" \
                 "${r_bonus}"
-            body+=("${line:0:46}")
+            # Same safety fallback as highscore_screen: the counters here
+            # are internal and bounded in practice, but a corrupted stats
+            # file could still overrun the 46-char budget, so an
+            # oversized line skips coloring rather than risking a cut
+            # escape sequence.
+            if [ "${#plain}" -le 46 ]; then
+                printf -v line '%10s %sRows %5d%s Reihen %4d Bonus %4d' \
+                    "${r_date}" "${TXT_ACCENT_SGR}" \
+                    "$(( r_lines + r_bonus ))" "${TXT_RESET_SGR}" \
+                    "${r_lines}" "${r_bonus}"
+                body+=("${line}")
+            else
+                body+=("${plain:0:46}")
+            fi
             fmt_ppm "${r_pieces}" "${r_time}"
-            printf -v line '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+            printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
                 "${r_gold}" "${r_silver}" "${r_hammers}" "${r_pieces}" \
                 "${FMT_PPM}"
-            body+=("${line:0:46}")
+            if [ "${#plain}" -le 46 ]; then
+                printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+                    "${TXT_GOLD_SGR}" "${r_gold}" "${TXT_RESET_SGR}" \
+                    "${TXT_SILVER_SGR}" "${r_silver}" "${TXT_RESET_SGR}" \
+                    "${TXT_WARN_SGR}" "${r_hammers}" "${TXT_RESET_SGR}" \
+                    "${r_pieces}" "${FMT_PPM}"
+                body+=("${line}")
+            else
+                body+=("${plain:0:46}")
+            fi
             body+=("")
         done
     fi

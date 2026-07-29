@@ -44,9 +44,15 @@
 #   Rows about to be cleared can be drawn highlighted (FLASH_ROWS /
 #   FLASH_STATE, since 0.11.0), which is what the clear animation in
 #   rowhammer.sh toggles to make them blink.
+#   render_colors_init also derives a small set of plain-text SGR colors
+#   (TXT_GOLD_SGR, TXT_SILVER_SGR, TXT_ACCENT_SGR, TXT_WARN_SGR,
+#   TXT_BOLD_SGR, TXT_RESET_SGR, since 0.18.0) from the same active theme,
+#   for menu screens that color individual values instead of whole
+#   blocks - currently the Highscores and Statistik screens
+#   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.17.0  (2026-07-28)
+# Version: 0.18.0  (2026-07-29)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -94,6 +100,21 @@ SQ_SILVER_SGR=""
 FLASH_SGR=""
 RESET_SGR=$'\e[0m'
 BOX_SGR=""
+
+# Plain (non-block) foreground colors for menu text - the Highscores and
+# Statistik screens (highscore_screen/stats_screen). Built from the same
+# theme so a "gold"/"silver" reading in those tables always matches what
+# the active theme paints gold/silver squares as, and so the colorblind
+# theme's red/green avoidance carries over (TXT_WARN_SGR reuses the
+# Z-piece color instead of a hardcoded red). Empty in --no-color/NO_COLOR
+# mode (TXT_RESET_SGR included), so a colorless run emits no SGR bytes at
+# all rather than a no-op reset.
+TXT_GOLD_SGR=""
+TXT_SILVER_SGR=""
+TXT_ACCENT_SGR=""
+TXT_WARN_SGR=""
+TXT_BOLD_SGR=""
+TXT_RESET_SGR=""
 
 # A fully highlighted board row (10 cells) of the clear animation, built
 # once by render_colors_init because every flashing row looks the same.
@@ -213,6 +234,34 @@ render_colors_init() {
         BOX_SGR=$'\e[1m'
     else
         BOX_SGR=""
+    fi
+    # Text colors for the Highscores/Statistik screens (see the TXT_*
+    # globals above). iname/zname reuse the active theme's I- and
+    # Z-piece colors as a neutral accent and a warning tone.
+    local iname zname
+    iname="${THEME_COLOR[${COLOR_THEME}:I]}"
+    zname="${THEME_COLOR[${COLOR_THEME}:Z]}"
+    if [ "${USE_COLOR}" -eq 1 ]; then
+        if [ "${COLOR_MODE}" = "extended" ]; then
+            TXT_GOLD_SGR=$'\e[38;5;'"${COLOR_EXT[${gname}]}m"
+            TXT_SILVER_SGR=$'\e[38;5;'"${COLOR_EXT[${sname}]}m"
+            TXT_ACCENT_SGR=$'\e[38;5;'"${COLOR_EXT[${iname}]}m"
+            TXT_WARN_SGR=$'\e[38;5;'"${COLOR_EXT[${zname}]}m"
+        else
+            TXT_GOLD_SGR=$'\e['"${COLOR_BASIC[${gname}]}m"
+            TXT_SILVER_SGR=$'\e['"${COLOR_BASIC[${sname}]}m"
+            TXT_ACCENT_SGR=$'\e['"${COLOR_BASIC[${iname}]}m"
+            TXT_WARN_SGR=$'\e['"${COLOR_BASIC[${zname}]}m"
+        fi
+        TXT_BOLD_SGR=$'\e[1m'
+        TXT_RESET_SGR="${RESET_SGR}"
+    else
+        TXT_GOLD_SGR=""
+        TXT_SILVER_SGR=""
+        TXT_ACCENT_SGR=""
+        TXT_WARN_SGR=""
+        TXT_BOLD_SGR=""
+        TXT_RESET_SGR=""
     fi
     FLASH_LINE=""
     for (( x = 0; x < BOARD_W; x++ )); do
