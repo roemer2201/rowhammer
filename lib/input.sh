@@ -8,6 +8,13 @@
 #   (the centered game block fills a 48x22 terminal down to its last cell)
 #   and provides a
 #   single-key reader that understands the arrow-key escape sequences.
+#   Since 0.8.0 the terminal is put into raw input mode once for the whole
+#   session (term_input_raw: echo and canonical mode off) instead of
+#   relying on the mode a single "read -rsn1" installs and drops again:
+#   between two reads the terminal used to echo whatever was typed onto
+#   the screen, where the incremental renderer left it standing (issue
+#   #33). Only the player name prompt switches back to line mode
+#   (term_input_line) so the terminal draws the typed name.
 #   Escape sequences are parsed by a state machine (key_feed and its
 #   key_in_* helpers) whose state lives in globals and therefore survives
 #   across read_key calls and game ticks. A sequence the terminal delivers
@@ -35,7 +42,7 @@
 #   overlay until it grows back.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.7.1  (2026-07-27)
+# Version: 0.8.0  (2026-07-29)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -185,13 +192,54 @@ term_resize_apply() {
     fi
 }
 
+# term_input_raw
+# Put the terminal into the input mode the game runs in: echo off and
+# canonical (line) mode off, so a key press is neither shown by the
+# terminal nor held back until Enter.
+#
+# Up to 0.28.0 no mode was set at all. The game relied on the temporary
+# mode "read -rsn1" installs for the duration of a single read and
+# restores right after, which left echo and line mode on for everything
+# between two reads - building and writing a frame, the row-clear flash,
+# and the pause and game over screens, where the game sits in short reads
+# but spends most of its time elsewhere. A key pressed in such a gap was
+# echoed by the terminal at the cursor position, i.e. behind the last
+# line the renderer had written. Since 0.22.0 only the lines that changed
+# are rewritten (see lib/render.sh), so nothing painted over the echoed
+# bytes again and they stayed on screen - "^[[C" next to the board, and
+# on a paused or finished round they never went away (issue #33). Before
+# the incremental renderer a full repaint had covered them up one frame
+# later, which is why the artifacts only surfaced now.
+#
+# "min 1 time 0" keeps a byte-wise read blocking until at least one byte
+# arrives; the game's timeouts come from bash's "read -t", which is
+# unaffected by these settings. term_restore puts the saved state back.
+term_input_raw() {
+    stty -echo -icanon min 1 time 0 ||
+        die "Cannot switch the terminal into raw input mode"
+}
+
+# term_input_line
+# Hand the line editing back to the terminal (canonical mode with echo)
+# for the one prompt that wants it: the player name input in
+# prompt_player_name, where the terminal draws the typed name and handles
+# backspace. Every other prompt reads single keys through read_key and
+# stays in raw mode. The caller switches back with term_input_raw.
+term_input_line() {
+    stty icanon echo ||
+        die "Cannot switch the terminal into line input mode"
+}
+
 # Enter the alternate screen buffer, clear it and hide the cursor. The
 # current stty state is saved first so term_restore can bring the terminal
-# back exactly as it was. A SIGWINCH trap is armed here so a resize during
-# play is noticed: the handler only flags TERM_RESIZED (signal-safe), and
-# read_key applies it via term_resize_apply on the next tick.
+# back exactly as it was, and the terminal is switched into the raw input
+# mode the game needs for the whole session (term_input_raw). A SIGWINCH
+# trap is armed here so a resize during play is noticed: the handler only
+# flags TERM_RESIZED (signal-safe), and read_key applies it via
+# term_resize_apply on the next tick.
 term_setup() {
     SAVED_STTY="$(stty -g)"
+    term_input_raw
     # Autowrap off (\e[?7l) alongside the alternate screen: the centered
     # game block fills the terminal exactly at the 48x22 minimum, so its
     # bottom right character lands in the very last cell. With autowrap on

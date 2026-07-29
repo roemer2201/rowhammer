@@ -80,7 +80,8 @@
 #      CLI and validate them.
 #   5. Install the cleanup trap, start the debug logs (when --debug is
 #      set), load the highscore list, the savegame and the statistics
-#      and enter the alternate screen.
+#      and enter the alternate screen in raw input mode (echo and
+#      canonical mode off for the whole session).
 #   6. Run the main menu loop; "Einzelspieler" starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
 #      clearing, rendering), finished rounds are recorded in the
@@ -98,7 +99,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.28.0  (2026-07-28)
+# Version: 0.28.1  (2026-07-29)
 
 set -euo pipefail
 

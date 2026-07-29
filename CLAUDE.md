@@ -365,7 +365,22 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - **Input:** nicht-blockierend ueber `read -rsn1 -t <timeout>`;
   Escape-Sequenzen der Pfeiltasten sauber einlesen. Terminal-Modus mit `stty`
   setzen und ueber einen `trap`-Handler (EXIT/INT/TERM) garantiert
-  wiederherstellen. Escape-Sequenzen laufen seit 0.23.0 (Issue #7,
+  wiederherstellen. **Der Rohmodus gilt seit 0.28.1 fuer die ganze
+  Sitzung** (`term_input_raw` in `lib/input.sh`, aufgerufen aus
+  `term_setup`: `stty -echo -icanon min 1 time 0`, Issue #33). Vorher
+  war ueberhaupt kein Modus gesetzt; das Spiel lebte von dem Modus, den
+  `read -rsn1` nur fuer die Dauer eines einzelnen Reads einstellt und
+  danach zuruecknimmt. Zwischen zwei Reads - beim Bauen und Schreiben
+  eines Frames, waehrend der Blink-Animation und auf den Pause- und
+  Game-Over-Bildschirmen - echote das Terminal darum jeden Tastendruck
+  an die Cursorposition, also hinter die zuletzt geschriebene Zeile.
+  Seit dem inkrementellen Rendering (0.22.0) wird eine unveraenderte
+  Zeile nicht mehr neu geschrieben, sodass das echote `^[[C` stehen
+  blieb (frueher hatte der naechste Voll-Frame es uebermalt). Einzige
+  Ausnahme ist die Namensabfrage (`prompt_player_name`), die fuer ihren
+  zeilenweisen `read` per `term_input_line` in den kanonischen Modus mit
+  Echo zurueckschaltet und danach wieder `term_input_raw` setzt.
+  Escape-Sequenzen laufen seit 0.23.0 (Issue #7,
   Analyse in `docs/input-analysis.md`) durch einen **Zustandsautomaten**
   (`key_feed` und die `key_in_*`-Helfer in `lib/input.sh`), dessen
   Zustand in Globals liegt und damit ueber `read_key`-Aufrufe und
@@ -1410,6 +1425,18 @@ Feature-Branch oder Pull Request.
       Byte-Abstand) wird ein `Esc` gemeldet, der Sequenzschwanz aber
       weiterhin geschluckt - der Hold-Wechsel aus Issue #7 kann nicht
       mehr auftreten
+- [x] Tastendruck-Artefakte auf dem Bildschirm behoben (Version 0.28.1,
+      Issue #33): Neben dem Spielfeld standen echote Tastenbytes
+      (`^[[C`, einzelne Buchstaben), die auf dem Pause- und
+      Game-Over-Bildschirm dauerhaft blieben. Ursache war der fehlende
+      Terminal-Modus: das Spiel verliess sich auf den Modus, den
+      `read -rsn1` je Read kurz setzt, sodass zwischen zwei Reads Echo
+      und kanonischer Modus aktiv waren - und seit dem inkrementellen
+      Rendering (0.22.0) uebermalt kein Voll-Frame das Echo mehr.
+      `term_setup` schaltet den Rohmodus jetzt einmal fuer die ganze
+      Sitzung (`term_input_raw`), die Namensabfrage holt sich fuer ihren
+      `read` per `term_input_line` kurz das Zeilen-Echo zurueck (siehe
+      4.3)
 - [x] Punktesystem-Umbau (Version 0.16.0, Nutzerentscheidung):
       abgebaute Reihen sind die einzige Punktquelle, der Score ist
       identisch mit der gewichteten Reihenwertung "Rows" (1 je Reihe,

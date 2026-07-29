@@ -1,3 +1,19 @@
+rowhammer (0.28.1) unstable; urgency=medium
+
+  * Fix the key press artifacts left on screen (issue #33): the terminal
+    is now switched into raw input mode once in term_setup (stty -echo
+    -icanon min 1 time 0) instead of relying on the mode a single
+    "read -rsn1" installs for its own duration. Keys pressed between two
+    reads - while a frame is drawn, during the row-clear flash and on the
+    pause and game over screens - were echoed by the terminal next to the
+    board, and since only changed lines are rewritten (0.22.0) nothing
+    painted over them again.
+  * The player name prompt switches back to line mode for its read
+    (term_input_line/term_input_raw), so the typed name is still echoed
+    and backspace still works.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 29 Jul 2026 10:00:00 +0200
+
 rowhammer (0.28.0) unstable; urgency=medium
 
   * Center the main menu and every other menu, info screen and prompt in

@@ -30,7 +30,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.11.0  (2026-07-28)
+# Version: 0.11.1  (2026-07-29)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -495,7 +495,13 @@ prompt_player_name() {
     screen_write "${RENDER_MENU_FRAME}"
     # Show the cursor while typing, hide it again afterwards.
     screen_write $'\e[?25h'
+    # The session runs with echo and canonical mode off (term_input_raw,
+    # see issue #33); this is the one prompt that wants the terminal to
+    # show the typed name and to handle backspace, so line mode is turned
+    # on for the read and off again right after.
+    term_input_line
     IFS= read -r name || name=""
+    term_input_raw
     screen_write $'\e[?25l'
     # The echoed input is on screen but not part of any menu frame; let
     # the next one clear the terminal rather than draw around it.
