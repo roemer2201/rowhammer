@@ -552,6 +552,24 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   22-Zeilen-Bildschirm und wird von `menu_pages` (`lib/menu.sh`)
   seitenweise gezeigt - fuenf Eintraege je Seite, Tabellenkopf auf
   jeder Seite wiederholt, Seitenzaehler im Titel.
+  **Farbige Darstellung (seit 0.30.0):** die Tabelle nutzt seither
+  dieselbe Theme-Infrastruktur wie das Spielfeld (`COLOR_THEME`,
+  `COLOR_MODE`, siehe 4.1): `render_colors_init` (`lib/render.sh`)
+  leitet daraus reine Text-SGR-Farben ab (`TXT_GOLD_SGR`,
+  `TXT_SILVER_SGR`, `TXT_ACCENT_SGR` = Farbe des I-Steins,
+  `TXT_WARN_SGR` = Farbe des Z-Steins, `TXT_BOLD_SGR`, `TXT_RESET_SGR`).
+  Rang 1 und 2 erscheinen in Gold-/Silber-Farbe (Medaillen-Optik), die
+  Rows-Spalte und die uebrigen Raenge in der Akzentfarbe, die
+  Gold-/Silber-/Rowhammer-Werte in der jeweiligen Themenfarbe.
+  `TXT_WARN_SGR` greift bewusst auf die Z-Stein-Farbe statt auf ein
+  festes Rot zurueck, damit das `colorblind`-Schema (das Rot/Gruen
+  meidet) auch hier stimmig bleibt. In `--no-color`/`NO_COLOR` sind alle
+  `TXT_*`-Variablen leer, die Anzeige ist dann byteidentisch zur
+  unkolorierten Fassung. Eine Zeile, die trotz der 46-Zeichen-Grenze zu
+  lang wird (`HS_FIELD_NUM_RE` begrenzt die Ziffernzahl nicht, eine von
+  Hand editierte Datei koennte also ueberlaufen), verzichtet auf Farbe
+  und faellt auf den bisherigen, hart abgeschnittenen Klartext zurueck -
+  sonst koennte eine Escape-Sequenz mitten durchgeschnitten werden.
 - `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
   `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,
   nicht gesourct; eine defekte Datei faellt mit Meldung auf 0 zurueck).
@@ -598,6 +616,13 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Freiraeumen der obersten Bildschirmzeile) - deshalb der Schnitt statt
   gestrichener Spalten. Jede Zeile bleibt in den 46 Zeichen, die der
   Zwei-Zeichen-Einzug vom 48-Spalten-Minimum uebriglaesst.
+  **Farbige Darstellung (seit 0.30.0):** wie die Highscore-Liste nutzt
+  auch dieser Bildschirm die `TXT_*`-SGR-Farben aus `lib/render.sh`
+  (siehe dort): die gewichtete Gesamtsumme in der Akzentfarbe, Gold-
+  und Silberbloecke in Gold-/Silberfarbe, der Rowhammer-Zaehler in der
+  Warnfarbe (Z-Stein-Farbe des aktiven Themas), und auf dem zweiten
+  Bildschirm dieselbe Faerbung fuer Rows sowie Gold/Silb/RH je Runde.
+  Dieselbe 46-Zeichen-Rueckfallregel gilt hier ebenfalls.
 
 ### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
 
@@ -1470,6 +1495,22 @@ Feature-Branch oder Pull Request.
       Entfallen sind Drop-Punkte, Quadrat-Bildungs-Boni (2000/1000)
       und die Level-Skalierung; Highscore (Rangfolge nach Rows) und
       Statistik speichern kein separates Score-Feld mehr (siehe 4.5)
+- [x] Highscores und Statistik farbig darstellen (Version 0.30.0):
+      beide Bildschirme waren reiner Text, obwohl das Spiel laengst ein
+      Theme-System fuer Farben hat (0.21.0, siehe 4.1). `render_colors_init`
+      (`lib/render.sh`) leitet jetzt zusaetzlich reine Text-SGR-Farben aus
+      dem aktiven Theme ab (`TXT_GOLD_SGR`, `TXT_SILVER_SGR`,
+      `TXT_ACCENT_SGR`, `TXT_WARN_SGR`, `TXT_BOLD_SGR`, `TXT_RESET_SGR`);
+      `highscore_screen` und `stats_screen` faerben damit Rang 1/2
+      (Gold-/Silber-Medaille), die Rows-/Gesamtsumme-Spalte sowie die
+      Gold-/Silber-/Rowhammer-Werte. Die Warnfarbe greift bewusst auf die
+      Z-Stein-Farbe des Themas zurueck statt auf ein festes Rot, damit
+      `colorblind` (das Rot/Gruen meidet) konsistent bleibt. In
+      `--no-color`/`NO_COLOR` bleiben alle `TXT_*`-Variablen leer, die
+      Anzeige bleibt dann byteidentisch zur bisherigen Fassung; eine
+      Zeile, die trotz der 46-Zeichen-Grenze zu lang wuerde, faellt auf
+      unkolorierten, abgeschnittenen Text zurueck statt eine
+      Escape-Sequenz zu zerschneiden (siehe 4.5).
 
 ### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 
