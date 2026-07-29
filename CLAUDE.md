@@ -510,9 +510,22 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   0.25.0) die Zahl der Vierfach-Abbaeue der Runde und das
   abschliessende Feld `pieces` (seit 0.27.0) die Zahl der abgelegten
   Teile.
-  Zeilen im falschen (nicht zehnfeldrigen) Format fallen gemaess der
-  Arbeitsregel "keine Abwaertskompatibilitaet" bei der Validierung
-  einfach heraus.
+  Seit 0.29.0 (Nutzerentscheidung, bewusste Ausnahme von der
+  Arbeitsregel "keine Abwaertskompatibilitaet"): eine Zeile muss nicht
+  mehr alle zehn Felder tragen. Akzeptiert werden 5, 7, 8, 9 oder 10
+  Felder - genau die Laengen, die das Format seit dem Punktesystem-
+  Umbau (0.16.0, Rows fuehrend) beim schrittweisen Anhaengen von
+  Gold/Silber, Zeit, Rowhammer und Pieces tatsaechlich durchlaufen hat
+  (`HS_FIELD_COUNTS`, `highscore_parse_line` in `lib/highscore.sh`).
+  Fehlende Zaehler werden beim Laden als `0` ergaenzt statt die ganze
+  Runde zu verwerfen - eine Runde soll nicht verschwinden, nur weil sie
+  aelter ist als ein Zaehler. Zeilen aus der Zeit vor 0.16.0 (fuehrendes
+  `score`-Feld, Rows an dritter Stelle) sind davon ausgenommen: das ist
+  eine andere Spaltenreihenfolge und keine bloss kuerzere Version der
+  heutigen, ein Wiederverwenden ihrer Felder wuerde den alten Score
+  faelschlich als Rows einordnen. Jede andere Feldzahl sowie ein
+  einzelnes Feld, das sein Muster nicht erfuellt (Namen, Datum, Zahlen),
+  wirft weiterhin die ganze Zeile heraus.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
   Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
@@ -1437,6 +1450,19 @@ Feature-Branch oder Pull Request.
       Sitzung (`term_input_raw`), die Namensabfrage holt sich fuer ihren
       `read` per `term_input_line` kurz das Zeilen-Echo zurueck (siehe
       4.3)
+- [x] Highscore-Eintraege ueberleben fehlende Zaehlerfelder (Version
+      0.29.0, Nutzerentscheidung): `highscore_load` verlangte bislang
+      alle zehn Felder und verwarf jede kuerzere Zeile ganz - jede
+      Formaterweiterung (Gold/Silber in 0.4.0, Zeit in 0.5.0,
+      Rowhammer in 0.6.0, Pieces in 0.7.0, jeweils Versionsstand von
+      `lib/highscore.sh`) liess dadurch bestehende Eintraege beim
+      naechsten Laden-und-wieder-Speichern still verschwinden. Akzeptiert
+      werden jetzt 5, 7, 8, 9 oder 10 Felder (`HS_FIELD_COUNTS`,
+      `highscore_parse_line`), fehlende Zaehler werden als `0` ergaenzt.
+      Zeilen von vor dem Punktesystem-Umbau (fuehrendes `score`-Feld,
+      Rows an dritter statt erster Stelle) bleiben aussen vor, da deren
+      andere Spaltenreihenfolge sonst den alten Score als Rows
+      einordnen wuerde (siehe 4.5).
 - [x] Punktesystem-Umbau (Version 0.16.0, Nutzerentscheidung):
       abgebaute Reihen sind die einzige Punktquelle, der Score ist
       identisch mit der gewichteten Reihenwertung "Rows" (1 je Reihe,
