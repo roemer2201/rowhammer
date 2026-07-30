@@ -1,3 +1,21 @@
+rowhammer (0.31.0) unstable; urgency=medium
+
+  * Change the default key bindings (user decision): rotation moved from
+    q/e to a (counter-clockwise) and d (clockwise), and the fixed
+    secondary hold key changed from 2 to w. Those three letters were
+    bound to moving left/right and to the hard drop, so both actions now
+    rely on their fixed secondary keys only - the arrow keys for moving,
+    space and arrow up for the hard drop - and carry no letter key in the
+    default layout.
+  * Add NONE as a key binding value ("this action has no letter key"),
+    the new default for KEY_LEFT/KEY_RIGHT. It is the one value several
+    actions may share (exempt from the duplicate check) and can never
+    collide with a real key press, since read_key only reports single
+    characters or the names LEFT/RIGHT/UP/DOWN/SPACE/ENTER/ESC. A letter
+    can be assigned again at any time in the settings menu.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 30 Jul 2026 12:00:00 +0200
+
 rowhammer (0.30.0) unstable; urgency=medium
 
   * Color the Highscores and Statistik screens: the rank medal (gold for

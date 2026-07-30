@@ -47,15 +47,32 @@ Die fuer uns relevanten Merkmale des Originals:
   (jede Sorte genau einmal pro 7er-Beutel, dann neu mischen).
 - Steuerung (Standardbelegung; ueber das Einstellungsmenue aenderbar und
   in der Nutzer-Konfigurationsdatei gespeichert, siehe 4.5):
-  - Links/Rechts: `a`/`d` und Pfeiltasten
-  - Rotation: `e` (im Uhrzeigersinn), `q` (gegen Uhrzeigersinn)
+  - Links/Rechts: Pfeiltasten (seit 0.31.0 ohne Buchstabentaste)
+  - Rotation: `d` (im Uhrzeigersinn), `a` (gegen Uhrzeigersinn)
   - Soft-Drop: `s` bzw. Pfeil runter
-  - Hard-Drop: `w`, Pfeil hoch und Leertaste
-  - Hold: `c` bzw. `2`
+  - Hard-Drop: Leertaste und Pfeil hoch (seit 0.31.0 ohne
+    Buchstabentaste)
+  - Hold: `c` bzw. `w`
   - Pause: `p`; `Esc`/`x` oeffnet das Pausenmenue (seit 0.12.0, Issue
     #12): Fortsetzen, Ins Hauptmenue (Runde pausiert, wieder aufnehmbar
     ueber den Eintrag "Fortsetzen", der dann im Hauptmenue und im
     Einzelspieler-Menue an erster Stelle steht) oder Runde beenden
+- **Belegungswechsel 0.31.0 (Nutzerentscheidung):** `q`/`e` (Rotation)
+  wurden zu `a`/`d`, die feste Hold-Sekundaertaste `2` zu `w`. Die drei
+  Buchstaben waren zuvor mit Links, Rechts und Hard-Drop belegt; diese
+  Aktionen behalten deshalb nur ihre festen Sekundaertasten
+  (Pfeiltasten bzw. Leertaste/Pfeil hoch) und haben in der
+  Standardbelegung keine Buchstabentaste mehr. Dafuer kennen die
+  Bindungen den Wert `NONE` ("keine Buchstabentaste"): `KEY_LEFT` und
+  `KEY_RIGHT` stehen darauf, `KEY_HARD` auf `SPACE`. `NONE` ist als
+  einziger Wert von der Dubletten-Pruefung ausgenommen (mehrere Aktionen
+  duerfen ungebunden sein) und kann nie mit einem echten Tastendruck
+  kollidieren, weil `read_key` nur Einzelzeichen oder die Namen
+  `LEFT`/`RIGHT`/`UP`/`DOWN`/`SPACE`/`ENTER`/`ESC` meldet. Ueber das
+  Einstellungsmenue laesst sich jeder Aktion wieder eine Buchstabentaste
+  geben; `NONE` selbst ist nur ueber Config-Datei bzw.
+  `ROWHAMMER_KEY_*` setzbar (der Rebind-Dialog nimmt nur echte Tasten
+  entgegen).
 - Vorschau: die naechsten 3 Teile. Hold: genau ein Teil, einmal pro Zug tauschbar.
 - Level/Geschwindigkeit: Fallgeschwindigkeit steigt mit der Zahl abgebauter
   Reihen der laufenden Runde.
@@ -1335,6 +1352,15 @@ Feature-Branch oder Pull Request.
       Leertaste liegen als feste Sekundaerbelegung auf dem Hard-Drop,
       `2` fest auf Hold; `w`, `e` und `c` sind die konfigurierbaren
       Primaertasten.
+- [x] Standard-Tastenbelegung erneut geaendert (siehe 3.1, Version
+      0.31.0, Nutzerentscheidung): Rotation liegt jetzt auf `a` (gegen
+      den Uhrzeigersinn) und `d` (im Uhrzeigersinn), die feste
+      Hold-Sekundaertaste ist `w` statt `2`. Links/Rechts und der
+      Hard-Drop geben ihre Buchstabentasten dafuer ab und laufen ueber
+      ihre festen Sekundaertasten (Pfeile bzw. Leertaste/Pfeil hoch);
+      neu ist der Bindungswert `NONE` fuer "keine Buchstabentaste"
+      (Standard fuer `KEY_LEFT`/`KEY_RIGHT`, von der Dubletten-Pruefung
+      ausgenommen).
 - [x] Highscore-Liste (Version 0.7.0: Top 10 im Datenverzeichnis,
       Anzeige im Hauptmenue, Rang im Game-Over-Bild; siehe 4.5)
 - [x] 256-Farben-Modus (Version 0.9.0: `--color-mode auto|basic|extended`,
