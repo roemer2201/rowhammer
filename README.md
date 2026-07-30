@@ -5,7 +5,7 @@ Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 Vorbild ist **"The New Tetris"** (Nintendo 64): Mit jeder abgebauten Reihe
 arbeitest du am Aufbau eines **Weltwunders**, das ueber alle Runden hinweg
 Stueck fuer Stueck aus ASCII-Art entsteht. Auch das Quadrat-System des
-Originals ist Teil des Konzepts: Wer aus vier Tetrominos ein 4x4-Quadrat baut,
+Originals ist Teil des Konzepts: Wer aus vier Bausteinen ein 4x4-Quadrat baut,
 erhaelt **Gold-** (sortenrein) oder **Silber-Bloecke** (gemischt), die beim
 Abbau kraeftige Bonus-Reihen liefern.
 
@@ -56,7 +56,7 @@ The-New-Tetris-Mechaniken und der Weltwunder-Modus): Spielfeld,
 7-Bag-Randomizer mit Vorschau auf
 3 Teile, Hold, Gravitation mit Levelkurve, Reihenabbau, Soft-/Hard-Drop,
 Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
-4x4-Feld aus genau vier unversehrten Tetrominos baut, erhaelt ein Gold-
+4x4-Feld aus genau vier unversehrten Bausteinen baut, erhaelt ein Gold-
 (sortenrein) oder Silber-Quadrat (gemischt); jede abgebaute Reihe bringt
 +10 Bonuszeilen je Gold- und +5 je Silber-Quadrat (ein Tetris +1 extra)
 fuer den "Rows"-Zaehler. Dieser Zaehler baut ueber alle Runden hinweg
@@ -160,7 +160,7 @@ Praezedenz: CLI > Umgebungsvariable > Konfigurationsdatei > Standardwert.
 
 Umgesetzt:
 
-- Klassisches 10x20-Spielfeld, 7 Tetrominos, 7-Bag-Randomizer
+- Klassisches 10x20-Spielfeld, 7 Bausteine, 7-Bag-Randomizer
 - Vorschau auf die naechsten 3 Teile und Hold (einmal pro Zug)
 - **Quadrat-System:** Gold- (sortenrein) und Silber-Quadrate (gemischt)
   aus je vier unversehrten Teilen; jede geraeumte Reihe zaehlt 1 plus

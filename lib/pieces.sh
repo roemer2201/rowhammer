@@ -3,7 +3,7 @@
 # lib/pieces.sh
 #
 # Description:
-#   Tetromino definitions for rowhammer: the seven piece types with their
+#   Piece definitions for rowhammer: the seven piece types with their
 #   four rotation states, the configurable color schemes (symbolic color
 #   names with a basic 8/16-color ANSI and an extended xterm 256-color
 #   meaning, mapped to pieces and gold/silver squares by the selectable

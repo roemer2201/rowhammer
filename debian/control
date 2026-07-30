@@ -14,7 +14,7 @@ Recommends: ncurses-bin
 Description: Tetris-like terminal game written in pure bash
  rowhammer is a Tetris-like game that runs entirely in the terminal and
  is modeled after "The New Tetris" (N64). It offers a classic 10x20
- board, the seven standard tetrominoes with a 7-bag randomizer, gravity
+ board, the seven standard pieces with a 7-bag randomizer, gravity
  with a level-based speed curve, line clearing, soft/hard drop, pause
  and restart, plus a start menu with configurable key bindings and
  player name.

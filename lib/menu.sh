@@ -254,7 +254,7 @@ menu_help() {
     body=("rowhammer ist ein Tetris-Spiel im Terminal," \
           "Vorbild ist \"The New Tetris\" (N64)." \
           "" \
-          "Steine (Tetrominos) so stapeln, dass sich" \
+          "Bausteine so stapeln, dass sich" \
           "Reihen komplett fuellen: volle Reihen werden" \
           "abgebaut und als \"Rows\" gewertet - das ist" \
           "zugleich der Punktestand der Runde." \
