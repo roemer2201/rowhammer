@@ -99,7 +99,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.29.0  (2026-07-29)
+# Version: 0.31.0  (2026-07-30)
 
 set -euo pipefail
 
@@ -113,7 +113,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.30.0"
+ROWHAMMER_VERSION="0.31.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -159,12 +159,20 @@ PLAYER_NAME="Player"
 # config-driven setting, so it starts from this default and is then
 # overridden by config_load and the env/CLI blocks after sourcing.
 COLOR_THEME="guideline"
-KEY_LEFT="a"
-KEY_RIGHT="d"
-KEY_ROT_CW="e"
-KEY_ROT_CCW="q"
+# CHANGE 2026-07-30 (user decision): the rotation keys moved onto the
+# left hand's home row - a turns counter-clockwise, d clockwise - and the
+# hold slot took w (replacing the fixed secondary 2). That claimed the
+# three letters that used to move left/right and hard drop, so those two
+# actions keep only their fixed secondaries: the arrow keys for moving
+# and space/arrow up for the hard drop. NONE is the "no letter bound"
+# value for exactly that case; the arrows and space are wired in
+# handle_key regardless of the bindings, so nothing becomes unreachable.
+KEY_LEFT="NONE"
+KEY_RIGHT="NONE"
+KEY_ROT_CW="d"
+KEY_ROT_CCW="a"
 KEY_SOFT="s"
-KEY_HARD="w"
+KEY_HARD="SPACE"
 KEY_PAUSE="p"
 KEY_QUIT="x"
 KEY_HOLD="c"
@@ -283,7 +291,11 @@ screen. Key bindings can also be overridden
 via environment variables ROWHAMMER_KEY_LEFT, ROWHAMMER_KEY_RIGHT,
 ROWHAMMER_KEY_ROT_CW, ROWHAMMER_KEY_ROT_CCW, ROWHAMMER_KEY_SOFT,
 ROWHAMMER_KEY_HARD, ROWHAMMER_KEY_PAUSE, ROWHAMMER_KEY_QUIT,
-ROWHAMMER_KEY_HOLD (single characters a-z or 0-9, or the word SPACE).
+ROWHAMMER_KEY_HOLD (single characters a-z or 0-9, or the words SPACE and
+NONE; NONE leaves an action without a letter key). Defaults: a/d rotate
+counter-clockwise/clockwise, s soft drop, c hold, p pause, x menu. Moving
+left/right (arrow keys), the hard drop (space, arrow up) and holding (w)
+always work through their fixed secondary keys as well.
 
 Precedence for every option: command-line argument > environment variable
 > config file > built-in default.
@@ -535,10 +547,19 @@ done
 if [ "${_theme_ok}" -eq 0 ]; then
     die "Invalid color theme: '${COLOR_THEME}' (allowed: ${COLOR_THEMES[*]})"
 fi
-_key_re='^([a-z0-9]|SPACE)$'
+# CHANGE 2026-07-30: NONE joined the allowed values as "this action has
+# no letter key" (see the defaults above). It is exempt from the
+# duplicate check on purpose - several actions may be unbound at once -
+# and it can never collide with a real key press either, because read_key
+# only ever reports single characters or the names LEFT/RIGHT/UP/DOWN/
+# SPACE/ENTER/ESC.
+_key_re='^([a-z0-9]|SPACE|NONE)$'
 for _var in "${KEY_ACTIONS[@]}"; do
     if ! [[ "${!_var}" =~ ${_key_re} ]]; then
-        die "Invalid key binding ${_var}='${!_var}' (allowed: a-z, 0-9 or SPACE)"
+        die "Invalid key binding ${_var}='${!_var}' (allowed: a-z, 0-9, SPACE or NONE)"
+    fi
+    if [ "${!_var}" = "NONE" ]; then
+        continue
     fi
     for _other in "${KEY_ACTIONS[@]}"; do
         if [ "${_var}" != "${_other}" ] && [ "${!_var}" = "${!_other}" ]; then
@@ -1060,7 +1081,10 @@ handle_key() {
         UP|SPACE|"${KEY_HARD}")
             hard_drop
             ;;
-        2|"${KEY_HOLD}")
+        # CHANGE 2026-07-30 (user decision): w replaced 2 as the fixed
+        # secondary hold key. It sits below the rotation keys a/d on the
+        # left hand and is free since the hard drop gave up its letter.
+        w|"${KEY_HOLD}")
             hold_piece
             ;;
     esac

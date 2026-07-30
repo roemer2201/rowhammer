@@ -35,7 +35,7 @@
 # Usage:
 #   tools/key-scan.sh [-g SEC] [-d MS] [-o NAME] [-l] [-s|-v] [-h]
 #
-# Version: 1.2.0  (2026-07-26)
+# Version: 1.2.1  (2026-07-30)
 
 set -u
 
@@ -288,13 +288,13 @@ run_replay() {
 # bindings from rowhammer.sh. Only used for the verbose report.
 action_for() {
     case "${1}" in
-        LEFT|a)      printf 'move left' ;;
-        RIGHT|d)     printf 'move right' ;;
-        e)           printf 'rotate cw' ;;
-        q)           printf 'rotate ccw' ;;
+        LEFT)        printf 'move left' ;;
+        RIGHT)       printf 'move right' ;;
+        d)           printf 'rotate cw' ;;
+        a)           printf 'rotate ccw' ;;
         DOWN|s)      printf 'soft drop' ;;
-        UP|SPACE|w)  printf 'hard drop' ;;
-        2|c)         printf 'HOLD' ;;
+        UP|SPACE)    printf 'hard drop' ;;
+        w|c)         printf 'HOLD' ;;
         p)           printf 'pause' ;;
         x|ESC)       printf 'pause menu' ;;
         r)           printf 'restart (game over screen)' ;;

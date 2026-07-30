@@ -148,8 +148,9 @@ fuer rowhammer wieder ueberschreiben, und `--no-color` auf der
 Kommandozeile gewinnt in jedem Fall.
 
 Die Tastenbelegung laesst sich zusaetzlich per Umgebungsvariablen
-`ROWHAMMER_KEY_*` uebersteuern (siehe `--help`). Praezedenz:
-CLI > Umgebungsvariable > Konfigurationsdatei > Standardwert.
+`ROWHAMMER_KEY_*` uebersteuern (siehe `--help`); erlaubt sind `a`-`z`,
+`0`-`9`, `SPACE` und `NONE` (kein Buchstabe fuer diese Aktion).
+Praezedenz: CLI > Umgebungsvariable > Konfigurationsdatei > Standardwert.
 
 ## Features
 
@@ -246,23 +247,28 @@ Spiel nach `/usr/share/rowhammer/` und legt den Starter
 
 ## Steuerung
 
-Standardbelegung; die Buchstabentasten (`w`, `e`, `c` usw.) sind im
+Standardbelegung; die Buchstabentasten (`a`, `d`, `c` usw.) sind im
 Einstellungsmenue aenderbar, waehrend die Pfeiltasten sowie Leertaste
-(Hard-Drop) und `2` (Hold) als feste Sekundaerbelegung immer aktiv
-bleiben. Der Spielbildschirm zeigt die Belegung nicht mehr an - dort
+(Hard-Drop) und `w` (Hold) als feste Sekundaerbelegung immer aktiv
+bleiben. Gedreht wird also mit der linken Hand (`a`/`d`), bewegt mit den
+Pfeiltasten. Der Spielbildschirm zeigt die Belegung nicht mehr an - dort
 stehen jetzt die Rundenzaehler:
 
 | Taste                     | Aktion                      |
 |---------------------------|-----------------------------|
-| `a` / `d`, Pfeile         | Links / Rechts              |
-| `e`                       | Rotation im Uhrzeigersinn   |
-| `q`                       | Rotation gegen Uhrzeigersinn|
+| Pfeil links / rechts      | Links / Rechts              |
+| `d`                       | Rotation im Uhrzeigersinn   |
+| `a`                       | Rotation gegen Uhrzeigersinn|
 | `s` / Pfeil runter        | Soft-Drop                   |
-| `w`, Pfeil hoch, Leertaste| Hard-Drop                   |
-| `c` / `2`                 | Hold / Tauschen             |
+| Leertaste, Pfeil hoch     | Hard-Drop                   |
+| `c` / `w`                 | Hold / Tauschen             |
 | `p`                       | Pause                       |
 | `Esc` / `x`               | Pausenmenue (Fortsetzen / Ins Hauptmenue / Runde beenden) |
 | `r`                       | Neustart (im Game-Over-Bild)|
+
+Links, Rechts und Hard-Drop haben in der Standardbelegung bewusst keine
+Buchstabentaste (`a`, `d` und `w` werden fuer Drehen und Hold gebraucht);
+im Einstellungsmenue laesst sich jederzeit wieder eine vergeben.
 
 In den Menues gelten Pfeiltasten bzw. `w`/`s` zum Waehlen, Enter oder
 Leertaste zum Bestaetigen und `Esc` fuer Zurueck.

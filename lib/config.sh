@@ -16,7 +16,7 @@
 #   debug_init); saves are logged as debug events at runtime.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.5.0  (2026-07-26)
+# Version: 0.5.1  (2026-07-30)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -37,7 +37,10 @@ CONFIG_NAME="rowhammer.conf"
 # The configurable key binding variables. Shared by the settings menu
 # (rebinding), validation and config_save, so new bindings only need to
 # be added here, in KEY_LABELS (lib/menu.sh) and in the defaults/env
-# blocks of rowhammer.sh.
+# blocks of rowhammer.sh. A binding holds a single character, SPACE, or
+# NONE for "this action has no letter key" (since 2026-07-30 the default
+# for moving left/right, which the arrow keys cover); NONE is the one
+# value several actions may share.
 KEY_ACTIONS=(KEY_LEFT KEY_RIGHT KEY_ROT_CW KEY_ROT_CCW
              KEY_SOFT KEY_HARD KEY_PAUSE KEY_QUIT KEY_HOLD)
 
