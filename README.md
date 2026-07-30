@@ -5,7 +5,7 @@ Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 Vorbild ist **"The New Tetris"** (Nintendo 64): Mit jeder abgebauten Reihe
 arbeitest du am Aufbau eines **Weltwunders**, das ueber alle Runden hinweg
 Stueck fuer Stueck aus ASCII-Art entsteht. Auch das Quadrat-System des
-Originals ist Teil des Konzepts: Wer aus vier Tetrominos ein 4x4-Quadrat baut,
+Originals ist Teil des Konzepts: Wer aus vier Bausteinen ein 4x4-Quadrat baut,
 erhaelt **Gold-** (sortenrein) oder **Silber-Bloecke** (gemischt), die beim
 Abbau kraeftige Bonus-Reihen liefern.
 
@@ -56,7 +56,7 @@ The-New-Tetris-Mechaniken und der Weltwunder-Modus): Spielfeld,
 7-Bag-Randomizer mit Vorschau auf
 3 Teile, Hold, Gravitation mit Levelkurve, Reihenabbau, Soft-/Hard-Drop,
 Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
-4x4-Feld aus genau vier unversehrten Tetrominos baut, erhaelt ein Gold-
+4x4-Feld aus genau vier unversehrten Bausteinen baut, erhaelt ein Gold-
 (sortenrein) oder Silber-Quadrat (gemischt); jede abgebaute Reihe bringt
 +10 Bonuszeilen je Gold- und +5 je Silber-Quadrat (ein Tetris +1 extra)
 fuer den "Rows"-Zaehler. Dieser Zaehler baut ueber alle Runden hinweg
@@ -64,8 +64,8 @@ sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
 unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
 und nach jeder Runde sowie im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
-Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik und
-Einstellungen;
+Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik,
+Einstellungen und einer kurzen Anleitung;
 die besten
 10 Runden werden dauerhaft gespeichert. Das vollstaendige Konzept
 und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
@@ -106,6 +106,10 @@ Das Startmenue bietet:
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`)
+- **Anleitung** - kurze Spielerklaerung auf fuenf Bildschirmen:
+  Spielprinzip, Steuerung (mit der gerade eingestellten
+  Tastenbelegung), Vorschau und Hold, Gold-/Silber-Quadrate mit ihrer
+  Reihenwertung und der Weltwunderbau
 
 Alle Spieldaten (Konfiguration, Highscores, Weltwunder-Spielstand,
 Statistik) liegen im Datenverzeichnis
@@ -156,7 +160,7 @@ Praezedenz: CLI > Umgebungsvariable > Konfigurationsdatei > Standardwert.
 
 Umgesetzt:
 
-- Klassisches 10x20-Spielfeld, 7 Tetrominos, 7-Bag-Randomizer
+- Klassisches 10x20-Spielfeld, 7 Bausteine, 7-Bag-Randomizer
 - Vorschau auf die naechsten 3 Teile und Hold (einmal pro Zug)
 - **Quadrat-System:** Gold- (sortenrein) und Silber-Quadrate (gemischt)
   aus je vier unversehrten Teilen; jede geraeumte Reihe zaehlt 1 plus
@@ -197,7 +201,10 @@ Umgesetzt:
   den Guideline-Teilfarben - inklusive echtem Orange fuer das L-Teil
   und kraeftigerem Gold/Silber fuer die Quadrate
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
-  Weltwunder, Statistik und Einstellungen
+  Weltwunder, Statistik, Einstellungen und Anleitung
+- **Anleitung im Spiel:** fuenf Bildschirme zu Spielprinzip, Steuerung,
+  Vorschau/Hold, Gold- und Silberbloecken und Weltwunderbau; die
+  Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
 - Persistente Highscore-Liste: die besten 10 Runden in
   `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -

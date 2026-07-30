@@ -62,6 +62,10 @@
 #   played, plus the results of
 #   the last three rounds with their play date), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
+#   The "Anleitung" main menu entry explains the game on five screens:
+#   the rules, the current key bindings, hold and preview, the
+#   gold/silver squares with their row bonus and the wonder construction
+#   (menu_help in lib/menu.sh).
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
 #   action (see lib/debug.sh). The fixed play screen needs a
@@ -99,7 +103,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.31.0  (2026-07-30)
+# Version: 0.32.0  (2026-07-30)
 
 set -euo pipefail
 
@@ -1237,7 +1241,7 @@ main() {
             entries+=("Fortsetzen")
         fi
         entries+=("Einzelspieler" "Mehrspieler" "Highscores" \
-            "Weltwunder" "Statistik" "Einstellungen" "Beenden")
+            "Weltwunder" "Statistik" "Einstellungen" "Anleitung" "Beenden")
         menu_run "R O W H A M M E R" "${entries[@]}"
         choice="${MENU_CHOICE}"
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -1277,6 +1281,13 @@ main() {
                 ;;
             5)
                 menu_settings
+                ;;
+            6)
+                # Short manual (user request): rules, controls, hold,
+                # gold/silver squares and the wonder construction. It
+                # sits right before "Beenden" so the entry a player
+                # needs on the first start is the last one they pass.
+                menu_help
                 ;;
             *)
                 # "Beenden" or ESC on the top level leaves the game. A

@@ -86,7 +86,7 @@ can_place() {
 
 # lock_piece TYPE ROT X Y
 # Write the piece permanently into the board under a fresh instance id,
-# so the square detection can identify complete tetrominoes later. The
+# so the square detection can identify complete pieces later. The
 # caller must have checked the position with can_place first.
 lock_piece() {
     local type="${1}" rot="${2}" px="${3}" py="${4}"

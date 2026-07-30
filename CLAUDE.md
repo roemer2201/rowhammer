@@ -10,7 +10,7 @@ Terminal laeuft. Vorbild ist **"The New Tetris"** fuer das Nintendo 64:
 
 - Ueber alle Runden hinweg wird an einem **Weltwunder** gebaut. Der Baufortschritt
   richtet sich nach der **Gesamtzahl der abgebauten Reihen**.
-- Das **Quadrat-System** des Originals ist enthalten: Aus Tetrominos gebildete
+- Das **Quadrat-System** des Originals ist enthalten: Aus Bausteinen gebildete
   4x4-Quadrate werden zu **Gold-** (sortenrein) bzw. **Silber-Bloecken**
   (gemischt) und liefern beim Abbau Bonus-Reihen.
 - Eine **Multiplayer-Funktion** ist geplant, wird aber erst in einer spaeteren
@@ -26,7 +26,7 @@ Die fuer uns relevanten Merkmale des Originals:
 - **Wonders-Modus:** Jede abgebaute Reihe zahlt auf einen persistenten
   Gesamtzaehler ein. Mit steigendem Zaehler werden nacheinander Weltwunder
   Stueck fuer Stueck aufgebaut und schliesslich freigeschaltet.
-- **Quadrate (Squares):** Wer aus **genau vier vollstaendigen Tetrominos** ein
+- **Quadrate (Squares):** Wer aus **genau vier vollstaendigen Bausteinen** ein
   4x4-Quadrat legt, erhaelt einen Bonusblock:
   - **Gold-Quadrat (Mono-Square):** vier Teile der **gleichen** Sorte.
   - **Silber-Quadrat (Multi-Square):** vier Teile **gemischter** Sorten.
@@ -43,7 +43,7 @@ Die fuer uns relevanten Merkmale des Originals:
 
 - Spielfeld: **10 Spalten x 20 Zeilen** (klassisch), plus unsichtbare
   Spawn-Zeilen oberhalb.
-- Die 7 Standard-Tetrominos (I, O, T, S, Z, J, L) mit **7-Bag-Randomizer**
+- Die 7 Standard-Bausteine (I, O, T, S, Z, J, L) mit **7-Bag-Randomizer**
   (jede Sorte genau einmal pro 7er-Beutel, dann neu mischen).
 - Steuerung (Standardbelegung; ueber das Einstellungsmenue aenderbar und
   in der Nutzer-Konfigurationsdatei gespeichert, siehe 4.5):
@@ -116,10 +116,10 @@ Die fuer uns relevanten Merkmale des Originals:
 
 ### 3.2 Quadrat-System (Gold/Silber)
 
-- Jeder gelegte Stein behaelt eine **Identitaet** (welches Tetromino, welche
+- Jeder gelegte Stein behaelt eine **Identitaet** (welcher Baustein, welche
   Instanz), solange er unversehrt ist.
 - Nach jedem Lock pruefen: Existiert ein 4x4-Bereich, der aus **genau vier
-  vollstaendigen, unversehrten** Tetrominos besteht und exakt gefuellt ist?
+  vollstaendigen, unversehrten** Bausteinen besteht und exakt gefuellt ist?
   - Ja, alle vier gleiche Sorte -> Zellen werden zum **Gold-Quadrat**.
   - Ja, gemischte Sorten -> **Silber-Quadrat**.
 - Quadrate werden farblich hervorgehoben (Gold/Gelb bzw. Silber/Weiss) und
@@ -265,6 +265,30 @@ Die fuer uns relevanten Merkmale des Originals:
   verschwinden (siehe 3.1).
 - Nach Rundenende: Bildschirm mit dem aktuellen Wunder in seiner neuen Baustufe.
 
+### 3.5 Anleitung (seit 0.32.0)
+
+Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
+"Beenden" und erklaert das Spiel auf fuenf Info-Bildschirmen
+(`menu_help` in `lib/menu.sh`, gezeigt ueber `menu_message`, also
+zentriert und mit beliebiger Taste weitergeblaettert):
+
+1. Spielprinzip: Bausteine, volle Reihen als "Rows", 7-Bag,
+   Level/Tempo, Rundenende.
+2. Steuerung: alle Aktionen mit ihren aktuellen Tasten, dazu die
+   Menue-Bedienung und `r` im Game-Over-Bild.
+3. Vorschau ("Next") und Hold (ein Tausch je Zug).
+4. Gold-/Silber-Quadrate und die Reihenwertung (Werte aus
+   `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`, siehe 3.2).
+5. Weltwunderbau mit der Kostentabelle aus `lib/wonders.sh`.
+
+Zwei Teile werden bewusst aus dem laufenden Zustand gelesen statt
+ausgeschrieben, damit die Anleitung nicht luegen kann: die
+Tastenbelegung (`menu_help_keys` setzt die konfigurierbare Taste vor die
+fest verdrahteten Sekundaertasten, laesst `NONE` weg und vermeidet
+Dubletten wie `KEY_HARD=SPACE` neben der Leertaste) und die Wunder-Namen
+samt Kosten. Jeder Bildschirm bleibt in den 46 Zeichen Breite und den
+`MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst.
+
 ## 4. Technisches Konzept
 
 ### 4.1 Rahmenbedingungen
@@ -313,7 +337,7 @@ rowhammer/
   rowhammer.sh         # Hauptskript: Argumente, Init, Game-Loop
   lib/
     board.sh           # Spielfeld-Zustand, Kollision, Reihenabbau
-    pieces.sh          # Tetromino-Definitionen und Rotationstabellen
+    pieces.sh          # Baustein-Definitionen und Rotationstabellen
     squares.sh         # Erkennung und Verwaltung von Gold-/Silber-Quadraten
     render.sh          # Rendering (Layout, Zeilen-Diff, ANSI)
     input.sh           # Nicht-blockierende Tastatureingabe
@@ -344,7 +368,8 @@ bislang nur spezifiziert sind (siehe Abschnitt 5)
 `stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
-Highscores / Weltwunder / Statistik / Einstellungen / Beenden;
+Highscores / Weltwunder / Statistik / Einstellungen / Anleitung /
+Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue); die
 Menue-Beschriftung
@@ -864,7 +889,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
 
 - **Feld-Snapshot (`BOARD`/`PEERBOARD`):** genau **200 Zeichen**, Zeile
   fuer Zeile von oben (y=HIDDEN_ROWS) nach unten, je Zelle ein Zeichen
-  aus `.IOTSZJLgsx`: `.` leer, Grossbuchstabe = Tetromino-Sorte,
+  aus `.IOTSZJLgsx`: `.` leer, Grossbuchstabe = Baustein-Sorte,
   `g` Gold-Quadrat, `s` Silber-Quadrat, `x` Garbage. Feste Laenge statt
   Lauflaengenkodierung, weil die Validierung dadurch trivial und
   lueckenlos ist (Laenge + Zeichensatz); 200 Byte bei max. 5 Hz und 6
@@ -1178,7 +1203,7 @@ Feature-Branch oder Pull Request.
       Aufraeumen per `trap`
 - [x] Nicht-blockierender Input inkl. Pfeiltasten-Escape-Sequenzen
 - [x] Spielfeld-Datenmodell und Kollisionspruefung
-- [x] Tetromino-Definitionen mit Rotationstabellen, 7-Bag-Randomizer
+- [x] Baustein-Definitionen mit Rotationstabellen, 7-Bag-Randomizer
 - [x] Game-Loop mit Gravitation, Lock, Reihenabbau
 - [x] Rendering mit Double-Buffering und Farben
 - [x] Soft-/Hard-Drop, Pause, Game Over (mit Neustart per `r`)
@@ -1540,6 +1565,15 @@ Feature-Branch oder Pull Request.
       Entfallen sind Drop-Punkte, Quadrat-Bildungs-Boni (2000/1000)
       und die Level-Skalierung; Highscore (Rangfolge nach Rows) und
       Statistik speichern kein separates Score-Feld mehr (siehe 4.5)
+- [x] Anleitung im Hauptmenue (Version 0.32.0, Nutzerwunsch): neuer
+      Menuepunkt "Anleitung" zwischen "Einstellungen" und "Beenden",
+      der das Spiel auf fuenf Info-Bildschirmen erklaert - Spielprinzip,
+      Steuerung, Vorschau/Hold, Gold-/Silber-Quadrate mit ihrer
+      Reihenwertung und zum Schluss den Weltwunderbau (`menu_help`,
+      `menu_help_keys` in `lib/menu.sh`, siehe 3.5). Tastenbelegung und
+      Wunder-Kosten stammen aus dem laufenden Zustand, damit ein Rebind
+      oder ein justiertes `WONDER_COSTS` die Anleitung nicht veralten
+      laesst.
 - [x] Highscores und Statistik farbig darstellen (Version 0.30.0):
       beide Bildschirme waren reiner Text, obwohl das Spiel laengst ein
       Theme-System fuer Farben hat (0.21.0, siehe 4.1). `render_colors_init`

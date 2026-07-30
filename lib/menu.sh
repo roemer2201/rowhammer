@@ -20,7 +20,12 @@
 #   preselected; it guards leaving the game while a round is still
 #   suspended. menu_pages (since 0.10.0) shows a table that outgrew one
 #   screen as a sequence of info screens with a repeated table head, which
-#   is what the two-line highscore entries need. All wait loops
+#   is what the two-line highscore entries need. menu_help (since
+#   0.12.0, user request) is the "Anleitung" main menu entry: five info
+#   screens explaining the game, the controls, hold and preview, the
+#   gold/silver squares and the wonder construction, with the key
+#   bindings and the wonder costs read from the live state instead of
+#   spelled out. All wait loops
 #   repaint on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave a menu or info screen blank (since 0.7.0).
 #   Since 0.11.0 every screen here is built as an array of plain content
@@ -30,7 +35,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.11.1  (2026-07-29)
+# Version: 0.12.0  (2026-07-30)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -184,6 +189,199 @@ menu_pages() {
             menu_message "${title}" "${body[@]}"
         fi
     done
+    return 0
+}
+
+# Number of screens menu_help walks through; only used to number the
+# titles ("Anleitung (2/5)"), so the pages stay self-describing.
+MENU_HELP_PAGES=5
+
+# menu_help_keys FIXED VAR
+# Build the key list for one action as the help screen shows it:
+# FIXED is the wording for the keys wired in unconditionally (arrows,
+# space, the fixed secondary hold key), VAR the name of the configurable
+# binding variable. The bound key leads the list as "[k]" - it is the
+# primary key, the one the settings menu rebinds - and is left out when
+# it is NONE (the action has no letter key, see rowhammer.sh) or already
+# part of FIXED: KEY_HARD defaults to SPACE, which the fixed part
+# already names, and a rebind could put the hold action on the fixed w.
+# Result in MENU_HELP_KEYS, so the caller needs no subshell.
+menu_help_keys() {
+    # The binding name goes through a variable of its own: "${!2}" is not
+    # an indirect expansion of the second argument, it looks for a
+    # variable named after the positional parameter.
+    local fixed="${1}" var="${2}" key
+    key="${!var}"
+    case "${key}" in
+        NONE)  key="" ;;
+        SPACE) key="Leertaste" ;;
+        *)     key="[${key}]" ;;
+    esac
+    if [ -z "${key}" ]; then
+        MENU_HELP_KEYS="${fixed}"
+        return 0
+    fi
+    if [ -z "${fixed}" ]; then
+        MENU_HELP_KEYS="${key}"
+        return 0
+    fi
+    # Quoted on purpose: an unquoted "[c]" would be read as a glob
+    # character class and never match.
+    case "${fixed}" in
+        *"${key}"*) MENU_HELP_KEYS="${fixed}" ;;
+        *)          MENU_HELP_KEYS="${key}, ${fixed}" ;;
+    esac
+    return 0
+}
+
+# menu_help
+# The "Anleitung" main menu entry (added 0.12.0, user request): a short
+# tour through the game on five info screens - what the game is about,
+# the controls, hold and preview, the gold/silver squares and the wonder
+# construction. Each screen is a menu_message, so it is centered and
+# paged by any key like the statistics screens. Two things are read from
+# the live state instead of being spelled out: the control page prints
+# the current bindings (menu_help_keys), and the wonder page lists the
+# names and costs from lib/wonders.sh - a rebind or a retuned
+# WONDER_COSTS must never leave the manual lying. Text is German like
+# the rest of the menus and ASCII only (script conventions); every line
+# stays within the 46 characters the 48-column minimum leaves next to
+# the two-column menu indent, and every page within MENU_BODY_MAX lines.
+menu_help() {
+    local -a body
+    local line i
+
+    body=("rowhammer ist ein Tetris-Spiel im Terminal," \
+          "Vorbild ist \"The New Tetris\" (N64)." \
+          "" \
+          "Bausteine so stapeln, dass sich" \
+          "Reihen komplett fuellen: volle Reihen werden" \
+          "abgebaut und als \"Rows\" gewertet - das ist" \
+          "zugleich der Punktestand der Runde." \
+          "" \
+          "Die Steine kommen aus einem 7er-Beutel: jede" \
+          "der sieben Sorten genau einmal, dann wird" \
+          "neu gemischt." \
+          "" \
+          "Mit jeder abgebauten Reihe steigt das Level," \
+          "und die Steine fallen schneller. Ist kein" \
+          "Platz mehr fuer einen neuen Stein, ist die" \
+          "Runde vorbei.")
+    menu_message "Anleitung (1/${MENU_HELP_PAGES})" "${body[@]}"
+
+    body=("Steuerung im Spiel (die Buchstabentasten" \
+          "sind unter Einstellungen aenderbar):" \
+          "")
+    menu_help_keys "Pfeil links" KEY_LEFT
+    printf -v line '%-17s %s' "Nach links" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    menu_help_keys "Pfeil rechts" KEY_RIGHT
+    printf -v line '%-17s %s' "Nach rechts" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    menu_help_keys "" KEY_ROT_CW
+    printf -v line '%-17s %s' "Drehen rechts" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    menu_help_keys "" KEY_ROT_CCW
+    printf -v line '%-17s %s' "Drehen links" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    menu_help_keys "Pfeil runter" KEY_SOFT
+    printf -v line '%-17s %s' "Soft-Drop" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    # Space and arrow up always drop hard, w always holds - the game
+    # wires both in regardless of the bindings (handle_key).
+    menu_help_keys "Leertaste, Pfeil hoch" KEY_HARD
+    printf -v line '%-17s %s' "Hard-Drop" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    menu_help_keys "[w]" KEY_HOLD
+    printf -v line '%-17s %s' "Hold / Tauschen" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    menu_help_keys "" KEY_PAUSE
+    printf -v line '%-17s %s' "Pause" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    menu_help_keys "ESC" KEY_QUIT
+    printf -v line '%-17s %s' "Pausenmenue" "${MENU_HELP_KEYS}"
+    body+=("${line}")
+    body+=("" \
+           "Soft-Drop laesst den Stein schneller fallen," \
+           "Hard-Drop setzt ihn sofort fest." \
+           "Nach einem Game Over startet [r] neu." \
+           "In den Menues: Pfeile oder w/s waehlen," \
+           "Enter bestaetigt, ESC geht zurueck.")
+    menu_message "Anleitung (2/${MENU_HELP_PAGES})" "${body[@]}"
+
+    menu_help_keys "[w]" KEY_HOLD
+    body=("Vorschau und Hold" \
+          "" \
+          "Oben rechts (\"Next\") stehen die naechsten" \
+          "drei Steine - genug Vorlauf, um den Stapel" \
+          "zu planen." \
+          "" \
+          "Links oben liegt der Hold-Speicher. Mit" \
+          "${MENU_HELP_KEYS} wandert der aktuelle Stein dorthin;" \
+          "liegt dort schon einer, tauschen die beiden" \
+          "die Plaetze und der geholdete Stein faellt" \
+          "in seiner Startlage neu ein." \
+          "" \
+          "Pro Zug ist nur ein Tausch erlaubt - erst" \
+          "nach dem naechsten Ablegen geht es wieder." \
+          "So laesst sich ein I-Stein fuer den grossen" \
+          "Abbau aufheben oder ein unpassendes Teil" \
+          "kurz parken.")
+    menu_message "Anleitung (3/${MENU_HELP_PAGES})" "${body[@]}"
+
+    body=("Vier vollstaendige, unversehrte Steine, die" \
+          "zusammen ein 4x4-Quadrat exakt ausfuellen," \
+          "werden zu einem Bonusblock:" \
+          "")
+    printf -v line '  %sGold%s   - alle vier Steine gleicher Sorte' \
+        "${TXT_GOLD_SGR}" "${TXT_RESET_SGR}"
+    body+=("${line}")
+    printf -v line '  %sSilber%s - vier gemischte Sorten' \
+        "${TXT_SILVER_SGR}" "${TXT_RESET_SGR}"
+    body+=("${line}")
+    body+=("" \
+           "Ein Stein, den ein Reihenabbau bereits" \
+           "zerschnitten hat, zaehlt nicht mehr mit." \
+           "" \
+           "Beim Abbau einer Reihe zaehlt (in Rows):")
+    # The bonus values are right aligned as whole strings ("+5", not
+    # "+ 5"), so the plus sign stays glued to its number.
+    printf -v line '  %-31s %s%3s%s' "Grundwert je Reihe" \
+        "${TXT_ACCENT_SGR}" "${ROWS_NORMAL}" "${TXT_RESET_SGR}"
+    body+=("${line}")
+    printf -v line '  %-31s %s%3s%s' "je Silber-Quadrat in der Reihe" \
+        "${TXT_SILVER_SGR}" "+${ROWS_SILVER}" "${TXT_RESET_SGR}"
+    body+=("${line}")
+    printf -v line '  %-31s %s%3s%s' "je Gold-Quadrat in der Reihe" \
+        "${TXT_GOLD_SGR}" "+${ROWS_GOLD}" "${TXT_RESET_SGR}"
+    body+=("${line}")
+    printf -v line '  %-31s %s%3s%s' "Rowhammer (4 Reihen auf einmal)" \
+        "${TXT_WARN_SGR}" "+${ROWS_TETRIS}" "${TXT_RESET_SGR}"
+    body+=("${line}")
+    body+=("" \
+           "Ein Rowhammer quer durch zwei komplette" \
+           "Gold-Quadrate bringt so 4+1+80 = 85 Rows.")
+    menu_message "Anleitung (4/${MENU_HELP_PAGES})" "${body[@]}"
+
+    body=("Alle abgebauten Reihen zaehlen ueber die" \
+          "Runden hinweg zusammen (auch die einer" \
+          "abgebrochenen Runde) und bauen nacheinander" \
+          "sieben Weltwunder auf." \
+          "" \
+          "Gewertete Reihen je Weltwunder:")
+    for (( i = 0; i < ${#WONDER_NAMES_DE[@]}; i++ )); do
+        printf -v line '  %d. %-28s %5d' "$(( i + 1 ))" \
+            "${WONDER_NAMES_DE[i]}" "${WONDER_COSTS[i]}"
+        body+=("${line}")
+    done
+    body+=("" \
+           "Der Menuepunkt \"Weltwunder\" zeigt die" \
+           "aktuelle Baustelle: das Bauwerk waechst von" \
+           "unten Zeile fuer Zeile und steht bei 100" \
+           "Prozent fertig da - ebenso nach jeder Runde.")
+    menu_message "Anleitung (5/${MENU_HELP_PAGES})" "${body[@]}"
+
+    debug_event "help screens shown"
     return 0
 }
 
