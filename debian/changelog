@@ -1,3 +1,22 @@
+rowhammer (0.32.0) unstable; urgency=medium
+
+  * Add RPM packaging: rowhammer.spec in the repository root calls the same
+    "make install DESTDIR=... PREFIX=/usr" that debian/rules calls, so the
+    RPM installs the identical layout (/usr/share/rowhammer plus the
+    /usr/games/rowhammer launcher symlink) and a layout change stays a
+    Makefile-only edit. The package is noarch and requires bash >= 4.0,
+    with ncurses recommended for the optional tput support.
+  * Add build-rpm.sh as the counterpart to build-deb.sh: it builds the
+    source tarball from the working tree, runs rpmbuild in a private
+    _topdir below the output directory so the caller's ~/rpmbuild stays
+    untouched, and collects the packages in dist/. It offers
+    --output-dir, --release, --srpm, --keep-build, --verbose and --silent,
+    each with a matching ROWHAMMER_RPM_* environment variable, and refuses
+    to build when the spec's Version and ROWHAMMER_VERSION in rowhammer.sh
+    disagree.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 30 Jul 2026 18:00:00 +0200
+
 rowhammer (0.31.0) unstable; urgency=medium
 
   * Change the default key bindings (user decision): rotation moved from

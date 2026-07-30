@@ -99,7 +99,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.31.0  (2026-07-30)
+# Version: 0.32.0  (2026-07-30)
 
 set -euo pipefail
 
@@ -112,8 +112,9 @@ SCRIPT_NAME="$(basename -- "${0}")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
 
 # Game version, reported in the debug session header. Keep in sync with
-# the Version field in the header comment above.
-ROWHAMMER_VERSION="0.31.0"
+# the Version field in the header comment above, with debian/changelog and
+# with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
+ROWHAMMER_VERSION="0.32.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
