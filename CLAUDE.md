@@ -265,6 +265,30 @@ Die fuer uns relevanten Merkmale des Originals:
   verschwinden (siehe 3.1).
 - Nach Rundenende: Bildschirm mit dem aktuellen Wunder in seiner neuen Baustufe.
 
+### 3.5 Anleitung (seit 0.32.0)
+
+Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
+"Beenden" und erklaert das Spiel auf fuenf Info-Bildschirmen
+(`menu_help` in `lib/menu.sh`, gezeigt ueber `menu_message`, also
+zentriert und mit beliebiger Taste weitergeblaettert):
+
+1. Spielprinzip: Tetrominos, volle Reihen als "Rows", 7-Bag,
+   Level/Tempo, Rundenende.
+2. Steuerung: alle Aktionen mit ihren aktuellen Tasten, dazu die
+   Menue-Bedienung und `r` im Game-Over-Bild.
+3. Vorschau ("Next") und Hold (ein Tausch je Zug).
+4. Gold-/Silber-Quadrate und die Reihenwertung (Werte aus
+   `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`, siehe 3.2).
+5. Weltwunderbau mit der Kostentabelle aus `lib/wonders.sh`.
+
+Zwei Teile werden bewusst aus dem laufenden Zustand gelesen statt
+ausgeschrieben, damit die Anleitung nicht luegen kann: die
+Tastenbelegung (`menu_help_keys` setzt die konfigurierbare Taste vor die
+fest verdrahteten Sekundaertasten, laesst `NONE` weg und vermeidet
+Dubletten wie `KEY_HARD=SPACE` neben der Leertaste) und die Wunder-Namen
+samt Kosten. Jeder Bildschirm bleibt in den 46 Zeichen Breite und den
+`MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst.
+
 ## 4. Technisches Konzept
 
 ### 4.1 Rahmenbedingungen
@@ -344,7 +368,8 @@ bislang nur spezifiziert sind (siehe Abschnitt 5)
 `stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
-Highscores / Weltwunder / Statistik / Einstellungen / Beenden;
+Highscores / Weltwunder / Statistik / Einstellungen / Anleitung /
+Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue); die
 Menue-Beschriftung
@@ -1521,6 +1546,15 @@ Feature-Branch oder Pull Request.
       Entfallen sind Drop-Punkte, Quadrat-Bildungs-Boni (2000/1000)
       und die Level-Skalierung; Highscore (Rangfolge nach Rows) und
       Statistik speichern kein separates Score-Feld mehr (siehe 4.5)
+- [x] Anleitung im Hauptmenue (Version 0.32.0, Nutzerwunsch): neuer
+      Menuepunkt "Anleitung" zwischen "Einstellungen" und "Beenden",
+      der das Spiel auf fuenf Info-Bildschirmen erklaert - Spielprinzip,
+      Steuerung, Vorschau/Hold, Gold-/Silber-Quadrate mit ihrer
+      Reihenwertung und zum Schluss den Weltwunderbau (`menu_help`,
+      `menu_help_keys` in `lib/menu.sh`, siehe 3.5). Tastenbelegung und
+      Wunder-Kosten stammen aus dem laufenden Zustand, damit ein Rebind
+      oder ein justiertes `WONDER_COSTS` die Anleitung nicht veralten
+      laesst.
 - [x] Highscores und Statistik farbig darstellen (Version 0.30.0):
       beide Bildschirme waren reiner Text, obwohl das Spiel laengst ein
       Theme-System fuer Farben hat (0.21.0, siehe 4.1). `render_colors_init`

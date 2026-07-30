@@ -1,3 +1,17 @@
+rowhammer (0.32.0) unstable; urgency=medium
+
+  * Add an "Anleitung" entry to the main menu, between "Einstellungen"
+    and "Beenden" (user request): a short manual on five info screens -
+    the game and its rules, the controls, the preview and the hold slot,
+    the gold and silver squares with their row bonus, and the world
+    wonder construction (menu_help in lib/menu.sh).
+  * The manual reads two things from the live state instead of spelling
+    them out: the controls page prints the bindings currently in effect
+    (including a rebound or unbound letter key), and the wonder page
+    lists the names and row costs from lib/wonders.sh.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 30 Jul 2026 14:00:00 +0200
+
 rowhammer (0.31.0) unstable; urgency=medium
 
   * Change the default key bindings (user decision): rotation moved from
