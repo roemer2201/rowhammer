@@ -1260,6 +1260,25 @@ Feature-Branch oder Pull Request.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
+- [ ] `--reset [config|stats|highscore|all]` einbauen: loescht gezielt
+      persistente Daten im Datenverzeichnis (`${DATA_DIR}`, siehe 4.5),
+      noch vor dem eigentlichen Programmstart. `config` entfernt
+      `rowhammer.conf`, `stats` die Datei `stats`, `highscore` die
+      Datei `highscore`, `all` alle drei zusammen. Wie jeder andere
+      Parameter zusaetzlich per Umgebungsvariable setzbar
+      (`ROWHAMMER_RESET`, Praezedenz wie ueblich Standard < Config <
+      Env < CLI - hier ist "Config" allerdings die Datei, die der
+      Reset selbst treffen kann, das ist beim Zusammenspiel zu
+      beachten). Nach dem Loeschen beendet sich das Programm mit einer
+      Bestaetigungsmeldung auf STDOUT statt ins Menue zu starten; im
+      interaktiven Betrieb vorher eine Sicherheitsabfrage (analog
+      `menu_confirm`), ohne TTY (Skripting, CI) direkt ausfuehren, da
+      ein wartendes `read` das Skript sonst haengen liesse. Nicht
+      vorhandene Dateien sind kein Fehler (Ziel bereits erreicht).
+      Offen: ob `all` zusaetzlich das Savegame (`save`, Weltwunder-
+      Fortschritt) mitloeschen soll oder bewusst nur die drei genannten
+      Dateien trifft - dafuer spraeche ein eigener Wert `save` oder
+      `wonders`, der die drei anderen unangetastet laesst.
 - [x] Hauptmenue ebenfalls zentriert darstellen (Version 0.28.0): das
       Spielfeld-Layout wird seit 0.22.0 per `layout_update` mittig im
       Terminal ausgerichtet (siehe 3.4, 4.3), das Hauptmenue
