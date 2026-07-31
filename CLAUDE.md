@@ -1304,6 +1304,30 @@ Feature-Branch oder Pull Request.
       Fortschritt) mitloeschen soll oder bewusst nur die drei genannten
       Dateien trifft - dafuer spraeche ein eigener Wert `save` oder
       `wonders`, der die drei anderen unangetastet laesst.
+- [ ] Demo-Aufzeichnung und Demo-Player: eigene Runden als Datei
+      mitschneiden (vermutlich Eingabe-Mitschnitt plus Seed statt voller
+      Board-Snapshots, analog dem Prinzip des Debug-Modus in 4.6, aber
+      fuer die reine Wiedergabe statt zur Fehlersuche) und ueber einen
+      Menuepunkt wieder abspielen koennen. Notizen fuer die Umsetzung:
+      - **Groessenabschaetzung:** vor der Formatwahl den Speicherbedarf
+        je Minute Spielzeit abschaetzen (Tick-Rate x Eingabeereignisse
+        bzw. x Feldgroesse bei Snapshots), damit klar ist, ob ein
+        Eingabe-Mitschnitt oder volle Snapshots infrage kommen und wie
+        viele Aufzeichnungen sich das Datenverzeichnis leisten kann.
+      - **Aufzeichnung unbedingt auf RAM-Disk:** waehrend der laufenden
+        Runde wird ausschliesslich in ein tmpfs geschrieben (z. B.
+        `${XDG_RUNTIME_DIR}` bzw. `/dev/shm`), nie direkt ins
+        persistente Datenverzeichnis - haeufige kleine Schreibzugriffe
+        waehrend des Spiels duerfen weder die Framerate noch (bei SSDs)
+        die Hardware belasten. Erst nach echtem Rundenende (siehe 3.3)
+        wird die fertige Aufzeichnung ins Datenverzeichnis uebernommen,
+        analog dem `--debug-dir`-Verzeichnis pro Lauf in 4.6.
+      - **Demo-Verwaltung:** eigener Menuepunkt mit Liste der
+        vorhandenen Aufzeichnungen (Datum, Laenge, Ergebnis), Auswahl
+        zum Anschauen und einzelnes Loeschen.
+      Noch offen: Aufzeichnungsformat im Detail, Obergrenze fuer Anzahl
+      bzw. Gesamtgroesse im Datenverzeichnis, Abspielgeschwindigkeit
+      (Pause/Vorspulen?).
 - [x] Hauptmenue ebenfalls zentriert darstellen (Version 0.28.0): das
       Spielfeld-Layout wird seit 0.22.0 per `layout_update` mittig im
       Terminal ausgerichtet (siehe 3.4, 4.3), das Hauptmenue
