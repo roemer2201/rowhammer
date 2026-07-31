@@ -1328,6 +1328,19 @@ Feature-Branch oder Pull Request.
       Noch offen: Aufzeichnungsformat im Detail, Obergrenze fuer Anzahl
       bzw. Gesamtgroesse im Datenverzeichnis, Abspielgeschwindigkeit
       (Pause/Vorspulen?).
+- [ ] Mehrsprachige Oberflaeche (Multi-Language Support): saemtliche
+      benutzersichtbaren Texte (Hauptmenue, Untermenues, Anleitung,
+      HUD-Labels, Highscore-/Statistik-Spaltenkoepfe, `-h`/`--help`,
+      Fehlermeldungen) hinter eine Uebersetzungsschicht ziehen, damit
+      eine Sprache auswaehlbar wird (`--lang CODE`/`ROWHAMMER_LANG`,
+      Einstellungsmenue, gespeichert in der Config). Greift die in
+      Abschnitt 8 offene UI-Sprachfrage auf (bislang Menues Deutsch,
+      HUD/--help Englisch als feste Konvention) und macht daraus eine
+      Laufzeit-Entscheidung statt einer festen Sprachmischung. Noch
+      offen: welche Sprachen ausser Deutsch/Englisch, Format der
+      Uebersetzungstabellen (reines Bash-Array je Sprache vermutlich am
+      einfachsten), Umgang mit variabler Textlaenge im starren
+      48-Spalten-Layout (siehe 3.4).
 - [x] Hauptmenue ebenfalls zentriert darstellen (Version 0.28.0): das
       Spielfeld-Layout wird seit 0.22.0 per `layout_update` mittig im
       Terminal ausgerichtet (siehe 3.4, 4.3), das Hauptmenue
