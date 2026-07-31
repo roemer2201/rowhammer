@@ -10,9 +10,11 @@
 #   clears -, the play time and the pieces placed) below it, the board in the middle and
 #   the three upcoming pieces in the top right pane. The wonder progress
 #   is not part of the HUD; it is shown on the "Weltwunder" screen
-#   instead. Pause
+#   instead. In the Ultra game mode (since 0.19.0) two more counters
+#   follow below: the run's row target and the rows still missing. Pause
 #   and game over are drawn as a box over the board, the latter with the
-#   achieved highscore rank.
+#   achieved highscore rank - or, for a finished Ultra run, with its time
+#   and Ultra rank.
 #   Since 0.12.0 frames are no longer pushed out as a whole: draw_frame
 #   builds the block into FRAME_LINES and render_flush emits only the lines
 #   that actually changed since the previous frame, each with its own
@@ -52,7 +54,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.18.0  (2026-07-29)
+# Version: 0.19.0  (2026-07-31)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -566,7 +568,7 @@ pane_stat() {
 # wide, so it could only ever have been shown as a stump, and the player
 # knows their own name anyway.
 render_pane_left() {
-    local i line
+    local i line left
     PANE_LEFT=()
     for (( i = 0; i <= BOARD_BOTTOM_ROW; i++ )); do
         PANE_LEFT[i]="${PANE_BLANK}"
@@ -596,6 +598,22 @@ render_pane_left() {
     # together are what the statistics and highscore screens turn into a
     # PCS/min rate. "Pieces" fills the pane's six label columns exactly.
     pane_stat 13 "Pieces" "${PIECE_COUNT}"
+    # Ultra mode (2026-07-31): the run's target and how far it still is,
+    # so the player never has to do that arithmetic mid-round. Only in
+    # that mode - a normal round has no goal, and the free rows below
+    # stay free for whatever comes next (see CLAUDE.md 3.4). "Left" is
+    # the interesting half and therefore the lower, more visible line;
+    # both labels fit the pane's six label columns.
+    if [ "${GAME_MODE}" = "ultra" ]; then
+        pane_stat 15 "Goal" "${ULTRA_TARGET_ROWS}"
+        left=$(( ULTRA_TARGET_ROWS - ROW_CREDIT ))
+        if [ "${left}" -lt 0 ]; then
+            # The last clear usually overshoots the target; showing a
+            # negative remainder would be noise on the finished run.
+            left=0
+        fi
+        pane_stat 16 "Left" "${left}"
+    fi
     return 0
 }
 
@@ -632,14 +650,37 @@ render_status_box() {
     if [ "${GAME_OVER}" -eq 1 ]; then
         local -a body=()
         body+=("")
-        body+=("    GAME OVER")
-        body+=("")
-        # The finished round was recorded when the game over triggered
-        # (record_round), so HS_LAST_RANK is this round's rank.
-        if [ "${HS_LAST_RANK}" -gt 0 ]; then
-            body+=("  Highscore #${HS_LAST_RANK}")
-        else
+        # Three endings share this box, and all three fill the same eight
+        # body lines so the borders stay put: a finished Ultra run (the
+        # time is the result and takes the headline's neighbouring line),
+        # a failed Ultra run (no rank - an attempt short of the goal is
+        # not recorded, so it shows how far it got instead) and the
+        # classic game over of an endless round.
+        if [ "${GOAL_REACHED}" -eq 1 ]; then
+            body+=("    ULTRA CLEAR")
+            fmt_duration_ms "${PLAY_MS}"
+            body+=("   Time ${FMT_DURATION_MS}")
+            # The run was recorded when the goal triggered (record_round),
+            # so HSU_LAST_RANK is this run's rank in the Ultra list.
+            if [ "${HSU_LAST_RANK}" -gt 0 ]; then
+                body+=("  Ultra #${HSU_LAST_RANK}")
+            else
+                body+=("")
+            fi
+        elif [ "${GAME_MODE}" = "ultra" ]; then
+            body+=("    GAME OVER")
             body+=("")
+            body+=("  Rows ${ROW_CREDIT}/${ULTRA_TARGET_ROWS}")
+        else
+            body+=("    GAME OVER")
+            body+=("")
+            # The finished round was recorded when the game over triggered
+            # (record_round), so HS_LAST_RANK is this round's rank.
+            if [ "${HS_LAST_RANK}" -gt 0 ]; then
+                body+=("  Highscore #${HS_LAST_RANK}")
+            else
+                body+=("")
+            fi
         fi
         body+=("")
         body+=("  r = restart")
@@ -698,7 +739,7 @@ render_flush() {
 # Render the complete game screen. Reads the game state globals (BOARD,
 # BOARD_SQ, CUR_*, QUEUE, HOLD_TYPE, CLEARED_TOTAL, ROW_CREDIT, LEVEL,
 # GOLD_COUNT, SILVER_COUNT, ROWHAMMER_COUNT, PIECE_COUNT, PLAY_MS,
-# PAUSED, GAME_OVER)
+# PAUSED, GAME_OVER, GAME_MODE, GOAL_REACHED)
 # and the USE_COLOR flag, assembles the block into
 # FRAME_LINES and lets render_flush emit the difference.
 draw_frame() {

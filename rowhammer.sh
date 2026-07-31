@@ -10,7 +10,12 @@
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
 #   restart. Completed rows blink briefly before they are removed, so
-#   the player sees which rows scored. The play screen is one fixed
+#   the player sees which rows scored. The singleplayer menu offers two
+#   game modes: the endless "Normales Spiel" and "Ultra", a race to
+#   clear ULTRA_TARGET_ROWS rows of credit as fast as possible - it ends
+#   the moment the target is reached, the play time is the result and
+#   only successful runs are recorded, in an Ultra highscore list of
+#   their own (lib/highscore.sh). The play screen is one fixed
 #   48x22 block centered in the terminal: the hold piece with the round
 #   counters below it on the left, the board in the middle and the three
 #   upcoming pieces top right; pause and game
@@ -87,10 +92,11 @@
 #      set), load the highscore list, the savegame and the statistics
 #      and enter the alternate screen in raw input mode (echo and
 #      canonical mode off for the whole session).
-#   6. Run the main menu loop; "Einzelspieler" starts the game loop
+#   6. Run the main menu loop; "Einzelspieler" picks a game mode and
+#      starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
 #      clearing, rendering), finished rounds are recorded in the
-#      highscore list, their row credit is banked into the wonder
+#      highscore list of their mode, their row credit is banked into the wonder
 #      savegame and their counters into the statistics file,
 #      settings changes are written back to the config file. A round
 #      suspended via the pause menu returns to the main menu
@@ -104,7 +110,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.33.0  (2026-07-31)
+# Version: 0.34.0  (2026-07-31)
 
 set -euo pipefail
 
@@ -118,7 +124,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.33.0"
+ROWHAMMER_VERSION="0.34.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -192,8 +198,8 @@ usage() {
 Usage: rowhammer.sh [OPTIONS]
 
 Terminal Tetris of the rowhammer project. Starts with a menu:
-singleplayer, multiplayer (placeholder), highscores, wonders,
-statistics and settings.
+singleplayer (endless "Normales Spiel" or the timed "Ultra" mode),
+multiplayer (placeholder), highscores, wonders, statistics and settings.
 
 Options:
   --seed N      Seed the piece randomizer for a reproducible sequence.
@@ -274,6 +280,17 @@ clearing 4 rows at once (a Tetris) adds 1 extra. The credit is shown as
 sole source of points - drops, square formation and spins earn nothing.
 Famous maximum for a single move: a Tetris through two complete gold
 squares = 4 + 1 + 8 x 10 = 85.
+
+Game modes (singleplayer menu): "Normales Spiel" is the endless round
+that ends on a top-out. "Ultra" is a race - clear 150 rows of credit as
+fast as possible; the run ends the moment that target is reached and its
+play time is the result. The HUD shows the target and the rows still
+missing while an Ultra run is going. Ultra runs are ranked by time in
+their own list (<data-dir>/highscore-ultra, fastest first) so they never
+displace the endless list's top ten, and only a run that reached the
+target is recorded - an attempt that topped out early has no comparable
+time. Its rows still count toward the wonders and the statistics, like
+any other round.
 
 Wonders: the row credit of every round is added to a persistent counter
 stored in <data-dir>/save. It builds seven world wonders in a fixed
@@ -634,6 +651,30 @@ PLAY_MS=0; PLAY_LAST=0
 # Guards record_round so one round enters the highscore list only
 # once (a round can end twice: game over, then quitting to the menu).
 ROUND_RECORDED=0
+# Game mode of the running round, "normal" (endless, the classic round)
+# or "ultra" (race: clear ULTRA_TARGET_ROWS of row credit as fast as
+# possible). Round state like the counters above: it is chosen in the
+# singleplayer menu, set by game_reset and kept across a suspend/resume,
+# so a resumed round always comes back in the mode it was started in.
+# The mode decides which highscore list the round is recorded in and
+# whether the HUD shows the goal counters (render_pane_left).
+GAME_MODE="normal"
+# Row credit an Ultra run has to reach. Weighted rows ("Rows", see the
+# scoring note below), not physical lines: in this game "cleared rows"
+# has meant the weighted figure everywhere else too (wonder progress,
+# statistics), and it makes the gold/silver squares - the mechanic the
+# game is built around - the fast way to the goal instead of dead weight.
+# An adjustable game-feel constant like LEVEL_SPEEDS and LOCK_DELAY_MS;
+# the menu entry and the HUD read it, but the usage text above spells it
+# out (its heredoc is unexpanded, and it is printed before this line ever
+# runs) - so keep that one number in sync when tuning this.
+ULTRA_TARGET_ROWS=150
+# Set when a round ended by reaching its mode's goal instead of by
+# topping out. Both end the round (GAME_OVER=1 drives the end-of-round
+# handling), this flag only tells the two apart - for the box over the
+# board (render_status_box) and for record_round, which enters a run in
+# the Ultra list only when it really got there.
+GOAL_REACHED=0
 
 # CHANGE 2026-07-20: the separate score (line points scaling with the
 # level, flat square formation bonuses, drop points) was removed on user
@@ -688,6 +729,19 @@ fmt_duration() {
     printf -v FMT_DURATION '%02d:%02d' $(( s / 60 )) $(( s % 60 ))
 }
 
+# fmt_duration_ms MILLISECONDS: format a millisecond duration as
+# MM:SS.mmm into the global FMT_DURATION_MS. Used where the tenths and
+# hundredths actually matter - the Ultra mode, where the play time is the
+# score and two attempts routinely land in the same second (the Ultra
+# highscore list therefore stores milliseconds, see lib/highscore.sh).
+# fmt_duration's MM:SS stays the format for everything else.
+FMT_DURATION_MS="00:00.000"
+fmt_duration_ms() {
+    local ms="${1}"
+    printf -v FMT_DURATION_MS '%02d:%02d.%03d' \
+        "$(( ms / 60000 ))" "$(( ms / 1000 % 60 ))" "$(( ms % 1000 ))"
+}
+
 # fmt_ppm PIECES SECONDS: format a placement rate as pieces per minute
 # with one decimal into the global FMT_PPM ("-" while no play time has
 # been measured yet, which is the only division-by-zero case). Bash has
@@ -704,6 +758,19 @@ fmt_ppm() {
     tenths=$(( pieces * 600 / secs ))
     printf -v FMT_PPM '%d.%d' "$(( tenths / 10 ))" "$(( tenths % 10 ))"
     return 0
+}
+
+# play_clock_tick: account the play time elapsed since the last accounted
+# moment into PLAY_MS (and refresh NOW_MS on the way). The game loop does
+# this once per tick; the Ultra mode calls it again at the very moment
+# its goal is reached, because a hard drop finishes a run between two of
+# those ticks and those milliseconds belong to the run - which in that
+# mode is its score. Idempotent: it only ever adds the interval since
+# PLAY_LAST, which it then moves to "now".
+play_clock_tick() {
+    now_ms
+    PLAY_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
+    PLAY_LAST="${NOW_MS}"
 }
 
 # play_clock_resume: mark "now" as the start of a fresh play-time segment
@@ -737,12 +804,18 @@ update_speed() {
 }
 
 # record_round: close the books on a finished round, at most once
-# per round: enter it into the highscore list, bank its row credit
+# per round: enter it into the highscore list of its mode, bank its row
+# credit
 # into the persistent wonder counter (savegame) and its counters into
 # the all-time statistics (lib/stats.sh). Runs right when the
 # game over triggers, so the game over box can show the achieved
-# rank (HS_LAST_RANK), and again as a catch-all when the player quits a
-# running round to the menu.
+# rank (HS_LAST_RANK / HSU_LAST_RANK), and again as a catch-all when the
+# player quits a running round to the menu.
+# The two lists are separate and a round enters exactly one of them (see
+# lib/highscore.sh): an Ultra run is ranked by time and would otherwise
+# push endless rounds out of a top ten it cannot be compared against.
+# Wonder progress and statistics do not care about the mode - those rows
+# were really cleared, and per the concept even an aborted round counts.
 record_round() {
     if [ "${ROUND_RECORDED}" -eq 1 ]; then
         return 0
@@ -751,9 +824,25 @@ record_round() {
     # Round play time in whole seconds, the round's four-row clears and
     # the pieces it placed; all three are stored with the highscore entry
     # (play time and pieces are what its PCS/min column is computed from).
-    highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
-        "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
-        "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
+    if [ "${GAME_MODE}" = "ultra" ]; then
+        # Only a run that reached the goal is recorded: an attempt that
+        # topped out early has no comparable time, and ranking it by rows
+        # would mean two orderings in one list. Its rows and counters
+        # still feed the wonder and the statistics below.
+        if [ "${GOAL_REACHED}" -eq 1 ]; then
+            highscore_ultra_add "${PLAY_MS}" "${ROW_CREDIT}" \
+                "${CLEARED_TOTAL}" "${LEVEL}" "${PLAYER_NAME}" \
+                "${GOLD_COUNT}" "${SILVER_COUNT}" "${ROWHAMMER_COUNT}" \
+                "${PIECE_COUNT}"
+        else
+            HSU_LAST_RANK=0
+            debug_event "ultra run not recorded: goal not reached (rows=${ROW_CREDIT}/${ULTRA_TARGET_ROWS})"
+        fi
+    else
+        highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
+            "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
+            "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
+    fi
     # Every cleared row counts toward the wonder, even from an aborted
     # round - like the original, where all modes feed the line total.
     if [ "${ROW_CREDIT}" -gt 0 ]; then
@@ -868,6 +957,24 @@ lock_and_next() {
         # lib/render.sh); record_round and wonder_screen each recompute
         # it from the row total, so nothing reads a stale value.
         debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} fall_ms=${FALL_MS} rowhammers=${ROWHAMMER_COUNT}"
+        # Ultra mode: the goal is a row credit, so this - right after a
+        # clear was scored - is the only place it can ever be reached.
+        # The run ends here, before the next piece spawns: it is over the
+        # moment the target is hit, and the piece would only be in the
+        # way of the result box.
+        if [ "${GAME_MODE}" = "ultra" ] && (( ROW_CREDIT >= ULTRA_TARGET_ROWS )); then
+            # Count the time up to this very moment: a hard drop lands
+            # between two loop ticks, and those milliseconds are part of
+            # the run's time - which in this mode is its score.
+            play_clock_tick
+            GOAL_REACHED=1
+            GAME_OVER=1
+            debug_event "ultra goal reached: rows=${ROW_CREDIT}/${ULTRA_TARGET_ROWS} time=${PLAY_MS}ms lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
+            record_round
+            debug_board_snapshot
+            DIRTY=1
+            return 0
+        fi
     fi
     debug_board_snapshot
     # The hold slot unlocks again once a piece has locked.
@@ -1096,9 +1203,13 @@ handle_key() {
     return 0
 }
 
-# game_reset: start a fresh round (used at launch and for restart).
+# game_reset [MODE]
+# Start a fresh round in MODE ("normal" or "ultra"); without an argument
+# the current GAME_MODE is kept, which is what the game over screen's
+# restart key does - a failed Ultra run restarts as an Ultra run.
 game_reset() {
-    debug_event "round start (seed=${SEED:-unset})"
+    GAME_MODE="${1:-${GAME_MODE}}"
+    debug_event "round start (mode=${GAME_MODE} seed=${SEED:-unset})"
     board_init
     BAG=()
     QUEUE=()
@@ -1115,6 +1226,7 @@ game_reset() {
     HOLD_USED=0
     PAUSED=0
     GAME_OVER=0
+    GOAL_REACHED=0
     ROUND_RECORDED=0
     LOCK_PENDING=0
     PLAY_MS=0
@@ -1125,22 +1237,25 @@ game_reset() {
 }
 
 # --- Game loop ------------------------------------------------------------
-# game_run [MODE]
+# game_run [normal|ultra|resume]
 # One game session; returns to the caller (the menu) when the player
-# leaves via the pause menu or the game over screen. MODE "resume"
-# continues the round suspended earlier through the pause menu instead
-# of starting a fresh one; the round comes back paused so it does not
-# run before the player is ready. A round suspended (again) is not
-# recorded - the books close only when the round really ends.
+# leaves via the pause menu or the game over screen. The argument is
+# either the game mode of the new round (see GAME_MODE) or "resume",
+# which continues the round suspended earlier through the pause menu
+# instead of starting a fresh one - in the mode that round was started
+# in, since the suspended state carries its GAME_MODE along. A resumed
+# round comes back paused so it does not run before the player is ready.
+# A round suspended (again) is not recorded - the books close only when
+# the round really ends.
 game_run() {
-    local mode="${1:-new}"
+    local mode="${1:-normal}"
     GAME_EXIT=0
     # The screen still holds a menu: the first frame must repaint it all.
     RENDER_FULL=1
     if [ "${mode}" = "resume" ] && [ "${GAME_SUSPENDED}" -eq 1 ]; then
         GAME_SUSPENDED=0
         PAUSED=1
-        debug_event "round resumed from menu (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+        debug_event "round resumed from menu (mode=${GAME_MODE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
         # The round keeps its accumulated PLAY_MS; only restart the clocks
         # so the suspended interval is not counted (it comes back paused).
         play_clock_resume
@@ -1153,7 +1268,7 @@ game_run() {
             GAME_SUSPENDED=0
             record_round
         fi
-        game_reset
+        game_reset "${mode}"
     fi
 
     while [ "${GAME_EXIT}" -eq 0 ]; do
@@ -1173,12 +1288,11 @@ game_run() {
             DIRTY=1
         fi
         if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
-            now_ms
             # Accumulate the play time of the segment since the last
-            # accounted moment. play_clock_resume set PLAY_LAST to "now"
-            # at every resume, so an idle phase never lands in PLAY_MS.
-            PLAY_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
-            PLAY_LAST="${NOW_MS}"
+            # accounted moment (and refresh NOW_MS for the gravity checks
+            # below). play_clock_resume set PLAY_LAST to "now" at every
+            # resume, so an idle phase never lands in PLAY_MS.
+            play_clock_tick
             if [ "${LOCK_PENDING}" -eq 1 ]; then
                 # Resting piece: lock once the grace window has elapsed.
                 # Gravity is idle here - the piece cannot fall anyway.
@@ -1199,13 +1313,13 @@ game_run() {
     # A suspended round is not finished: keep the whole game state
     # (including the ROUND_RECORDED guard) for the "Fortsetzen" entry.
     if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-        debug_event "game session suspended (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
+        debug_event "game session suspended (mode=${GAME_MODE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
         return 0
     fi
     # Quitting a running round to the menu ends it too; the flag makes
     # this a no-op when the game over path already recorded the round.
     record_round
-    debug_event "game session end (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
+    debug_event "game session end (mode=${GAME_MODE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} goal_reached=${GOAL_REACHED})"
     return 0
 }
 
@@ -1219,9 +1333,12 @@ main() {
     # Debug logging starts before the alternate screen, so init errors
     # (unwritable log directory etc.) stay readable.
     debug_init
-    # Load the persistent highscore list once; rounds update it in
-    # memory and rewrite the file when they enter the list.
+    # Load the persistent highscore lists once; rounds update them in
+    # memory and rewrite their file when they enter one. The Ultra list
+    # is a separate file with its own ranking (fastest run first), so a
+    # timed run and an endless round never compete for the same slots.
     highscore_load
+    highscore_ultra_load
     # Load the wonder savegame and derive the wonder state once, so the
     # "Weltwunder" screen and record_round start from a valid state.
     save_load

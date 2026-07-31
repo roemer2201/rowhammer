@@ -251,6 +251,9 @@ Die fuer uns relevanten Merkmale des Originals:
     freie Zeilen (Zeile 14-21; Zeile 13 hat der Pieces-Zaehler aus
     0.27.0 belegt). Ein weiterer Zaehler muss also nichts
     mehr verdraengen, solange sein Label in sechs Zeichen passt.
+    Zwei davon (Zeile 15 und 16) nutzt seit 0.34.0 der Ultra-Modus fuer
+    "Goal" und "Left" - aber nur, solange eine Ultra-Runde laeuft; im
+    normalen Spiel bleiben alle acht Zeilen frei (siehe 3.6).
 - Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
   aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
   Pausenmenue) sowie der Game-Over-Bildschirm zaehlen nicht; die Zeit
@@ -297,6 +300,64 @@ fest verdrahteten Sekundaertasten, laesst `NONE` weg und vermeidet
 Dubletten wie `KEY_HARD=SPACE` neben der Leertaste) und die Wunder-Namen
 samt Kosten. Jeder Bildschirm bleibt in den 46 Zeichen Breite und den
 `MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst.
+
+Noch offen: die Anleitung kennt die Spielmodi aus 3.6 noch nicht (die
+fuenf Seiten stammen aus der Zeit, als es nur die endlose Runde gab).
+Eine sechste Seite "Spielmodi" gehoert nachgezogen, sobald auch Sprint
+steht - dann lassen sich beide Modi auf einer Seite erklaeren, statt die
+Seite zweimal umzubauen.
+
+### 3.6 Spielmodi (Ultra seit 0.34.0)
+
+Das Einzelspieler-Menue waehlt den Modus der Runde; der gewaehlte Name
+geht als Argument an `game_run` und liegt waehrend der Runde in
+`GAME_MODE` (Rundenzustand in `rowhammer.sh`, bleibt ueber
+Pausieren/Fortsetzen erhalten - eine ins Hauptmenue gelegte Runde kommt
+im Modus zurueck, in dem sie gestartet wurde).
+
+- **Normales Spiel** (`normal`): die endlose Runde wie bisher, Ende
+  durch Game Over.
+- **Ultra** (`ultra`, Nutzerwunsch): Wettlauf gegen die Uhr -
+  `ULTRA_TARGET_ROWS` (150) **Rows** so schnell wie moeglich abbauen.
+  Die Runde endet in dem Moment, in dem die Wertung das Ziel erreicht
+  oder ueberschreitet; das Ergebnis ist die Spielzeit.
+- **Sprint** (geplant, siehe Roadmap): in 3 Minuten moeglichst viele
+  Reihen. Noch nicht umgesetzt.
+
+Entscheidungen zu Ultra (die drei in der Roadmap offen gelassenen
+Punkte, im Sinne der dortigen Empfehlung entschieden):
+
+- **Gemessen werden Rows, nicht Lines.** "Abgebaute Reihen" bezeichnet
+  im Weltwunder- und Statistik-Kontext laengst die gewichtete Wertung
+  (siehe 3.2, 3.3); ausserdem macht das die Gold-/Silber-Quadrate - die
+  Kernmechanik des Spiels - zum schnellen Weg ins Ziel statt zu totem
+  Gewicht. Ein Rowhammer durch zwei Gold-Quadrate (85 Rows) ist damit
+  mehr als die halbe Strecke.
+- **Nur erfolgreiche Laeufe kommen in die Ultra-Bestenliste.** Ein
+  Versuch, der vorher im Game Over endet, hat keine vergleichbare Zeit;
+  ihn nach Rows einzusortieren hiesse, zwei Ordnungen in eine Liste zu
+  mischen. Reihen und Zaehler eines gescheiterten Versuchs zaehlen aber
+  wie bei jeder abgebrochenen Runde in Weltwunder-Fortschritt und
+  Statistik (siehe 3.3).
+- **HUD:** zwei zusaetzliche Zaehler in der linken Spalte, nur im
+  Ultra-Modus sichtbar (`render_pane_left`, Zeile 15/16): "Goal" (das
+  Ziel) und "Left" (noch fehlende Rows, bei Ueberschreitung auf 0
+  gekappt). Sie belegen zwei der acht freien Zeilen aus 3.4; im normalen
+  Spiel bleiben alle acht frei.
+- **Rundenende-Kasten** (`render_status_box`): derselbe Kasten ueber dem
+  Spielfeld traegt jetzt drei Ausgaenge, alle mit denselben acht
+  Innenzeilen, damit die Rahmen stehen bleiben - "ULTRA CLEAR" mit Zeit
+  (`fmt_duration_ms`, MM:SS.mmm) und Ultra-Rang, ein gescheiterter
+  Ultra-Versuch mit dem erreichten Stand ("Rows 87/150", bewusst ohne
+  Rang) und das klassische Game Over der endlosen Runde mit dem
+  Highscore-Rang.
+- **Zeitmessung:** die Spielzeit der Runde (siehe 3.4) ist die Wertung,
+  deshalb wird sie im Zielmoment noch einmal nachgefuehrt
+  (`play_clock_tick`, dieselbe Funktion, die der Game-Loop je Tick
+  nutzt): ein Hard-Drop faellt zwischen zwei Ticks, und diese
+  Millisekunden gehoeren zum Lauf.
+- **`r` im Rundenende-Bild startet im selben Modus neu** (`game_reset`
+  ohne Argument behaelt `GAME_MODE`).
 
 ## 4. Technisches Konzept
 
@@ -380,7 +441,9 @@ startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
 Highscores / Weltwunder / Statistik / Einstellungen / Anleitung /
 Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
-erster Stelle, ebenso im Einzelspieler-Untermenue); die
+erster Stelle, ebenso im Einzelspieler-Untermenue). Das
+Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
+("Normales Spiel" oder "Ultra", siehe 3.6); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -531,7 +594,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${HOME}/.config/rowhammer` (seit 0.13.0, vorher `${HOME}/rowhammer`;
   aenderbar per `--data-dir DIR` bzw.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
-  Highscore-Liste `highscore`, der Spielstand `save` und die
+  Highscore-Liste `highscore`, die Ultra-Bestenliste `highscore-ultra`
+  (seit 0.34.0, siehe 3.6), der Spielstand `save` und die
   Statistik `stats`.
 - Bewusste Abweichung von den Script-Konventionen (Abschnitt 11,
   organisationsbasierte Suche unter `/etc` und `${HOME}/.config`):
@@ -590,6 +654,29 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   die Rowhammer der Runde ("RH", seit 0.25.0), die abgelegten Teile
   ("PCS") und die daraus mit der Spielzeit berechnete Ablegerate
   ("PPM", Teile je Minute, `fmt_ppm` in `rowhammer.sh`).
+  **Ultra-Bestenliste (seit 0.34.0, siehe 3.6):** die Ergebnisse des
+  Ultra-Modus liegen in einer **eigenen** Datei `${DATA_DIR}/highscore-ultra`
+  mit eigener Ordnung - Zeilenformat
+  `time|rows|lines|level|name|date|gold|silver|rowhammers|pieces`,
+  aufsteigend nach `time` sortiert (schnellster Lauf zuerst, gleiche
+  Zeit rangiert hinter dem aelteren Eintrag), ebenfalls Top 10
+  (`HSU_*` in `lib/highscore.sh`). Zwei Gruende fuer die getrennte
+  Datei: ein Lauf auf Zeit und eine endlose Runde sind ueber Rows nicht
+  vergleichbar, und ein 150-Rows-Lauf soll die Top 10 der endlosen
+  Liste nicht verdraengen. Das fuehrende `time`-Feld ist die Spielzeit
+  in **Millisekunden** (nicht in ganzen Sekunden wie in der
+  Normal-Liste): es ist hier das Sortierkriterium, und zwei Versuche auf
+  dasselbe Ziel landen oft genug in derselben Sekunde, dass ganze
+  Sekunden die Rangfolge nach Eintreffen statt nach Tempo entscheiden
+  wuerden; angezeigt wird das spaeter ueber `fmt_duration_ms` als
+  MM:SS.mmm. Gespeichert werden nur Laeufe, die das Ziel erreicht haben
+  (Entscheidung in 3.6). Es gilt die uebliche Arbeitsregel "keine
+  Abwaertskompatibilitaet": genau zehn Felder, jede andere Zeile faellt
+  bei der Validierung heraus - die Kulanz der Normal-Liste
+  (`HS_FIELD_COUNTS`) gibt es hier nicht, weil das Format neu ist und nie
+  in einer kuerzeren Fassung existiert hat. Eine Anzeige gibt es noch
+  nicht (Nutzerentscheidung: erst die Speicherung); der erreichte Rang
+  steht bereits im Rundenende-Kasten.
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
@@ -1922,28 +2009,39 @@ Feature-Branch oder Pull Request.
       Anleitung. Der Seiteninhalt kommt aus `menu_help_body`, einem
       `case`-Switch je Seitenindex, damit jede Seite direkt angesprungen
       werden kann statt nur der Reihe nach.
-- [ ] Weitere Spiel-Modi einbauen (Nutzerwunsch, noch nicht umgesetzt):
-      im Menue "Einzelspieler" sollen neben "Normales Spiel" zwei
-      zeitbezogene Modi waehlbar werden - **Ultra** (Ziel: 150 Reihen so
-      schnell wie moeglich abbauen) und **Sprint** (Ziel: in 3 Minuten
-      moeglichst viele Reihen abbauen). Beide brauchen eine eigene
-      Highscore-Liste (getrennt von der endlosen Normal-Liste, damit ein
-      zeitlich begrenzter Versuch deren Top 10 nicht verdraengt - Ultra
-      zudem mit einer anderen Rangordnung: kuerzeste Zeit statt meiste
-      Rows) und eine entsprechend erweiterte Statistik (gespielte Runden
-      je Modus, bei Ultra zusaetzlich wie oft das Ziel erreicht wurde).
-      Dadurch werden vermutlich mehrere bestehende Menues mehrseitig
-      bzw. wachsen um eine Ebene: die Modus-Auswahl im
-      Einzelspieler-Menue, eine Modus-Auswahl vor der Highscore-Anzeige
-      und eine zusaetzliche Statistik-Seite. Offene Punkte fuer die
-      Umsetzung: ob "Reihen" hier die physischen Reihen (`Lines`) oder
-      die gewichtete Reihenwertung (`Rows`, siehe 3.2) meint - **Rows**
-      liegt naeher an der bestehenden Konvention, wonach "abgebaute
-      Reihen" im Weltwunder- und Statistik-Kontext bereits die gewertete
-      Groesse bezeichnet (siehe 3.3, 4.5); ob ein Ultra-Versuch, der vor
-      dem Ziel abbricht (Top-Out), ueberhaupt in dessen Highscore-Liste
-      landet; und wie der HUD den Modus-Fortschritt anzeigt, ohne die
-      acht freien Zeilen der linken Spalte (siehe 3.4) zu sprengen.
+- [x] **Ultra-Modus** einbauen (Version 0.34.0, Nutzerwunsch): im Menue
+      "Einzelspieler" steht neben "Normales Spiel" jetzt "Ultra" -
+      `ULTRA_TARGET_ROWS` (150) Rows so schnell wie moeglich abbauen,
+      die Runde endet im Zielmoment und die Spielzeit ist das Ergebnis
+      (`GAME_MODE`, `GOAL_REACHED`, Zielpruefung in `lock_and_next`,
+      siehe 3.6). Die drei offen gelassenen Punkte sind dort
+      entschieden: gemessen werden **Rows** (nicht Lines), ein vor dem
+      Ziel abgebrochener Versuch kommt **nicht** in die Bestenliste
+      (seine Reihen zaehlen aber wie bei jeder abgebrochenen Runde in
+      Weltwunder und Statistik), und der HUD zeigt den Fortschritt in
+      zwei der acht freien Zeilen der linken Spalte ("Goal"/"Left", nur
+      im Ultra-Modus). Speicherung in einer eigenen Liste
+      `${DATA_DIR}/highscore-ultra` mit eigener Rangordnung (kuerzeste
+      Zeit zuerst, Zeit in Millisekunden), damit ein zeitlich
+      begrenzter Lauf die Top 10 der endlosen Liste nicht verdraengt
+      (`HSU_*` in `lib/highscore.sh`, siehe 4.5).
+- [ ] **Sprint-Modus** und die Anzeige-Seiten der Modi (Rest des
+      Modus-Themas, Nutzerentscheidung: die Anzeige folgt getrennt von
+      der Speicherung). Offen sind:
+      - **Sprint** (Ziel: in 3 Minuten moeglichst viele Reihen) als
+        dritter Eintrag im Einzelspieler-Menue - dieselbe Mechanik wie
+        Ultra mit vertauschten Rollen (feste Zeit, offene Rows), also
+        wieder eine eigene Liste (Rangordnung: meiste Rows) und ein
+        eigener HUD-Zaehler (verbleibende Zeit).
+      - **Anzeige der Ultra-Bestenliste**: das Datenformat steht
+        (4.5), es fehlt der Bildschirm. Dafuer braucht der Menuepunkt
+        "Highscores" eine vorgeschaltete Modus-Auswahl (oder die
+        Seitenlogik aus `menu_pages` je Modus).
+      - **Statistik je Modus**: gespielte Runden je Modus, bei Ultra
+        zusaetzlich wie oft das Ziel erreicht wurde. Bewusst noch nicht
+        eingebaut - Zaehler ohne Anzeige waeren tote Daten, und die
+        Statistik-Bildschirme sind schon zweiseitig (siehe 4.5).
+      - **Anleitung**: eine sechste Seite "Spielmodi" (siehe 3.5).
 
 ### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 
@@ -2139,6 +2237,14 @@ Multi-Server zuletzt.
   eine weitere Seite: pro Info-Bildschirm passen 18 Zeilen
   (`MENU_BODY_MAX`, seit 0.28.0 eine mehr), die Highscore-Liste zeigt fuenf Eintraege je
   Seite, die Statistik teilt sich in Gesamtzaehler und letzte Spiele.
+- Spielmodi: die drei Fragen zum Ultra-Modus sind mit 0.34.0
+  entschieden (Rows statt Lines, gescheiterte Versuche ohne
+  Listeneintrag, HUD-Zaehler "Goal"/"Left" in der linken Spalte, siehe
+  3.6). Offen bleibt nur die Justierung: ob 150 Rows die richtige
+  Distanz sind, entscheidet Playtesting (`ULTRA_TARGET_ROWS`) - mit den
+  Quadrat-Boni ist die Strecke deutlich kuerzer als 150 physische
+  Reihen, das ist so gewollt. Sprint, die Anzeige der Ultra-Liste und
+  die Statistik je Modus stehen noch aus (siehe Roadmap Phase 4).
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach
