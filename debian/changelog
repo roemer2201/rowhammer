@@ -1,3 +1,18 @@
+rowhammer (0.33.0) unstable; urgency=medium
+
+  * Make the "Anleitung" manual browsable with the left/right arrow keys
+    (user request): the five info screens used to advance on any key
+    press with no way back, one menu_message call per screen in a fixed
+    sequence. menu_help (lib/menu.sh) is now its own wait loop: arrow
+    left/right pages between screens and wraps at both ends, Enter,
+    space, x and ESC close the manual.
+  * Split the screen content into menu_help_body, a case switch indexed
+    by page number, so any page can be rebuilt and shown directly
+    instead of only ever being reachable by stepping through the ones
+    before it.
+
+ -- roemer2201 <r.oliver@web.de>  Fri, 31 Jul 2026 10:00:00 +0200
+
 rowhammer (0.32.0) unstable; urgency=medium
 
   * Add an "Anleitung" entry to the main menu, between "Einstellungen"
