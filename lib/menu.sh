@@ -251,15 +251,15 @@ menu_help() {
     local -a body
     local line i
 
-    body=("rowhammer ist ein Tetris-Spiel im Terminal," \
+    body=("rowhammer ist ein Tetris-Spiel fuers Terminal," \
           "Vorbild ist \"The New Tetris\" (N64)." \
           "" \
-          "Bausteine so stapeln, dass sich" \
+          "Bausteine muessen so gestapelt werden, dass sich" \
           "Reihen komplett fuellen: volle Reihen werden" \
           "abgebaut und als \"Rows\" gewertet - das ist" \
           "zugleich der Punktestand der Runde." \
           "" \
-          "Die Steine kommen aus einem 7er-Beutel: jede" \
+          "Die Steine kommen aus einem 7er-Beutel: Jede" \
           "der sieben Sorten genau einmal, dann wird" \
           "neu gemischt." \
           "" \
@@ -323,10 +323,10 @@ menu_help() {
           "in seiner Startlage neu ein." \
           "" \
           "Pro Zug ist nur ein Tausch erlaubt - erst" \
-          "nach dem naechsten Ablegen geht es wieder." \
-          "So laesst sich ein I-Stein fuer den grossen" \
-          "Abbau aufheben oder ein unpassendes Teil" \
-          "kurz parken.")
+          "nach dem naechsten Ablegen kann erneut getauscht" \
+          "werden. So laesst sich ein I-Stein fuer den" \
+          "grossen Abbau aufheben oder ein unpassendes" \
+          "Teil kurz parken.")
     menu_message "Anleitung (3/${MENU_HELP_PAGES})" "${body[@]}"
 
     body=("Vier vollstaendige, unversehrte Steine, die" \
