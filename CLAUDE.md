@@ -1164,6 +1164,165 @@ Menuefuehrung: "Mehrspieler" -> "Spiel eroeffnen" / "Spiel beitreten"
 einer `INFO`-Abfrage) / "Zurueck". Danach eine Lobby mit Spielerliste,
 Bereitschaftsstatus und - fuer den Host - Zielwahl-Modus und Start.
 
+### 5.11 Deployment: dedizierter Server mit SSH-ForceCommand
+
+- **Zielbild (Nutzerentscheidung):** rowhammer laeuft nicht nur
+  gelegentlich auf einer Maschine mit, auf der ohnehin mehrere Leute
+  eingeloggt sind (das urspruengliche Szenario aus 5.2), sondern es gibt
+  einen **dedizierten Spiel-Server**. Spieler verbinden sich per SSH; ein
+  `ForceCommand` in `sshd_config` (bzw. `command="..."` vor dem Key in
+  `authorized_keys`, praeziser pro Nutzer) startet direkt `rowhammer.sh`
+  statt einer freien Shell. Die Transport- und Prozessarchitektur aus
+  5.2/5.3 (Unix-Socket, Hub/Bridge/Client) bleibt dabei unveraendert
+  gueltig - ForceCommand entscheidet nur, *wie* ein Client-Prozess
+  gestartet wird, nicht *wie* er mit dem Hub redet.
+- **Sicherheitsgewinn und -grenzen:** Eine per ForceCommand erzwungene
+  Sitzung ist kein Ersatz fuer die Regeln aus 5.5, aber eine zusaetzliche
+  Huerde: ein Spieler bekommt gar keine Shell, sondern landet direkt im
+  Spiel. Empfehlenswerte `sshd_config`/`authorized_keys`-Haerten (spaeter,
+  vor Schritt 1 dieser Phase zu pruefen und festzuschreiben):
+  `no-port-forwarding,no-X11-forwarding,no-agent-forwarding` (PTY bleibt
+  noetig, das Spiel braucht ein Terminal), eigener Systembenutzer ohne
+  Zugriff auf fremde Daten, restriktive Dateisystemrechte auf
+  `${DATA_DIR}`/`${MP_DIR}` (siehe 4.5, 5.2). Ein ausbrechender Spieler
+  darf ueber `rowhammer.sh` und seine Module (siehe 5.5) so wenig
+  erreichen wie ueber die Shell, die ihm fehlt - das ist keine neue Regel,
+  sondern die bestehende Regel aus 5.5 unter schaerferen Vorzeichen.
+- **Ablauf fuer den Spieler:** SSH-Verbindung -> ForceCommand startet
+  rowhammer -> (spaeter, siehe 5.12) Login/Identifikation -> Hauptmenue
+  mit Mehrspieler-Lobby ("Spiel eroeffnen" / "Spiel beitreten", wie in
+  5.10 beschrieben) -> Runde -> Rueckkehr ins Menue oder Verbindungsende.
+  Fuer den Einzelspieler-Betrieb (lokal installiert, siehe 4.7) aendert
+  sich nichts.
+
+### 5.12 Accounts und Authentifizierung
+
+- **Ausgangslage:** Ohne Accounts kann sich jeder einen beliebigen Namen
+  geben (Missbrauchspotenzial: Namen faelschen, Highscore-Spam) und es
+  gibt keinen Ort, an dem persoenliche Highscores, Tastenbelegung und
+  Farbschema (heute lokal in `rowhammer.conf`, siehe 4.5) ueber
+  verschiedene Server-Sitzungen hinweg ueberleben.
+- **Entwicklungsphase (Nutzerentscheidung):** freier Login mit frei
+  waehlbarem Namen bleibt bis auf Weiteres der Standard - identisch zum
+  heutigen `--name`/`ROWHAMMER_PLAYER_NAME` (siehe 4.2). Ein konkretes
+  Account-System wird erst nachgezogen, sobald ein oeffentlicher Server
+  ansteht.
+- **Empfehlung fuer das spaetere Account-System (zu bestaetigen, siehe
+  Abschnitt 8):** rowhammer-Accounts **nicht** eins-zu-eins auf
+  Unix-Systembenutzer abbilden. Unix-Accounts je Spieler bedeuten
+  Root-Rechte fuer jede Neuregistrierung, keinen Bezug zu
+  Web-Identitaeten (Apple/Google/Facebook-Login ist ein Web-OAuth-Flow,
+  keine Unix-Anmeldung) und ein Auseinanderlaufen von "wer darf sich per
+  SSH verbinden" und "welchem Spielkonto das zugeordnet ist". Stattdessen:
+  - **SSH-Zugang bleibt technisch getrennt vom Spielkonto.** Ob per
+    einzelnem Systembenutzer je Spieler, einem gemeinsamen Spiel-Benutzer
+    mit `command=`-eingeschraenkten `authorized_keys`-Eintraegen oder SSH
+    Certificates entschieden wird, ist ein Ops-Detail und beeinflusst das
+    Spielkonto nicht.
+  - **Das Spielkonto ist Anwendungslogik** des neuen Server-Backends
+    (siehe 5.13/5.15): Benutzername, Passwort-Hash (falls Passwort-Login
+    gewuenscht) oder - einfacher und dem SSH-Kontext angemessener -
+    Bindung an den bereits durch `sshd` geprueften SSH-Public-Key
+    (Fingerprint als Kontoschluessel; kein zusaetzliches Passwort noetig,
+    keine Passwort-Eingabe im Terminal, kein Passwort-Handling im Spiel).
+    Erste Anmeldung eines unbekannten Keys fragt einen Kontonamen ab und
+    legt das Konto an; ein bekannter Key wird automatisch erkannt.
+  - **Verknuepfung mit Google/Apple/Facebook & Co. ist ein Web-Flow und
+    gehoert auf die Webseite** (siehe 5.14), nicht in die
+    Terminal-Sitzung: ein Browser-OAuth-Flow laesst sich in einer
+    TTY-Sitzung nicht sauber abbilden. Vorschlag: der Spieler meldet sich
+    auf der (spaeteren) Webseite per OAuth an, bekommt dort einen
+    kurzlebigen Verknuepfungscode angezeigt und gibt diesen einmalig im
+    Spiel ein (Menuepunkt "Konto verknuepfen"); das Backend ordnet danach
+    SSH-Key und Web-Identitaet demselben Spielkonto zu.
+  - Tastenbelegung und Farbschema (heute in `rowhammer.conf`, 4.5) werden
+    mit dem Spielkonto **serverseitig** gespeichert, sobald eines
+    existiert; lokal bleibt die Config-Datei der Fallback ohne Konto bzw.
+    fuer die lokale Installation.
+- **Missbrauchsschutz:** Namensmuster wie in 5.5 (`^[A-Za-z0-9_-]{1,16}$`)
+  gelten unveraendert; ein Spielkonto aendert daran nichts, verhindert
+  aber Namenskollisionen/-diebstahl, weil ein Name erst beim jeweiligen
+  Konto reserviert ist.
+
+### 5.13 Server-Persistenz und Highscore-Datenbank
+
+- **Ausgangslage:** Die heutige Highscore-Liste (`lib/highscore.sh`, Top
+  10, Flatfile, siehe 4.5) ist fuer einen Einzelspieler-Rechner gedacht.
+  Ein Server mit vielen Konten braucht eine laengere, nach Konto
+  durchsuchbare Liste; ab einer gewissen Groesse ist lineares
+  Text-Parsing nicht mehr das richtige Werkzeug.
+- **Empfehlung (zu bestaetigen):** kein Sprung direkt auf einen separaten
+  Datenbankserver. Ein guter Zwischenschritt ist **SQLite**: eine echte
+  SQL-Datenbank, aber ein einzelner Dateipfad ohne eigenen Serverprozess,
+  aus Bash ueber die `sqlite3`-Kommandozeile ansprechbar (neue optionale
+  Abhaengigkeit analog `socat`, siehe 5.2/5.10) - der bestehende
+  Bash-Stil (siehe 5.15) muss dafuer nicht verlassen werden. Migration
+  der Flatfile-Formate (Highscore, Stats, Accounts) auf Tabellen gemaess
+  der Arbeitsregel "keine Abwaertskompatibilitaet" (Abschnitt 6): kein
+  Altdaten-Import noetig, nur ein sauberer Schnitt. Ein "richtiger"
+  Datenbankserver (Postgres o. ae.) wird erst relevant, wenn
+  Multi-Server-Betrieb (5.14) mehrere Prozesse/Hosts gegen dieselben
+  Daten schreiben laesst - SQLite ist fuer nebenlaeufige Schreiber von
+  mehreren Hosts aus nicht das richtige Werkzeug.
+- **Sicherheit:** SQL-Statements werden ausschliesslich mit gebundenen
+  Parametern gebaut (kein String-Zusammenbau aus Netz-/Spielerdaten in
+  ein SQL-Kommando) - dieselbe Injektions-Vorsicht wie in 5.5 fuer
+  Arithmetik und `eval`, nur auf SQL uebertragen.
+
+### 5.14 Endausbaustufe: Web-Highscore, Liga-System, Multi-Server
+
+Diese drei Punkte sind bewusst nur grob skizziert - sie stehen am Ende
+der Roadmap (Phase 6, Abschnitt 7) und werden erst konkretisiert, wenn
+Server-Deployment (5.11), Accounts (5.12) und Server-Persistenz (5.13)
+stehen.
+
+- **Web-Highscore:** eine schreibgeschuetzte Webseite, die dieselbe
+  Datenbank (5.13) liest wie das Spiel schreibt. Kein Bash-Webserver
+  (siehe 5.15) - ein schlankes, separates Web-Backend liest nur, das
+  Spiel bleibt der einzige Schreiber.
+- **Liga-System:** Saisons/Ranglisten oberhalb der reinen
+  Highscore-Liste; Regeln (Saisonlaenge, Punkteverfall, Ranglisten je
+  Spielmodus) sind noch offen und folgen erst nach Playtesting des
+  Mehrspieler-Kerns (Phase 5) - ein Liga-System ohne stabile
+  Mehrspieler-Wertung waere verfrueht.
+- **Multi-Server-Faehigkeit:** mehrere Spiel-Server (je eigener
+  Hub-Pool, eigenes `MP_DIR`, siehe 5.2), die gegen ein gemeinsames
+  Backend fuer Accounts und Highscores sprechen. Setzt voraus, dass
+  Accounts (5.12) und Persistenz (5.13) bereits serverunabhaengig sind -
+  sonst muesste ein Spieler auf jedem Server ein eigenes Konto fuehren.
+
+### 5.15 Backend-Technologie: Bash vs. andere Systeme
+
+- **Frage:** Wird das serverseitige Backend (Accounts, Highscore-Web,
+  Liga, Multi-Server) ebenfalls in Bash geschrieben, oder kommuniziert
+  Bash mit einem in einer anderen Sprache geschriebenen Dienst?
+- **Empfehlung (zu bestaetigen, siehe Abschnitt 8):** kein Bruch, sondern
+  eine klare Grenze entlang dessen, was Bash gut kann und was nicht:
+  - **Spiel-Engine und lokale Mehrspieler-Sitzung bleiben Bash** - Hub,
+    Bridge, Client, Protokoll (`lib/net.sh`, `lib/proto.sh`,
+    `lib/hub.sh`, `lib/mp.sh`, siehe 5.3) sind bereits so entworfen und
+    funktionieren lokal ueber Unix-Sockets gut; ein Sprachwechsel hier
+    waere ein Neubau ohne Not.
+  - **SSH/ForceCommand-Login und Konto-Bindung (5.12) bleiben Bash** -
+    das ist im Kern derselbe Umgang mit Fremdeingaben wie das bestehende
+    Protokoll und profitiert von denselben Regeln aus 5.5
+    (Zeichensatzfilter, Whitelist, keine Injektion).
+  - **Alles, was HTTP/TLS, JSON-APIs oder gleichzeitige Schreibzugriffe
+    von mehreren Hosts braucht (Web-Highscore, Liga, Multi-Server-Sync,
+    5.14), ist in Bash unangemessen aufwendig und fehleranfaellig**
+    (kein sicheres TLS, keine echte Nebenlaeufigkeit, JSON-Parsing in
+    Bash ist Bastelei). Dafuer ein schlanker, separater Dienst in einer
+    Sprache mit vernuenftiger HTTP-/JSON-/DB-Unterstuetzung (Sprache
+    selbst noch offen) - er liest/schreibt dieselbe Datenbank (5.13)
+    bzw. bekommt Rundenergebnisse ueber einen schmalen, validierten
+    Kanal vom Bash-Server zugestellt (analog der Bridge-Rolle in 5.3:
+    ein kleiner Uebersetzer statt eines Sprachwechsels im Kern).
+  - Damit bleibt die in 5.5 verbindliche Regel unangetastet, egal welche
+    Sprache spaeter dazukommt: kein `eval`, keine Kommandosubstitution
+    und keine Interpolation von Fremddaten in auszufuehrenden Code -
+    weder in Bash noch im neuen Dienst (dort: keine dynamisch gebauten
+    SQL-Strings oder Shell-Aufrufe aus Nutzereingaben, siehe 5.13).
+
 ## 6. Konventionen fuer alle Skripte
 
 Fuer **jedes** Bash-Skript in diesem Repo gelten verbindlich die
@@ -1708,6 +1867,59 @@ Details stehen jeweils im genannten Unterabschnitt.
       Fuzz-Lauf gegen den fertigen Stand, dazu ein "boeser Client", der
       absichtlich das Protokoll verletzt.
 
+### Phase 6 - Server-Betrieb, Accounts, Web (spezifiziert in 5.11-5.15, noch nicht umgesetzt)
+
+Setzt auf einem fertigen Phase 5 auf (der Mehrspieler-Kern muss laufen
+und sich per Playtesting bewaehrt haben, bevor Accounts/Web/Liga
+sinnvoll sind). Reihenfolge wie in 5.11-5.15 begruendet: Deployment
+zuerst (ohne Server kein Bedarf fuer Accounts), Accounts vor dem
+Persistenz-Umbau (das Datenbankschema haengt vom Kontomodell ab),
+Web/Liga/Multi-Server zuletzt.
+
+- [ ] **Schritt 1 - SSH-ForceCommand-Deployment** (siehe 5.11).
+      `sshd_config`/`authorized_keys`-Vorlage mit `ForceCommand` bzw.
+      `command=`, Haertung (`no-port-forwarding` usw.), eigener
+      Systembenutzer, Rechte auf `${DATA_DIR}`/`${MP_DIR}` geprueft.
+      Laeuft zunaechst weiter mit freiem Login (siehe 5.12).
+      Abnahme: mehrere SSH-Sitzungen landen direkt im Spiel, keine Shell
+      erreichbar.
+- [ ] **Schritt 2 - Konto-Grundlage: SSH-Key-Bindung** (siehe 5.12).
+      Spielkonto an SSH-Public-Key-Fingerprint gebunden, Erstanmeldung
+      fragt Kontonamen ab, Namensmuster wie 5.5. Noch ohne Passwort- oder
+      OAuth-Login. Abnahme: derselbe Key wird bei jeder Sitzung demselben
+      Konto zugeordnet, ein fremder Key kann einen belegten Namen nicht
+      kapern.
+- [ ] **Schritt 3 - Server-Persistenz auf SQLite umstellen** (siehe 5.13).
+      Highscore, Stats und Konten in SQLite-Tabellen statt Flatfiles,
+      `sqlite3`-Zugriff aus Bash mit gebundenen Parametern, Migration der
+      Formate ohne Altdaten-Uebernahme (Arbeitsregel Abschnitt 6).
+      Abnahme: identisches Verhalten wie die bisherigen Flatfiles, aber
+      per SQL abfragbar (z. B. Rang eines Kontos ueber alle Runden).
+- [ ] **Schritt 4 - Erweiterte Server-Highscore-Liste** (siehe 5.13).
+      Laengere Liste (mehr als Top 10), Filter/Suche nach Konto,
+      weiterhin im Spiel ueber "Highscores" abrufbar. Abnahme: Liste
+      bleibt bei vielen Konten performant und uebersichtlich (seitenweise
+      wie heute, siehe 4.5).
+- [ ] **Schritt 5 - Web-Highscore (read-only)** (siehe 5.14).
+      Separates, schlankes Web-Backend liest die Datenbank aus Schritt 3,
+      zeigt Highscore/Statistik im Browser. Kein Schreibzugriff vom Web
+      aus. Abnahme: Highscore-Liste ist ohne SSH-Zugang einsehbar.
+- [ ] **Schritt 6 - OAuth-Kontoverknuepfung** (siehe 5.12, 5.14).
+      Login mit Google/Apple/Facebook & Co. auf der Webseite, Anzeige
+      eines kurzlebigen Verknuepfungscodes, Eingabe im Spiel
+      ("Konto verknuepfen") bindet SSH-Key und Web-Identitaet an
+      dasselbe Konto. Abnahme: Anmeldung ueber einen der Anbieter fuehrt
+      zum selben Spielkonto wie der bisherige SSH-Key-Login.
+- [ ] **Schritt 7 - Liga-System** (siehe 5.14).
+      Saisons/Ranglisten oberhalb der Highscore-Liste; Regeln noch offen
+      (siehe Abschnitt 8), erst nach Playtesting des Mehrspieler-Kerns zu
+      konkretisieren.
+- [ ] **Schritt 8 - Multi-Server-Faehigkeit** (siehe 5.14).
+      Mehrere Spiel-Server gegen ein gemeinsames Accounts-/Highscore-
+      Backend, Kontosynchronisation ueber Server-Grenzen hinweg. Abnahme:
+      ein Konto behaelt Highscore und Einstellungen beim Wechsel des
+      Servers.
+
 ## 8. Offene Punkte
 
 - Bonus-Reihenwertung ist verifiziert und umgesetzt (siehe 3.2); seit
@@ -1783,3 +1995,30 @@ Uebrige dort ist entschieden):
   melden; eine serverseitige Vollsimulation ist kein Ziel. Die
   Sicherheitsregeln in 5.5 schuetzen dagegen die Prozesse und Terminals
   der Mitspieler - dieser Teil ist nicht verhandelbar.
+
+Offene Punkte zum Server-Betrieb (Phase 6, Spezifikation siehe 5.11-5.15):
+
+- **Siegbedingung im Versus-Modus:** 5.1/5.8 legen "letzter
+  Ueberlebender" (KO ueber Garbage/Top-Out) als Sieger fest. Die
+  neueste Nutzerbeschreibung ("man spielt die Runde, der Spieler mit
+  den meisten Reihen gewinnt") klingt dagegen nach einer reinen
+  Reihen-Wertung ohne Elimination. Beides zusammen ist moeglich (Rows
+  als Tiebreaker, wie in 5.8 bereits fuer den Gleichstand-Fall
+  vorgesehen), aber als alleinige Regel schliessen sie sich aus:
+  Bestaetigung noetig, ob der Garbage-/KO-Versus-Modus aus 5.7/5.8
+  bleibt, durch einen reinen Rows-Wettkampf ohne Garbage ersetzt wird,
+  oder beide als waehlbare Modi nebeneinander bestehen.
+- **Unix-Accounts vs. eigenes Kontosystem:** Empfehlung in 5.12 ist ein
+  vom SSH-Login entkoppeltes Spielkonto (Bindung an
+  SSH-Key-Fingerprint, keine Unix-Accounts je Spieler). Bestaetigung
+  ausstehend.
+- **Backend-Sprache:** Empfehlung in 5.15 ist, Spiel-Engine und lokales
+  Mehrspieler-Protokoll bei Bash zu belassen, aber fuer Web/Liga/
+  Multi-Server einen schlanken separaten Dienst in einer HTTP-/JSON-/
+  DB-tauglicheren Sprache vorzusehen. Sprache selbst noch offen;
+  Bestaetigung ausstehend, ob dieser Schnitt so gewuenscht ist.
+- **Server-Persistenz:** Empfehlung in 5.13 ist SQLite als
+  Zwischenschritt vor einem "richtigen" Datenbankserver (erst bei
+  Multi-Server-Bedarf, 5.14). Bestaetigung ausstehend.
+- **Liga-Regeln:** komplett offen (Saisonlaenge, Punkteverfall,
+  Ranglisten je Modus), siehe 5.14.
