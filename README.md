@@ -89,7 +89,19 @@ Das Startmenue bietet:
 - **Fortsetzen** - erscheint nur, solange eine ueber das Pausenmenue
   ins Hauptmenue gelegte Runde wartet, und nimmt sie wieder auf; der
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
-- **Einzelspieler** - vorerst nur "Normales Spiel"
+- **Einzelspieler** - die Spielmodi: "Normales Spiel" (endlos, Ende
+  durch Game Over) und **Ultra** - 150 Rows so schnell wie moeglich
+  abbauen. Die Ultra-Runde endet in dem Moment, in dem das Ziel
+  erreicht ist; das Ergebnis ist die Spielzeit, und der HUD zeigt
+  waehrenddessen Ziel ("Goal") und Restbedarf ("Left"). Gewertete Rows
+  zaehlen, nicht physische Reihen - Gold- und Silberquadrate sind also
+  die Abkuerzung ins Ziel. Erfolgreiche Laeufe landen in einer eigenen
+  Bestenliste (`~/.config/rowhammer/highscore-ultra`, schnellster Lauf
+  zuerst), die die 10 besten endlosen Runden unberuehrt laesst; ein
+  Versuch, der vorher im Game Over endet, wird nicht eingetragen, seine
+  Reihen zaehlen aber weiter fuer Weltwunder und Statistik. Die
+  Anzeige dieser Liste im Menue folgt noch (bislang meldet nur das
+  Rundenende-Bild den erreichten Rang)
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
 - **Highscores** - die besten 10 Runden, je Eintrag zwei Zeilen und
   seitenweise geblaettert: Name, Rows (die Punkte der Runde), Spielzeit
@@ -112,7 +124,8 @@ Das Startmenue bietet:
   Tastenbelegung), Vorschau und Hold, Gold-/Silber-Quadrate mit ihrer
   Reihenwertung und der Weltwunderbau
 
-Alle Spieldaten (Konfiguration, Highscores, Weltwunder-Spielstand,
+Alle Spieldaten (Konfiguration, Highscores inklusive der Ultra-Liste,
+Weltwunder-Spielstand,
 Statistik) liegen im Datenverzeichnis
 `~/.config/rowhammer`, aenderbar per `--data-dir`.
 
@@ -206,6 +219,8 @@ Umgesetzt:
 - **Anleitung im Spiel:** fuenf Bildschirme zu Spielprinzip, Steuerung,
   Vorschau/Hold, Gold- und Silberbloecken und Weltwunderbau; die
   Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
+- **Spielmodi:** endloses "Normales Spiel" und **Ultra** (150 Rows auf
+  Zeit, eigene Bestenliste nach kuerzester Zeit; siehe oben)
 - Persistente Highscore-Liste: die besten 10 Runden in
   `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -

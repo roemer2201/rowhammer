@@ -40,9 +40,18 @@
 #   hand-edited file could exceed the 46-char budget) skips coloring and
 #   falls back to the plain truncated text instead of risking a cut
 #   escape sequence.
+#   Since 0.10.0 the Ultra game mode (clear ULTRA_TARGET_ROWS rows as
+#   fast as possible, see rowhammer.sh) keeps its own list in
+#   ${DATA_DIR}/highscore-ultra, built from the HSU_* globals and
+#   functions below: a separate file because a timed attempt ranks by the
+#   shortest time, not by the most rows, and must not push endless rounds
+#   out of the normal top ten. Only runs that reached the goal are
+#   stored, so every entry carries a comparable time. Its screen follows
+#   later (user decision: storage first), hence there is no hsu
+#   counterpart to highscore_screen yet.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-07-29)
+# Version: 0.10.0  (2026-07-31)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -196,6 +205,154 @@ highscore_add() {
     HS_LAST_RANK="${rank}"
     debug_event "highscore: '${name}' rows=${rows} enters at rank ${rank}"
     highscore_save
+    return 0
+}
+
+# --- Ultra mode list ------------------------------------------------------
+# The Ultra mode (added 0.10.0) is a race: clear ULTRA_TARGET_ROWS rows
+# of credit as fast as possible (see rowhammer.sh). Its results live in
+# their own file with their own order - fastest first - for two reasons:
+# a timed attempt and an endless round are not comparable by rows, and a
+# 150-row sprint must not displace the endless list's top ten.
+HSU_MAX=10
+HSU_FILE_NAME="highscore-ultra"
+
+# In-memory list, one
+# "time|rows|lines|level|name|date|gold|silver|rowhammers|pieces" string
+# per element, sorted by time ascending. HSU_LAST_RANK is the rank the
+# most recently added run reached (1-based, 0 = not on the list).
+#
+# The leading time field is the run's play time in MILLISECONDS, not in
+# whole seconds like the normal list's: this list is ranked by that very
+# number, and two attempts at the same target land in the same second
+# often enough that second granularity would decide the ranking by
+# arrival order instead of by speed. Formatting for display (later, see
+# the header) is fmt_duration_ms's job.
+HSU_ENTRIES=()
+HSU_LAST_RANK=0
+
+# Field count of a stored Ultra line. A single accepted count on purpose:
+# unlike the normal list (HS_FIELD_COUNTS, which tolerates lines written
+# before a counter was appended), this format is new and has never
+# shipped in a shorter shape, so the project's usual
+# no-backward-compatibility rule applies unchanged.
+HSU_FIELDS=10
+
+# highscore_ultra_parse_line LINE
+# Validate one stored Ultra line and, on success, append it to
+# HSU_ENTRIES. Field patterns are shared with the normal list; only the
+# layout differs (time first, date fifth from the front). A line that
+# fails anywhere is dropped silently, so a damaged file costs single
+# entries instead of the game.
+highscore_ultra_parse_line() {
+    local line="${1}"
+    local -a f=()
+    local i
+
+    IFS='|' read -r -a f <<< "${line}"
+    [ "${#f[@]}" -eq "${HSU_FIELDS}" ] || return 0
+
+    # time, rows, lines, level.
+    for ((i = 0; i < 4; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+    [[ "${f[4]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
+    [[ "${f[5]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
+    # gold, silver, rowhammers, pieces.
+    for ((i = 6; i < HSU_FIELDS; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+    # A run without a measured time cannot be ranked against the others;
+    # it can only come from a hand-edited file, so drop it here rather
+    # than let it take the first place forever.
+    [ "${f[0]}" -gt 0 ] || return 0
+
+    HSU_ENTRIES+=("${line}")
+    return 0
+}
+
+# highscore_ultra_load
+# Read the Ultra list into HSU_ENTRIES. Missing file = empty list,
+# malformed lines are skipped (see highscore_ultra_parse_line).
+highscore_ultra_load() {
+    HSU_ENTRIES=()
+    local f="${DATA_DIR}/${HSU_FILE_NAME}" line
+    if [ ! -r "${f}" ]; then
+        return 0
+    fi
+    while IFS= read -r line; do
+        highscore_ultra_parse_line "${line}"
+        if [ "${#HSU_ENTRIES[@]}" -ge "${HSU_MAX}" ]; then
+            break
+        fi
+    done < "${f}"
+    debug_event "highscore ultra loaded: ${#HSU_ENTRIES[@]} entries from ${f}"
+    return 0
+}
+
+# highscore_ultra_save
+# Write HSU_ENTRIES atomically (temp file + mv), like highscore_save.
+highscore_ultra_save() {
+    local f="${DATA_DIR}/${HSU_FILE_NAME}" tmp
+    mkdir -p -- "${DATA_DIR}"
+    tmp="$(mktemp -- "${DATA_DIR}/.${HSU_FILE_NAME}.XXXXXX")"
+    # Expanding an empty array under set -u errors on bash < 4.4, so the
+    # empty list writes an empty file explicitly.
+    if [ "${#HSU_ENTRIES[@]}" -gt 0 ]; then
+        printf '%s\n' "${HSU_ENTRIES[@]}" > "${tmp}"
+    else
+        : > "${tmp}"
+    fi
+    mv -f -- "${tmp}" "${f}"
+    debug_event "highscore ultra saved: ${f} (${#HSU_ENTRIES[@]} entries)"
+    return 0
+}
+
+# highscore_ultra_add TIME_MS ROWS LINES LEVEL NAME GOLD SILVER ROWHAMMERS PIECES
+# Insert one finished Ultra run into the sorted list and persist it.
+# TIME_MS is the run's play time in milliseconds and ranks the list,
+# fastest first; equal times rank below existing ones, so the older entry
+# keeps its place (same tie rule as the normal list). Runs without a
+# measured time are ignored, and nothing is written when the run does not
+# make the list; HSU_LAST_RANK reports the outcome either way.
+#
+# Whether a run may be recorded at all is the caller's decision, not this
+# function's: record_round (rowhammer.sh) only calls it for a run that
+# actually reached the goal, because a timed-out attempt has no time that
+# could be compared with the others.
+highscore_ultra_add() {
+    local time="${1}" rows="${2}" lines="${3}" level="${4}" name="${5}"
+    local gold="${6}" silver="${7}" hammers="${8}" pieces="${9}"
+    local entry e placed=0 rank=0
+    local -a merged=()
+    HSU_LAST_RANK=0
+    if [ "${time}" -le 0 ]; then
+        return 0
+    fi
+    entry="${time}|${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${hammers}|${pieces}"
+    if [ "${#HSU_ENTRIES[@]}" -gt 0 ]; then
+        for e in "${HSU_ENTRIES[@]}"; do
+            if [ "${placed}" -eq 0 ] && [ "${time}" -lt "${e%%|*}" ]; then
+                merged+=("${entry}")
+                rank="${#merged[@]}"
+                placed=1
+            fi
+            merged+=("${e}")
+        done
+    fi
+    # Slower than every existing entry: append only while there is room.
+    if [ "${placed}" -eq 0 ]; then
+        if [ "${#merged[@]}" -ge "${HSU_MAX}" ]; then
+            debug_event "highscore ultra: '${name}' time=${time}ms outside the top ${HSU_MAX}"
+            return 0
+        fi
+        merged+=("${entry}")
+        rank="${#merged[@]}"
+    fi
+    HSU_ENTRIES=("${merged[@]:0:HSU_MAX}")
+    HSU_LAST_RANK="${rank}"
+    debug_event "highscore ultra: '${name}' time=${time}ms rows=${rows} enters at rank ${rank}"
+    highscore_ultra_save
     return 0
 }
 

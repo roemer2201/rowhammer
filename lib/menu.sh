@@ -4,7 +4,8 @@
 #
 # Description:
 #   Menu system for rowhammer: a generic list-selection widget plus the
-#   application menus (main menu, singleplayer, multiplayer placeholder,
+#   application menus (main menu, singleplayer with its game modes,
+#   multiplayer placeholder,
 #   settings with key bindings, color theme and player name). Menu labels are German
 #   on purpose (requested UI language); code and comments stay English
 #   per the script conventions. All screen output goes through
@@ -32,6 +33,10 @@
 #   directly in either direction. All wait loops
 #   repaint on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave a menu or info screen blank (since 0.7.0).
+#   Since 0.14.0 (user request) menu_singleplayer offers the game modes:
+#   the endless "Normales Spiel" and "Ultra", the race for
+#   ULTRA_TARGET_ROWS rows against the clock. The entry picked is handed
+#   to game_run as its mode name.
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -39,7 +44,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.13.0  (2026-07-31)
+# Version: 0.14.0  (2026-07-31)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -525,10 +530,15 @@ menu_pause() {
     return 0
 }
 
-# menu_singleplayer: for now only the normal game; more modes (for
-# example a sprint mode) can be added as further entries later. After a
+# menu_singleplayer: the game modes. "Normales Spiel" is the endless
+# round, "Ultra" the race for ULTRA_TARGET_ROWS rows against the clock
+# (0.14.0, user request); a "Sprint" mode - most rows within a time
+# limit - is planned as a third entry (see CLAUDE.md). The chosen entry
+# is passed to game_run as the mode name, so adding one is a matter of
+# an entry plus its case branch. After a
 # game session the wonder construction site is shown with the freshly
-# banked row total (the round credit was banked by record_round).
+# banked row total (the round credit was banked by record_round) -
+# regardless of the mode, because every cleared row builds the wonder.
 # A round suspended via the pause menu skips that screen and returns to
 # the main menu instead, where its "Fortsetzen" entry picks it up.
 # While a suspended round waits, this menu offers the same "Fortsetzen"
@@ -542,7 +552,9 @@ menu_singleplayer() {
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             entries+=("Fortsetzen")
         fi
-        entries+=("Normales Spiel" "Zurueck")
+        entries+=("Normales Spiel" \
+                  "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
+                  "Zurueck")
         menu_run "Einzelspieler" "${entries[@]}"
         choice="${MENU_CHOICE}"
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -557,15 +569,15 @@ menu_singleplayer() {
                 choice=$(( choice - 1 ))
             fi
         fi
-        if [ "${choice}" -eq 0 ]; then
-            game_run
-            if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-                return 0
-            fi
-            wonder_screen "${TOTAL_ROW_CREDIT}"
-        else
+        case "${choice}" in
+            0) game_run normal ;;
+            1) game_run ultra ;;
+            *) return 0 ;;
+        esac
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             return 0
         fi
+        wonder_screen "${TOTAL_ROW_CREDIT}"
     done
 }
 

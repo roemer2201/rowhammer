@@ -1,3 +1,30 @@
+rowhammer (0.34.0) unstable; urgency=medium
+
+  * Add the "Ultra" game mode (user request): the singleplayer menu now
+    picks a mode, and Ultra is a race - clear ULTRA_TARGET_ROWS (150)
+    rows of credit as fast as possible. The run ends the moment the
+    target is reached and its play time is the result. Weighted rows are
+    what counts, not physical lines, so the gold and silver squares are
+    the short way to the goal (see CLAUDE.md 3.6).
+  * Track the mode per round in GAME_MODE, kept across suspending a
+    round into the main menu and across a restart from the end-of-round
+    screen, so a resumed or restarted Ultra run stays an Ultra run.
+  * Show the target and the rows still missing in the left HUD pane
+    while an Ultra run is going ("Goal"/"Left", two of the pane's free
+    rows); a normal round leaves them free as before.
+  * Report the outcome in the box over the board: "ULTRA CLEAR" with the
+    run's time (MM:SS.mmm) and its Ultra rank, or - for a run that
+    topped out early - how far it got instead of a rank.
+  * Store finished Ultra runs in their own top-ten list,
+    <data-dir>/highscore-ultra, ordered by time with millisecond
+    resolution (fastest first). A timed run and an endless round cannot
+    be compared by rows, and a 150-row sprint must not displace the
+    endless list's top ten. Only runs that reached the target are
+    recorded; the rows of a failed attempt still build the wonders and
+    feed the statistics like any other aborted round.
+
+ -- roemer2201 <r.oliver@web.de>  Fri, 31 Jul 2026 18:00:00 +0200
+
 rowhammer (0.33.0) unstable; urgency=medium
 
   * Make the "Anleitung" manual browsable with the left/right arrow keys
