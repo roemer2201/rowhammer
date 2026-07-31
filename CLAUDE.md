@@ -269,8 +269,17 @@ Die fuer uns relevanten Merkmale des Originals:
 
 Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
 "Beenden" und erklaert das Spiel auf fuenf Info-Bildschirmen
-(`menu_help` in `lib/menu.sh`, gezeigt ueber `menu_message`, also
-zentriert und mit beliebiger Taste weitergeblaettert):
+(`menu_help` in `lib/menu.sh`, ueber `render_menu_frame` zentriert wie
+der Spielblock). **Seit Version 0.33.0 (Nutzerwunsch)** blaettert man mit
+den **Pfeiltasten links/rechts** durch die Seiten (umlaufend: von der
+letzten geht es mit Pfeil rechts zurueck zur ersten und umgekehrt);
+Enter, Leertaste, `x` und `ESC` schliessen die Anleitung. Zuvor fuehrte
+jede beliebige Taste zur naechsten Seite, ohne Weg zurueck - die fuenf
+Bildschirme liefen als feste Folge einzelner `menu_message`-Aufrufe
+nacheinander durch. Damit auch rueckwaerts auf jede Seite gesprungen
+werden kann, baut `menu_help_body` (ein `case`-Switch je Seite, 0-basiert)
+den Inhalt der angeforderten Seite bei Bedarf neu, statt ihn wie vorher
+in fester Reihenfolge einmal durchzureichen:
 
 1. Spielprinzip: Bausteine, volle Reihen als "Rows", 7-Bag,
    Level/Tempo, Rundenende.
@@ -1904,6 +1913,37 @@ Feature-Branch oder Pull Request.
       Zeile, die trotz der 46-Zeichen-Grenze zu lang wuerde, faellt auf
       unkolorierten, abgeschnittenen Text zurueck statt eine
       Escape-Sequenz zu zerschneiden (siehe 4.5).
+- [x] Anleitung mit den Pfeiltasten blaetterbar machen (Version 0.33.0,
+      Nutzerwunsch, siehe 3.5): zuvor fuehrte jede beliebige Taste zur
+      naechsten der fuenf Seiten, ohne Weg zurueck (eine feste Folge von
+      `menu_message`-Aufrufen). `menu_help` (`lib/menu.sh`) ist jetzt
+      eine eigene Warteschleife: Pfeil links/rechts blaettert umlaufend
+      zwischen den Seiten, Enter/Leertaste/`x`/`ESC` schliessen die
+      Anleitung. Der Seiteninhalt kommt aus `menu_help_body`, einem
+      `case`-Switch je Seitenindex, damit jede Seite direkt angesprungen
+      werden kann statt nur der Reihe nach.
+- [ ] Weitere Spiel-Modi einbauen (Nutzerwunsch, noch nicht umgesetzt):
+      im Menue "Einzelspieler" sollen neben "Normales Spiel" zwei
+      zeitbezogene Modi waehlbar werden - **Ultra** (Ziel: 150 Reihen so
+      schnell wie moeglich abbauen) und **Sprint** (Ziel: in 3 Minuten
+      moeglichst viele Reihen abbauen). Beide brauchen eine eigene
+      Highscore-Liste (getrennt von der endlosen Normal-Liste, damit ein
+      zeitlich begrenzter Versuch deren Top 10 nicht verdraengt - Ultra
+      zudem mit einer anderen Rangordnung: kuerzeste Zeit statt meiste
+      Rows) und eine entsprechend erweiterte Statistik (gespielte Runden
+      je Modus, bei Ultra zusaetzlich wie oft das Ziel erreicht wurde).
+      Dadurch werden vermutlich mehrere bestehende Menues mehrseitig
+      bzw. wachsen um eine Ebene: die Modus-Auswahl im
+      Einzelspieler-Menue, eine Modus-Auswahl vor der Highscore-Anzeige
+      und eine zusaetzliche Statistik-Seite. Offene Punkte fuer die
+      Umsetzung: ob "Reihen" hier die physischen Reihen (`Lines`) oder
+      die gewichtete Reihenwertung (`Rows`, siehe 3.2) meint - **Rows**
+      liegt naeher an der bestehenden Konvention, wonach "abgebaute
+      Reihen" im Weltwunder- und Statistik-Kontext bereits die gewertete
+      Groesse bezeichnet (siehe 3.3, 4.5); ob ein Ultra-Versuch, der vor
+      dem Ziel abbricht (Top-Out), ueberhaupt in dessen Highscore-Liste
+      landet; und wie der HUD den Modus-Fortschritt anzeigt, ohne die
+      acht freien Zeilen der linken Spalte (siehe 3.4) zu sprengen.
 
 ### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 

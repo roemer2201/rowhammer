@@ -62,7 +62,8 @@
 #   played, plus the results of
 #   the last three rounds with their play date), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
-#   The "Anleitung" main menu entry explains the game on five screens:
+#   The "Anleitung" main menu entry explains the game on five screens,
+#   paged with the left/right arrow keys (wrapping at both ends):
 #   the rules, the current key bindings, hold and preview, the
 #   gold/silver squares with their row bonus and the wonder construction
 #   (menu_help in lib/menu.sh).
@@ -103,7 +104,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.32.0  (2026-07-30)
+# Version: 0.33.0  (2026-07-31)
 
 set -euo pipefail
 
@@ -117,7 +118,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.31.0"
+ROWHAMMER_VERSION="0.33.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config

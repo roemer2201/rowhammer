@@ -106,7 +106,8 @@ Das Startmenue bietet:
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`)
-- **Anleitung** - kurze Spielerklaerung auf fuenf Bildschirmen:
+- **Anleitung** - kurze Spielerklaerung auf fuenf Bildschirmen, mit
+  den Pfeiltasten links/rechts durchblaetterbar (umlaufend):
   Spielprinzip, Steuerung (mit der gerade eingestellten
   Tastenbelegung), Vorschau und Hold, Gold-/Silber-Quadrate mit ihrer
   Reihenwertung und der Weltwunderbau
