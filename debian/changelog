@@ -1,3 +1,14 @@
+rowhammer (0.34.1) unstable; urgency=medium
+
+  * Rename the endless singleplayer mode from "Normales Spiel" to
+    "Marathon" (user decision, matches the term other Tetris games use
+    for the endless mode). The internal GAME_MODE identifier changes
+    from "normal" to "marathon" accordingly (rowhammer.sh, lib/menu.sh).
+    Purely cosmetic: GAME_MODE is never persisted, so savegames and
+    highscore files are unaffected.
+
+ -- roemer2201 <r.oliver@web.de>  Fri, 31 Jul 2026 19:00:00 +0200
+
 rowhammer (0.34.0) unstable; urgency=medium
 
   * Add the "Ultra" game mode (user request): the singleplayer menu now
