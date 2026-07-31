@@ -89,7 +89,7 @@ Das Startmenue bietet:
 - **Fortsetzen** - erscheint nur, solange eine ueber das Pausenmenue
   ins Hauptmenue gelegte Runde wartet, und nimmt sie wieder auf; der
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
-- **Einzelspieler** - die Spielmodi: "Normales Spiel" (endlos, Ende
+- **Einzelspieler** - die Spielmodi: **Marathon** (endlos, Ende
   durch Game Over) und **Ultra** - 150 Rows so schnell wie moeglich
   abbauen. Die Ultra-Runde endet in dem Moment, in dem das Ziel
   erreicht ist; das Ergebnis ist die Spielzeit, und der HUD zeigt
@@ -219,7 +219,7 @@ Umgesetzt:
 - **Anleitung im Spiel:** fuenf Bildschirme zu Spielprinzip, Steuerung,
   Vorschau/Hold, Gold- und Silberbloecken und Weltwunderbau; die
   Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
-- **Spielmodi:** endloses "Normales Spiel" und **Ultra** (150 Rows auf
+- **Spielmodi:** endloses **Marathon** und **Ultra** (150 Rows auf
   Zeit, eigene Bestenliste nach kuerzester Zeit; siehe oben)
 - Persistente Highscore-Liste: die besten 10 Runden in
   `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild

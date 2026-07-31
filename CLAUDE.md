@@ -315,8 +315,10 @@ geht als Argument an `game_run` und liegt waehrend der Runde in
 Pausieren/Fortsetzen erhalten - eine ins Hauptmenue gelegte Runde kommt
 im Modus zurueck, in dem sie gestartet wurde).
 
-- **Normales Spiel** (`normal`): die endlose Runde wie bisher, Ende
-  durch Game Over.
+- **Marathon** (`marathon`; bis 0.34.1 "Normales Spiel"/`normal` -
+  Nutzerentscheidung, an den in anderen Tetris-Spielen ueblichen Namen
+  fuer den endlosen Modus angeglichen): die endlose Runde wie bisher,
+  Ende durch Game Over.
 - **Ultra** (`ultra`, Nutzerwunsch): Wettlauf gegen die Uhr -
   `ULTRA_TARGET_ROWS` (150) **Rows** so schnell wie moeglich abbauen.
   Die Runde endet in dem Moment, in dem die Wertung das Ziel erreicht
@@ -342,8 +344,8 @@ Punkte, im Sinne der dortigen Empfehlung entschieden):
 - **HUD:** zwei zusaetzliche Zaehler in der linken Spalte, nur im
   Ultra-Modus sichtbar (`render_pane_left`, Zeile 15/16): "Goal" (das
   Ziel) und "Left" (noch fehlende Rows, bei Ueberschreitung auf 0
-  gekappt). Sie belegen zwei der acht freien Zeilen aus 3.4; im normalen
-  Spiel bleiben alle acht frei.
+  gekappt). Sie belegen zwei der acht freien Zeilen aus 3.4; im
+  Marathon-Modus bleiben alle acht frei.
 - **Rundenende-Kasten** (`render_status_box`): derselbe Kasten ueber dem
   Spielfeld traegt jetzt drei Ausgaenge, alle mit denselben acht
   Innenzeilen, damit die Rahmen stehen bleiben - "ULTRA CLEAR" mit Zeit
@@ -443,7 +445,8 @@ Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue). Das
 Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
-("Normales Spiel" oder "Ultra", siehe 3.6); die
+("Marathon" oder "Ultra", siehe 3.6; der endlose Modus hiess bis
+0.34.1 "Normales Spiel"); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -2025,6 +2028,15 @@ Feature-Branch oder Pull Request.
       Zeit zuerst, Zeit in Millisekunden), damit ein zeitlich
       begrenzter Lauf die Top 10 der endlosen Liste nicht verdraengt
       (`HSU_*` in `lib/highscore.sh`, siehe 4.5).
+- [x] **Endlosen Modus in "Marathon" umbenannt** (Version 0.34.1,
+      Nutzerentscheidung): der bisherige Menuepunkt "Normales Spiel"
+      heisst jetzt "Marathon" (`lib/menu.sh`), der interne Modusname
+      `GAME_MODE` wechselt entsprechend von `normal` zu `marathon`
+      (Standardwert und `game_run`-Argument in `rowhammer.sh`, siehe
+      3.6). Reine Umbenennung ohne Verhaltensaenderung: `GAME_MODE`
+      wird nicht persistiert (siehe 4.5), betrifft also weder Savegame
+      noch Highscore-Dateien; einzig `events.log` des Debug-Modus
+      protokolliert den neuen Namen.
 - [ ] **Sprint-Modus** und die Anzeige-Seiten der Modi (Rest des
       Modus-Themas, Nutzerentscheidung: die Anzeige folgt getrennt von
       der Speicherung). Offen sind:

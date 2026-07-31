@@ -11,7 +11,7 @@
 #   landing piece still be slid or rotated, pause and game over with
 #   restart. Completed rows blink briefly before they are removed, so
 #   the player sees which rows scored. The singleplayer menu offers two
-#   game modes: the endless "Normales Spiel" and "Ultra", a race to
+#   game modes: the endless "Marathon" and "Ultra", a race to
 #   clear ULTRA_TARGET_ROWS rows of credit as fast as possible - it ends
 #   the moment the target is reached, the play time is the result and
 #   only successful runs are recorded, in an Ultra highscore list of
@@ -110,7 +110,7 @@
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.34.0  (2026-07-31)
+# Version: 0.34.1  (2026-07-31)
 
 set -euo pipefail
 
@@ -124,7 +124,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.34.0"
+ROWHAMMER_VERSION="0.34.1"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -198,7 +198,7 @@ usage() {
 Usage: rowhammer.sh [OPTIONS]
 
 Terminal Tetris of the rowhammer project. Starts with a menu:
-singleplayer (endless "Normales Spiel" or the timed "Ultra" mode),
+singleplayer (endless "Marathon" or the timed "Ultra" mode),
 multiplayer (placeholder), highscores, wonders, statistics and settings.
 
 Options:
@@ -281,7 +281,7 @@ sole source of points - drops, square formation and spins earn nothing.
 Famous maximum for a single move: a Tetris through two complete gold
 squares = 4 + 1 + 8 x 10 = 85.
 
-Game modes (singleplayer menu): "Normales Spiel" is the endless round
+Game modes (singleplayer menu): "Marathon" is the endless round
 that ends on a top-out. "Ultra" is a race - clear 150 rows of credit as
 fast as possible; the run ends the moment that target is reached and its
 play time is the result. The HUD shows the target and the rows still
@@ -651,14 +651,16 @@ PLAY_MS=0; PLAY_LAST=0
 # Guards record_round so one round enters the highscore list only
 # once (a round can end twice: game over, then quitting to the menu).
 ROUND_RECORDED=0
-# Game mode of the running round, "normal" (endless, the classic round)
-# or "ultra" (race: clear ULTRA_TARGET_ROWS of row credit as fast as
+# Game mode of the running round, "marathon" (endless, the classic round;
+# CHANGE 2026-07-31, user decision: renamed from "normal"/"Normales Spiel"
+# to match the term used by other Tetris games for the endless mode) or
+# "ultra" (race: clear ULTRA_TARGET_ROWS of row credit as fast as
 # possible). Round state like the counters above: it is chosen in the
 # singleplayer menu, set by game_reset and kept across a suspend/resume,
 # so a resumed round always comes back in the mode it was started in.
 # The mode decides which highscore list the round is recorded in and
 # whether the HUD shows the goal counters (render_pane_left).
-GAME_MODE="normal"
+GAME_MODE="marathon"
 # Row credit an Ultra run has to reach. Weighted rows ("Rows", see the
 # scoring note below), not physical lines: in this game "cleared rows"
 # has meant the weighted figure everywhere else too (wonder progress,
@@ -1204,7 +1206,7 @@ handle_key() {
 }
 
 # game_reset [MODE]
-# Start a fresh round in MODE ("normal" or "ultra"); without an argument
+# Start a fresh round in MODE ("marathon" or "ultra"); without an argument
 # the current GAME_MODE is kept, which is what the game over screen's
 # restart key does - a failed Ultra run restarts as an Ultra run.
 game_reset() {
@@ -1237,7 +1239,7 @@ game_reset() {
 }
 
 # --- Game loop ------------------------------------------------------------
-# game_run [normal|ultra|resume]
+# game_run [marathon|ultra|resume]
 # One game session; returns to the caller (the menu) when the player
 # leaves via the pause menu or the game over screen. The argument is
 # either the game mode of the new round (see GAME_MODE) or "resume",
@@ -1248,7 +1250,7 @@ game_reset() {
 # A round suspended (again) is not recorded - the books close only when
 # the round really ends.
 game_run() {
-    local mode="${1:-normal}"
+    local mode="${1:-marathon}"
     GAME_EXIT=0
     # The screen still holds a menu: the first frame must repaint it all.
     RENDER_FULL=1

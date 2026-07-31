@@ -34,9 +34,9 @@
 #   repaint on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave a menu or info screen blank (since 0.7.0).
 #   Since 0.14.0 (user request) menu_singleplayer offers the game modes:
-#   the endless "Normales Spiel" and "Ultra", the race for
-#   ULTRA_TARGET_ROWS rows against the clock. The entry picked is handed
-#   to game_run as its mode name.
+#   the endless "Marathon" (renamed from "Normales Spiel" in 0.14.1, user
+#   decision) and "Ultra", the race for ULTRA_TARGET_ROWS rows against the
+#   clock. The entry picked is handed to game_run as its mode name.
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -44,7 +44,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.14.0  (2026-07-31)
+# Version: 0.14.1  (2026-07-31)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -530,7 +530,7 @@ menu_pause() {
     return 0
 }
 
-# menu_singleplayer: the game modes. "Normales Spiel" is the endless
+# menu_singleplayer: the game modes. "Marathon" is the endless
 # round, "Ultra" the race for ULTRA_TARGET_ROWS rows against the clock
 # (0.14.0, user request); a "Sprint" mode - most rows within a time
 # limit - is planned as a third entry (see CLAUDE.md). The chosen entry
@@ -552,7 +552,7 @@ menu_singleplayer() {
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             entries+=("Fortsetzen")
         fi
-        entries+=("Normales Spiel" \
+        entries+=("Marathon" \
                   "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
                   "Zurueck")
         menu_run "Einzelspieler" "${entries[@]}"
@@ -570,7 +570,7 @@ menu_singleplayer() {
             fi
         fi
         case "${choice}" in
-            0) game_run normal ;;
+            0) game_run marathon ;;
             1) game_run ultra ;;
             *) return 0 ;;
         esac
