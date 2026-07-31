@@ -1223,8 +1223,8 @@ Feature-Branch oder Pull Request.
 - [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
       Launcher-Symlink `/usr/games/rowhammer`)
 - [x] Build-Skript `build-deb.sh` nach Script-Konventionen
-- [ ] RPM-Paketierung (Spec-Datei, nutzt `make install`)
-- [ ] Lizenz festlegen und `debian/copyright` aktualisieren
+- [ ] **A.** RPM-Paketierung (Spec-Datei, nutzt `make install`)
+- [ ] **B.** Lizenz festlegen und `debian/copyright` aktualisieren
 
 ### Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
 
@@ -1271,7 +1271,7 @@ Feature-Branch oder Pull Request.
       `ROWHAMMER_COLOR_THEME`, gespeichert als `COLOR_THEME` in der
       Config; symbolische Farbnamen mit Basic- und Extended-Bedeutung,
       siehe 4.1)
-- [ ] Umschaltbar zwischen Voll-Frame- und Partial-Rendering: seit
+- [ ] **C.** Umschaltbar zwischen Voll-Frame- und Partial-Rendering: seit
       0.22.0 zeichnet `render_flush` (`lib/render.sh`) standardmaessig
       nur die tatsaechlich geaenderten Zeilen (siehe 4.3); fuer
       Terminals/Multiplexer, bei denen sich das inkrementelle Update
@@ -1285,7 +1285,7 @@ Feature-Branch oder Pull Request.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
-- [ ] `--reset [config|stats|highscore|all]` einbauen: loescht gezielt
+- [ ] **D.** `--reset [config|stats|highscore|all]` einbauen: loescht gezielt
       persistente Daten im Datenverzeichnis (`${DATA_DIR}`, siehe 4.5),
       noch vor dem eigentlichen Programmstart. `config` entfernt
       `rowhammer.conf`, `stats` die Datei `stats`, `highscore` die
@@ -1597,7 +1597,7 @@ Die Schritte sind so sortiert, dass jeder fuer sich lauffaehig und
 testbar ist und der Mehrspieler-Modus Stueck fuer Stueck waechst. Die
 Details stehen jeweils im genannten Unterabschnitt.
 
-- [ ] **Schritt 1 - Vorarbeit: Entkopplung und Render-Performance** (siehe 5.3, 5.9).
+- [ ] **E. Schritt 1 - Vorarbeit: Entkopplung und Render-Performance** (siehe 5.3, 5.9).
       Rundenlogik ohne Rendering/Input lauffaehig machen (`game_reset`,
       `step_down`, `lock_and_next`, `try_move`, `try_rotate`, `hold_piece`
       zeichnen nicht mehr selbst; `record_round` trennt Verbuchen und
@@ -1608,21 +1608,21 @@ Details stehen jeweils im genannten Unterabschnitt.
       Entkopplung der Rundenlogik.
       Abnahme: Einzelspieler unveraendert spielbar, Frame-Kosten messbar
       gesunken.
-- [ ] **Schritt 2 - Transportschicht `lib/net.sh`** (siehe 5.2, 5.3).
+- [ ] **F. Schritt 2 - Transportschicht `lib/net.sh`** (siehe 5.2, 5.3).
       Hilfsprogramm-Erkennung (`socat` > `ncat --unixsock` > `nc -U`) mit
       klarer Meldung, wenn nichts vorhanden ist; Verbindung als Coprocess,
       nicht-blockierendes Leeren des Sockets pro Tick, Zeilenrahmung mit
       512-Byte-Grenze, Aufraeumen im bestehenden EXIT-`trap`,
       Debug-Mitschnitt `net.log`. Abnahme: zwei Testprozesse tauschen
       ueber einen Socket Zeilen aus, ohne dass der Game-Loop stockt.
-- [ ] **Schritt 3 - Protokoll v1 und Validierung `lib/proto.sh`** (siehe 5.4, 5.5).
+- [ ] **G. Schritt 3 - Protokoll v1 und Validierung `lib/proto.sh`** (siehe 5.4, 5.5).
       Nachrichtentabelle, Serialisierung, Whitelist-Parser mit
       Feldmustern, Zeichensatzfilter 0x20-0x7E, Ratenbegrenzung.
       Zusammen mit `tools/net-fuzz.sh` (boesartige Zeilen: ANSI-Escapes,
       `$(...)`, Backticks, `../`, Ueberlaenge, Nullbytes, halbe Zeilen).
       Abnahme: kein Prozess stirbt, kein Befehl laeuft, kein
       Steuerzeichen erreicht das Terminal.
-- [ ] **Schritt 4 - Hub-Prozess und Lobby** (siehe 5.3, 5.10).
+- [ ] **H. Schritt 4 - Hub-Prozess und Lobby** (siehe 5.3, 5.10).
       `--mp-hub` headless, `--mp-bridge`, Sitzungsverzeichnis mit den
       Rechte- und Symlink-Pruefungen aus 5.5, Menue "Spiel eroeffnen /
       Spiel beitreten", Spielerliste, Bereitschaft, Seed-Verteilung,
@@ -1630,41 +1630,41 @@ Details stehen jeweils im genannten Unterabschnitt.
       Interaktion im Spiel: alle spielen parallel ihre eigene Runde.
       Abnahme: vier Terminals treten bei, starten gemeinsam, ein
       `kill -9` auf einen Client stoert die anderen nicht.
-- [ ] **Schritt 5 - Mitspieler-Anzeige Stufe 0 und 1** (siehe 5.6).
+- [ ] **I. Schritt 5 - Mitspieler-Anzeige Stufe 0 und 1** (siehe 5.6).
       `PEER`-Zustaende puffern, Scoreboard- und Kompaktansicht in der
       Seitenleiste, Detailstufen-Auswahl inklusive Neuberechnung beim
       Resize, `--mp-view`. Erstes sichtbares Mehrspieler-Erlebnis, laeuft
       im 48x22-Minimum. Abnahme: vier Spieler sehen gegenseitig ihre
       Rows/Lines live.
-- [ ] **Schritt 6 - Mitspieler-Anzeige Stufe 2 (Mini-Felder)** (siehe 5.4, 5.6).
+- [ ] **J. Schritt 6 - Mitspieler-Anzeige Stufe 2 (Mini-Felder)** (siehe 5.4, 5.6).
       Feld-Snapshot in 200 Zeichen kodieren/dekodieren, `NEEDBOARD`-
       Steuerung, Drosselung auf 5 Hz und "nur bei Aenderung", Layout
       rechts neben der Seitenleiste, Akzentfarbe je Slot. Abnahme: bei
       4 Spielern in einem 90x24-Terminal bleibt die Framerate stabil.
-- [ ] **Schritt 7 - Garbage-Mechanik** (siehe 5.7).
+- [ ] **K. Schritt 7 - Garbage-Mechanik** (siehe 5.7).
       Zellsorte `x`, zeilenweises Hochschieben von `BOARD`/`BOARD_ID`/
       `BOARD_SQ`, Top-Out-Erkennung beim Schieben, Warteschlange mit
       Verrechnung, Hub-seitige Angriffsberechnung und Lochspalte,
       Vorwarn-Balken im HUD. Zuerst nur fuer 2 Spieler. Abnahme:
       Tetris und Gold-Quadrat erzeugen die spezifizierten Mengen,
       Quadrate ueberleben das Hochschieben.
-- [ ] **Schritt 8 - Rundenende, KO-Reihenfolge, Zuschauermodus,
+- [ ] **L. Schritt 8 - Rundenende, KO-Reihenfolge, Zuschauermodus,
       Verbindungsabbruch** (siehe 5.8).
       `TOPOUT`/`KO`/`END`, Platzierung, Endbildschirm mit Rangliste,
       Timeout- und EOF-Behandlung, Mehrspieler-Pausenmenue ohne
       "Ins Hauptmenue", Verbuchung von Wunder-Fortschritt und Statistik.
       Abnahme: eine Runde laeuft sauber bis zum Sieger, ein abgestuerzter
       Client beendet sie nicht.
-- [ ] **Schritt 9 - Drei bis sechs Spieler** (siehe 5.1, 5.6, 5.7).
+- [ ] **M. Schritt 9 - Drei bis sechs Spieler** (siehe 5.1, 5.6, 5.7).
       Zielwahl-Modi `random|all|even`, Layout-Raster fuer mehrere
       Mini-Felder, `--mp-max`, Lasttests. Abnahme: sechs Bots spielen
       eine Runde ohne Verbindungs- oder Renderprobleme durch.
-- [ ] **Schritt 10 - Test-Bot, Dokumentation, Paketierung** (siehe 5.10, 5.9).
+- [ ] **N. Schritt 10 - Test-Bot, Dokumentation, Paketierung** (siehe 5.10, 5.9).
       `--mp-bot` (Client ohne Terminal, zufaellige Zuege) fuer
       reproduzierbare Mehrspieler-Tests ohne N Terminals; README-Kapitel
       mit Beispiel-Ablauf ueber SSH; asciinema-Clip mit zwei Feldern;
       `socat` als `Recommends` im Debian-Paket.
-- [ ] **Schritt 11 - Sicherheits-Review vor der Freigabe** (siehe 5.5).
+- [ ] **O. Schritt 11 - Sicherheits-Review vor der Freigabe** (siehe 5.5).
       Kompletter Durchgang durch alle Stellen, die Empfangenes anfassen:
       kein `eval`/`source`, keine ungeprueften Werte in `$(( ))` oder in
       Array-Indizes, Zeichensatzfilter, Pfadpruefungen, Grenzen. Erneuter
