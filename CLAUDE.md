@@ -1323,6 +1323,114 @@ stehen.
     weder in Bash noch im neuen Dienst (dort: keine dynamisch gebauten
     SQL-Strings oder Shell-Aufrufe aus Nutzereingaben, siehe 5.13).
 
+### 5.16 Serverweite Statistik
+
+- **Ausgangslage:** `lib/stats.sh` (4.5) fuehrt heute genau eine
+  Statistik je Installation (lokal oder - nach 5.12 - je Account
+  serverseitig gespeichert). Auf einem Mehrspieler-Server mit vielen
+  Accounts fehlt ein Blick auf das Ganze: wie viele Reihen hat der
+  Server insgesamt abgebaut, wie viele Gold-/Silberquadrate insgesamt,
+  wie viele Rowhammer, wie viele Runden wurden gespielt.
+- **Vorschlag:** ein zusaetzlicher, kontounabhaengiger Aggregat-Zaehler
+  in der Server-Datenbank (5.13), der bei jedem `record_round` (siehe
+  3.3, 4.5) neben dem Account-Eintrag mitgefuehrt wird (`server_stats`,
+  dieselben Felder wie die persoenliche Statistik, dazu Anzahl aktiver
+  Accounts und Anzahl gespielter Mehrspieler-Runden). Anzeige: neuer
+  Menuepunkt "Server-Statistik" (nur im Server-Betrieb sichtbar - lokal
+  entfaellt er mangels Server) analog zum bestehenden
+  "Statistik"-Bildschirm (4.5), spaeter moeglicherweise auch auf der
+  Web-Highscore-Seite (5.14).
+- **Abgrenzung zur Wertung:** die serverweite Statistik ist reine
+  Anzeige, kein Bestandteil von Highscore oder Account-Fortschritt -
+  sie zaehlt nur mit, veraendert aber nicht die individuelle Wertung
+  einer Runde.
+
+### 5.17 Gemeinsamer Weltwunder-Fortschritt auf dem Server
+
+- **Idee (Nutzervorschlag, zu bestaetigen, siehe Abschnitt 8):** auf
+  einem Server bauen nicht nur einzelne Accounts an ihrem eigenen
+  Weltwunder (siehe 3.3, das bleibt fuer den lokalen
+  Einzelspieler-Betrieb unveraendert bestehen), sondern **alle Spieler
+  gemeinsam** zusaetzlich an einem serverweiten Weltwunder. Jede
+  abgebaute Reihe jedes Accounts zahlt dann doppelt ein: auf den
+  eigenen (Account-)Zaehler und auf einen gemeinsamen Server-Zaehler.
+- **Konsequenz fuer die Kostentabelle:** Die bestehende
+  `WONDER_COSTS`-Reihe (100..6400, insgesamt 12.700 Reihen, siehe 3.3)
+  ist auf Einzelrechner-Spielzeit herunterskaliert und waere von vielen
+  gleichzeitig spielenden Accounts binnen Stunden durchgespielt. Der
+  Server-Fortschritt braucht **eine eigene, deutlich groessere
+  Kostentabelle** (`SERVER_WONDER_COSTS`) - naeher an der
+  Original-Groessenordnung (2.500 bis 500.000 Zeilen je Wunder, siehe
+  3.3) oder sogar darueber, je nach erwarteter Serverlast. Beide
+  Tabellen nutzen dieselbe Wunder-Liste und -Logik (`lib/wonders.sh`),
+  nur mit unterschiedlichem Kosten-Array und unterschiedlichem
+  Zaehlerstand.
+- **Anzeige:** der bestehende Weltwunder-Bildschirm bekommt im
+  Server-Betrieb einen zweiten Bildschirm fuer den Server-Fortschritt
+  (eigenes Bauwerk, eigene Baustufe); die Rundenwertung fuer den
+  Account (Highscore, persoenliche Statistik, 4.5) bleibt davon
+  unberuehrt.
+- **Offen (siehe Abschnitt 8):** ob der Server tatsaechlich eigene,
+  groessere Wunder braucht (weitere, noch unverifizierte Bauwerke) oder
+  dieselbe Liste nur mit anderen Kosten laufen soll; ob ein
+  fertiggestelltes Server-Wunder ein sichtbares Server-Ereignis ist
+  (Ankuendigung an alle verbundenen Clients, siehe Protokoll 5.4).
+
+### 5.18 Weltwunder-Animation
+
+- **Ausgangslage:** der Weltwunder-Bildschirm (3.3, seit 0.8.0
+  umgesetzt) deckt die ASCII-Art zeilenweise von unten auf - statisch,
+  ohne Bewegung. Nutzerwunsch: der Bildschirm soll "etwas mehr
+  animiert" sein.
+- **Vorschlag:** kurze **asciinema-Aufnahmen** (`.cast`-Dateien, wie
+  bereits fuer die README-Democlips genutzt, siehe Phase 4 "README mit
+  Screenshots/Asciinema aktualisieren") je Wunder-Uebergang, die beim
+  Erreichen einer neuen Baustufe bzw. bei Fertigstellung eines Wunders
+  einmalig abgespielt werden (z. B. ein kurzer Bau-Effekt oder ein
+  Glanz-Effekt ueber der ASCII-Art). Zwei Umsetzungswege: entweder ein
+  echter `.cast`-Player in Bash (Zeitstempel aus dem Cast-Format
+  auswerten, neuer Formatparser) oder - einfacher und ohne neue
+  Abhaengigkeit - eine kleine, von Hand aus einer asciinema-
+  Voraufnahme abgeleitete Frame-Tabelle (analog den zwoelf
+  Baustufen-Zeilen aus 3.3, nur als kurze Zwischenschritte statt eines
+  Sprungs), abgespielt ueber das bestehende Rendering-Modell
+  (`FRAME_LINES`, 4.3). Die Frame-Tabelle ist der einfachere und damit
+  bevorzugte Weg; `asciinema rec` dient dabei nur als
+  Entwicklungswerkzeug fuer die Vorschau, nicht als Laufzeitformat.
+- **Geltungsbereich:** gilt fuer den lokalen Einzelspieler-Wunder-
+  bildschirm ebenso wie fuer den serverweiten (5.17) - beide nutzen
+  denselben Anzeige-Code (`wonder_screen`, `lib/wonders.sh`) und haben
+  keine Server-Abhaengigkeit.
+- **Nicht Ziel:** eine waehrend der laufenden Partie eingeblendete
+  Animation (der Wunderbildschirm bleibt ein Bildschirm nach
+  Rundenende bzw. ein Hauptmenuepunkt, siehe 3.3) - die Animation laeuft
+  nur dort, nicht im HUD.
+
+### 5.19 Account-Abzeichen (Achievements)
+
+- **Nutzerwunsch:** persoenliche **Abzeichen** am Account, zusaetzlich
+  zu Highscores und Statistiken (die es fuer den Account bereits gibt,
+  siehe 5.12/4.5).
+- **Vorschlag:** eine feste Liste von Abzeichen mit klaren, serverseitig
+  bei jedem `record_round` pruefbaren Bedingungen (z. B. "erstes
+  Rowhammer", "100 Gold-Quadrate insgesamt", "ein Wunder allein
+  fertiggestellt", "am Server-Wunder mitgebaut" [5.17], "Sieger einer
+  Mehrspieler-Runde", "1.000.000 Reihen Lebenszeit"). Jedes Abzeichen
+  wird einmalig freigeschaltet und mit Datum am Account gespeichert
+  (neue Tabelle in der Server-DB, siehe 5.13); ein Abzeichen wird nie
+  wieder entzogen.
+- **Anzeige:** eigener Bereich in der Account-Ansicht (Menuepunkt,
+  analog "Statistik") mit freigeschalteten und - abgeblendet - noch
+  offenen Abzeichen; auf der spaeteren Highscore-Webseite (5.14) als
+  kleine Icons neben dem Namen.
+- **Voraussetzung:** Abzeichen sind reine Server-Funktion (haengen an
+  einem Account, siehe 5.12) und ergeben ohne Account/Server keinen
+  Sinn; sie entfallen daher konsequent im lokalen Einzelspieler-Betrieb.
+- **Offen (siehe Abschnitt 8):** konkrete Abzeichen-Liste und ihre
+  Bedingungen sind noch nicht festgelegt - erst nach Playtesting und
+  zusammen mit dem Liga-System (5.14) sinnvoll auszuarbeiten, damit
+  Abzeichen und Liga-Punkte sich nicht widersprechen.
+
 ## 6. Konventionen fuer alle Skripte
 
 Fuer **jedes** Bash-Skript in diesem Repo gelten verbindlich die
@@ -1500,6 +1608,16 @@ Feature-Branch oder Pull Request.
       Uebersetzungstabellen (reines Bash-Array je Sprache vermutlich am
       einfachsten), Umgang mit variabler Textlaenge im starren
       48-Spalten-Layout (siehe 3.4).
+- [ ] Weltwunder-Animation (siehe 5.18, Nutzerwunsch): der
+      Wunder-Bildschirm deckt die ASCII-Art bislang nur statisch
+      zeilenweise auf. Kurze, von Hand aus asciinema-Voraufnahmen
+      abgeleitete Frame-Tabellen sollen Wunder-Uebergaenge (neue
+      Baustufe, Fertigstellung) mit einem kleinen Animationsschritt
+      versehen, ueber das bestehende `FRAME_LINES`-Rendering (4.3) ohne
+      neue Abhaengigkeit. Gilt fuer den lokalen wie den spaeteren
+      serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
+      keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
+      umsetzbar.
 - [x] Hauptmenue ebenfalls zentriert darstellen (Version 0.28.0): das
       Spielfeld-Layout wird seit 0.22.0 per `layout_update` mittig im
       Terminal ausgerichtet (siehe 3.4, 4.3), das Hauptmenue
@@ -1867,14 +1985,18 @@ Details stehen jeweils im genannten Unterabschnitt.
       Fuzz-Lauf gegen den fertigen Stand, dazu ein "boeser Client", der
       absichtlich das Protokoll verletzt.
 
-### Phase 6 - Server-Betrieb, Accounts, Web (spezifiziert in 5.11-5.15, noch nicht umgesetzt)
+### Phase 6 - Server-Betrieb, Accounts, Web (spezifiziert in 5.11-5.19, noch nicht umgesetzt)
 
 Setzt auf einem fertigen Phase 5 auf (der Mehrspieler-Kern muss laufen
 und sich per Playtesting bewaehrt haben, bevor Accounts/Web/Liga
-sinnvoll sind). Reihenfolge wie in 5.11-5.15 begruendet: Deployment
+sinnvoll sind). Reihenfolge wie in 5.11-5.19 begruendet: Deployment
 zuerst (ohne Server kein Bedarf fuer Accounts), Accounts vor dem
 Persistenz-Umbau (das Datenbankschema haengt vom Kontomodell ab),
-Web/Liga/Multi-Server zuletzt.
+serverweite Statistik und gemeinsames Weltwunder direkt danach (sie
+brauchen nur Accounts und die Datenbank, keine laufende
+Mehrspieler-Session, und lassen sich vor der Webseite fertig testen),
+Web-Frontend/Kontoverknuepfung/Abzeichen anschliessend, Liga und
+Multi-Server zuletzt.
 
 - [ ] **Schritt 1 - SSH-ForceCommand-Deployment** (siehe 5.11).
       `sshd_config`/`authorized_keys`-Vorlage mit `ForceCommand` bzw.
@@ -1900,21 +2022,39 @@ Web/Liga/Multi-Server zuletzt.
       weiterhin im Spiel ueber "Highscores" abrufbar. Abnahme: Liste
       bleibt bei vielen Konten performant und uebersichtlich (seitenweise
       wie heute, siehe 4.5).
-- [ ] **Schritt 5 - Web-Highscore (read-only)** (siehe 5.14).
+- [ ] **Schritt 5 - Serverweite Statistik** (siehe 5.16).
+      Kontounabhaengiger Aggregat-Zaehler zusaetzlich zum Account-Eintrag
+      bei jeder verbuchten Runde (`server_stats`), neuer Menuepunkt
+      "Server-Statistik". Abnahme: der Zaehler summiert sichtbar ueber
+      mehrere Accounts hinweg korrekt auf, unabhaengig von Highscore und
+      persoenlicher Statistik.
+- [ ] **Schritt 6 - Gemeinsamer Weltwunder-Fortschritt** (siehe 5.17).
+      Zusaetzlicher serverweiter Reihenzaehler mit eigener, deutlich
+      groesserer Kostentabelle (`SERVER_WONDER_COSTS`), zweiter
+      Wunder-Bildschirm fuer den Server-Fortschritt. Abnahme: Reihen
+      mehrerer Accounts zahlen sichtbar auf denselben Server-Fortschritt
+      ein, der Account-eigene Fortschritt bleibt davon unberuehrt.
+- [ ] **Schritt 7 - Web-Highscore (read-only)** (siehe 5.14).
       Separates, schlankes Web-Backend liest die Datenbank aus Schritt 3,
-      zeigt Highscore/Statistik im Browser. Kein Schreibzugriff vom Web
-      aus. Abnahme: Highscore-Liste ist ohne SSH-Zugang einsehbar.
-- [ ] **Schritt 6 - OAuth-Kontoverknuepfung** (siehe 5.12, 5.14).
+      zeigt Highscore/Statistik (inklusive Server-Statistik aus Schritt 5)
+      im Browser. Kein Schreibzugriff vom Web aus. Abnahme: Highscore-
+      Liste ist ohne SSH-Zugang einsehbar.
+- [ ] **Schritt 8 - OAuth-Kontoverknuepfung** (siehe 5.12, 5.14).
       Login mit Google/Apple/Facebook & Co. auf der Webseite, Anzeige
       eines kurzlebigen Verknuepfungscodes, Eingabe im Spiel
       ("Konto verknuepfen") bindet SSH-Key und Web-Identitaet an
       dasselbe Konto. Abnahme: Anmeldung ueber einen der Anbieter fuehrt
       zum selben Spielkonto wie der bisherige SSH-Key-Login.
-- [ ] **Schritt 7 - Liga-System** (siehe 5.14).
+- [ ] **Schritt 9 - Account-Abzeichen** (siehe 5.19).
+      Feste Abzeichen-Liste mit pruefbaren Bedingungen, Freischaltung bei
+      `record_round`, Anzeige im Account-Bereich und spaeter auf der
+      Highscore-Webseite. Abnahme: ein erfuelltes Kriterium schaltet das
+      passende Abzeichen zuverlaessig und dauerhaft frei.
+- [ ] **Schritt 10 - Liga-System** (siehe 5.14).
       Saisons/Ranglisten oberhalb der Highscore-Liste; Regeln noch offen
-      (siehe Abschnitt 8), erst nach Playtesting des Mehrspieler-Kerns zu
-      konkretisieren.
-- [ ] **Schritt 8 - Multi-Server-Faehigkeit** (siehe 5.14).
+      (siehe Abschnitt 8), erst nach Playtesting des Mehrspieler-Kerns und
+      im Zusammenspiel mit den Abzeichen aus Schritt 9 zu konkretisieren.
+- [ ] **Schritt 11 - Multi-Server-Faehigkeit** (siehe 5.14).
       Mehrere Spiel-Server gegen ein gemeinsames Accounts-/Highscore-
       Backend, Kontosynchronisation ueber Server-Grenzen hinweg. Abnahme:
       ein Konto behaelt Highscore und Einstellungen beim Wechsel des
@@ -1996,7 +2136,7 @@ Uebrige dort ist entschieden):
   Sicherheitsregeln in 5.5 schuetzen dagegen die Prozesse und Terminals
   der Mitspieler - dieser Teil ist nicht verhandelbar.
 
-Offene Punkte zum Server-Betrieb (Phase 6, Spezifikation siehe 5.11-5.15):
+Offene Punkte zum Server-Betrieb (Phase 6, Spezifikation siehe 5.11-5.19):
 
 - **Siegbedingung im Versus-Modus:** 5.1/5.8 legen "letzter
   Ueberlebender" (KO ueber Garbage/Top-Out) als Sieger fest. Die
@@ -2022,3 +2162,16 @@ Offene Punkte zum Server-Betrieb (Phase 6, Spezifikation siehe 5.11-5.15):
   Multi-Server-Bedarf, 5.14). Bestaetigung ausstehend.
 - **Liga-Regeln:** komplett offen (Saisonlaenge, Punkteverfall,
   Ranglisten je Modus), siehe 5.14.
+- **Serverweites Weltwunder:** Nutzervorschlag (5.17), zu bestaetigen.
+  Offen: eigene, groessere Wunder-Liste oder dieselbe Liste mit
+  hoeherer Kostentabelle (`SERVER_WONDER_COSTS`); ob ein
+  fertiggestelltes Server-Wunder allen verbundenen Clients angekuendigt
+  wird.
+- **Weltwunder-Animation:** Nutzerwunsch (5.18) nach mehr Bewegung im
+  Wunder-Bildschirm. Offen: eigener `.cast`-Player zur Laufzeit oder
+  eine von Hand aus einer asciinema-Voraufnahme abgeleitete
+  Frame-Tabelle (letzteres ist der Vorschlag, weil es ohne neue
+  Abhaengigkeit auskommt).
+- **Account-Abzeichen:** Nutzerwunsch (5.19). Offen: konkrete
+  Abzeichen-Liste und ihre Bedingungen, Verhaeltnis zum spaeteren
+  Liga-System.
