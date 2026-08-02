@@ -47,80 +47,80 @@ rowhammer/
 
 ## Improvement Suggestions
 
+Every item carries a letter; together with its section number it forms a
+unique handle (for example "1a" or "8f") for tracking the work.
+
 ### 1. Code Structure & Maintainability
-- Add version headers to each library file
-- Implement version compatibility checks during sourcing
-- Centralize all configurable parameters in config.sh
-- Create utils.sh for shared utility functions
+- [ ] **a)** Add version headers to each library file
+- [ ] **b)** Implement version compatibility checks during sourcing
+- [ ] **c)** Centralize all configurable parameters in config.sh
+- [ ] **d)** Create utils.sh for shared utility functions
 
 ### 2. Performance Optimizations
-- Implement partial screen updates instead of full redraws
-- Use tput for all terminal control operations (better compatibility)
-- Cache repeated calculations (board positions, piece rotations)
-- Optimize input handling with buffering
+- [ ] **a)** Implement partial screen updates instead of full redraws
+- [ ] **b)** Use tput for all terminal control operations (better compatibility)
+- [ ] **c)** Cache repeated calculations (board positions, piece rotations)
+- [ ] **d)** Optimize input handling with buffering
 
 ### 3. Error Handling & Robustness
-- Add comprehensive terminal capability detection
-- Implement graceful degradation for unsupported terminals
-- Ensure all signals are properly trapped (SIGINT, SIGTERM, SIGWINCH, SIGHUP)
-- Add signal handler for SIGTSTP (Ctrl+Z) to pause game properly
+- [ ] **a)** Add comprehensive terminal capability detection
+- [ ] **b)** Implement graceful degradation for unsupported terminals
+- [ ] **c)** Ensure all signals are properly trapped (SIGINT, SIGTERM, SIGWINCH, SIGHUP)
+- [ ] **d)** Add signal handler for SIGTSTP (Ctrl+Z) to pause game properly
 
 ### 4. Code Quality
-- Standardize indentation (use spaces consistently)
-- Adopt consistent naming conventions (snake_case for variables/functions)
-- Add function-level documentation for all public functions
-- Use declare -i, -a, -r for type safety
+- [ ] **a)** Standardize indentation (use spaces consistently)
+- [ ] **b)** Adopt consistent naming conventions (snake_case for variables/functions)
+- [ ] **c)** Add function-level documentation for all public functions
+- [ ] **d)** Use declare -i, -a, -r for type safety
 
 ### 5. Testing & Debugging
-- Implement testing using bats (Bash Automated Testing System)
-- Add configurable debug levels (ERROR, WARN, INFO, DEBUG, TRACE)
-- Implement performance profiling
-- Add structured logging with timestamps
+- [ ] **a)** Implement testing using bats (Bash Automated Testing System)
+- [ ] **b)** Add configurable debug levels (ERROR, WARN, INFO, DEBUG, TRACE)
+- [ ] **c)** Implement performance profiling
+- [ ] **d)** Add structured logging with timestamps
 
 ### 6. Build & Packaging
-- Add make test, clean, check targets
-- Add man pages and desktop entry for menu integration
-- Add postinst script for terminal compatibility checks
-- Support cross-distribution packaging (RPM, Arch Linux)
+- [ ] **a)** Add make test, clean, check targets
+- [ ] **b)** Add man pages and desktop entry for menu integration
+- [ ] **c)** Add postinst script for terminal compatibility checks
+- [ ] **d)** Support cross-distribution packaging (RPM, Arch Linux)
 
 ### 7. User Experience
-- Implement user-specific configuration: ~/.config/rowhammer/
-- Make all key bindings configurable
-- Add accessibility features (colorblind mode, high-contrast themes, monochrome mode)
-- Add command-line arguments for common settings
+- [ ] **a)** Implement user-specific configuration: ~/.config/rowhammer/
+- [ ] **b)** Make all key bindings configurable
+- [ ] **c)** Add accessibility features (colorblind mode, high-contrast themes, monochrome mode)
+- [ ] **d)** Add command-line arguments for common settings
 
 ### 8. Documentation
-- Add installation instructions for multiple platforms
-- Include dependency requirements
-- Add troubleshooting section with common issues
-- Document all command-line options
-- Add contribution guidelines
-- Include license information (LICENSE file)
+- [ ] **a)** Add installation instructions for multiple platforms
+- [ ] **b)** Include dependency requirements
+- [ ] **c)** Add troubleshooting section with common issues
+- [ ] **d)** Document all command-line options
+- [ ] **e)** Add contribution guidelines
+- [ ] **f)** Include license information (LICENSE file)
 
 ### 9. Security
-- Validate all user inputs (file paths, configuration values)
-- Sanitize inputs used in eval or command substitution
-- Use mktemp for all temporary files with proper cleanup
-- Ensure correct file permissions
+- [ ] **a)** Validate all user inputs (file paths, configuration values)
+- [ ] **b)** Sanitize inputs used in eval or command substitution
+- [ ] **c)** Use mktemp for all temporary files with proper cleanup
+- [ ] **d)** Ensure correct file permissions
 
 ### 10. Future Enhancements
-- Implement local multiplayer (split screen)
-- Add network multiplayer support
-- Create turn-based multiplayer mode
-- Add game modes (time trial, survival, marathon, custom rulesets)
-- Implement replay system (record and playback games)
-- Support customization (custom piece sets, color themes, wonder designs)
+- [ ] **a)** Implement local multiplayer (split screen)
+- [ ] **b)** Add network multiplayer support
+- [ ] **c)** Create turn-based multiplayer mode
+- [ ] **d)** Add game modes (time trial, survival, marathon, custom rulesets)
+- [ ] **e)** Implement replay system (record and playback games)
+- [ ] **f)** Support customization (custom piece sets, color themes, wonder designs)
 
 ## Specific Code Examples
 
-### 1. Enhanced Library Loading with Version Checking
-
-Current approach sources libraries with basic existence checks.
-Improved approach adds version checking and better error messages.
-
-### 2. Standardized Error Handling Framework
-
-Add log levels (ERROR, WARN, INFO, DEBUG, TRACE) and consistent cleanup.
+- [ ] **a) Enhanced Library Loading with Version Checking**
+      Current approach sources libraries with basic existence checks.
+      Improved approach adds version checking and better error messages.
+- [ ] **b) Standardized Error Handling Framework**
+      Add log levels (ERROR, WARN, INFO, DEBUG, TRACE) and consistent cleanup.
 
 ## Implementation Priority
 
@@ -141,19 +141,19 @@ Add log levels (ERROR, WARN, INFO, DEBUG, TRACE) and consistent cleanup.
 ## Next Steps
 
 ### Immediate (1-2 days)
-1. Create development branch
-2. Set up testing framework (bats)
-3. Implement error handling framework
-4. Enhance documentation
+- [ ] **a)** Create development branch
+- [ ] **b)** Set up testing framework (bats)
+- [ ] **c)** Implement error handling framework
+- [ ] **d)** Enhance documentation
 
 ### Short-term (1-2 weeks)
-1. Implement configuration system
-2. Performance profiling and optimization
-3. Add unit tests
+- [ ] **a)** Implement configuration system
+- [ ] **b)** Performance profiling and optimization
+- [ ] **c)** Add unit tests
 
 ### Medium-term (2-4 weeks)
-1. Enhance packaging
-2. Implement accessibility features
-3. Add internationalization
+- [ ] **a)** Enhance packaging
+- [ ] **b)** Implement accessibility features
+- [ ] **c)** Add internationalization
 
 *Generated by Mistral AI - July 30, 2026*
