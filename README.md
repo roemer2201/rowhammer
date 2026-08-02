@@ -67,8 +67,13 @@ Anwendung startet in einem Menue mit Einzelspieler,
 Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik,
 Einstellungen und einer kurzen Anleitung;
 die besten
-10 Runden werden dauerhaft gespeichert. Das vollstaendige Konzept
-und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
+10 Runden werden dauerhaft gespeichert. Dazu kommen die Politur-Schritte
+aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
+(Marathon/Ultra), Anleitung, Lock Delay und der gezielte Reset
+gespeicherter Daten. Das vollstaendige Konzept
+und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
+abgeschlossenen Entwicklungsschritte je Version in
+[HISTORY.md](HISTORY.md).
 
 ## Spielen
 
@@ -119,8 +124,10 @@ Das Startmenue bietet:
   Silberbloecke, die "Rowhammer" - vier Reihen auf einmal -, die
   abgelegten Teile, die Gesamtspielzeit und die daraus berechneten
   Steine/Minute), danach die Ergebnisse der letzten drei Spiele
-- **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
-  beides wird in der Konfigurationsdatei gespeichert (Standard:
+- **Einstellungen** - Tastenbelegung aendern, Farbschema waehlen
+  (`guideline`, `classic`, `mono` oder `colorblind`, jeweils mit einer
+  Farbvorschau in der Liste) und Spielernamen setzen; alles drei wird in
+  der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`)
 - **Anleitung** - kurze Spielerklaerung auf fuenf Bildschirmen, mit
   den Pfeiltasten links/rechts durchblaetterbar (umlaufend):
@@ -142,6 +149,7 @@ Optionen:
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen (auch Standard-`NO_COLOR`, s. u.) |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
+| `--color-theme N`| `ROWHAMMER_COLOR_THEME`  | Farbschema: `guideline` (Standard), `classic`, `mono`, `colorblind` |
 | `--reset ZIEL`   | `ROWHAMMER_RESET`        | Persistente Daten zuruecksetzen und beenden (s. unten) |
 | `--force`        | `ROWHAMMER_FORCE`        | Sicherheitsabfragen automatisch mit "ja" beantworten |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
@@ -218,6 +226,9 @@ Umgesetzt:
   Diese Reihenwertung ist zugleich das Punktesystem: nur abgebaute
   Reihen bringen Punkte, Drops und Quadrat-Bildung nicht
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
+- **Lock Delay:** ein aufsetzender Stein wird nicht sofort festgesetzt,
+  sondern laesst sich noch ein kurzes Gnadenfenster (250 ms) verschieben
+  und drehen; der Hard-Drop setzt weiterhin sofort fest
 - **Blinkende Reihen beim Abbau:** vollstaendige Reihen blinken kurz
   auf (zweimal hell/normal, zusammen rund 280 ms), bevor sie
   verschwinden und das naechste Teil erscheint
@@ -249,6 +260,12 @@ Umgesetzt:
   erkannt, umschaltbar per `--color-mode`) eine satte xterm-Palette mit
   den Guideline-Teilfarben - inklusive echtem Orange fuer das L-Teil
   und kraeftigerem Gold/Silber fuer die Quadrate
+- **Waehlbare Farbschemata:** `guideline` (Standard), `classic`, `mono`
+  und `colorblind` (meidet das Rot/Gruen-Paar) - im Einstellungsmenue
+  mit Farbvorschau waehlbar, per `--color-theme` setzbar und in der
+  Konfiguration gespeichert; jedes Schema gilt in beiden Farbmodi.
+  Highscore- und Statistik-Bildschirm nutzen dieselben Themenfarben
+  (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
   Weltwunder, Statistik, Einstellungen und Anleitung
 - **Anleitung im Spiel:** fuenf Bildschirme zu Spielprinzip, Steuerung,
@@ -368,4 +385,7 @@ Leertaste zum Bestaetigen und `Esc` fuer Zurueck.
 
 Konzept, Architektur, Roadmap und die verbindlichen Skript-Konventionen sind
 in [CLAUDE.md](CLAUDE.md) dokumentiert. Diese Datei ist der Startpunkt fuer
-jede Weiterentwicklung.
+jede Weiterentwicklung. Was bereits umgesetzt ist - jeder erledigte
+Roadmap-Punkt mit seiner Begruendung und der Version, in der er kam -
+steht im Archiv [HISTORY.md](HISTORY.md); den *aktuellen* Zustand einer
+Funktion beschreiben dagegen CLAUDE.md und diese README.
