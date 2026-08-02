@@ -1,4 +1,4 @@
-rowhammer (0.35.0) unstable; urgency=medium
+rowhammer (0.38.0) unstable; urgency=medium
 
   * Show the Ultra highscore list (user request). 0.34.0 deliberately
     shipped its storage without a screen, so the only place a run's rank
@@ -17,6 +17,77 @@ rowhammer (0.35.0) unstable; urgency=medium
     merged table would mix two orderings. The picker stays up until
     "Zurueck" or ESC, so comparing both lists needs no walk back through
     the main menu, and each screen's title names its mode.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 23:30:00 +0200
+
+rowhammer (0.37.0) unstable; urgency=medium
+
+  * Add RPM packaging: rowhammer.spec in the repository root calls the same
+    "make install DESTDIR=... PREFIX=/usr" that debian/rules calls, so the
+    RPM installs the identical layout (/usr/share/rowhammer plus the
+    /usr/games/rowhammer launcher symlink) and a layout change stays a
+    Makefile-only edit. The package is noarch and requires bash >= 4.0,
+    with ncurses recommended for the optional tput support.
+  * Add build-rpm.sh as the counterpart to build-deb.sh: it builds the
+    source tarball from the working tree, runs rpmbuild in a private
+    _topdir below the output directory so the caller's ~/rpmbuild stays
+    untouched, and collects the packages in dist/. It offers
+    --output-dir, --release, --srpm, --keep-build, --verbose and --silent,
+    each with a matching ROWHAMMER_RPM_* environment variable, and refuses
+    to build when the spec's Version and ROWHAMMER_VERSION in rowhammer.sh
+    disagree.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 22:30:00 +0200
+
+rowhammer (0.36.1) unstable; urgency=medium
+
+  * Word the reset confirmation as the user asked for it: "Bist du
+    sicher, dass du <target> zuruecksetzen moechtest? [N/y]", and report
+    "Reset erfolgreich" once the files have been moved aside, with the
+    counts on the line below.
+  * Put the rest of the reset dialogue into German as well (the file
+    listing, the backup note, the cancel message and the per-file move
+    lines), so the exchange is in one language. ASCII as everywhere
+    else, like the German menus; --help and the error messages on STDERR
+    stay English per the script conventions.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 21:45:00 +0200
+
+rowhammer (0.36.0) unstable; urgency=medium
+
+  * Make --reset non-destructive (user decision): instead of deleting a
+    file it is moved to <file>-YYYYMMDDhhmmss.bak next to it, so a reset
+    can be undone with a single mv. One timestamp is used for the whole
+    run, so the backups of a "--reset all" belong together visibly.
+  * Wait for the next second when a backup of the current second already
+    exists (the same reset ran twice in a row): sleep 1, take a fresh
+    timestamp and retry rather than overwrite the backup just written.
+    After RESET_STAMP_ATTEMPTS (3) tries the reset gives up with a
+    message instead of looping on a stuck clock.
+  * Spell the reset question "[N/y]" so the declining default is visible
+    in the prompt itself.
+  * Add --force (ROWHAMMER_FORCE): answer confirmation questions with
+    "yes" instead of asking. Combines with any other option and is
+    without effect where nothing is asked, so the game starts normally
+    with it; today it covers the --reset question.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 21:30:00 +0200
+
+rowhammer (0.35.0) unstable; urgency=medium
+
+  * Add --reset config|stats|highscore|save|all (ROWHAMMER_RESET): delete
+    persistent data in the data directory and exit instead of starting
+    the game. "config" removes rowhammer.conf, "stats" the statistics,
+    "highscore" both highscore lists (highscore and highscore-ultra),
+    "save" the savegame with the wonder progress and "all" every one of
+    them.
+  * Ask before deleting on a terminal: the affected paths are listed
+    first and the question defaults to no, like the in-game confirmation
+    does. Without a tty (scripting, CI) the reset runs right away, since
+    a waiting prompt would hang the caller. Files that are already gone
+    are reported but are not an error.
+  * Move the tty check below the library modules so a reset also works
+    without a terminal; the game itself still requires one.
 
  -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 12:00:00 +0200
 

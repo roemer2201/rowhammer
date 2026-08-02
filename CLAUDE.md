@@ -426,9 +426,11 @@ rowhammer/
     mp.sh              # (Phase 5) Client-Seite: Lobby, Peer-Zustaende, Anbindung
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
-  Makefile             # install/uninstall-Ziele (genutzt von deb, spaeter rpm)
+  Makefile             # install/uninstall-Ziele (genutzt von deb und rpm)
   build-deb.sh         # Baut das Debian-Paket, Artefakte nach dist/
+  build-rpm.sh         # Baut das RPM-Paket, Artefakte nach dist/
   debian/              # Debian-Paketierung (debhelper, natives Paket)
+  rowhammer.spec       # RPM-Paketierung (nutzt dasselbe make install)
   CLAUDE.md
   README.md
 ```
@@ -446,7 +448,7 @@ solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue). Das
 Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
 ("Marathon" oder "Ultra", siehe 3.6; der endlose Modus hiess bis
-0.34.1 "Normales Spiel"), und seit 0.35.0 waehlt der Menuepunkt
+0.34.1 "Normales Spiel"), und seit 0.38.0 waehlt der Menuepunkt
 "Highscores" ebenso den Modus der anzuzeigenden Bestenliste
 (`menu_highscores`, siehe 4.5); die
 Menue-Beschriftung
@@ -470,6 +472,10 @@ wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
 `--color-theme guideline|classic|mono|colorblind`
 (`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
 Einstellungsmenue waehlbar und in der Config gespeichert),
+`--reset config|stats|highscore|save|all` (`ROWHAMMER_RESET`, seit
+0.35.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
+beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
+Resets; frei mit anderen Optionen kombinierbar),
 `--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
@@ -680,7 +686,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   bei der Validierung heraus - die Kulanz der Normal-Liste
   (`HS_FIELD_COUNTS`) gibt es hier nicht, weil das Format neu ist und nie
   in einer kuerzeren Fassung existiert hat.
-  **Anzeige (seit 0.35.0, Nutzerwunsch):** `highscore_ultra_screen`
+  **Anzeige (seit 0.38.0, Nutzerwunsch):** `highscore_ultra_screen`
   zeigt die Liste so, wie `highscore_screen` die Marathon-Liste zeigt -
   seitenweise ueber `menu_pages`, zwei Zeilen je Eintrag, gleiche
   Spaltenbreiten, gleiche Faerbung (deshalb teilt sie sich auch
@@ -695,7 +701,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Information. Der erreichte Rang steht wie bisher zusaetzlich im
   Rundenende-Kasten.
   **Modus-Auswahl:** weil es damit zwei Listen mit zwei Rangordnungen
-  gibt, fragt der Hauptmenuepunkt "Highscores" seit 0.35.0 zuerst nach
+  gibt, fragt der Hauptmenuepunkt "Highscores" seit 0.38.0 zuerst nach
   dem Modus (`menu_highscores` in `lib/menu.sh`: Marathon / Ultra /
   Zurueck) und zeigt danach die gewaehlte Liste; die Auswahl bleibt
   stehen, bis "Zurueck" oder `ESC` kommt, sodass ein Vergleich beider
@@ -839,11 +845,131 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   `debian/rules` ruft es mit `PREFIX=/usr` auf. Bequemer Build ueber
   `./build-deb.sh` (Artefakte in `dist/`, per `.gitignore`
   ausgeschlossen); Build-Abhaengigkeiten: `dpkg-dev`, `debhelper`.
-- **RPM (geplant):** Spec-Datei soll dasselbe `make install`
-  wiederverwenden; gleiche Pfade (`/usr/share/rowhammer`, `/usr/games`).
+- **RPM (umgesetzt, Version 0.37.0):** Spec-Datei `rowhammer.spec` im
+  Wurzelverzeichnis (dort erwartet sie das RPM-Oekosystem, anders als das
+  `debian/`-Verzeichnis). Sie enthaelt bewusst **keine eigene
+  Installationslogik**, sondern ruft im `%install`-Abschnitt dasselbe
+  `make install DESTDIR=... PREFIX=/usr` auf wie `debian/rules`; beide
+  Pakete liefern damit identische Pfade (`/usr/share/rowhammer`, Starter
+  `/usr/games/rowhammer`), und ein Layout-Wechsel ist nur im `Makefile`
+  nachzuziehen. Das `%make_install`-Makro wird absichtlich nicht genutzt,
+  weil es nicht auf jedem Build-Host definiert ist. Paket-Eigenschaften:
+  `BuildArch: noarch`, `Requires: bash >= 4.0`, `Recommends: ncurses`
+  (`tput` ist optional, siehe 4.1). `/usr/games` ist als Verzeichnis
+  mitverpackt, weil es auf RPM-Distributionen nicht ueberall vom
+  `filesystem`-Paket kommt (Mitbesitz ist bei RPM zulaessig); die
+  Ablage von Spielen in `/usr/games` statt `%{_bindir}` weicht von der
+  Fedora-Gepflogenheit ab und ist die bewusste Entscheidung fuer
+  Gleichlauf mit dem Debian-Paket.
+- Build ueber `./build-rpm.sh` (Script-Konventionen wie `build-deb.sh`):
+  packt das Quell-Tarball aus dem Arbeitsbaum (nicht aus dem letzten
+  Commit, analog zu `dpkg-buildpackage`), laesst `rpmbuild` in einem
+  privaten `_topdir` unterhalb des Ausgabeverzeichnisses laufen - das
+  `~/rpmbuild` des Aufrufers bleibt unberuehrt - und sammelt die Pakete
+  in `dist/`. Optionen: `--output-dir`, `--release N` (erneuter Bau
+  derselben Version, im Spec als `%{rowhammer_release}` verankert),
+  `--srpm` (zusaetzlich das Quellpaket), `--keep-build`, `--verbose`,
+  `--silent`, je mit `ROWHAMMER_RPM_*`-Umgebungsvariable.
+  Build-Abhaengigkeiten: `rpm-build`, `make`, `tar` (GNU-`tar` wegen
+  `--transform`). Zwei bewusste Entscheidungen: (1) Das Skript prueft
+  die `Version` des Specs gegen `ROWHAMMER_VERSION` in `rowhammer.sh`
+  und bricht bei Abweichung ab, statt ein falsch beschriftetes Paket zu
+  bauen (das Spec ist die Versionsquelle des RPMs, so wie
+  `debian/changelog` die des Debian-Pakets). (2) `rpmbuild` laeuft mit
+  `--nodeps`, weil die `BuildRequires` gegen die RPM-Datenbank des Hosts
+  aufgeloest werden - auf einem Debian-Entwicklungsrechner ist die leer,
+  obwohl `make` und `tar` da sind. Das Skript prueft dieselben Werkzeuge
+  vorher selbst per `command -v`; der `BuildRequires`-Eintrag bleibt im
+  Spec, wo ihn `mock`/COPR und ein direkter `rpmbuild`-Lauf auf einer
+  RPM-Distribution regulaer durchsetzen.
 - Hinweis: Das Repository hat noch keine Lizenzdatei;
-  `debian/copyright` ist entsprechend als "UNLICENSED" markiert und muss
+  `debian/copyright` ist entsprechend als "UNLICENSED" markiert
+  (im Spec `License: LicenseRef-UNLICENSED`) und beides muss
   nachgezogen werden, sobald eine Lizenz festgelegt ist.
+
+### 4.8 Reset persistenter Daten (seit 0.35.0)
+
+`--reset TARGET` (`ROWHAMMER_RESET`) setzt gezielt persistente Dateien
+im Datenverzeichnis (siehe 4.5) zurueck und beendet das Programm, statt
+ins Menue zu starten. Ziele:
+
+| TARGET | betroffene Dateien |
+| --- | --- |
+| `config` | `rowhammer.conf` |
+| `stats` | `stats` |
+| `highscore` | `highscore` **und** `highscore-ultra` |
+| `save` | `save` (Weltwunder-Fortschritt) |
+| `all` | alle fuenf Dateien |
+
+**Reset heisst verschieben, nicht loeschen (seit 0.36.0,
+Nutzerentscheidung).** Jede betroffene Datei wandert nach
+`<datei>-YYYYMMDDhhmmss.bak` im selben Verzeichnis; ein versehentliches
+`--reset all` kostet damit keine Daten mehr, das Zurueckholen ist ein
+`mv`. Der Zeitstempel gilt fuer den ganzen Lauf, sodass die Backups
+eines `all` sichtbar zusammengehoeren. Existiert eine Backup-Datei
+dieser Sekunde bereits, lief derselbe Reset gerade eben schon einmal:
+`reset_run` wartet dann mit `sleep 1` auf die naechste Sekunde und
+nimmt einen frischen Zeitstempel, statt das eben geschriebene Backup zu
+ueberschreiben (`RESET_STAMP_ATTEMPTS`, 3 Versuche; danach Abbruch mit
+Meldung - eine stehende oder zurueckspringende Uhr soll keine
+Endlosschleife ergeben). Verschoben wird mit einfachem `mv` ohne `-f`,
+weil ein vorhandenes Backup nie ueberschrieben werden darf. Die
+`.bak`-Dateien bleiben liegen; das Spiel liest sie nie (kein Dateiname
+passt auf die Konstanten aus 4.5), aufgeraeumt werden sie von Hand.
+
+Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
+
+- **`all` loescht auch das Savegame.** "Alles" heisst alles; wer nur den
+  Weltwunder-Fortschritt zuruecksetzen will, hat dafuer das eigene Ziel
+  `save` (der in der Roadmap angedachte Wert), das die uebrigen Dateien
+  unangetastet laesst.
+- **`highscore` trifft beide Bestenlisten.** Endlos- und Ultra-Liste
+  (seit 0.34.0, siehe 4.5) sind dieselbe Art Daten; eine davon stehen zu
+  lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
+  einen Reset zu fein.
+
+Ablauf und Einordnung:
+
+- **Kein Config-Wert.** Praezedenz Standard < Env < CLI wie beim
+  Datenverzeichnis und den Debug-Schaltern. Die Config-Datei ist eines
+  der Reset-Ziele - wuerde der Reset von dort gelesen, koennte sich eine
+  Datei bei jedem Start selbst loeschen lassen.
+- **Zeitpunkt:** direkt nach dem Sourcen der Module (die Dateinamen
+  kommen aus den Modulen, die sie besitzen: `CONFIG_NAME`,
+  `STATS_FILE_NAME`, `HS_FILE_NAME`/`HSU_FILE_NAME`, `SAVE_FILE_NAME`)
+  und **vor** der TTY-Pruefung. Die TTY-Pruefung ist dafuer aus dem
+  Prerequisites-Block nach unten gewandert: ein Reset loescht nur
+  Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
+  ohne Terminal laufen. Das Terminal wird nie angefasst (kein
+  Alternate-Screen, kein Rohmodus).
+- **Sicherheitsabfrage:** an einem Terminal listet `reset_run` erst die
+  betroffenen Pfade und fragt dann `Bist du sicher, dass du <ziel>
+  zuruecksetzen moechtest? [N/y]`; wie bei `menu_confirm` ist "nein" die
+  Vorgabe - deshalb steht das `N` vorn und gross, und leere Antwort, EOF
+  oder alles ausser `y`/`yes` bricht ab. Nach dem Verschieben meldet der
+  Reset `Reset erfolgreich`, darunter die Bilanz (gesicherte und nicht
+  vorhandene Dateien). **Sprache (seit 0.36.1, Nutzerentscheidung):**
+  der Reset-Dialog ist als Nutzerdialog wie die Menues **deutsch in
+  ASCII** (also "zuruecksetzen"/"moechtest" in der
+  Umlaut-Umschreibung) - eine bewusste
+  Ausnahme von der Konventionsregel "Ausgaben in Englisch", die fuer
+  `--help` und die Fehlermeldungen nach STDERR unveraendert gilt. Das
+  ist derselbe Schnitt wie im Rest des Spiels (Menues deutsch, HUD und
+  `--help` englisch, siehe offener Punkt "UI-Sprache" in Abschnitt 8).
+  Ohne TTY entfaellt die Abfrage, weil ein wartendes `read` den Aufrufer
+  haengen liesse. Die Abfrage ist bewusst ein einfaches `read` statt
+  `menu_confirm`: letzteres braucht Alternate-Screen, Rohmodus und
+  `render_menu_frame`, also genau das, was der Reset nicht aufbaut.
+- **`--force` (`ROWHAMMER_FORCE`, seit 0.36.0)** beantwortet die Abfrage
+  vorab mit "ja". Der Schalter ist bewusst allgemein gehalten und nicht
+  `--reset-force`: er laesst sich mit jeder anderen Option kombinieren
+  und ist ueberall wirkungslos, wo nichts gefragt wird (das Spiel
+  startet mit `--force` also ganz normal). Wie das Reset-Ziel steht er
+  nicht in der Config - ein gespeichertes "frag mich nie wieder" wuerde
+  das Sicherheitsnetz aushebeln -, Praezedenz also Standard < Env < CLI.
+- Nicht vorhandene Dateien sind kein Fehler (Ziel bereits erreicht) und
+  werden nur gemeldet; eine vorhandene Datei, die sich nicht verschieben
+  laesst, bricht mit Fehlermeldung ab.
 
 ## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
 
@@ -1607,13 +1733,39 @@ Feature-Branch oder Pull Request.
 - [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
       atomar geschrieben, Praezedenz Standard < Config < Env < CLI
 
-### Zwischenschritt - Paketierung (deb umgesetzt, Version 0.17.0)
+### Zwischenschritt - Paketierung (deb umgesetzt 0.17.0, rpm 0.37.0)
 
 - [x] `Makefile` mit install/uninstall (DESTDIR/PREFIX, deb/rpm-tauglich)
 - [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
       Launcher-Symlink `/usr/games/rowhammer`)
 - [x] Build-Skript `build-deb.sh` nach Script-Konventionen
-- [ ] RPM-Paketierung (Spec-Datei, nutzt `make install`)
+- [x] RPM-Paketierung (Version 0.37.0): Spec-Datei `rowhammer.spec` im
+      Wurzelverzeichnis, die im `%install`-Abschnitt dasselbe
+      `make install DESTDIR=... PREFIX=/usr` aufruft wie `debian/rules`,
+      sodass beide Pakete dieselben Pfade liefern und ein Layout-Wechsel
+      nur das `Makefile` betrifft. Dazu `build-rpm.sh` nach den
+      Script-Konventionen als Gegenstueck zu `build-deb.sh`: baut das
+      Quell-Tarball aus dem Arbeitsbaum, laesst `rpmbuild` in einem
+      privaten `_topdir` unter `dist/` laufen (das `~/rpmbuild` des
+      Aufrufers bleibt unberuehrt) und sammelt die Pakete in `dist/`;
+      Optionen `--output-dir`, `--release N`, `--srpm`, `--keep-build`,
+      `--verbose`, `--silent` je mit `ROWHAMMER_RPM_*`-Variable. Das
+      Skript bricht ab, wenn die `Version` im Spec und
+      `ROWHAMMER_VERSION` in `rowhammer.sh` auseinanderlaufen (siehe
+      4.7). Getestet: gebautes Paket ist `noarch`, installiert
+      `/usr/share/rowhammer/` plus Symlink `/usr/games/rowhammer`, und
+      das Spiel startet ueber diesen Starter; das mit `--srpm`
+      erzeugte Quellpaket laesst sich per `rpmbuild --rebuild`
+      eigenstaendig neu bauen.
+- [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
+      auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
+      naechsten Punkt (opkg-Paketierung) angehen
+- [ ] opkg-Paketierung implementieren (fuer OpenWrt/Embedded-Systeme,
+      analog zur Debian-Paketierung, nutzt ebenfalls `make install`),
+      vorausgesetzt die Shell-Kompatibilitaetspruefung faellt positiv aus
+- [ ] Release-Struktur auf GitHub aufbauen (Tags, Release Notes, Assets)
+- [ ] Paketierung GitHub-seitig automatisch bauen lassen (CI-Workflow),
+      sobald ein neues Release fertiggestellt ist
 - [ ] Lizenz festlegen und `debian/copyright` aktualisieren
 
 ### Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
@@ -1675,25 +1827,37 @@ Feature-Branch oder Pull Request.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
-- [ ] `--reset [config|stats|highscore|all]` einbauen: loescht gezielt
-      persistente Daten im Datenverzeichnis (`${DATA_DIR}`, siehe 4.5),
-      noch vor dem eigentlichen Programmstart. `config` entfernt
-      `rowhammer.conf`, `stats` die Datei `stats`, `highscore` die
-      Datei `highscore`, `all` alle drei zusammen. Wie jeder andere
-      Parameter zusaetzlich per Umgebungsvariable setzbar
-      (`ROWHAMMER_RESET`, Praezedenz wie ueblich Standard < Config <
-      Env < CLI - hier ist "Config" allerdings die Datei, die der
-      Reset selbst treffen kann, das ist beim Zusammenspiel zu
-      beachten). Nach dem Loeschen beendet sich das Programm mit einer
-      Bestaetigungsmeldung auf STDOUT statt ins Menue zu starten; im
-      interaktiven Betrieb vorher eine Sicherheitsabfrage (analog
-      `menu_confirm`), ohne TTY (Skripting, CI) direkt ausfuehren, da
-      ein wartendes `read` das Skript sonst haengen liesse. Nicht
-      vorhandene Dateien sind kein Fehler (Ziel bereits erreicht).
-      Offen: ob `all` zusaetzlich das Savegame (`save`, Weltwunder-
-      Fortschritt) mitloeschen soll oder bewusst nur die drei genannten
-      Dateien trifft - dafuer spraeche ein eigener Wert `save` oder
-      `wonders`, der die drei anderen unangetastet laesst.
+- [x] `--reset config|stats|highscore|save|all` eingebaut (Version
+      0.35.0, siehe 4.8): setzt gezielt persistente Daten im
+      Datenverzeichnis (`${DATA_DIR}`, siehe 4.5) zurueck und beendet
+      sich mit einer Bilanz auf STDOUT, statt ins Menue zu starten. Am
+      Terminal
+      werden die betroffenen Pfade vorher aufgelistet und bestaetigt
+      ("nein" ist wie bei `menu_confirm` die Vorgabe), ohne TTY laeuft
+      der Reset direkt durch, damit ein wartendes `read` kein Skript
+      haengen laesst; nicht vorhandene Dateien sind kein Fehler.
+      Nachgezogen in 0.36.0 (Nutzerentscheidung): der Reset **loescht
+      nicht mehr**, sondern verschiebt jede Datei nach
+      `<datei>-YYYYMMDDhhmmss.bak` (bei einem Backup derselben Sekunde
+      `sleep 1` und neuer Zeitstempel statt Ueberschreiben), und der
+      neue Schalter `--force`
+      (`ROWHAMMER_FORCE`) beantwortet sie automatisch mit "ja" - frei
+      mit anderen Optionen kombinierbar und ueberall wirkungslos, wo
+      nichts gefragt wird.
+      Zusaetzlich per `ROWHAMMER_RESET` setzbar, Praezedenz Standard <
+      Env < CLI: bewusst **ohne** die Config-Stufe, weil die
+      Config-Datei selbst ein Reset-Ziel ist (sie koennte sich sonst bei
+      jedem Start selbst loeschen lassen). Die beiden offen gelassenen
+      Fragen sind in 4.8 entschieden - `all` nimmt das Savegame mit
+      (das eigene Ziel `save` deckt den Fall "nur der
+      Weltwunder-Fortschritt" ab), `highscore` trifft beide
+      Bestenlisten. Umsetzung: `reset_run` in `rowhammer.sh`, direkt
+      nach dem Sourcen der Module (fuer deren Dateinamen-Konstanten) und
+      vor der dorthin verschobenen TTY-Pruefung. In 0.36.1
+      (Nutzerentscheidung) wurde der Dialog auf Deutsch umgestellt:
+      `Bist du sicher, dass du <ziel> zuruecksetzen moechtest? [N/y]`
+      und nach dem Verschieben `Reset erfolgreich` (ASCII wie die
+      Menues, siehe 4.8).
 - [ ] Demo-Aufzeichnung und Demo-Player: eigene Runden als Datei
       mitschneiden (vermutlich Eingabe-Mitschnitt plus Seed statt voller
       Board-Snapshots, analog dem Prinzip des Debug-Modus in 4.6, aber
@@ -2069,14 +2233,14 @@ Feature-Branch oder Pull Request.
         Ultra mit vertauschten Rollen (feste Zeit, offene Rows), also
         wieder eine eigene Liste (Rangordnung: meiste Rows) und ein
         eigener HUD-Zaehler (verbleibende Zeit).
-      - ~~**Anzeige der Ultra-Bestenliste**~~: erledigt in 0.35.0
+      - ~~**Anzeige der Ultra-Bestenliste**~~: erledigt in 0.38.0
         (Nutzerwunsch), siehe den eigenen Punkt weiter unten.
       - **Statistik je Modus**: gespielte Runden je Modus, bei Ultra
         zusaetzlich wie oft das Ziel erreicht wurde. Bewusst noch nicht
         eingebaut - Zaehler ohne Anzeige waeren tote Daten, und die
         Statistik-Bildschirme sind schon zweiseitig (siehe 4.5).
       - **Anleitung**: eine sechste Seite "Spielmodi" (siehe 3.5).
-- [x] **Ultra-Bestenliste anzeigen** (Version 0.35.0, Nutzerwunsch):
+- [x] **Ultra-Bestenliste anzeigen** (Version 0.38.0, Nutzerwunsch):
       0.34.0 hatte die Liste bewusst nur gespeichert - der Bildschirm
       fehlte, und der erreichte Rang stand allein im Rundenende-Kasten.
       `highscore_ultra_screen` (`lib/highscore.sh`) zeigt sie jetzt im
@@ -2297,7 +2461,7 @@ Multi-Server zuletzt.
   Distanz sind, entscheidet Playtesting (`ULTRA_TARGET_ROWS`) - mit den
   Quadrat-Boni ist die Strecke deutlich kuerzer als 150 physische
   Reihen, das ist so gewollt. Die Anzeige der Ultra-Liste ist mit
-  0.35.0 nachgezogen (Modus-Auswahl unter "Highscores", siehe 4.5);
+  0.38.0 nachgezogen (Modus-Auswahl unter "Highscores", siehe 4.5);
   Sprint und die Statistik je Modus stehen noch aus (siehe Roadmap
   Phase 4).
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in

@@ -142,9 +142,40 @@ Optionen:
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen (auch Standard-`NO_COLOR`, s. u.) |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
+| `--reset ZIEL`   | `ROWHAMMER_RESET`        | Persistente Daten zuruecksetzen und beenden (s. unten) |
+| `--force`        | `ROWHAMMER_FORCE`        | Sicherheitsabfragen automatisch mit "ja" beantworten |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
 | `--debug-dir DIR`| `ROWHAMMER_DEBUG_DIR`    | Zielverzeichnis fuer die Debug-Logs      |
 | `-h/--help`      | -                        | Hilfe mit allen Optionen und Tasten      |
+
+`--reset ZIEL` setzt gezielt gespeicherte Daten im Datenverzeichnis
+zurueck und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
+`config` (die Konfigurationsdatei `rowhammer.conf`), `stats` (die
+Statistik), `highscore` (beide Bestenlisten - `highscore` und
+`highscore-ultra`), `save` (der Weltwunder-Fortschritt) oder `all`
+(alles zusammen).
+
+**Geloescht wird dabei nichts:** jede betroffene Datei wird nach
+`<datei>-YYYYMMDDhhmmss.bak` im selben Verzeichnis verschoben, ein
+Reset laesst sich also mit einem `mv` rueckgaengig machen. Wird
+derselbe Reset zweimal in derselben Sekunde ausgefuehrt, wartet das
+Spiel eine Sekunde und nimmt einen neuen Zeitstempel, statt das gerade
+geschriebene Backup zu ueberschreiben.
+
+Am Terminal werden die betroffenen Dateien erst aufgelistet und dann
+abgefragt (`Bist du sicher, dass du <ziel> zuruecksetzen moechtest?
+[N/y]`); die Vorgabe ist "nein", verschoben wird nur nach einem
+ausdruecklichen `y` - danach meldet das Spiel `Reset erfolgreich`.
+`--force`
+beantwortet die Abfrage automatisch mit "ja" und laesst sich mit allen
+anderen Optionen kombinieren; ohne Terminal (Skript, CI) laeuft der
+Reset ohnehin ohne Rueckfrage durch. Bereits fehlende Dateien sind kein
+Fehler.
+
+```
+rowhammer.sh --reset highscore
+rowhammer.sh --reset all --force
+```
 
 Der Debug-Modus zeichnet die komplette Session in drei korrelierte
 Log-Dateien auf (Standardziel:
@@ -244,6 +275,11 @@ Umgesetzt:
   `~/.config/rowhammer/save`, Anzeige nach jeder Runde und im Menue
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
   `~/.config/rowhammer/rowhammer.conf`
+- **Gezielter Reset:** `--reset config|stats|highscore|save|all` setzt
+  die gespeicherten Daten einzeln oder komplett zurueck - die alten
+  Dateien wandern in ein `.bak` mit Zeitstempel statt geloescht zu
+  werden, am Terminal mit Sicherheitsabfrage (`--force` beantwortet sie
+  mit ja), im Skript ohne (s. o.)
 
 Geplant:
 
@@ -264,7 +300,33 @@ Spiel nach `/usr/share/rowhammer/` und legt den Starter
 `/usr/games/rowhammer` an. Alternativ geht auch der klassische Weg mit
 `dpkg-buildpackage -us -uc -b` oder eine Installation ohne Paket per
 `sudo make install` (Standard-Praefix `/usr/local`, entfernen mit
-`sudo make uninstall`). Eine RPM-Paketierung ist geplant.
+`sudo make uninstall`).
+
+## Installation als RPM-Paket
+
+Fuer RPM-Distributionen (Fedora, RHEL, openSUSE) liegt die Spec-Datei
+`rowhammer.spec` bei. Bauen und installieren:
+
+```
+./build-rpm.sh
+sudo dnf install ./dist/rowhammer-*.noarch.rpm
+```
+
+Benoetigt werden `rpm-build`, `make` und `tar`. `build-rpm.sh` packt das
+Quell-Tarball, laesst `rpmbuild` in einem eigenen Baum unterhalb von
+`dist/` laufen (das `~/rpmbuild` des Aufrufers bleibt unangetastet) und
+legt die fertigen Pakete in `dist/` ab. Nuetzliche Optionen:
+`--srpm` baut zusaetzlich das Quellpaket, `--release N` setzt die
+Release-Nummer fuer einen erneuten Bau derselben Version,
+`--keep-build` behaelt den Build-Baum zum Nachsehen; `--help` zeigt alle
+Optionen samt zugehoeriger `ROWHAMMER_RPM_*`-Umgebungsvariablen.
+
+Das RPM installiert dieselben Pfade wie das Debian-Paket
+(`/usr/share/rowhammer/` plus Starter `/usr/games/rowhammer`), weil beide
+Pakete denselben `make install`-Aufruf nutzen. Die `Version` in
+`rowhammer.spec` muss zu `ROWHAMMER_VERSION` in `rowhammer.sh` passen -
+`build-rpm.sh` bricht bei Abweichung mit einer Meldung ab, statt ein
+falsch beschriftetes Paket zu bauen.
 
 ## Voraussetzungen
 

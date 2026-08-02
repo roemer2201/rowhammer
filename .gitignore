@@ -1,6 +1,7 @@
 .claude/
-# Debian build artifacts (dpkg-buildpackage / debhelper litter and the
-# output directory used by build-deb.sh).
+# Package build artifacts: the output directory shared by build-deb.sh and
+# build-rpm.sh (the latter also keeps its private rpmbuild tree in there)
+# plus the dpkg-buildpackage / debhelper litter.
 dist/
 debian/rowhammer/
 debian/.debhelper/
