@@ -10,7 +10,7 @@ Terminal laeuft. Vorbild ist **"The New Tetris"** fuer das Nintendo 64:
 
 - Ueber alle Runden hinweg wird an einem **Weltwunder** gebaut. Der Baufortschritt
   richtet sich nach der **Gesamtzahl der abgebauten Reihen**.
-- Das **Quadrat-System** des Originals ist enthalten: Aus Tetrominos gebildete
+- Das **Quadrat-System** des Originals ist enthalten: Aus Bausteinen gebildete
   4x4-Quadrate werden zu **Gold-** (sortenrein) bzw. **Silber-Bloecken**
   (gemischt) und liefern beim Abbau Bonus-Reihen.
 - Eine **Multiplayer-Funktion** ist geplant, wird aber erst in einer spaeteren
@@ -26,7 +26,7 @@ Die fuer uns relevanten Merkmale des Originals:
 - **Wonders-Modus:** Jede abgebaute Reihe zahlt auf einen persistenten
   Gesamtzaehler ein. Mit steigendem Zaehler werden nacheinander Weltwunder
   Stueck fuer Stueck aufgebaut und schliesslich freigeschaltet.
-- **Quadrate (Squares):** Wer aus **genau vier vollstaendigen Tetrominos** ein
+- **Quadrate (Squares):** Wer aus **genau vier vollstaendigen Bausteinen** ein
   4x4-Quadrat legt, erhaelt einen Bonusblock:
   - **Gold-Quadrat (Mono-Square):** vier Teile der **gleichen** Sorte.
   - **Silber-Quadrat (Multi-Square):** vier Teile **gemischter** Sorten.
@@ -43,7 +43,7 @@ Die fuer uns relevanten Merkmale des Originals:
 
 - Spielfeld: **10 Spalten x 20 Zeilen** (klassisch), plus unsichtbare
   Spawn-Zeilen oberhalb.
-- Die 7 Standard-Tetrominos (I, O, T, S, Z, J, L) mit **7-Bag-Randomizer**
+- Die 7 Standard-Bausteine (I, O, T, S, Z, J, L) mit **7-Bag-Randomizer**
   (jede Sorte genau einmal pro 7er-Beutel, dann neu mischen).
 - Steuerung (Standardbelegung; ueber das Einstellungsmenue aenderbar und
   in der Nutzer-Konfigurationsdatei gespeichert, siehe 4.5):
@@ -116,10 +116,10 @@ Die fuer uns relevanten Merkmale des Originals:
 
 ### 3.2 Quadrat-System (Gold/Silber)
 
-- Jeder gelegte Stein behaelt eine **Identitaet** (welches Tetromino, welche
+- Jeder gelegte Stein behaelt eine **Identitaet** (welcher Baustein, welche
   Instanz), solange er unversehrt ist.
 - Nach jedem Lock pruefen: Existiert ein 4x4-Bereich, der aus **genau vier
-  vollstaendigen, unversehrten** Tetrominos besteht und exakt gefuellt ist?
+  vollstaendigen, unversehrten** Bausteinen besteht und exakt gefuellt ist?
   - Ja, alle vier gleiche Sorte -> Zellen werden zum **Gold-Quadrat**.
   - Ja, gemischte Sorten -> **Silber-Quadrat**.
 - Quadrate werden farblich hervorgehoben (Gold/Gelb bzw. Silber/Weiss) und
@@ -251,6 +251,9 @@ Die fuer uns relevanten Merkmale des Originals:
     freie Zeilen (Zeile 14-21; Zeile 13 hat der Pieces-Zaehler aus
     0.27.0 belegt). Ein weiterer Zaehler muss also nichts
     mehr verdraengen, solange sein Label in sechs Zeichen passt.
+    Zwei davon (Zeile 15 und 16) nutzt seit 0.34.0 der Ultra-Modus fuer
+    "Goal" und "Left" - aber nur, solange eine Ultra-Runde laeuft; im
+    normalen Spiel bleiben alle acht Zeilen frei (siehe 3.6).
 - Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
   aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
   Pausenmenue) sowie der Game-Over-Bildschirm zaehlen nicht; die Zeit
@@ -264,6 +267,99 @@ Die fuer uns relevanten Merkmale des Originals:
 - Reihenabbau: die betroffenen Reihen blinken kurz auf, bevor sie
   verschwinden (siehe 3.1).
 - Nach Rundenende: Bildschirm mit dem aktuellen Wunder in seiner neuen Baustufe.
+
+### 3.5 Anleitung (seit 0.32.0)
+
+Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
+"Beenden" und erklaert das Spiel auf fuenf Info-Bildschirmen
+(`menu_help` in `lib/menu.sh`, ueber `render_menu_frame` zentriert wie
+der Spielblock). **Seit Version 0.33.0 (Nutzerwunsch)** blaettert man mit
+den **Pfeiltasten links/rechts** durch die Seiten (umlaufend: von der
+letzten geht es mit Pfeil rechts zurueck zur ersten und umgekehrt);
+Enter, Leertaste, `x` und `ESC` schliessen die Anleitung. Zuvor fuehrte
+jede beliebige Taste zur naechsten Seite, ohne Weg zurueck - die fuenf
+Bildschirme liefen als feste Folge einzelner `menu_message`-Aufrufe
+nacheinander durch. Damit auch rueckwaerts auf jede Seite gesprungen
+werden kann, baut `menu_help_body` (ein `case`-Switch je Seite, 0-basiert)
+den Inhalt der angeforderten Seite bei Bedarf neu, statt ihn wie vorher
+in fester Reihenfolge einmal durchzureichen:
+
+1. Spielprinzip: Bausteine, volle Reihen als "Rows", 7-Bag,
+   Level/Tempo, Rundenende.
+2. Steuerung: alle Aktionen mit ihren aktuellen Tasten, dazu die
+   Menue-Bedienung und `r` im Game-Over-Bild.
+3. Vorschau ("Next") und Hold (ein Tausch je Zug).
+4. Gold-/Silber-Quadrate und die Reihenwertung (Werte aus
+   `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`, siehe 3.2).
+5. Weltwunderbau mit der Kostentabelle aus `lib/wonders.sh`.
+
+Zwei Teile werden bewusst aus dem laufenden Zustand gelesen statt
+ausgeschrieben, damit die Anleitung nicht luegen kann: die
+Tastenbelegung (`menu_help_keys` setzt die konfigurierbare Taste vor die
+fest verdrahteten Sekundaertasten, laesst `NONE` weg und vermeidet
+Dubletten wie `KEY_HARD=SPACE` neben der Leertaste) und die Wunder-Namen
+samt Kosten. Jeder Bildschirm bleibt in den 46 Zeichen Breite und den
+`MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst.
+
+Noch offen: die Anleitung kennt die Spielmodi aus 3.6 noch nicht (die
+fuenf Seiten stammen aus der Zeit, als es nur die endlose Runde gab).
+Eine sechste Seite "Spielmodi" gehoert nachgezogen, sobald auch Sprint
+steht - dann lassen sich beide Modi auf einer Seite erklaeren, statt die
+Seite zweimal umzubauen.
+
+### 3.6 Spielmodi (Ultra seit 0.34.0)
+
+Das Einzelspieler-Menue waehlt den Modus der Runde; der gewaehlte Name
+geht als Argument an `game_run` und liegt waehrend der Runde in
+`GAME_MODE` (Rundenzustand in `rowhammer.sh`, bleibt ueber
+Pausieren/Fortsetzen erhalten - eine ins Hauptmenue gelegte Runde kommt
+im Modus zurueck, in dem sie gestartet wurde).
+
+- **Marathon** (`marathon`; bis 0.34.1 "Normales Spiel"/`normal` -
+  Nutzerentscheidung, an den in anderen Tetris-Spielen ueblichen Namen
+  fuer den endlosen Modus angeglichen): die endlose Runde wie bisher,
+  Ende durch Game Over.
+- **Ultra** (`ultra`, Nutzerwunsch): Wettlauf gegen die Uhr -
+  `ULTRA_TARGET_ROWS` (150) **Rows** so schnell wie moeglich abbauen.
+  Die Runde endet in dem Moment, in dem die Wertung das Ziel erreicht
+  oder ueberschreitet; das Ergebnis ist die Spielzeit.
+- **Sprint** (geplant, siehe Roadmap): in 3 Minuten moeglichst viele
+  Reihen. Noch nicht umgesetzt.
+
+Entscheidungen zu Ultra (die drei in der Roadmap offen gelassenen
+Punkte, im Sinne der dortigen Empfehlung entschieden):
+
+- **Gemessen werden Rows, nicht Lines.** "Abgebaute Reihen" bezeichnet
+  im Weltwunder- und Statistik-Kontext laengst die gewichtete Wertung
+  (siehe 3.2, 3.3); ausserdem macht das die Gold-/Silber-Quadrate - die
+  Kernmechanik des Spiels - zum schnellen Weg ins Ziel statt zu totem
+  Gewicht. Ein Rowhammer durch zwei Gold-Quadrate (85 Rows) ist damit
+  mehr als die halbe Strecke.
+- **Nur erfolgreiche Laeufe kommen in die Ultra-Bestenliste.** Ein
+  Versuch, der vorher im Game Over endet, hat keine vergleichbare Zeit;
+  ihn nach Rows einzusortieren hiesse, zwei Ordnungen in eine Liste zu
+  mischen. Reihen und Zaehler eines gescheiterten Versuchs zaehlen aber
+  wie bei jeder abgebrochenen Runde in Weltwunder-Fortschritt und
+  Statistik (siehe 3.3).
+- **HUD:** zwei zusaetzliche Zaehler in der linken Spalte, nur im
+  Ultra-Modus sichtbar (`render_pane_left`, Zeile 15/16): "Goal" (das
+  Ziel) und "Left" (noch fehlende Rows, bei Ueberschreitung auf 0
+  gekappt). Sie belegen zwei der acht freien Zeilen aus 3.4; im
+  Marathon-Modus bleiben alle acht frei.
+- **Rundenende-Kasten** (`render_status_box`): derselbe Kasten ueber dem
+  Spielfeld traegt jetzt drei Ausgaenge, alle mit denselben acht
+  Innenzeilen, damit die Rahmen stehen bleiben - "ULTRA CLEAR" mit Zeit
+  (`fmt_duration_ms`, MM:SS.mmm) und Ultra-Rang, ein gescheiterter
+  Ultra-Versuch mit dem erreichten Stand ("Rows 87/150", bewusst ohne
+  Rang) und das klassische Game Over der endlosen Runde mit dem
+  Highscore-Rang.
+- **Zeitmessung:** die Spielzeit der Runde (siehe 3.4) ist die Wertung,
+  deshalb wird sie im Zielmoment noch einmal nachgefuehrt
+  (`play_clock_tick`, dieselbe Funktion, die der Game-Loop je Tick
+  nutzt): ein Hard-Drop faellt zwischen zwei Ticks, und diese
+  Millisekunden gehoeren zum Lauf.
+- **`r` im Rundenende-Bild startet im selben Modus neu** (`game_reset`
+  ohne Argument behaelt `GAME_MODE`).
 
 ## 4. Technisches Konzept
 
@@ -313,7 +409,7 @@ rowhammer/
   rowhammer.sh         # Hauptskript: Argumente, Init, Game-Loop
   lib/
     board.sh           # Spielfeld-Zustand, Kollision, Reihenabbau
-    pieces.sh          # Tetromino-Definitionen und Rotationstabellen
+    pieces.sh          # Baustein-Definitionen und Rotationstabellen
     squares.sh         # Erkennung und Verwaltung von Gold-/Silber-Quadraten
     render.sh          # Rendering (Layout, Zeilen-Diff, ANSI)
     input.sh           # Nicht-blockierende Tastatureingabe
@@ -346,9 +442,13 @@ bislang nur spezifiziert sind (siehe Abschnitt 5)
 `stats.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
-Highscores / Weltwunder / Statistik / Einstellungen / Beenden;
+Highscores / Weltwunder / Statistik / Einstellungen / Anleitung /
+Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
-erster Stelle, ebenso im Einzelspieler-Untermenue); die
+erster Stelle, ebenso im Einzelspieler-Untermenue). Das
+Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
+("Marathon" oder "Ultra", siehe 3.6; der endlose Modus hiess bis
+0.34.1 "Normales Spiel"); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -370,6 +470,10 @@ wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
 `--color-theme guideline|classic|mono|colorblind`
 (`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
 Einstellungsmenue waehlbar und in der Config gespeichert),
+`--reset config|stats|highscore|save|all` (`ROWHAMMER_RESET`, seit
+0.35.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
+beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
+Resets; frei mit anderen Optionen kombinierbar),
 `--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
@@ -499,7 +603,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${HOME}/.config/rowhammer` (seit 0.13.0, vorher `${HOME}/rowhammer`;
   aenderbar per `--data-dir DIR` bzw.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
-  Highscore-Liste `highscore`, der Spielstand `save` und die
+  Highscore-Liste `highscore`, die Ultra-Bestenliste `highscore-ultra`
+  (seit 0.34.0, siehe 3.6), der Spielstand `save` und die
   Statistik `stats`.
 - Bewusste Abweichung von den Script-Konventionen (Abschnitt 11,
   organisationsbasierte Suche unter `/etc` und `${HOME}/.config`):
@@ -558,6 +663,29 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   die Rowhammer der Runde ("RH", seit 0.25.0), die abgelegten Teile
   ("PCS") und die daraus mit der Spielzeit berechnete Ablegerate
   ("PPM", Teile je Minute, `fmt_ppm` in `rowhammer.sh`).
+  **Ultra-Bestenliste (seit 0.34.0, siehe 3.6):** die Ergebnisse des
+  Ultra-Modus liegen in einer **eigenen** Datei `${DATA_DIR}/highscore-ultra`
+  mit eigener Ordnung - Zeilenformat
+  `time|rows|lines|level|name|date|gold|silver|rowhammers|pieces`,
+  aufsteigend nach `time` sortiert (schnellster Lauf zuerst, gleiche
+  Zeit rangiert hinter dem aelteren Eintrag), ebenfalls Top 10
+  (`HSU_*` in `lib/highscore.sh`). Zwei Gruende fuer die getrennte
+  Datei: ein Lauf auf Zeit und eine endlose Runde sind ueber Rows nicht
+  vergleichbar, und ein 150-Rows-Lauf soll die Top 10 der endlosen
+  Liste nicht verdraengen. Das fuehrende `time`-Feld ist die Spielzeit
+  in **Millisekunden** (nicht in ganzen Sekunden wie in der
+  Normal-Liste): es ist hier das Sortierkriterium, und zwei Versuche auf
+  dasselbe Ziel landen oft genug in derselben Sekunde, dass ganze
+  Sekunden die Rangfolge nach Eintreffen statt nach Tempo entscheiden
+  wuerden; angezeigt wird das spaeter ueber `fmt_duration_ms` als
+  MM:SS.mmm. Gespeichert werden nur Laeufe, die das Ziel erreicht haben
+  (Entscheidung in 3.6). Es gilt die uebliche Arbeitsregel "keine
+  Abwaertskompatibilitaet": genau zehn Felder, jede andere Zeile faellt
+  bei der Validierung heraus - die Kulanz der Normal-Liste
+  (`HS_FIELD_COUNTS`) gibt es hier nicht, weil das Format neu ist und nie
+  in einer kuerzeren Fassung existiert hat. Eine Anzeige gibt es noch
+  nicht (Nutzerentscheidung: erst die Speicherung); der erreichte Rang
+  steht bereits im Rundenende-Kasten.
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
@@ -693,7 +821,7 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   `debian/rules` ruft es mit `PREFIX=/usr` auf. Bequemer Build ueber
   `./build-deb.sh` (Artefakte in `dist/`, per `.gitignore`
   ausgeschlossen); Build-Abhaengigkeiten: `dpkg-dev`, `debhelper`.
-- **RPM (umgesetzt, Version 0.32.0):** Spec-Datei `rowhammer.spec` im
+- **RPM (umgesetzt, Version 0.37.0):** Spec-Datei `rowhammer.spec` im
   Wurzelverzeichnis (dort erwartet sie das RPM-Oekosystem, anders als das
   `debian/`-Verzeichnis). Sie enthaelt bewusst **keine eigene
   Installationslogik**, sondern ruft im `%install`-Abschnitt dasselbe
@@ -734,6 +862,90 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   `debian/copyright` ist entsprechend als "UNLICENSED" markiert
   (im Spec `License: LicenseRef-UNLICENSED`) und beides muss
   nachgezogen werden, sobald eine Lizenz festgelegt ist.
+
+### 4.8 Reset persistenter Daten (seit 0.35.0)
+
+`--reset TARGET` (`ROWHAMMER_RESET`) setzt gezielt persistente Dateien
+im Datenverzeichnis (siehe 4.5) zurueck und beendet das Programm, statt
+ins Menue zu starten. Ziele:
+
+| TARGET | betroffene Dateien |
+| --- | --- |
+| `config` | `rowhammer.conf` |
+| `stats` | `stats` |
+| `highscore` | `highscore` **und** `highscore-ultra` |
+| `save` | `save` (Weltwunder-Fortschritt) |
+| `all` | alle fuenf Dateien |
+
+**Reset heisst verschieben, nicht loeschen (seit 0.36.0,
+Nutzerentscheidung).** Jede betroffene Datei wandert nach
+`<datei>-YYYYMMDDhhmmss.bak` im selben Verzeichnis; ein versehentliches
+`--reset all` kostet damit keine Daten mehr, das Zurueckholen ist ein
+`mv`. Der Zeitstempel gilt fuer den ganzen Lauf, sodass die Backups
+eines `all` sichtbar zusammengehoeren. Existiert eine Backup-Datei
+dieser Sekunde bereits, lief derselbe Reset gerade eben schon einmal:
+`reset_run` wartet dann mit `sleep 1` auf die naechste Sekunde und
+nimmt einen frischen Zeitstempel, statt das eben geschriebene Backup zu
+ueberschreiben (`RESET_STAMP_ATTEMPTS`, 3 Versuche; danach Abbruch mit
+Meldung - eine stehende oder zurueckspringende Uhr soll keine
+Endlosschleife ergeben). Verschoben wird mit einfachem `mv` ohne `-f`,
+weil ein vorhandenes Backup nie ueberschrieben werden darf. Die
+`.bak`-Dateien bleiben liegen; das Spiel liest sie nie (kein Dateiname
+passt auf die Konstanten aus 4.5), aufgeraeumt werden sie von Hand.
+
+Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
+
+- **`all` loescht auch das Savegame.** "Alles" heisst alles; wer nur den
+  Weltwunder-Fortschritt zuruecksetzen will, hat dafuer das eigene Ziel
+  `save` (der in der Roadmap angedachte Wert), das die uebrigen Dateien
+  unangetastet laesst.
+- **`highscore` trifft beide Bestenlisten.** Endlos- und Ultra-Liste
+  (seit 0.34.0, siehe 4.5) sind dieselbe Art Daten; eine davon stehen zu
+  lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
+  einen Reset zu fein.
+
+Ablauf und Einordnung:
+
+- **Kein Config-Wert.** Praezedenz Standard < Env < CLI wie beim
+  Datenverzeichnis und den Debug-Schaltern. Die Config-Datei ist eines
+  der Reset-Ziele - wuerde der Reset von dort gelesen, koennte sich eine
+  Datei bei jedem Start selbst loeschen lassen.
+- **Zeitpunkt:** direkt nach dem Sourcen der Module (die Dateinamen
+  kommen aus den Modulen, die sie besitzen: `CONFIG_NAME`,
+  `STATS_FILE_NAME`, `HS_FILE_NAME`/`HSU_FILE_NAME`, `SAVE_FILE_NAME`)
+  und **vor** der TTY-Pruefung. Die TTY-Pruefung ist dafuer aus dem
+  Prerequisites-Block nach unten gewandert: ein Reset loescht nur
+  Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
+  ohne Terminal laufen. Das Terminal wird nie angefasst (kein
+  Alternate-Screen, kein Rohmodus).
+- **Sicherheitsabfrage:** an einem Terminal listet `reset_run` erst die
+  betroffenen Pfade und fragt dann `Bist du sicher, dass du <ziel>
+  zuruecksetzen moechtest? [N/y]`; wie bei `menu_confirm` ist "nein" die
+  Vorgabe - deshalb steht das `N` vorn und gross, und leere Antwort, EOF
+  oder alles ausser `y`/`yes` bricht ab. Nach dem Verschieben meldet der
+  Reset `Reset erfolgreich`, darunter die Bilanz (gesicherte und nicht
+  vorhandene Dateien). **Sprache (seit 0.36.1, Nutzerentscheidung):**
+  der Reset-Dialog ist als Nutzerdialog wie die Menues **deutsch in
+  ASCII** (also "zuruecksetzen"/"moechtest" in der
+  Umlaut-Umschreibung) - eine bewusste
+  Ausnahme von der Konventionsregel "Ausgaben in Englisch", die fuer
+  `--help` und die Fehlermeldungen nach STDERR unveraendert gilt. Das
+  ist derselbe Schnitt wie im Rest des Spiels (Menues deutsch, HUD und
+  `--help` englisch, siehe offener Punkt "UI-Sprache" in Abschnitt 8).
+  Ohne TTY entfaellt die Abfrage, weil ein wartendes `read` den Aufrufer
+  haengen liesse. Die Abfrage ist bewusst ein einfaches `read` statt
+  `menu_confirm`: letzteres braucht Alternate-Screen, Rohmodus und
+  `render_menu_frame`, also genau das, was der Reset nicht aufbaut.
+- **`--force` (`ROWHAMMER_FORCE`, seit 0.36.0)** beantwortet die Abfrage
+  vorab mit "ja". Der Schalter ist bewusst allgemein gehalten und nicht
+  `--reset-force`: er laesst sich mit jeder anderen Option kombinieren
+  und ist ueberall wirkungslos, wo nichts gefragt wird (das Spiel
+  startet mit `--force` also ganz normal). Wie das Reset-Ziel steht er
+  nicht in der Config - ein gespeichertes "frag mich nie wieder" wuerde
+  das Sicherheitsnetz aushebeln -, Praezedenz also Standard < Env < CLI.
+- Nicht vorhandene Dateien sind kein Fehler (Ziel bereits erreicht) und
+  werden nur gemeldet; eine vorhandene Datei, die sich nicht verschieben
+  laesst, bricht mit Fehlermeldung ab.
 
 ## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
 
@@ -902,7 +1114,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
 
 - **Feld-Snapshot (`BOARD`/`PEERBOARD`):** genau **200 Zeichen**, Zeile
   fuer Zeile von oben (y=HIDDEN_ROWS) nach unten, je Zelle ein Zeichen
-  aus `.IOTSZJLgsx`: `.` leer, Grossbuchstabe = Tetromino-Sorte,
+  aus `.IOTSZJLgsx`: `.` leer, Grossbuchstabe = Baustein-Sorte,
   `g` Gold-Quadrat, `s` Silber-Quadrat, `x` Garbage. Feste Laenge statt
   Lauflaengenkodierung, weil die Validierung dadurch trivial und
   lueckenlos ist (Laenge + Zeichensatz); 200 Byte bei max. 5 Hz und 6
@@ -1177,6 +1389,273 @@ Menuefuehrung: "Mehrspieler" -> "Spiel eroeffnen" / "Spiel beitreten"
 einer `INFO`-Abfrage) / "Zurueck". Danach eine Lobby mit Spielerliste,
 Bereitschaftsstatus und - fuer den Host - Zielwahl-Modus und Start.
 
+### 5.11 Deployment: dedizierter Server mit SSH-ForceCommand
+
+- **Zielbild (Nutzerentscheidung):** rowhammer laeuft nicht nur
+  gelegentlich auf einer Maschine mit, auf der ohnehin mehrere Leute
+  eingeloggt sind (das urspruengliche Szenario aus 5.2), sondern es gibt
+  einen **dedizierten Spiel-Server**. Spieler verbinden sich per SSH; ein
+  `ForceCommand` in `sshd_config` (bzw. `command="..."` vor dem Key in
+  `authorized_keys`, praeziser pro Nutzer) startet direkt `rowhammer.sh`
+  statt einer freien Shell. Die Transport- und Prozessarchitektur aus
+  5.2/5.3 (Unix-Socket, Hub/Bridge/Client) bleibt dabei unveraendert
+  gueltig - ForceCommand entscheidet nur, *wie* ein Client-Prozess
+  gestartet wird, nicht *wie* er mit dem Hub redet.
+- **Sicherheitsgewinn und -grenzen:** Eine per ForceCommand erzwungene
+  Sitzung ist kein Ersatz fuer die Regeln aus 5.5, aber eine zusaetzliche
+  Huerde: ein Spieler bekommt gar keine Shell, sondern landet direkt im
+  Spiel. Empfehlenswerte `sshd_config`/`authorized_keys`-Haerten (spaeter,
+  vor Schritt 1 dieser Phase zu pruefen und festzuschreiben):
+  `no-port-forwarding,no-X11-forwarding,no-agent-forwarding` (PTY bleibt
+  noetig, das Spiel braucht ein Terminal), eigener Systembenutzer ohne
+  Zugriff auf fremde Daten, restriktive Dateisystemrechte auf
+  `${DATA_DIR}`/`${MP_DIR}` (siehe 4.5, 5.2). Ein ausbrechender Spieler
+  darf ueber `rowhammer.sh` und seine Module (siehe 5.5) so wenig
+  erreichen wie ueber die Shell, die ihm fehlt - das ist keine neue Regel,
+  sondern die bestehende Regel aus 5.5 unter schaerferen Vorzeichen.
+- **Ablauf fuer den Spieler:** SSH-Verbindung -> ForceCommand startet
+  rowhammer -> (spaeter, siehe 5.12) Login/Identifikation -> Hauptmenue
+  mit Mehrspieler-Lobby ("Spiel eroeffnen" / "Spiel beitreten", wie in
+  5.10 beschrieben) -> Runde -> Rueckkehr ins Menue oder Verbindungsende.
+  Fuer den Einzelspieler-Betrieb (lokal installiert, siehe 4.7) aendert
+  sich nichts.
+
+### 5.12 Accounts und Authentifizierung
+
+- **Ausgangslage:** Ohne Accounts kann sich jeder einen beliebigen Namen
+  geben (Missbrauchspotenzial: Namen faelschen, Highscore-Spam) und es
+  gibt keinen Ort, an dem persoenliche Highscores, Tastenbelegung und
+  Farbschema (heute lokal in `rowhammer.conf`, siehe 4.5) ueber
+  verschiedene Server-Sitzungen hinweg ueberleben.
+- **Entwicklungsphase (Nutzerentscheidung):** freier Login mit frei
+  waehlbarem Namen bleibt bis auf Weiteres der Standard - identisch zum
+  heutigen `--name`/`ROWHAMMER_PLAYER_NAME` (siehe 4.2). Ein konkretes
+  Account-System wird erst nachgezogen, sobald ein oeffentlicher Server
+  ansteht.
+- **Empfehlung fuer das spaetere Account-System (zu bestaetigen, siehe
+  Abschnitt 8):** rowhammer-Accounts **nicht** eins-zu-eins auf
+  Unix-Systembenutzer abbilden. Unix-Accounts je Spieler bedeuten
+  Root-Rechte fuer jede Neuregistrierung, keinen Bezug zu
+  Web-Identitaeten (Apple/Google/Facebook-Login ist ein Web-OAuth-Flow,
+  keine Unix-Anmeldung) und ein Auseinanderlaufen von "wer darf sich per
+  SSH verbinden" und "welchem Spielkonto das zugeordnet ist". Stattdessen:
+  - **SSH-Zugang bleibt technisch getrennt vom Spielkonto.** Ob per
+    einzelnem Systembenutzer je Spieler, einem gemeinsamen Spiel-Benutzer
+    mit `command=`-eingeschraenkten `authorized_keys`-Eintraegen oder SSH
+    Certificates entschieden wird, ist ein Ops-Detail und beeinflusst das
+    Spielkonto nicht.
+  - **Das Spielkonto ist Anwendungslogik** des neuen Server-Backends
+    (siehe 5.13/5.15): Benutzername, Passwort-Hash (falls Passwort-Login
+    gewuenscht) oder - einfacher und dem SSH-Kontext angemessener -
+    Bindung an den bereits durch `sshd` geprueften SSH-Public-Key
+    (Fingerprint als Kontoschluessel; kein zusaetzliches Passwort noetig,
+    keine Passwort-Eingabe im Terminal, kein Passwort-Handling im Spiel).
+    Erste Anmeldung eines unbekannten Keys fragt einen Kontonamen ab und
+    legt das Konto an; ein bekannter Key wird automatisch erkannt.
+  - **Verknuepfung mit Google/Apple/Facebook & Co. ist ein Web-Flow und
+    gehoert auf die Webseite** (siehe 5.14), nicht in die
+    Terminal-Sitzung: ein Browser-OAuth-Flow laesst sich in einer
+    TTY-Sitzung nicht sauber abbilden. Vorschlag: der Spieler meldet sich
+    auf der (spaeteren) Webseite per OAuth an, bekommt dort einen
+    kurzlebigen Verknuepfungscode angezeigt und gibt diesen einmalig im
+    Spiel ein (Menuepunkt "Konto verknuepfen"); das Backend ordnet danach
+    SSH-Key und Web-Identitaet demselben Spielkonto zu.
+  - Tastenbelegung und Farbschema (heute in `rowhammer.conf`, 4.5) werden
+    mit dem Spielkonto **serverseitig** gespeichert, sobald eines
+    existiert; lokal bleibt die Config-Datei der Fallback ohne Konto bzw.
+    fuer die lokale Installation.
+- **Missbrauchsschutz:** Namensmuster wie in 5.5 (`^[A-Za-z0-9_-]{1,16}$`)
+  gelten unveraendert; ein Spielkonto aendert daran nichts, verhindert
+  aber Namenskollisionen/-diebstahl, weil ein Name erst beim jeweiligen
+  Konto reserviert ist.
+
+### 5.13 Server-Persistenz und Highscore-Datenbank
+
+- **Ausgangslage:** Die heutige Highscore-Liste (`lib/highscore.sh`, Top
+  10, Flatfile, siehe 4.5) ist fuer einen Einzelspieler-Rechner gedacht.
+  Ein Server mit vielen Konten braucht eine laengere, nach Konto
+  durchsuchbare Liste; ab einer gewissen Groesse ist lineares
+  Text-Parsing nicht mehr das richtige Werkzeug.
+- **Empfehlung (zu bestaetigen):** kein Sprung direkt auf einen separaten
+  Datenbankserver. Ein guter Zwischenschritt ist **SQLite**: eine echte
+  SQL-Datenbank, aber ein einzelner Dateipfad ohne eigenen Serverprozess,
+  aus Bash ueber die `sqlite3`-Kommandozeile ansprechbar (neue optionale
+  Abhaengigkeit analog `socat`, siehe 5.2/5.10) - der bestehende
+  Bash-Stil (siehe 5.15) muss dafuer nicht verlassen werden. Migration
+  der Flatfile-Formate (Highscore, Stats, Accounts) auf Tabellen gemaess
+  der Arbeitsregel "keine Abwaertskompatibilitaet" (Abschnitt 6): kein
+  Altdaten-Import noetig, nur ein sauberer Schnitt. Ein "richtiger"
+  Datenbankserver (Postgres o. ae.) wird erst relevant, wenn
+  Multi-Server-Betrieb (5.14) mehrere Prozesse/Hosts gegen dieselben
+  Daten schreiben laesst - SQLite ist fuer nebenlaeufige Schreiber von
+  mehreren Hosts aus nicht das richtige Werkzeug.
+- **Sicherheit:** SQL-Statements werden ausschliesslich mit gebundenen
+  Parametern gebaut (kein String-Zusammenbau aus Netz-/Spielerdaten in
+  ein SQL-Kommando) - dieselbe Injektions-Vorsicht wie in 5.5 fuer
+  Arithmetik und `eval`, nur auf SQL uebertragen.
+
+### 5.14 Endausbaustufe: Web-Highscore, Liga-System, Multi-Server
+
+Diese drei Punkte sind bewusst nur grob skizziert - sie stehen am Ende
+der Roadmap (Phase 6, Abschnitt 7) und werden erst konkretisiert, wenn
+Server-Deployment (5.11), Accounts (5.12) und Server-Persistenz (5.13)
+stehen.
+
+- **Web-Highscore:** eine schreibgeschuetzte Webseite, die dieselbe
+  Datenbank (5.13) liest wie das Spiel schreibt. Kein Bash-Webserver
+  (siehe 5.15) - ein schlankes, separates Web-Backend liest nur, das
+  Spiel bleibt der einzige Schreiber.
+- **Liga-System:** Saisons/Ranglisten oberhalb der reinen
+  Highscore-Liste; Regeln (Saisonlaenge, Punkteverfall, Ranglisten je
+  Spielmodus) sind noch offen und folgen erst nach Playtesting des
+  Mehrspieler-Kerns (Phase 5) - ein Liga-System ohne stabile
+  Mehrspieler-Wertung waere verfrueht.
+- **Multi-Server-Faehigkeit:** mehrere Spiel-Server (je eigener
+  Hub-Pool, eigenes `MP_DIR`, siehe 5.2), die gegen ein gemeinsames
+  Backend fuer Accounts und Highscores sprechen. Setzt voraus, dass
+  Accounts (5.12) und Persistenz (5.13) bereits serverunabhaengig sind -
+  sonst muesste ein Spieler auf jedem Server ein eigenes Konto fuehren.
+
+### 5.15 Backend-Technologie: Bash vs. andere Systeme
+
+- **Frage:** Wird das serverseitige Backend (Accounts, Highscore-Web,
+  Liga, Multi-Server) ebenfalls in Bash geschrieben, oder kommuniziert
+  Bash mit einem in einer anderen Sprache geschriebenen Dienst?
+- **Empfehlung (zu bestaetigen, siehe Abschnitt 8):** kein Bruch, sondern
+  eine klare Grenze entlang dessen, was Bash gut kann und was nicht:
+  - **Spiel-Engine und lokale Mehrspieler-Sitzung bleiben Bash** - Hub,
+    Bridge, Client, Protokoll (`lib/net.sh`, `lib/proto.sh`,
+    `lib/hub.sh`, `lib/mp.sh`, siehe 5.3) sind bereits so entworfen und
+    funktionieren lokal ueber Unix-Sockets gut; ein Sprachwechsel hier
+    waere ein Neubau ohne Not.
+  - **SSH/ForceCommand-Login und Konto-Bindung (5.12) bleiben Bash** -
+    das ist im Kern derselbe Umgang mit Fremdeingaben wie das bestehende
+    Protokoll und profitiert von denselben Regeln aus 5.5
+    (Zeichensatzfilter, Whitelist, keine Injektion).
+  - **Alles, was HTTP/TLS, JSON-APIs oder gleichzeitige Schreibzugriffe
+    von mehreren Hosts braucht (Web-Highscore, Liga, Multi-Server-Sync,
+    5.14), ist in Bash unangemessen aufwendig und fehleranfaellig**
+    (kein sicheres TLS, keine echte Nebenlaeufigkeit, JSON-Parsing in
+    Bash ist Bastelei). Dafuer ein schlanker, separater Dienst in einer
+    Sprache mit vernuenftiger HTTP-/JSON-/DB-Unterstuetzung (Sprache
+    selbst noch offen) - er liest/schreibt dieselbe Datenbank (5.13)
+    bzw. bekommt Rundenergebnisse ueber einen schmalen, validierten
+    Kanal vom Bash-Server zugestellt (analog der Bridge-Rolle in 5.3:
+    ein kleiner Uebersetzer statt eines Sprachwechsels im Kern).
+  - Damit bleibt die in 5.5 verbindliche Regel unangetastet, egal welche
+    Sprache spaeter dazukommt: kein `eval`, keine Kommandosubstitution
+    und keine Interpolation von Fremddaten in auszufuehrenden Code -
+    weder in Bash noch im neuen Dienst (dort: keine dynamisch gebauten
+    SQL-Strings oder Shell-Aufrufe aus Nutzereingaben, siehe 5.13).
+
+### 5.16 Serverweite Statistik
+
+- **Ausgangslage:** `lib/stats.sh` (4.5) fuehrt heute genau eine
+  Statistik je Installation (lokal oder - nach 5.12 - je Account
+  serverseitig gespeichert). Auf einem Mehrspieler-Server mit vielen
+  Accounts fehlt ein Blick auf das Ganze: wie viele Reihen hat der
+  Server insgesamt abgebaut, wie viele Gold-/Silberquadrate insgesamt,
+  wie viele Rowhammer, wie viele Runden wurden gespielt.
+- **Vorschlag:** ein zusaetzlicher, kontounabhaengiger Aggregat-Zaehler
+  in der Server-Datenbank (5.13), der bei jedem `record_round` (siehe
+  3.3, 4.5) neben dem Account-Eintrag mitgefuehrt wird (`server_stats`,
+  dieselben Felder wie die persoenliche Statistik, dazu Anzahl aktiver
+  Accounts und Anzahl gespielter Mehrspieler-Runden). Anzeige: neuer
+  Menuepunkt "Server-Statistik" (nur im Server-Betrieb sichtbar - lokal
+  entfaellt er mangels Server) analog zum bestehenden
+  "Statistik"-Bildschirm (4.5), spaeter moeglicherweise auch auf der
+  Web-Highscore-Seite (5.14).
+- **Abgrenzung zur Wertung:** die serverweite Statistik ist reine
+  Anzeige, kein Bestandteil von Highscore oder Account-Fortschritt -
+  sie zaehlt nur mit, veraendert aber nicht die individuelle Wertung
+  einer Runde.
+
+### 5.17 Gemeinsamer Weltwunder-Fortschritt auf dem Server
+
+- **Idee (Nutzervorschlag, zu bestaetigen, siehe Abschnitt 8):** auf
+  einem Server bauen nicht nur einzelne Accounts an ihrem eigenen
+  Weltwunder (siehe 3.3, das bleibt fuer den lokalen
+  Einzelspieler-Betrieb unveraendert bestehen), sondern **alle Spieler
+  gemeinsam** zusaetzlich an einem serverweiten Weltwunder. Jede
+  abgebaute Reihe jedes Accounts zahlt dann doppelt ein: auf den
+  eigenen (Account-)Zaehler und auf einen gemeinsamen Server-Zaehler.
+- **Konsequenz fuer die Kostentabelle:** Die bestehende
+  `WONDER_COSTS`-Reihe (100..6400, insgesamt 12.700 Reihen, siehe 3.3)
+  ist auf Einzelrechner-Spielzeit herunterskaliert und waere von vielen
+  gleichzeitig spielenden Accounts binnen Stunden durchgespielt. Der
+  Server-Fortschritt braucht **eine eigene, deutlich groessere
+  Kostentabelle** (`SERVER_WONDER_COSTS`) - naeher an der
+  Original-Groessenordnung (2.500 bis 500.000 Zeilen je Wunder, siehe
+  3.3) oder sogar darueber, je nach erwarteter Serverlast. Beide
+  Tabellen nutzen dieselbe Wunder-Liste und -Logik (`lib/wonders.sh`),
+  nur mit unterschiedlichem Kosten-Array und unterschiedlichem
+  Zaehlerstand.
+- **Anzeige:** der bestehende Weltwunder-Bildschirm bekommt im
+  Server-Betrieb einen zweiten Bildschirm fuer den Server-Fortschritt
+  (eigenes Bauwerk, eigene Baustufe); die Rundenwertung fuer den
+  Account (Highscore, persoenliche Statistik, 4.5) bleibt davon
+  unberuehrt.
+- **Offen (siehe Abschnitt 8):** ob der Server tatsaechlich eigene,
+  groessere Wunder braucht (weitere, noch unverifizierte Bauwerke) oder
+  dieselbe Liste nur mit anderen Kosten laufen soll; ob ein
+  fertiggestelltes Server-Wunder ein sichtbares Server-Ereignis ist
+  (Ankuendigung an alle verbundenen Clients, siehe Protokoll 5.4).
+
+### 5.18 Weltwunder-Animation
+
+- **Ausgangslage:** der Weltwunder-Bildschirm (3.3, seit 0.8.0
+  umgesetzt) deckt die ASCII-Art zeilenweise von unten auf - statisch,
+  ohne Bewegung. Nutzerwunsch: der Bildschirm soll "etwas mehr
+  animiert" sein.
+- **Vorschlag:** kurze **asciinema-Aufnahmen** (`.cast`-Dateien, wie
+  bereits fuer die README-Democlips genutzt, siehe Phase 4 "README mit
+  Screenshots/Asciinema aktualisieren") je Wunder-Uebergang, die beim
+  Erreichen einer neuen Baustufe bzw. bei Fertigstellung eines Wunders
+  einmalig abgespielt werden (z. B. ein kurzer Bau-Effekt oder ein
+  Glanz-Effekt ueber der ASCII-Art). Zwei Umsetzungswege: entweder ein
+  echter `.cast`-Player in Bash (Zeitstempel aus dem Cast-Format
+  auswerten, neuer Formatparser) oder - einfacher und ohne neue
+  Abhaengigkeit - eine kleine, von Hand aus einer asciinema-
+  Voraufnahme abgeleitete Frame-Tabelle (analog den zwoelf
+  Baustufen-Zeilen aus 3.3, nur als kurze Zwischenschritte statt eines
+  Sprungs), abgespielt ueber das bestehende Rendering-Modell
+  (`FRAME_LINES`, 4.3). Die Frame-Tabelle ist der einfachere und damit
+  bevorzugte Weg; `asciinema rec` dient dabei nur als
+  Entwicklungswerkzeug fuer die Vorschau, nicht als Laufzeitformat.
+- **Geltungsbereich:** gilt fuer den lokalen Einzelspieler-Wunder-
+  bildschirm ebenso wie fuer den serverweiten (5.17) - beide nutzen
+  denselben Anzeige-Code (`wonder_screen`, `lib/wonders.sh`) und haben
+  keine Server-Abhaengigkeit.
+- **Nicht Ziel:** eine waehrend der laufenden Partie eingeblendete
+  Animation (der Wunderbildschirm bleibt ein Bildschirm nach
+  Rundenende bzw. ein Hauptmenuepunkt, siehe 3.3) - die Animation laeuft
+  nur dort, nicht im HUD.
+
+### 5.19 Account-Abzeichen (Achievements)
+
+- **Nutzerwunsch:** persoenliche **Abzeichen** am Account, zusaetzlich
+  zu Highscores und Statistiken (die es fuer den Account bereits gibt,
+  siehe 5.12/4.5).
+- **Vorschlag:** eine feste Liste von Abzeichen mit klaren, serverseitig
+  bei jedem `record_round` pruefbaren Bedingungen (z. B. "erstes
+  Rowhammer", "100 Gold-Quadrate insgesamt", "ein Wunder allein
+  fertiggestellt", "am Server-Wunder mitgebaut" [5.17], "Sieger einer
+  Mehrspieler-Runde", "1.000.000 Reihen Lebenszeit"). Jedes Abzeichen
+  wird einmalig freigeschaltet und mit Datum am Account gespeichert
+  (neue Tabelle in der Server-DB, siehe 5.13); ein Abzeichen wird nie
+  wieder entzogen.
+- **Anzeige:** eigener Bereich in der Account-Ansicht (Menuepunkt,
+  analog "Statistik") mit freigeschalteten und - abgeblendet - noch
+  offenen Abzeichen; auf der spaeteren Highscore-Webseite (5.14) als
+  kleine Icons neben dem Namen.
+- **Voraussetzung:** Abzeichen sind reine Server-Funktion (haengen an
+  einem Account, siehe 5.12) und ergeben ohne Account/Server keinen
+  Sinn; sie entfallen daher konsequent im lokalen Einzelspieler-Betrieb.
+- **Offen (siehe Abschnitt 8):** konkrete Abzeichen-Liste und ihre
+  Bedingungen sind noch nicht festgelegt - erst nach Playtesting und
+  zusammen mit dem Liga-System (5.14) sinnvoll auszuarbeiten, damit
+  Abzeichen und Liga-Punkte sich nicht widersprechen.
+
 ## 6. Konventionen fuer alle Skripte
 
 Fuer **jedes** Bash-Skript in diesem Repo gelten verbindlich die
@@ -1216,7 +1695,7 @@ Feature-Branch oder Pull Request.
       Aufraeumen per `trap`
 - [x] Nicht-blockierender Input inkl. Pfeiltasten-Escape-Sequenzen
 - [x] Spielfeld-Datenmodell und Kollisionspruefung
-- [x] Tetromino-Definitionen mit Rotationstabellen, 7-Bag-Randomizer
+- [x] Baustein-Definitionen mit Rotationstabellen, 7-Bag-Randomizer
 - [x] Game-Loop mit Gravitation, Lock, Reihenabbau
 - [x] Rendering mit Double-Buffering und Farben
 - [x] Soft-/Hard-Drop, Pause, Game Over (mit Neustart per `r`)
@@ -1230,13 +1709,13 @@ Feature-Branch oder Pull Request.
 - [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
       atomar geschrieben, Praezedenz Standard < Config < Env < CLI
 
-### Zwischenschritt - Paketierung (deb umgesetzt 0.17.0, rpm 0.32.0)
+### Zwischenschritt - Paketierung (deb umgesetzt 0.17.0, rpm 0.37.0)
 
 - [x] `Makefile` mit install/uninstall (DESTDIR/PREFIX, deb/rpm-tauglich)
 - [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
       Launcher-Symlink `/usr/games/rowhammer`)
 - [x] Build-Skript `build-deb.sh` nach Script-Konventionen
-- [x] RPM-Paketierung (Version 0.32.0): Spec-Datei `rowhammer.spec` im
+- [x] RPM-Paketierung (Version 0.37.0): Spec-Datei `rowhammer.spec` im
       Wurzelverzeichnis, die im `%install`-Abschnitt dasselbe
       `make install DESTDIR=... PREFIX=/usr` aufruft wie `debian/rules`,
       sodass beide Pakete dieselben Pfade liefern und ein Layout-Wechsel
@@ -1254,6 +1733,15 @@ Feature-Branch oder Pull Request.
       das Spiel startet ueber diesen Starter; das mit `--srpm`
       erzeugte Quellpaket laesst sich per `rpmbuild --rebuild`
       eigenstaendig neu bauen.
+- [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
+      auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
+      naechsten Punkt (opkg-Paketierung) angehen
+- [ ] opkg-Paketierung implementieren (fuer OpenWrt/Embedded-Systeme,
+      analog zur Debian-Paketierung, nutzt ebenfalls `make install`),
+      vorausgesetzt die Shell-Kompatibilitaetspruefung faellt positiv aus
+- [ ] Release-Struktur auf GitHub aufbauen (Tags, Release Notes, Assets)
+- [ ] Paketierung GitHub-seitig automatisch bauen lassen (CI-Workflow),
+      sobald ein neues Release fertiggestellt ist
 - [ ] Lizenz festlegen und `debian/copyright` aktualisieren
 
 ### Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
@@ -1315,6 +1803,84 @@ Feature-Branch oder Pull Request.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
+- [x] `--reset config|stats|highscore|save|all` eingebaut (Version
+      0.35.0, siehe 4.8): setzt gezielt persistente Daten im
+      Datenverzeichnis (`${DATA_DIR}`, siehe 4.5) zurueck und beendet
+      sich mit einer Bilanz auf STDOUT, statt ins Menue zu starten. Am
+      Terminal
+      werden die betroffenen Pfade vorher aufgelistet und bestaetigt
+      ("nein" ist wie bei `menu_confirm` die Vorgabe), ohne TTY laeuft
+      der Reset direkt durch, damit ein wartendes `read` kein Skript
+      haengen laesst; nicht vorhandene Dateien sind kein Fehler.
+      Nachgezogen in 0.36.0 (Nutzerentscheidung): der Reset **loescht
+      nicht mehr**, sondern verschiebt jede Datei nach
+      `<datei>-YYYYMMDDhhmmss.bak` (bei einem Backup derselben Sekunde
+      `sleep 1` und neuer Zeitstempel statt Ueberschreiben), und der
+      neue Schalter `--force`
+      (`ROWHAMMER_FORCE`) beantwortet sie automatisch mit "ja" - frei
+      mit anderen Optionen kombinierbar und ueberall wirkungslos, wo
+      nichts gefragt wird.
+      Zusaetzlich per `ROWHAMMER_RESET` setzbar, Praezedenz Standard <
+      Env < CLI: bewusst **ohne** die Config-Stufe, weil die
+      Config-Datei selbst ein Reset-Ziel ist (sie koennte sich sonst bei
+      jedem Start selbst loeschen lassen). Die beiden offen gelassenen
+      Fragen sind in 4.8 entschieden - `all` nimmt das Savegame mit
+      (das eigene Ziel `save` deckt den Fall "nur der
+      Weltwunder-Fortschritt" ab), `highscore` trifft beide
+      Bestenlisten. Umsetzung: `reset_run` in `rowhammer.sh`, direkt
+      nach dem Sourcen der Module (fuer deren Dateinamen-Konstanten) und
+      vor der dorthin verschobenen TTY-Pruefung. In 0.36.1
+      (Nutzerentscheidung) wurde der Dialog auf Deutsch umgestellt:
+      `Bist du sicher, dass du <ziel> zuruecksetzen moechtest? [N/y]`
+      und nach dem Verschieben `Reset erfolgreich` (ASCII wie die
+      Menues, siehe 4.8).
+- [ ] Demo-Aufzeichnung und Demo-Player: eigene Runden als Datei
+      mitschneiden (vermutlich Eingabe-Mitschnitt plus Seed statt voller
+      Board-Snapshots, analog dem Prinzip des Debug-Modus in 4.6, aber
+      fuer die reine Wiedergabe statt zur Fehlersuche) und ueber einen
+      Menuepunkt wieder abspielen koennen. Notizen fuer die Umsetzung:
+      - **Groessenabschaetzung:** vor der Formatwahl den Speicherbedarf
+        je Minute Spielzeit abschaetzen (Tick-Rate x Eingabeereignisse
+        bzw. x Feldgroesse bei Snapshots), damit klar ist, ob ein
+        Eingabe-Mitschnitt oder volle Snapshots infrage kommen und wie
+        viele Aufzeichnungen sich das Datenverzeichnis leisten kann.
+      - **Aufzeichnung unbedingt auf RAM-Disk:** waehrend der laufenden
+        Runde wird ausschliesslich in ein tmpfs geschrieben (z. B.
+        `${XDG_RUNTIME_DIR}` bzw. `/dev/shm`), nie direkt ins
+        persistente Datenverzeichnis - haeufige kleine Schreibzugriffe
+        waehrend des Spiels duerfen weder die Framerate noch (bei SSDs)
+        die Hardware belasten. Erst nach echtem Rundenende (siehe 3.3)
+        wird die fertige Aufzeichnung ins Datenverzeichnis uebernommen,
+        analog dem `--debug-dir`-Verzeichnis pro Lauf in 4.6.
+      - **Demo-Verwaltung:** eigener Menuepunkt mit Liste der
+        vorhandenen Aufzeichnungen (Datum, Laenge, Ergebnis), Auswahl
+        zum Anschauen und einzelnes Loeschen.
+      Noch offen: Aufzeichnungsformat im Detail, Obergrenze fuer Anzahl
+      bzw. Gesamtgroesse im Datenverzeichnis, Abspielgeschwindigkeit
+      (Pause/Vorspulen?).
+- [ ] Mehrsprachige Oberflaeche (Multi-Language Support): saemtliche
+      benutzersichtbaren Texte (Hauptmenue, Untermenues, Anleitung,
+      HUD-Labels, Highscore-/Statistik-Spaltenkoepfe, `-h`/`--help`,
+      Fehlermeldungen) hinter eine Uebersetzungsschicht ziehen, damit
+      eine Sprache auswaehlbar wird (`--lang CODE`/`ROWHAMMER_LANG`,
+      Einstellungsmenue, gespeichert in der Config). Greift die in
+      Abschnitt 8 offene UI-Sprachfrage auf (bislang Menues Deutsch,
+      HUD/--help Englisch als feste Konvention) und macht daraus eine
+      Laufzeit-Entscheidung statt einer festen Sprachmischung. Noch
+      offen: welche Sprachen ausser Deutsch/Englisch, Format der
+      Uebersetzungstabellen (reines Bash-Array je Sprache vermutlich am
+      einfachsten), Umgang mit variabler Textlaenge im starren
+      48-Spalten-Layout (siehe 3.4).
+- [ ] Weltwunder-Animation (siehe 5.18, Nutzerwunsch): der
+      Wunder-Bildschirm deckt die ASCII-Art bislang nur statisch
+      zeilenweise auf. Kurze, von Hand aus asciinema-Voraufnahmen
+      abgeleitete Frame-Tabellen sollen Wunder-Uebergaenge (neue
+      Baustufe, Fertigstellung) mit einem kleinen Animationsschritt
+      versehen, ueber das bestehende `FRAME_LINES`-Rendering (4.3) ohne
+      neue Abhaengigkeit. Gilt fuer den lokalen wie den spaeteren
+      serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
+      keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
+      umsetzbar.
 - [x] Hauptmenue ebenfalls zentriert darstellen (Version 0.28.0): das
       Spielfeld-Layout wird seit 0.22.0 per `layout_update` mittig im
       Terminal ausgerichtet (siehe 3.4, 4.3), das Hauptmenue
@@ -1576,6 +2142,15 @@ Feature-Branch oder Pull Request.
       Entfallen sind Drop-Punkte, Quadrat-Bildungs-Boni (2000/1000)
       und die Level-Skalierung; Highscore (Rangfolge nach Rows) und
       Statistik speichern kein separates Score-Feld mehr (siehe 4.5)
+- [x] Anleitung im Hauptmenue (Version 0.32.0, Nutzerwunsch): neuer
+      Menuepunkt "Anleitung" zwischen "Einstellungen" und "Beenden",
+      der das Spiel auf fuenf Info-Bildschirmen erklaert - Spielprinzip,
+      Steuerung, Vorschau/Hold, Gold-/Silber-Quadrate mit ihrer
+      Reihenwertung und zum Schluss den Weltwunderbau (`menu_help`,
+      `menu_help_keys` in `lib/menu.sh`, siehe 3.5). Tastenbelegung und
+      Wunder-Kosten stammen aus dem laufenden Zustand, damit ein Rebind
+      oder ein justiertes `WONDER_COSTS` die Anleitung nicht veralten
+      laesst.
 - [x] Highscores und Statistik farbig darstellen (Version 0.30.0):
       beide Bildschirme waren reiner Text, obwohl das Spiel laengst ein
       Theme-System fuer Farben hat (0.21.0, siehe 4.1). `render_colors_init`
@@ -1592,6 +2167,57 @@ Feature-Branch oder Pull Request.
       Zeile, die trotz der 46-Zeichen-Grenze zu lang wuerde, faellt auf
       unkolorierten, abgeschnittenen Text zurueck statt eine
       Escape-Sequenz zu zerschneiden (siehe 4.5).
+- [x] Anleitung mit den Pfeiltasten blaetterbar machen (Version 0.33.0,
+      Nutzerwunsch, siehe 3.5): zuvor fuehrte jede beliebige Taste zur
+      naechsten der fuenf Seiten, ohne Weg zurueck (eine feste Folge von
+      `menu_message`-Aufrufen). `menu_help` (`lib/menu.sh`) ist jetzt
+      eine eigene Warteschleife: Pfeil links/rechts blaettert umlaufend
+      zwischen den Seiten, Enter/Leertaste/`x`/`ESC` schliessen die
+      Anleitung. Der Seiteninhalt kommt aus `menu_help_body`, einem
+      `case`-Switch je Seitenindex, damit jede Seite direkt angesprungen
+      werden kann statt nur der Reihe nach.
+- [x] **Ultra-Modus** einbauen (Version 0.34.0, Nutzerwunsch): im Menue
+      "Einzelspieler" steht neben "Normales Spiel" jetzt "Ultra" -
+      `ULTRA_TARGET_ROWS` (150) Rows so schnell wie moeglich abbauen,
+      die Runde endet im Zielmoment und die Spielzeit ist das Ergebnis
+      (`GAME_MODE`, `GOAL_REACHED`, Zielpruefung in `lock_and_next`,
+      siehe 3.6). Die drei offen gelassenen Punkte sind dort
+      entschieden: gemessen werden **Rows** (nicht Lines), ein vor dem
+      Ziel abgebrochener Versuch kommt **nicht** in die Bestenliste
+      (seine Reihen zaehlen aber wie bei jeder abgebrochenen Runde in
+      Weltwunder und Statistik), und der HUD zeigt den Fortschritt in
+      zwei der acht freien Zeilen der linken Spalte ("Goal"/"Left", nur
+      im Ultra-Modus). Speicherung in einer eigenen Liste
+      `${DATA_DIR}/highscore-ultra` mit eigener Rangordnung (kuerzeste
+      Zeit zuerst, Zeit in Millisekunden), damit ein zeitlich
+      begrenzter Lauf die Top 10 der endlosen Liste nicht verdraengt
+      (`HSU_*` in `lib/highscore.sh`, siehe 4.5).
+- [x] **Endlosen Modus in "Marathon" umbenannt** (Version 0.34.1,
+      Nutzerentscheidung): der bisherige Menuepunkt "Normales Spiel"
+      heisst jetzt "Marathon" (`lib/menu.sh`), der interne Modusname
+      `GAME_MODE` wechselt entsprechend von `normal` zu `marathon`
+      (Standardwert und `game_run`-Argument in `rowhammer.sh`, siehe
+      3.6). Reine Umbenennung ohne Verhaltensaenderung: `GAME_MODE`
+      wird nicht persistiert (siehe 4.5), betrifft also weder Savegame
+      noch Highscore-Dateien; einzig `events.log` des Debug-Modus
+      protokolliert den neuen Namen.
+- [ ] **Sprint-Modus** und die Anzeige-Seiten der Modi (Rest des
+      Modus-Themas, Nutzerentscheidung: die Anzeige folgt getrennt von
+      der Speicherung). Offen sind:
+      - **Sprint** (Ziel: in 3 Minuten moeglichst viele Reihen) als
+        dritter Eintrag im Einzelspieler-Menue - dieselbe Mechanik wie
+        Ultra mit vertauschten Rollen (feste Zeit, offene Rows), also
+        wieder eine eigene Liste (Rangordnung: meiste Rows) und ein
+        eigener HUD-Zaehler (verbleibende Zeit).
+      - **Anzeige der Ultra-Bestenliste**: das Datenformat steht
+        (4.5), es fehlt der Bildschirm. Dafuer braucht der Menuepunkt
+        "Highscores" eine vorgeschaltete Modus-Auswahl (oder die
+        Seitenlogik aus `menu_pages` je Modus).
+      - **Statistik je Modus**: gespielte Runden je Modus, bei Ultra
+        zusaetzlich wie oft das Ziel erreicht wurde. Bewusst noch nicht
+        eingebaut - Zaehler ohne Anzeige waeren tote Daten, und die
+        Statistik-Bildschirme sind schon zweiseitig (siehe 4.5).
+      - **Anleitung**: eine sechste Seite "Spielmodi" (siehe 3.5).
 
 ### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 
@@ -1673,6 +2299,81 @@ Details stehen jeweils im genannten Unterabschnitt.
       Fuzz-Lauf gegen den fertigen Stand, dazu ein "boeser Client", der
       absichtlich das Protokoll verletzt.
 
+### Phase 6 - Server-Betrieb, Accounts, Web (spezifiziert in 5.11-5.19, noch nicht umgesetzt)
+
+Setzt auf einem fertigen Phase 5 auf (der Mehrspieler-Kern muss laufen
+und sich per Playtesting bewaehrt haben, bevor Accounts/Web/Liga
+sinnvoll sind). Reihenfolge wie in 5.11-5.19 begruendet: Deployment
+zuerst (ohne Server kein Bedarf fuer Accounts), Accounts vor dem
+Persistenz-Umbau (das Datenbankschema haengt vom Kontomodell ab),
+serverweite Statistik und gemeinsames Weltwunder direkt danach (sie
+brauchen nur Accounts und die Datenbank, keine laufende
+Mehrspieler-Session, und lassen sich vor der Webseite fertig testen),
+Web-Frontend/Kontoverknuepfung/Abzeichen anschliessend, Liga und
+Multi-Server zuletzt.
+
+- [ ] **Schritt 1 - SSH-ForceCommand-Deployment** (siehe 5.11).
+      `sshd_config`/`authorized_keys`-Vorlage mit `ForceCommand` bzw.
+      `command=`, Haertung (`no-port-forwarding` usw.), eigener
+      Systembenutzer, Rechte auf `${DATA_DIR}`/`${MP_DIR}` geprueft.
+      Laeuft zunaechst weiter mit freiem Login (siehe 5.12).
+      Abnahme: mehrere SSH-Sitzungen landen direkt im Spiel, keine Shell
+      erreichbar.
+- [ ] **Schritt 2 - Konto-Grundlage: SSH-Key-Bindung** (siehe 5.12).
+      Spielkonto an SSH-Public-Key-Fingerprint gebunden, Erstanmeldung
+      fragt Kontonamen ab, Namensmuster wie 5.5. Noch ohne Passwort- oder
+      OAuth-Login. Abnahme: derselbe Key wird bei jeder Sitzung demselben
+      Konto zugeordnet, ein fremder Key kann einen belegten Namen nicht
+      kapern.
+- [ ] **Schritt 3 - Server-Persistenz auf SQLite umstellen** (siehe 5.13).
+      Highscore, Stats und Konten in SQLite-Tabellen statt Flatfiles,
+      `sqlite3`-Zugriff aus Bash mit gebundenen Parametern, Migration der
+      Formate ohne Altdaten-Uebernahme (Arbeitsregel Abschnitt 6).
+      Abnahme: identisches Verhalten wie die bisherigen Flatfiles, aber
+      per SQL abfragbar (z. B. Rang eines Kontos ueber alle Runden).
+- [ ] **Schritt 4 - Erweiterte Server-Highscore-Liste** (siehe 5.13).
+      Laengere Liste (mehr als Top 10), Filter/Suche nach Konto,
+      weiterhin im Spiel ueber "Highscores" abrufbar. Abnahme: Liste
+      bleibt bei vielen Konten performant und uebersichtlich (seitenweise
+      wie heute, siehe 4.5).
+- [ ] **Schritt 5 - Serverweite Statistik** (siehe 5.16).
+      Kontounabhaengiger Aggregat-Zaehler zusaetzlich zum Account-Eintrag
+      bei jeder verbuchten Runde (`server_stats`), neuer Menuepunkt
+      "Server-Statistik". Abnahme: der Zaehler summiert sichtbar ueber
+      mehrere Accounts hinweg korrekt auf, unabhaengig von Highscore und
+      persoenlicher Statistik.
+- [ ] **Schritt 6 - Gemeinsamer Weltwunder-Fortschritt** (siehe 5.17).
+      Zusaetzlicher serverweiter Reihenzaehler mit eigener, deutlich
+      groesserer Kostentabelle (`SERVER_WONDER_COSTS`), zweiter
+      Wunder-Bildschirm fuer den Server-Fortschritt. Abnahme: Reihen
+      mehrerer Accounts zahlen sichtbar auf denselben Server-Fortschritt
+      ein, der Account-eigene Fortschritt bleibt davon unberuehrt.
+- [ ] **Schritt 7 - Web-Highscore (read-only)** (siehe 5.14).
+      Separates, schlankes Web-Backend liest die Datenbank aus Schritt 3,
+      zeigt Highscore/Statistik (inklusive Server-Statistik aus Schritt 5)
+      im Browser. Kein Schreibzugriff vom Web aus. Abnahme: Highscore-
+      Liste ist ohne SSH-Zugang einsehbar.
+- [ ] **Schritt 8 - OAuth-Kontoverknuepfung** (siehe 5.12, 5.14).
+      Login mit Google/Apple/Facebook & Co. auf der Webseite, Anzeige
+      eines kurzlebigen Verknuepfungscodes, Eingabe im Spiel
+      ("Konto verknuepfen") bindet SSH-Key und Web-Identitaet an
+      dasselbe Konto. Abnahme: Anmeldung ueber einen der Anbieter fuehrt
+      zum selben Spielkonto wie der bisherige SSH-Key-Login.
+- [ ] **Schritt 9 - Account-Abzeichen** (siehe 5.19).
+      Feste Abzeichen-Liste mit pruefbaren Bedingungen, Freischaltung bei
+      `record_round`, Anzeige im Account-Bereich und spaeter auf der
+      Highscore-Webseite. Abnahme: ein erfuelltes Kriterium schaltet das
+      passende Abzeichen zuverlaessig und dauerhaft frei.
+- [ ] **Schritt 10 - Liga-System** (siehe 5.14).
+      Saisons/Ranglisten oberhalb der Highscore-Liste; Regeln noch offen
+      (siehe Abschnitt 8), erst nach Playtesting des Mehrspieler-Kerns und
+      im Zusammenspiel mit den Abzeichen aus Schritt 9 zu konkretisieren.
+- [ ] **Schritt 11 - Multi-Server-Faehigkeit** (siehe 5.14).
+      Mehrere Spiel-Server gegen ein gemeinsames Accounts-/Highscore-
+      Backend, Kontosynchronisation ueber Server-Grenzen hinweg. Abnahme:
+      ein Konto behaelt Highscore und Einstellungen beim Wechsel des
+      Servers.
+
 ## 8. Offene Punkte
 
 - Bonus-Reihenwertung ist verifiziert und umgesetzt (siehe 3.2); seit
@@ -1712,6 +2413,14 @@ Details stehen jeweils im genannten Unterabschnitt.
   eine weitere Seite: pro Info-Bildschirm passen 18 Zeilen
   (`MENU_BODY_MAX`, seit 0.28.0 eine mehr), die Highscore-Liste zeigt fuenf Eintraege je
   Seite, die Statistik teilt sich in Gesamtzaehler und letzte Spiele.
+- Spielmodi: die drei Fragen zum Ultra-Modus sind mit 0.34.0
+  entschieden (Rows statt Lines, gescheiterte Versuche ohne
+  Listeneintrag, HUD-Zaehler "Goal"/"Left" in der linken Spalte, siehe
+  3.6). Offen bleibt nur die Justierung: ob 150 Rows die richtige
+  Distanz sind, entscheidet Playtesting (`ULTRA_TARGET_ROWS`) - mit den
+  Quadrat-Boni ist die Strecke deutlich kuerzer als 150 physische
+  Reihen, das ist so gewollt. Sprint, die Anzeige der Ultra-Liste und
+  die Statistik je Modus stehen noch aus (siehe Roadmap Phase 4).
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach
@@ -1748,3 +2457,43 @@ Uebrige dort ist entschieden):
   melden; eine serverseitige Vollsimulation ist kein Ziel. Die
   Sicherheitsregeln in 5.5 schuetzen dagegen die Prozesse und Terminals
   der Mitspieler - dieser Teil ist nicht verhandelbar.
+
+Offene Punkte zum Server-Betrieb (Phase 6, Spezifikation siehe 5.11-5.19):
+
+- **Siegbedingung im Versus-Modus:** 5.1/5.8 legen "letzter
+  Ueberlebender" (KO ueber Garbage/Top-Out) als Sieger fest. Die
+  neueste Nutzerbeschreibung ("man spielt die Runde, der Spieler mit
+  den meisten Reihen gewinnt") klingt dagegen nach einer reinen
+  Reihen-Wertung ohne Elimination. Beides zusammen ist moeglich (Rows
+  als Tiebreaker, wie in 5.8 bereits fuer den Gleichstand-Fall
+  vorgesehen), aber als alleinige Regel schliessen sie sich aus:
+  Bestaetigung noetig, ob der Garbage-/KO-Versus-Modus aus 5.7/5.8
+  bleibt, durch einen reinen Rows-Wettkampf ohne Garbage ersetzt wird,
+  oder beide als waehlbare Modi nebeneinander bestehen.
+- **Unix-Accounts vs. eigenes Kontosystem:** Empfehlung in 5.12 ist ein
+  vom SSH-Login entkoppeltes Spielkonto (Bindung an
+  SSH-Key-Fingerprint, keine Unix-Accounts je Spieler). Bestaetigung
+  ausstehend.
+- **Backend-Sprache:** Empfehlung in 5.15 ist, Spiel-Engine und lokales
+  Mehrspieler-Protokoll bei Bash zu belassen, aber fuer Web/Liga/
+  Multi-Server einen schlanken separaten Dienst in einer HTTP-/JSON-/
+  DB-tauglicheren Sprache vorzusehen. Sprache selbst noch offen;
+  Bestaetigung ausstehend, ob dieser Schnitt so gewuenscht ist.
+- **Server-Persistenz:** Empfehlung in 5.13 ist SQLite als
+  Zwischenschritt vor einem "richtigen" Datenbankserver (erst bei
+  Multi-Server-Bedarf, 5.14). Bestaetigung ausstehend.
+- **Liga-Regeln:** komplett offen (Saisonlaenge, Punkteverfall,
+  Ranglisten je Modus), siehe 5.14.
+- **Serverweites Weltwunder:** Nutzervorschlag (5.17), zu bestaetigen.
+  Offen: eigene, groessere Wunder-Liste oder dieselbe Liste mit
+  hoeherer Kostentabelle (`SERVER_WONDER_COSTS`); ob ein
+  fertiggestelltes Server-Wunder allen verbundenen Clients angekuendigt
+  wird.
+- **Weltwunder-Animation:** Nutzerwunsch (5.18) nach mehr Bewegung im
+  Wunder-Bildschirm. Offen: eigener `.cast`-Player zur Laufzeit oder
+  eine von Hand aus einer asciinema-Voraufnahme abgeleitete
+  Frame-Tabelle (letzteres ist der Vorschlag, weil es ohne neue
+  Abhaengigkeit auskommt).
+- **Account-Abzeichen:** Nutzerwunsch (5.19). Offen: konkrete
+  Abzeichen-Liste und ihre Bedingungen, Verhaeltnis zum spaeteren
+  Liga-System.

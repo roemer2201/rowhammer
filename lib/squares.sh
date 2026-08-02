@@ -4,7 +4,7 @@
 #
 # Description:
 #   The-New-Tetris square mechanics for rowhammer: detection of 4x4
-#   squares built from exactly four complete, uncut tetromino instances.
+#   squares built from exactly four complete, uncut piece instances.
 #   Four instances of the same type form a gold (mono) square, mixed
 #   types a silver (multi) square. Square cells are marked in BOARD_SQ
 #   and make cleared rows worth bonus row credit (see ROWS_* below);

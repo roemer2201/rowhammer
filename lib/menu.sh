@@ -4,7 +4,8 @@
 #
 # Description:
 #   Menu system for rowhammer: a generic list-selection widget plus the
-#   application menus (main menu, singleplayer, multiplayer placeholder,
+#   application menus (main menu, singleplayer with its game modes,
+#   multiplayer placeholder,
 #   settings with key bindings, color theme and player name). Menu labels are German
 #   on purpose (requested UI language); code and comments stay English
 #   per the script conventions. All screen output goes through
@@ -20,9 +21,22 @@
 #   preselected; it guards leaving the game while a round is still
 #   suspended. menu_pages (since 0.10.0) shows a table that outgrew one
 #   screen as a sequence of info screens with a repeated table head, which
-#   is what the two-line highscore entries need. All wait loops
+#   is what the two-line highscore entries need. menu_help (since
+#   0.12.0, user request) is the "Anleitung" main menu entry: five info
+#   screens explaining the game, the controls, hold and preview, the
+#   gold/silver squares and the wonder construction, with the key
+#   bindings and the wonder costs read from the live state instead of
+#   spelled out. Since 0.13.0 (user request) its pages are browsed with
+#   the left/right arrow keys instead of "any key advances" - built from
+#   one case switch (menu_help_body) indexed by page instead of a fixed
+#   sequence of menu_message calls, so any page can be jumped to
+#   directly in either direction. All wait loops
 #   repaint on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave a menu or info screen blank (since 0.7.0).
+#   Since 0.14.0 (user request) menu_singleplayer offers the game modes:
+#   the endless "Marathon" (renamed from "Normales Spiel" in 0.14.1, user
+#   decision) and "Ultra", the race for ULTRA_TARGET_ROWS rows against the
+#   clock. The entry picked is handed to game_run as its mode name.
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -30,7 +44,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.11.1  (2026-07-29)
+# Version: 0.14.1  (2026-07-31)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -187,6 +201,251 @@ menu_pages() {
     return 0
 }
 
+# Number of screens menu_help walks through; used both to number the
+# titles ("Anleitung (2/5)") and to wrap the left/right paging
+# (menu_help below), so the pages stay self-describing.
+MENU_HELP_PAGES=5
+
+# menu_help_keys FIXED VAR
+# Build the key list for one action as the help screen shows it:
+# FIXED is the wording for the keys wired in unconditionally (arrows,
+# space, the fixed secondary hold key), VAR the name of the configurable
+# binding variable. The bound key leads the list as "[k]" - it is the
+# primary key, the one the settings menu rebinds - and is left out when
+# it is NONE (the action has no letter key, see rowhammer.sh) or already
+# part of FIXED: KEY_HARD defaults to SPACE, which the fixed part
+# already names, and a rebind could put the hold action on the fixed w.
+# Result in MENU_HELP_KEYS, so the caller needs no subshell.
+menu_help_keys() {
+    # The binding name goes through a variable of its own: "${!2}" is not
+    # an indirect expansion of the second argument, it looks for a
+    # variable named after the positional parameter.
+    local fixed="${1}" var="${2}" key
+    key="${!var}"
+    case "${key}" in
+        NONE)  key="" ;;
+        SPACE) key="Leertaste" ;;
+        *)     key="[${key}]" ;;
+    esac
+    if [ -z "${key}" ]; then
+        MENU_HELP_KEYS="${fixed}"
+        return 0
+    fi
+    if [ -z "${fixed}" ]; then
+        MENU_HELP_KEYS="${key}"
+        return 0
+    fi
+    # Quoted on purpose: an unquoted "[c]" would be read as a glob
+    # character class and never match.
+    case "${fixed}" in
+        *"${key}"*) MENU_HELP_KEYS="${fixed}" ;;
+        *)          MENU_HELP_KEYS="${key}, ${fixed}" ;;
+    esac
+    return 0
+}
+
+# menu_help_body PAGE
+# Fill the global array HELP_BODY (an array cannot be a function's return
+# value, hence the global - the same convention FRAME_LINES/RENDER_MINI
+# etc. use) with the content lines of one Anleitung page (0-based, see
+# MENU_HELP_PAGES). Kept as one case switch per page instead of one
+# function per page so menu_help can jump to any page directly (needed
+# for the left/right paging added in 0.13.0; the previous version only
+# ever moved forward, one menu_message call per page).
+menu_help_body() {
+    local page="${1}"
+    local line i
+    HELP_BODY=()
+    case "${page}" in
+        0)
+            HELP_BODY=("rowhammer ist ein Tetris-Spiel fuers Terminal," \
+                  "Vorbild ist \"The New Tetris\" (N64)." \
+                  "" \
+                  "Bausteine muessen so gestapelt werden, dass sich" \
+                  "Reihen komplett fuellen: volle Reihen werden" \
+                  "abgebaut und als \"Rows\" gewertet - das ist" \
+                  "zugleich der Punktestand der Runde." \
+                  "" \
+                  "Die Steine kommen aus einem 7er-Beutel: Jede" \
+                  "der sieben Sorten genau einmal, dann wird" \
+                  "neu gemischt." \
+                  "" \
+                  "Mit jeder abgebauten Reihe steigt das Level," \
+                  "und die Steine fallen schneller. Ist kein" \
+                  "Platz mehr fuer einen neuen Stein, ist die" \
+                  "Runde vorbei.")
+            ;;
+        1)
+            HELP_BODY=("Steuerung im Spiel (die Buchstabentasten" \
+                  "sind unter Einstellungen aenderbar):" \
+                  "")
+            menu_help_keys "Pfeil links" KEY_LEFT
+            printf -v line '%-17s %s' "Nach links" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            menu_help_keys "Pfeil rechts" KEY_RIGHT
+            printf -v line '%-17s %s' "Nach rechts" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            menu_help_keys "" KEY_ROT_CW
+            printf -v line '%-17s %s' "Drehen rechts" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            menu_help_keys "" KEY_ROT_CCW
+            printf -v line '%-17s %s' "Drehen links" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            menu_help_keys "Pfeil runter" KEY_SOFT
+            printf -v line '%-17s %s' "Soft-Drop" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            # Space and arrow up always drop hard, w always holds - the
+            # game wires both in regardless of the bindings (handle_key).
+            menu_help_keys "Leertaste, Pfeil hoch" KEY_HARD
+            printf -v line '%-17s %s' "Hard-Drop" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            menu_help_keys "[w]" KEY_HOLD
+            printf -v line '%-17s %s' "Hold / Tauschen" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            menu_help_keys "" KEY_PAUSE
+            printf -v line '%-17s %s' "Pause" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            menu_help_keys "ESC" KEY_QUIT
+            printf -v line '%-17s %s' "Pausenmenue" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            HELP_BODY+=("" \
+                   "Soft-Drop laesst den Stein schneller fallen," \
+                   "Hard-Drop setzt ihn sofort fest." \
+                   "Nach einem Game Over startet [r] neu." \
+                   "In den Menues: Pfeile oder w/s waehlen," \
+                   "Enter bestaetigt, ESC geht zurueck.")
+            ;;
+        2)
+            menu_help_keys "[w]" KEY_HOLD
+            HELP_BODY=("Vorschau und Hold" \
+                  "" \
+                  "Oben rechts (\"Next\") stehen die naechsten" \
+                  "drei Steine - genug Vorlauf, um den Stapel" \
+                  "zu planen." \
+                  "" \
+                  "Links oben liegt der Hold-Speicher. Mit" \
+                  "${MENU_HELP_KEYS} wandert der aktuelle Stein dorthin;" \
+                  "liegt dort schon einer, tauschen die beiden" \
+                  "die Plaetze und der geholdete Stein faellt" \
+                  "in seiner Startlage neu ein." \
+                  "" \
+                  "Pro Zug ist nur ein Tausch erlaubt - erst" \
+                  "nach dem naechsten Ablegen kann erneut getauscht" \
+                  "werden. So laesst sich ein I-Stein fuer den" \
+                  "grossen Abbau aufheben oder ein unpassendes" \
+                  "Teil kurz parken.")
+            ;;
+        3)
+            HELP_BODY=("Vier vollstaendige, unversehrte Steine, die" \
+                  "zusammen ein 4x4-Quadrat exakt ausfuellen," \
+                  "werden zu einem Bonusblock:" \
+                  "")
+            printf -v line '  %sGold%s   - alle vier Steine gleicher Sorte' \
+                "${TXT_GOLD_SGR}" "${TXT_RESET_SGR}"
+            HELP_BODY+=("${line}")
+            printf -v line '  %sSilber%s - vier gemischte Sorten' \
+                "${TXT_SILVER_SGR}" "${TXT_RESET_SGR}"
+            HELP_BODY+=("${line}")
+            HELP_BODY+=("" \
+                   "Ein Stein, den ein Reihenabbau bereits" \
+                   "zerschnitten hat, zaehlt nicht mehr mit." \
+                   "" \
+                   "Beim Abbau einer Reihe zaehlt (in Rows):")
+            # The bonus values are right aligned as whole strings ("+5",
+            # not "+ 5"), so the plus sign stays glued to its number.
+            printf -v line '  %-31s %s%3s%s' "Grundwert je Reihe" \
+                "${TXT_ACCENT_SGR}" "${ROWS_NORMAL}" "${TXT_RESET_SGR}"
+            HELP_BODY+=("${line}")
+            printf -v line '  %-31s %s%3s%s' "je Silber-Quadrat in der Reihe" \
+                "${TXT_SILVER_SGR}" "+${ROWS_SILVER}" "${TXT_RESET_SGR}"
+            HELP_BODY+=("${line}")
+            printf -v line '  %-31s %s%3s%s' "je Gold-Quadrat in der Reihe" \
+                "${TXT_GOLD_SGR}" "+${ROWS_GOLD}" "${TXT_RESET_SGR}"
+            HELP_BODY+=("${line}")
+            printf -v line '  %-31s %s%3s%s' "Rowhammer (4 Reihen auf einmal)" \
+                "${TXT_WARN_SGR}" "+${ROWS_TETRIS}" "${TXT_RESET_SGR}"
+            HELP_BODY+=("${line}")
+            HELP_BODY+=("" \
+                   "Ein Rowhammer quer durch zwei komplette" \
+                   "Gold-Quadrate bringt so 4+1+80 = 85 Rows.")
+            ;;
+        4)
+            HELP_BODY=("Alle abgebauten Reihen zaehlen ueber die" \
+                  "Runden hinweg zusammen (auch die einer" \
+                  "abgebrochenen Runde) und bauen nacheinander" \
+                  "sieben Weltwunder auf." \
+                  "" \
+                  "Gewertete Reihen je Weltwunder:")
+            for (( i = 0; i < ${#WONDER_NAMES_DE[@]}; i++ )); do
+                printf -v line '  %d. %-28s %5d' "$(( i + 1 ))" \
+                    "${WONDER_NAMES_DE[i]}" "${WONDER_COSTS[i]}"
+                HELP_BODY+=("${line}")
+            done
+            HELP_BODY+=("" \
+                   "Der Menuepunkt \"Weltwunder\" zeigt die" \
+                   "aktuelle Baustelle: das Bauwerk waechst von" \
+                   "unten Zeile fuer Zeile und steht bei 100" \
+                   "Prozent fertig da - ebenso nach jeder Runde.")
+            ;;
+    esac
+    return 0
+}
+
+# menu_help
+# The "Anleitung" main menu entry (added 0.12.0, user request): a short
+# tour through the game on five info screens - what the game is about,
+# the controls, hold and preview, the gold/silver squares and the wonder
+# construction (menu_help_body builds each page's content). Two things
+# are read from the live state
+# instead of being spelled out: the control page prints the current
+# bindings (menu_help_keys), and the wonder page lists the names and costs
+# from lib/wonders.sh - a rebind or a retuned
+# WONDER_COSTS must never leave the manual lying. Text is German like
+# the rest of the menus and ASCII only (script conventions); every line
+# stays within the 46 characters the 48-column minimum leaves next to
+# the two-column menu indent, and every page within MENU_BODY_MAX lines.
+# CHANGE 2026-07-31 (user request): paging switched from "any key
+# advances, no way back" (one menu_message call per page in sequence) to
+# left/right arrow browsing that wraps at both ends, like menu_run's
+# up/down. Enter, space, ESC and x all close the manual now instead of
+# doubling as "next page" - with dedicated paging keys, overloading
+# every other key as "advance" would only make it easy to fly past a
+# page by accident while actually looking for something on it.
+menu_help() {
+    local -a lines
+    local page=0 dirty=1 l
+    while :; do
+        if [ "${dirty}" -eq 1 ]; then
+            menu_help_body "${page}"
+            lines=("  Anleitung ($(( page + 1 ))/${MENU_HELP_PAGES})" "")
+            for l in "${HELP_BODY[@]}"; do
+                lines+=("  ${l}")
+            done
+            lines+=("" "  Pfeil li/re: Seite   Enter/ESC: zurueck")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        read_key
+        # Repaint after a resize (read_key cleared the screen); rebuilt
+        # rather than re-emitted, like every other wait loop here - the
+        # frame carries absolute cursor positions for the old size.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+            continue
+        fi
+        case "${KEY}" in
+            LEFT)  page=$(( (page + MENU_HELP_PAGES - 1) % MENU_HELP_PAGES )); dirty=1 ;;
+            RIGHT) page=$(( (page + 1) % MENU_HELP_PAGES )); dirty=1 ;;
+            ENTER|SPACE|ESC|x)
+                debug_event "help screens closed on page $(( page + 1 ))/${MENU_HELP_PAGES}"
+                return 0
+                ;;
+        esac
+    done
+}
+
 # menu_confirm TITLE YES_LABEL NO_LABEL LINE...
 # Ask a yes/no question: TITLE and the explanatory LINEs are shown above
 # a two-entry selection. Returns 0 for "yes", 1 for "no". The declining
@@ -271,10 +530,15 @@ menu_pause() {
     return 0
 }
 
-# menu_singleplayer: for now only the normal game; more modes (for
-# example a sprint mode) can be added as further entries later. After a
+# menu_singleplayer: the game modes. "Marathon" is the endless
+# round, "Ultra" the race for ULTRA_TARGET_ROWS rows against the clock
+# (0.14.0, user request); a "Sprint" mode - most rows within a time
+# limit - is planned as a third entry (see CLAUDE.md). The chosen entry
+# is passed to game_run as the mode name, so adding one is a matter of
+# an entry plus its case branch. After a
 # game session the wonder construction site is shown with the freshly
-# banked row total (the round credit was banked by record_round).
+# banked row total (the round credit was banked by record_round) -
+# regardless of the mode, because every cleared row builds the wonder.
 # A round suspended via the pause menu skips that screen and returns to
 # the main menu instead, where its "Fortsetzen" entry picks it up.
 # While a suspended round waits, this menu offers the same "Fortsetzen"
@@ -288,7 +552,9 @@ menu_singleplayer() {
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             entries+=("Fortsetzen")
         fi
-        entries+=("Normales Spiel" "Zurueck")
+        entries+=("Marathon" \
+                  "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
+                  "Zurueck")
         menu_run "Einzelspieler" "${entries[@]}"
         choice="${MENU_CHOICE}"
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -303,15 +569,15 @@ menu_singleplayer() {
                 choice=$(( choice - 1 ))
             fi
         fi
-        if [ "${choice}" -eq 0 ]; then
-            game_run
-            if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-                return 0
-            fi
-            wonder_screen "${TOTAL_ROW_CREDIT}"
-        else
+        case "${choice}" in
+            0) game_run marathon ;;
+            1) game_run ultra ;;
+            *) return 0 ;;
+        esac
+        if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             return 0
         fi
+        wonder_screen "${TOTAL_ROW_CREDIT}"
     done
 }
 

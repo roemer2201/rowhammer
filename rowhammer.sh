@@ -10,7 +10,12 @@
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
 #   restart. Completed rows blink briefly before they are removed, so
-#   the player sees which rows scored. The play screen is one fixed
+#   the player sees which rows scored. The singleplayer menu offers two
+#   game modes: the endless "Marathon" and "Ultra", a race to
+#   clear ULTRA_TARGET_ROWS rows of credit as fast as possible - it ends
+#   the moment the target is reached, the play time is the result and
+#   only successful runs are recorded, in an Ultra highscore list of
+#   their own (lib/highscore.sh). The play screen is one fixed
 #   48x22 block centered in the terminal: the hold piece with the round
 #   counters below it on the left, the board in the middle and the three
 #   upcoming pieces top right; pause and game
@@ -62,6 +67,18 @@
 #   played, plus the results of
 #   the last three rounds with their play date), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
+#   The "Anleitung" main menu entry explains the game on five screens,
+#   paged with the left/right arrow keys (wrapping at both ends):
+#   the rules, the current key bindings, hold and preview, the
+#   gold/silver squares with their row bonus and the wonder construction
+#   (menu_help in lib/menu.sh).
+#   --reset resets persistent data on purpose: the config file, the
+#   statistics, the highscore lists, the wonder savegame or all of them
+#   at once. Nothing is deleted - each file is moved to
+#   <file>-YYYYMMDDhhmmss.bak beside it, so a reset can be undone. It
+#   runs before the game starts, asks for confirmation on a terminal
+#   (unless --force answers for the caller) and then exits instead of
+#   entering the menu.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
 #   action (see lib/debug.sh). The fixed play screen needs a
@@ -72,34 +89,40 @@
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
-#   2. Verify prerequisites (bash >= 4, interactive terminal, minimum
-#      size; the size is rechecked live via SIGWINCH while running).
+#   2. Verify the bash version (>= 4).
 #   3. Source the library modules (debug, config, pieces, board,
 #      squares, highscore, save, stats, wonders, input, render, menu).
-#   4. Resolve settings with precedence default < config file < env <
+#   4. Carry out --reset if requested: move the selected persistent
+#      files below the data directory aside to timestamped .bak copies
+#      and exit, without ever touching the terminal.
+#   5. Verify the remaining prerequisites (interactive terminal, minimum
+#      size; the size is rechecked live via SIGWINCH while running).
+#   6. Resolve settings with precedence default < config file < env <
 #      CLI and validate them.
-#   5. Install the cleanup trap, start the debug logs (when --debug is
+#   7. Install the cleanup trap, start the debug logs (when --debug is
 #      set), load the highscore list, the savegame and the statistics
 #      and enter the alternate screen in raw input mode (echo and
 #      canonical mode off for the whole session).
-#   6. Run the main menu loop; "Einzelspieler" starts the game loop
+#   8. Run the main menu loop; "Einzelspieler" picks a game mode and
+#      starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
 #      clearing, rendering), finished rounds are recorded in the
-#      highscore list, their row credit is banked into the wonder
+#      highscore list of their mode, their row credit is banked into the wonder
 #      savegame and their counters into the statistics file,
 #      settings changes are written back to the config file. A round
 #      suspended via the pause menu returns to the main menu
 #      unrecorded and continues via its "Fortsetzen" entry; leaving the
 #      game while such a round waits asks for confirmation first.
-#   7. Restore the terminal on exit and close the debug logs.
+#   9. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
 #                [--color-mode auto|basic|extended]
 #                [--color-theme guideline|classic|mono|colorblind]
+#                [--reset config|stats|highscore|save|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.32.0  (2026-07-30)
+# Version: 0.37.0  (2026-08-02)
 
 set -euo pipefail
 
@@ -114,7 +137,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.32.0"
+ROWHAMMER_VERSION="0.37.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -154,6 +177,28 @@ DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 # ~/.config/rowhammer (user decision: keep the home directory clean);
 # no migration of the old path per the no-backward-compatibility rule.
 DATA_DIR="${ROWHAMMER_DATA_DIR:-${HOME}/.config/rowhammer}"
+# Reset target: which persistent files below DATA_DIR to delete before
+# the game would start ("" = no reset, the normal case). Deliberately
+# not a config file setting - the config file is one of the things a
+# reset deletes, so honoring it from there would let a file order its
+# own removal on every start. Precedence is therefore default < env <
+# CLI, like the data directory and the debug switches.
+RESET_OPT="${ROWHAMMER_RESET:-}"
+# The accepted reset targets. "highscore" covers both lists (the endless
+# one and the Ultra list) - they are the same kind of data and a caller
+# asking to drop "the highscores" means all of them. "all" includes the
+# savegame, i.e. the wonder progress: it is the plain reading of the
+# word, and "save" exists as its own target for the case where only the
+# wonder progress is meant while config, stats and highscores stay
+# (CLAUDE.md 4.5 left that choice open; this is the decision).
+RESET_TARGETS=(config stats highscore save all)
+# Answer confirmation questions with "yes" instead of asking. Today that
+# is the --reset question; the switch is written as a general one (it may
+# be combined with any other option and is simply without effect where
+# nothing is asked) so a future prompt does not need a second flag. Kept
+# out of the config file for the same reason as the reset target itself:
+# a stored "never ask me again" would defeat the safety net.
+FORCE_OPT="${ROWHAMMER_FORCE:-0}"
 PLAYER_NAME="Player"
 # Color theme: maps piece and gold/silver colors to a named scheme
 # (COLOR_THEMES in lib/pieces.sh). Like the key bindings it is a
@@ -188,8 +233,8 @@ usage() {
 Usage: rowhammer.sh [OPTIONS]
 
 Terminal Tetris of the rowhammer project. Starts with a menu:
-singleplayer, multiplayer (placeholder), highscores, wonders,
-statistics and settings.
+singleplayer (endless "Marathon" or the timed "Ultra" mode),
+multiplayer (placeholder), highscores, wonders, statistics and settings.
 
 Options:
   --seed N      Seed the piece randomizer for a reproducible sequence.
@@ -223,6 +268,31 @@ Options:
                 "guideline" (default), "classic", "mono" or "colorblind".
                 Also selectable in the settings menu and persisted there.
                 Env: ROWHAMMER_COLOR_THEME  Default: guideline
+  --reset TARGET
+                Reset persistent data in the data directory and exit
+                without starting the game. TARGET is one of:
+                  config     the config file rowhammer.conf
+                  stats      the statistics file stats
+                  highscore  both highscore lists (highscore and
+                             highscore-ultra)
+                  save       the savegame save (the wonder progress)
+                  all        all of the above
+                Nothing is deleted: every affected file is moved to
+                <file>-YYYYMMDDhhmmss.bak next to it, so a reset can be
+                undone by moving the backup back. Running the same reset
+                twice within one second waits for the next second rather
+                than overwriting the backup just written.
+                On a terminal the affected files are listed and
+                confirmed first ([N/y], the default answer is no);
+                without a tty (scripting, CI) the reset runs right away,
+                since a waiting prompt would hang the script. Files that
+                do not exist are not an error.
+                Env: ROWHAMMER_RESET        Default: (no reset)
+  --force       Answer confirmation questions with "yes" instead of
+                asking. Combines with any other option; currently the
+                only question asked outside the menus is the --reset
+                one, so "--reset all --force" resets without a prompt.
+                Env: ROWHAMMER_FORCE        Default: 0
   --debug       Enable the debug/trace mode: the session is recorded
                 into log files (see below). Logs can grow to several
                 megabytes in long sessions.
@@ -271,6 +341,17 @@ sole source of points - drops, square formation and spins earn nothing.
 Famous maximum for a single move: a Tetris through two complete gold
 squares = 4 + 1 + 8 x 10 = 85.
 
+Game modes (singleplayer menu): "Marathon" is the endless round
+that ends on a top-out. "Ultra" is a race - clear 150 rows of credit as
+fast as possible; the run ends the moment that target is reached and its
+play time is the result. The HUD shows the target and the rows still
+missing while an Ultra run is going. Ultra runs are ranked by time in
+their own list (<data-dir>/highscore-ultra, fastest first) so they never
+displace the endless list's top ten, and only a run that reached the
+target is recorded - an attempt that topped out early has no comparable
+time. Its rows still count toward the wonders and the statistics, like
+any other round.
+
 Wonders: the row credit of every round is added to a persistent counter
 stored in <data-dir>/save. It builds seven world wonders in a fixed
 sequence; the current wonder and its build percentage are shown in the
@@ -318,6 +399,19 @@ die() {
     fi
     printf '%s: %s\n' "${SCRIPT_NAME}" "$*" >&2
     exit 1
+}
+
+# reset_opt_required
+# Reject an empty --reset argument during parsing. An unset RESET_OPT
+# means "no reset", so "--reset ''" would otherwise start the game as if
+# nothing had been asked for - the one case the shared validation below
+# cannot tell apart from the option being absent.
+reset_opt_required() {
+    if [ -z "${RESET_OPT}" ]; then
+        printf '%s: --reset expects one of: %s\n' \
+            "${SCRIPT_NAME}" "${RESET_TARGETS[*]}" >&2
+        exit 2
+    fi
 }
 
 # --- Argument parsing (highest precedence) --------------------------------
@@ -387,6 +481,24 @@ while [ "$#" -gt 0 ]; do
             CLI_COLOR_THEME="${1#*=}"
             shift
             ;;
+        --reset)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            RESET_OPT="${2}"
+            reset_opt_required
+            shift 2
+            ;;
+        --reset=*)
+            RESET_OPT="${1#*=}"
+            reset_opt_required
+            shift
+            ;;
+        --force)
+            FORCE_OPT=1
+            shift
+            ;;
         --debug)
             DEBUG_OPT=1
             shift
@@ -454,6 +566,29 @@ case "${DEBUG_OPT}" in
         exit 2
         ;;
 esac
+if [ -n "${RESET_OPT}" ]; then
+    _reset_ok=0
+    for _target in "${RESET_TARGETS[@]}"; do
+        if [ "${_target}" = "${RESET_OPT}" ]; then
+            _reset_ok=1
+            break
+        fi
+    done
+    if [ "${_reset_ok}" -eq 0 ]; then
+        printf '%s: --reset expects one of: %s, got: %s\n' \
+            "${SCRIPT_NAME}" "${RESET_TARGETS[*]}" "${RESET_OPT}" >&2
+        exit 2
+    fi
+    unset _reset_ok _target
+fi
+case "${FORCE_OPT}" in
+    0|1) : ;;
+    *)
+        printf '%s: ROWHAMMER_FORCE expects 0 or 1, got: %s\n' \
+            "${SCRIPT_NAME}" "${FORCE_OPT}" >&2
+        exit 2
+        ;;
+esac
 
 # --- Prerequisites --------------------------------------------------------
 # Associative arrays (piece tables) and fractional read timeouts need
@@ -461,9 +596,10 @@ esac
 if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
     die "bash >= 4.0 is required, this is bash ${BASH_VERSION}"
 fi
-if [ ! -t 0 ] || [ ! -t 1 ]; then
-    die "This game needs an interactive terminal (stdin/stdout must be a tty)"
-fi
+# CHANGE 2026-08-02: the tty check moved below the library modules and
+# the --reset block. --reset only deletes files and prints a report, so
+# it must work from a script or a CI job without a terminal - and it
+# needs the file name constants the modules define.
 
 # The fixed board+sidebar layout needs at least this much room. The check
 # runs at startup (below, once the input module is sourced) and, since
@@ -496,6 +632,147 @@ for _lib in debug config pieces board squares highscore save stats wonders input
     . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
 unset _lib
+
+# --- Reset of persistent data (runs before the game starts) ---------------
+# How often reset_run retries when a backup of the current second is
+# already there. One wait is normally enough (the next second brings a
+# free name); more attempts only matter if the clock stands still or
+# jumps back, and after these the reset gives up instead of looping.
+RESET_STAMP_ATTEMPTS=3
+
+# reset_run TARGET
+# Reset the persistent files TARGET stands for below DATA_DIR and report
+# what happened on STDOUT. The file names come from the library modules
+# that own them, so a renamed file never leaves the reset behind.
+# CHANGE 2026-08-02 (user decision): nothing is deleted any more. Every
+# affected file is moved aside to "<file>-YYYYMMDDhhmmss.bak" in the same
+# directory, so a reset stays undoable - a mistyped --reset all used to
+# cost the wonder progress of every round ever played. Should a backup of
+# that very second already exist, the reset ran twice within one second;
+# it then waits for the next second (sleep 1) and tries again with a
+# fresh timestamp rather than overwriting the older backup.
+# This runs before anything touches the terminal: no alternate screen, no
+# raw input mode - which is why the report is plain lines and the
+# confirmation is a plain read instead of menu_confirm, which needs both.
+# Like menu_confirm the question defaults to declining. Returns 0 after a
+# completed or a declined reset; a file that exists but cannot be moved
+# aside is a hard error.
+reset_run() {
+    local target="${1}"
+    local -a names=()
+    local name path backup answer
+    local stamp="" try attempt collision
+    local moved=0 missing=0
+
+    case "${target}" in
+        config)    names=("${CONFIG_NAME}") ;;
+        stats)     names=("${STATS_FILE_NAME}") ;;
+        highscore) names=("${HS_FILE_NAME}" "${HSU_FILE_NAME}") ;;
+        save)      names=("${SAVE_FILE_NAME}") ;;
+        all)       names=("${CONFIG_NAME}" "${STATS_FILE_NAME}"
+                          "${HS_FILE_NAME}" "${HSU_FILE_NAME}"
+                          "${SAVE_FILE_NAME}") ;;
+        # Unreachable: the value is validated against RESET_TARGETS
+        # right after the argument parsing. Kept so a new target added
+        # there without a case here fails loudly instead of silently
+        # resetting nothing.
+        *)         die "Unhandled reset target: ${target}" ;;
+    esac
+
+    printf 'Reset "%s" betrifft diese Dateien in %s:\n' "${target}" "${DATA_DIR}"
+    for name in "${names[@]}"; do
+        path="${DATA_DIR}/${name}"
+        if [ -e "${path}" ]; then
+            printf '  %s\n' "${path}"
+        else
+            printf '  %s (nicht vorhanden)\n' "${path}"
+        fi
+    done
+    printf 'Sie werden nicht geloescht, sondern nach <datei>-YYYYMMDDhhmmss.bak verschoben.\n'
+
+    # Ask first - but only when someone is there to answer and --force
+    # did not answer already. Without a tty (scripting, CI) a waiting
+    # read would hang the caller, so the reset is carried out right away;
+    # asking for it non-interactively is explicit enough.
+    if [ "${FORCE_OPT}" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+        # The declining answer is the default, so it is spelled first and
+        # capitalized - a reset must never be the path of least
+        # resistance (same rule as menu_confirm's preselected "no").
+        printf 'Bist du sicher, dass du %s zuruecksetzen moechtest? [N/y] ' "${target}"
+        # EOF (Ctrl-D) leaves the answer empty and therefore declines.
+        read -r answer || answer=""
+        case "${answer}" in
+            y|Y|yes|YES) : ;;
+            *)
+                printf 'Reset abgebrochen, es wurde nichts verschoben.\n'
+                return 0
+                ;;
+        esac
+    fi
+
+    # One timestamp for the whole run, so the backups of a "--reset all"
+    # belong together visibly. A backup of that second already sitting
+    # there means this very reset just ran; waiting a second yields a
+    # free name instead of clobbering that first backup.
+    for (( attempt = 1; attempt <= RESET_STAMP_ATTEMPTS; attempt++ )); do
+        try="$(date +%Y%m%d%H%M%S)"
+        collision=0
+        for name in "${names[@]}"; do
+            path="${DATA_DIR}/${name}"
+            if [ -e "${path}" ] && [ -e "${path}-${try}.bak" ]; then
+                collision=1
+                break
+            fi
+        done
+        if [ "${collision}" -eq 0 ]; then
+            stamp="${try}"
+            break
+        fi
+        printf 'Backup aus derselben Sekunde vorhanden, warte auf die naechste...\n'
+        sleep 1
+    done
+    if [ -z "${stamp}" ]; then
+        die "Could not find a free backup timestamp after ${RESET_STAMP_ATTEMPTS} attempts in ${DATA_DIR} (is the clock going backwards?)"
+    fi
+
+    for name in "${names[@]}"; do
+        path="${DATA_DIR}/${name}"
+        # A file that is already gone is not an error: the goal of the
+        # reset is reached for it, and there is nothing to back up.
+        if [ ! -e "${path}" ]; then
+            missing=$(( missing + 1 ))
+            continue
+        fi
+        backup="${path}-${stamp}.bak"
+        # Plain mv, no -f: the loop above made sure the backup name is
+        # free, and overwriting an existing backup is exactly what this
+        # must never do.
+        if ! mv -- "${path}" "${backup}"; then
+            die "Failed to move aside: ${path}"
+        fi
+        printf 'Verschoben: %s -> %s\n' "${path}" "${backup}"
+        moved=$(( moved + 1 ))
+    done
+    # The line the user asked for, kept short and always the same, so it
+    # is easy to grep for in a script. The counts follow on their own
+    # line: a reset of a target whose files never existed is a success
+    # too (the goal is reached), and the numbers say which case it was.
+    printf 'Reset erfolgreich\n'
+    printf 'Reset "%s": %d Datei(en) gesichert, %d nicht vorhanden.\n' \
+        "${target}" "${moved}" "${missing}"
+    return 0
+}
+
+if [ -n "${RESET_OPT}" ]; then
+    reset_run "${RESET_OPT}"
+    exit 0
+fi
+
+# The game itself needs a terminal (the reset above does not, see the
+# prerequisites section).
+if [ ! -t 0 ] || [ ! -t 1 ]; then
+    die "This game needs an interactive terminal (stdin/stdout must be a tty)"
+fi
 
 # Terminal size check, now that term_measure (lib/input.sh) is available.
 # It fills TERM_ROWS/TERM_COLS and sets TERM_TOO_SMALL against the minimum
@@ -630,6 +907,32 @@ PLAY_MS=0; PLAY_LAST=0
 # Guards record_round so one round enters the highscore list only
 # once (a round can end twice: game over, then quitting to the menu).
 ROUND_RECORDED=0
+# Game mode of the running round, "marathon" (endless, the classic round;
+# CHANGE 2026-07-31, user decision: renamed from "normal"/"Normales Spiel"
+# to match the term used by other Tetris games for the endless mode) or
+# "ultra" (race: clear ULTRA_TARGET_ROWS of row credit as fast as
+# possible). Round state like the counters above: it is chosen in the
+# singleplayer menu, set by game_reset and kept across a suspend/resume,
+# so a resumed round always comes back in the mode it was started in.
+# The mode decides which highscore list the round is recorded in and
+# whether the HUD shows the goal counters (render_pane_left).
+GAME_MODE="marathon"
+# Row credit an Ultra run has to reach. Weighted rows ("Rows", see the
+# scoring note below), not physical lines: in this game "cleared rows"
+# has meant the weighted figure everywhere else too (wonder progress,
+# statistics), and it makes the gold/silver squares - the mechanic the
+# game is built around - the fast way to the goal instead of dead weight.
+# An adjustable game-feel constant like LEVEL_SPEEDS and LOCK_DELAY_MS;
+# the menu entry and the HUD read it, but the usage text above spells it
+# out (its heredoc is unexpanded, and it is printed before this line ever
+# runs) - so keep that one number in sync when tuning this.
+ULTRA_TARGET_ROWS=150
+# Set when a round ended by reaching its mode's goal instead of by
+# topping out. Both end the round (GAME_OVER=1 drives the end-of-round
+# handling), this flag only tells the two apart - for the box over the
+# board (render_status_box) and for record_round, which enters a run in
+# the Ultra list only when it really got there.
+GOAL_REACHED=0
 
 # CHANGE 2026-07-20: the separate score (line points scaling with the
 # level, flat square formation bonuses, drop points) was removed on user
@@ -684,6 +987,19 @@ fmt_duration() {
     printf -v FMT_DURATION '%02d:%02d' $(( s / 60 )) $(( s % 60 ))
 }
 
+# fmt_duration_ms MILLISECONDS: format a millisecond duration as
+# MM:SS.mmm into the global FMT_DURATION_MS. Used where the tenths and
+# hundredths actually matter - the Ultra mode, where the play time is the
+# score and two attempts routinely land in the same second (the Ultra
+# highscore list therefore stores milliseconds, see lib/highscore.sh).
+# fmt_duration's MM:SS stays the format for everything else.
+FMT_DURATION_MS="00:00.000"
+fmt_duration_ms() {
+    local ms="${1}"
+    printf -v FMT_DURATION_MS '%02d:%02d.%03d' \
+        "$(( ms / 60000 ))" "$(( ms / 1000 % 60 ))" "$(( ms % 1000 ))"
+}
+
 # fmt_ppm PIECES SECONDS: format a placement rate as pieces per minute
 # with one decimal into the global FMT_PPM ("-" while no play time has
 # been measured yet, which is the only division-by-zero case). Bash has
@@ -700,6 +1016,19 @@ fmt_ppm() {
     tenths=$(( pieces * 600 / secs ))
     printf -v FMT_PPM '%d.%d' "$(( tenths / 10 ))" "$(( tenths % 10 ))"
     return 0
+}
+
+# play_clock_tick: account the play time elapsed since the last accounted
+# moment into PLAY_MS (and refresh NOW_MS on the way). The game loop does
+# this once per tick; the Ultra mode calls it again at the very moment
+# its goal is reached, because a hard drop finishes a run between two of
+# those ticks and those milliseconds belong to the run - which in that
+# mode is its score. Idempotent: it only ever adds the interval since
+# PLAY_LAST, which it then moves to "now".
+play_clock_tick() {
+    now_ms
+    PLAY_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
+    PLAY_LAST="${NOW_MS}"
 }
 
 # play_clock_resume: mark "now" as the start of a fresh play-time segment
@@ -733,12 +1062,18 @@ update_speed() {
 }
 
 # record_round: close the books on a finished round, at most once
-# per round: enter it into the highscore list, bank its row credit
+# per round: enter it into the highscore list of its mode, bank its row
+# credit
 # into the persistent wonder counter (savegame) and its counters into
 # the all-time statistics (lib/stats.sh). Runs right when the
 # game over triggers, so the game over box can show the achieved
-# rank (HS_LAST_RANK), and again as a catch-all when the player quits a
-# running round to the menu.
+# rank (HS_LAST_RANK / HSU_LAST_RANK), and again as a catch-all when the
+# player quits a running round to the menu.
+# The two lists are separate and a round enters exactly one of them (see
+# lib/highscore.sh): an Ultra run is ranked by time and would otherwise
+# push endless rounds out of a top ten it cannot be compared against.
+# Wonder progress and statistics do not care about the mode - those rows
+# were really cleared, and per the concept even an aborted round counts.
 record_round() {
     if [ "${ROUND_RECORDED}" -eq 1 ]; then
         return 0
@@ -747,9 +1082,25 @@ record_round() {
     # Round play time in whole seconds, the round's four-row clears and
     # the pieces it placed; all three are stored with the highscore entry
     # (play time and pieces are what its PCS/min column is computed from).
-    highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
-        "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
-        "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
+    if [ "${GAME_MODE}" = "ultra" ]; then
+        # Only a run that reached the goal is recorded: an attempt that
+        # topped out early has no comparable time, and ranking it by rows
+        # would mean two orderings in one list. Its rows and counters
+        # still feed the wonder and the statistics below.
+        if [ "${GOAL_REACHED}" -eq 1 ]; then
+            highscore_ultra_add "${PLAY_MS}" "${ROW_CREDIT}" \
+                "${CLEARED_TOTAL}" "${LEVEL}" "${PLAYER_NAME}" \
+                "${GOLD_COUNT}" "${SILVER_COUNT}" "${ROWHAMMER_COUNT}" \
+                "${PIECE_COUNT}"
+        else
+            HSU_LAST_RANK=0
+            debug_event "ultra run not recorded: goal not reached (rows=${ROW_CREDIT}/${ULTRA_TARGET_ROWS})"
+        fi
+    else
+        highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
+            "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
+            "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
+    fi
     # Every cleared row counts toward the wonder, even from an aborted
     # round - like the original, where all modes feed the line total.
     if [ "${ROW_CREDIT}" -gt 0 ]; then
@@ -864,6 +1215,24 @@ lock_and_next() {
         # lib/render.sh); record_round and wonder_screen each recompute
         # it from the row total, so nothing reads a stale value.
         debug_event "cleared ${CLEARED} row(s): credit=+${CLEARED_CREDIT} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} fall_ms=${FALL_MS} rowhammers=${ROWHAMMER_COUNT}"
+        # Ultra mode: the goal is a row credit, so this - right after a
+        # clear was scored - is the only place it can ever be reached.
+        # The run ends here, before the next piece spawns: it is over the
+        # moment the target is hit, and the piece would only be in the
+        # way of the result box.
+        if [ "${GAME_MODE}" = "ultra" ] && (( ROW_CREDIT >= ULTRA_TARGET_ROWS )); then
+            # Count the time up to this very moment: a hard drop lands
+            # between two loop ticks, and those milliseconds are part of
+            # the run's time - which in this mode is its score.
+            play_clock_tick
+            GOAL_REACHED=1
+            GAME_OVER=1
+            debug_event "ultra goal reached: rows=${ROW_CREDIT}/${ULTRA_TARGET_ROWS} time=${PLAY_MS}ms lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
+            record_round
+            debug_board_snapshot
+            DIRTY=1
+            return 0
+        fi
     fi
     debug_board_snapshot
     # The hold slot unlocks again once a piece has locked.
@@ -1092,9 +1461,13 @@ handle_key() {
     return 0
 }
 
-# game_reset: start a fresh round (used at launch and for restart).
+# game_reset [MODE]
+# Start a fresh round in MODE ("marathon" or "ultra"); without an argument
+# the current GAME_MODE is kept, which is what the game over screen's
+# restart key does - a failed Ultra run restarts as an Ultra run.
 game_reset() {
-    debug_event "round start (seed=${SEED:-unset})"
+    GAME_MODE="${1:-${GAME_MODE}}"
+    debug_event "round start (mode=${GAME_MODE} seed=${SEED:-unset})"
     board_init
     BAG=()
     QUEUE=()
@@ -1111,6 +1484,7 @@ game_reset() {
     HOLD_USED=0
     PAUSED=0
     GAME_OVER=0
+    GOAL_REACHED=0
     ROUND_RECORDED=0
     LOCK_PENDING=0
     PLAY_MS=0
@@ -1121,22 +1495,25 @@ game_reset() {
 }
 
 # --- Game loop ------------------------------------------------------------
-# game_run [MODE]
+# game_run [marathon|ultra|resume]
 # One game session; returns to the caller (the menu) when the player
-# leaves via the pause menu or the game over screen. MODE "resume"
-# continues the round suspended earlier through the pause menu instead
-# of starting a fresh one; the round comes back paused so it does not
-# run before the player is ready. A round suspended (again) is not
-# recorded - the books close only when the round really ends.
+# leaves via the pause menu or the game over screen. The argument is
+# either the game mode of the new round (see GAME_MODE) or "resume",
+# which continues the round suspended earlier through the pause menu
+# instead of starting a fresh one - in the mode that round was started
+# in, since the suspended state carries its GAME_MODE along. A resumed
+# round comes back paused so it does not run before the player is ready.
+# A round suspended (again) is not recorded - the books close only when
+# the round really ends.
 game_run() {
-    local mode="${1:-new}"
+    local mode="${1:-marathon}"
     GAME_EXIT=0
     # The screen still holds a menu: the first frame must repaint it all.
     RENDER_FULL=1
     if [ "${mode}" = "resume" ] && [ "${GAME_SUSPENDED}" -eq 1 ]; then
         GAME_SUSPENDED=0
         PAUSED=1
-        debug_event "round resumed from menu (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+        debug_event "round resumed from menu (mode=${GAME_MODE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
         # The round keeps its accumulated PLAY_MS; only restart the clocks
         # so the suspended interval is not counted (it comes back paused).
         play_clock_resume
@@ -1149,7 +1526,7 @@ game_run() {
             GAME_SUSPENDED=0
             record_round
         fi
-        game_reset
+        game_reset "${mode}"
     fi
 
     while [ "${GAME_EXIT}" -eq 0 ]; do
@@ -1169,12 +1546,11 @@ game_run() {
             DIRTY=1
         fi
         if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
-            now_ms
             # Accumulate the play time of the segment since the last
-            # accounted moment. play_clock_resume set PLAY_LAST to "now"
-            # at every resume, so an idle phase never lands in PLAY_MS.
-            PLAY_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
-            PLAY_LAST="${NOW_MS}"
+            # accounted moment (and refresh NOW_MS for the gravity checks
+            # below). play_clock_resume set PLAY_LAST to "now" at every
+            # resume, so an idle phase never lands in PLAY_MS.
+            play_clock_tick
             if [ "${LOCK_PENDING}" -eq 1 ]; then
                 # Resting piece: lock once the grace window has elapsed.
                 # Gravity is idle here - the piece cannot fall anyway.
@@ -1195,13 +1571,13 @@ game_run() {
     # A suspended round is not finished: keep the whole game state
     # (including the ROUND_RECORDED guard) for the "Fortsetzen" entry.
     if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-        debug_event "game session suspended (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
+        debug_event "game session suspended (mode=${GAME_MODE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
         return 0
     fi
     # Quitting a running round to the menu ends it too; the flag makes
     # this a no-op when the game over path already recorded the round.
     record_round
-    debug_event "game session end (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL})"
+    debug_event "game session end (mode=${GAME_MODE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} level=${LEVEL} goal_reached=${GOAL_REACHED})"
     return 0
 }
 
@@ -1215,9 +1591,12 @@ main() {
     # Debug logging starts before the alternate screen, so init errors
     # (unwritable log directory etc.) stay readable.
     debug_init
-    # Load the persistent highscore list once; rounds update it in
-    # memory and rewrite the file when they enter the list.
+    # Load the persistent highscore lists once; rounds update them in
+    # memory and rewrite their file when they enter one. The Ultra list
+    # is a separate file with its own ranking (fastest run first), so a
+    # timed run and an endless round never compete for the same slots.
     highscore_load
+    highscore_ultra_load
     # Load the wonder savegame and derive the wonder state once, so the
     # "Weltwunder" screen and record_round start from a valid state.
     save_load
@@ -1238,7 +1617,7 @@ main() {
             entries+=("Fortsetzen")
         fi
         entries+=("Einzelspieler" "Mehrspieler" "Highscores" \
-            "Weltwunder" "Statistik" "Einstellungen" "Beenden")
+            "Weltwunder" "Statistik" "Einstellungen" "Anleitung" "Beenden")
         menu_run "R O W H A M M E R" "${entries[@]}"
         choice="${MENU_CHOICE}"
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -1278,6 +1657,13 @@ main() {
                 ;;
             5)
                 menu_settings
+                ;;
+            6)
+                # Short manual (user request): rules, controls, hold,
+                # gold/silver squares and the wonder construction. It
+                # sits right before "Beenden" so the entry a player
+                # needs on the first start is the last one they pass.
+                menu_help
                 ;;
             *)
                 # "Beenden" or ESC on the top level leaves the game. A

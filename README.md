@@ -5,7 +5,7 @@ Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 Vorbild ist **"The New Tetris"** (Nintendo 64): Mit jeder abgebauten Reihe
 arbeitest du am Aufbau eines **Weltwunders**, das ueber alle Runden hinweg
 Stueck fuer Stueck aus ASCII-Art entsteht. Auch das Quadrat-System des
-Originals ist Teil des Konzepts: Wer aus vier Tetrominos ein 4x4-Quadrat baut,
+Originals ist Teil des Konzepts: Wer aus vier Bausteinen ein 4x4-Quadrat baut,
 erhaelt **Gold-** (sortenrein) oder **Silber-Bloecke** (gemischt), die beim
 Abbau kraeftige Bonus-Reihen liefern.
 
@@ -56,7 +56,7 @@ The-New-Tetris-Mechaniken und der Weltwunder-Modus): Spielfeld,
 7-Bag-Randomizer mit Vorschau auf
 3 Teile, Hold, Gravitation mit Levelkurve, Reihenabbau, Soft-/Hard-Drop,
 Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
-4x4-Feld aus genau vier unversehrten Tetrominos baut, erhaelt ein Gold-
+4x4-Feld aus genau vier unversehrten Bausteinen baut, erhaelt ein Gold-
 (sortenrein) oder Silber-Quadrat (gemischt); jede abgebaute Reihe bringt
 +10 Bonuszeilen je Gold- und +5 je Silber-Quadrat (ein Tetris +1 extra)
 fuer den "Rows"-Zaehler. Dieser Zaehler baut ueber alle Runden hinweg
@@ -64,8 +64,8 @@ sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
 unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
 und nach jeder Runde sowie im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
-Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik und
-Einstellungen;
+Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik,
+Einstellungen und einer kurzen Anleitung;
 die besten
 10 Runden werden dauerhaft gespeichert. Das vollstaendige Konzept
 und die Roadmap stehen in [CLAUDE.md](CLAUDE.md).
@@ -89,7 +89,19 @@ Das Startmenue bietet:
 - **Fortsetzen** - erscheint nur, solange eine ueber das Pausenmenue
   ins Hauptmenue gelegte Runde wartet, und nimmt sie wieder auf; der
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
-- **Einzelspieler** - vorerst nur "Normales Spiel"
+- **Einzelspieler** - die Spielmodi: **Marathon** (endlos, Ende
+  durch Game Over) und **Ultra** - 150 Rows so schnell wie moeglich
+  abbauen. Die Ultra-Runde endet in dem Moment, in dem das Ziel
+  erreicht ist; das Ergebnis ist die Spielzeit, und der HUD zeigt
+  waehrenddessen Ziel ("Goal") und Restbedarf ("Left"). Gewertete Rows
+  zaehlen, nicht physische Reihen - Gold- und Silberquadrate sind also
+  die Abkuerzung ins Ziel. Erfolgreiche Laeufe landen in einer eigenen
+  Bestenliste (`~/.config/rowhammer/highscore-ultra`, schnellster Lauf
+  zuerst), die die 10 besten endlosen Runden unberuehrt laesst; ein
+  Versuch, der vorher im Game Over endet, wird nicht eingetragen, seine
+  Reihen zaehlen aber weiter fuer Weltwunder und Statistik. Die
+  Anzeige dieser Liste im Menue folgt noch (bislang meldet nur das
+  Rundenende-Bild den erreichten Rang)
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
 - **Highscores** - die besten 10 Runden, je Eintrag zwei Zeilen und
   seitenweise geblaettert: Name, Rows (die Punkte der Runde), Spielzeit
@@ -106,8 +118,14 @@ Das Startmenue bietet:
 - **Einstellungen** - Tastenbelegung aendern und Spielernamen setzen;
   beides wird in der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`)
+- **Anleitung** - kurze Spielerklaerung auf fuenf Bildschirmen, mit
+  den Pfeiltasten links/rechts durchblaetterbar (umlaufend):
+  Spielprinzip, Steuerung (mit der gerade eingestellten
+  Tastenbelegung), Vorschau und Hold, Gold-/Silber-Quadrate mit ihrer
+  Reihenwertung und der Weltwunderbau
 
-Alle Spieldaten (Konfiguration, Highscores, Weltwunder-Spielstand,
+Alle Spieldaten (Konfiguration, Highscores inklusive der Ultra-Liste,
+Weltwunder-Spielstand,
 Statistik) liegen im Datenverzeichnis
 `~/.config/rowhammer`, aenderbar per `--data-dir`.
 
@@ -120,9 +138,40 @@ Optionen:
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen (auch Standard-`NO_COLOR`, s. u.) |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
+| `--reset ZIEL`   | `ROWHAMMER_RESET`        | Persistente Daten zuruecksetzen und beenden (s. unten) |
+| `--force`        | `ROWHAMMER_FORCE`        | Sicherheitsabfragen automatisch mit "ja" beantworten |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
 | `--debug-dir DIR`| `ROWHAMMER_DEBUG_DIR`    | Zielverzeichnis fuer die Debug-Logs      |
 | `-h/--help`      | -                        | Hilfe mit allen Optionen und Tasten      |
+
+`--reset ZIEL` setzt gezielt gespeicherte Daten im Datenverzeichnis
+zurueck und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
+`config` (die Konfigurationsdatei `rowhammer.conf`), `stats` (die
+Statistik), `highscore` (beide Bestenlisten - `highscore` und
+`highscore-ultra`), `save` (der Weltwunder-Fortschritt) oder `all`
+(alles zusammen).
+
+**Geloescht wird dabei nichts:** jede betroffene Datei wird nach
+`<datei>-YYYYMMDDhhmmss.bak` im selben Verzeichnis verschoben, ein
+Reset laesst sich also mit einem `mv` rueckgaengig machen. Wird
+derselbe Reset zweimal in derselben Sekunde ausgefuehrt, wartet das
+Spiel eine Sekunde und nimmt einen neuen Zeitstempel, statt das gerade
+geschriebene Backup zu ueberschreiben.
+
+Am Terminal werden die betroffenen Dateien erst aufgelistet und dann
+abgefragt (`Bist du sicher, dass du <ziel> zuruecksetzen moechtest?
+[N/y]`); die Vorgabe ist "nein", verschoben wird nur nach einem
+ausdruecklichen `y` - danach meldet das Spiel `Reset erfolgreich`.
+`--force`
+beantwortet die Abfrage automatisch mit "ja" und laesst sich mit allen
+anderen Optionen kombinieren; ohne Terminal (Skript, CI) laeuft der
+Reset ohnehin ohne Rueckfrage durch. Bereits fehlende Dateien sind kein
+Fehler.
+
+```
+rowhammer.sh --reset highscore
+rowhammer.sh --reset all --force
+```
 
 Der Debug-Modus zeichnet die komplette Session in drei korrelierte
 Log-Dateien auf (Standardziel:
@@ -156,7 +205,7 @@ Praezedenz: CLI > Umgebungsvariable > Konfigurationsdatei > Standardwert.
 
 Umgesetzt:
 
-- Klassisches 10x20-Spielfeld, 7 Tetrominos, 7-Bag-Randomizer
+- Klassisches 10x20-Spielfeld, 7 Bausteine, 7-Bag-Randomizer
 - Vorschau auf die naechsten 3 Teile und Hold (einmal pro Zug)
 - **Quadrat-System:** Gold- (sortenrein) und Silber-Quadrate (gemischt)
   aus je vier unversehrten Teilen; jede geraeumte Reihe zaehlt 1 plus
@@ -197,7 +246,12 @@ Umgesetzt:
   den Guideline-Teilfarben - inklusive echtem Orange fuer das L-Teil
   und kraeftigerem Gold/Silber fuer die Quadrate
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
-  Weltwunder, Statistik und Einstellungen
+  Weltwunder, Statistik, Einstellungen und Anleitung
+- **Anleitung im Spiel:** fuenf Bildschirme zu Spielprinzip, Steuerung,
+  Vorschau/Hold, Gold- und Silberbloecken und Weltwunderbau; die
+  Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
+- **Spielmodi:** endloses **Marathon** und **Ultra** (150 Rows auf
+  Zeit, eigene Bestenliste nach kuerzester Zeit; siehe oben)
 - Persistente Highscore-Liste: die besten 10 Runden in
   `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
@@ -215,6 +269,11 @@ Umgesetzt:
   `~/.config/rowhammer/save`, Anzeige nach jeder Runde und im Menue
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
   `~/.config/rowhammer/rowhammer.conf`
+- **Gezielter Reset:** `--reset config|stats|highscore|save|all` setzt
+  die gespeicherten Daten einzeln oder komplett zurueck - die alten
+  Dateien wandern in ein `.bak` mit Zeitstempel statt geloescht zu
+  werden, am Terminal mit Sicherheitsabfrage (`--force` beantwortet sie
+  mit ja), im Skript ohne (s. o.)
 
 Geplant:
 
