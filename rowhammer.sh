@@ -72,6 +72,13 @@
 #   the rules, the current key bindings, hold and preview, the
 #   gold/silver squares with their row bonus and the wonder construction
 #   (menu_help in lib/menu.sh).
+#   --reset resets persistent data on purpose: the config file, the
+#   statistics, the highscore lists, the wonder savegame or all of them
+#   at once. Nothing is deleted - each file is moved to
+#   <file>-YYYYMMDDhhmmss.bak beside it, so a reset can be undone. It
+#   runs before the game starts, asks for confirmation on a terminal
+#   (unless --force answers for the caller) and then exits instead of
+#   entering the menu.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
 #   action (see lib/debug.sh). The fixed play screen needs a
@@ -82,17 +89,21 @@
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
-#   2. Verify prerequisites (bash >= 4, interactive terminal, minimum
-#      size; the size is rechecked live via SIGWINCH while running).
+#   2. Verify the bash version (>= 4).
 #   3. Source the library modules (debug, config, pieces, board,
 #      squares, highscore, save, stats, wonders, input, render, menu).
-#   4. Resolve settings with precedence default < config file < env <
+#   4. Carry out --reset if requested: move the selected persistent
+#      files below the data directory aside to timestamped .bak copies
+#      and exit, without ever touching the terminal.
+#   5. Verify the remaining prerequisites (interactive terminal, minimum
+#      size; the size is rechecked live via SIGWINCH while running).
+#   6. Resolve settings with precedence default < config file < env <
 #      CLI and validate them.
-#   5. Install the cleanup trap, start the debug logs (when --debug is
+#   7. Install the cleanup trap, start the debug logs (when --debug is
 #      set), load the highscore list, the savegame and the statistics
 #      and enter the alternate screen in raw input mode (echo and
 #      canonical mode off for the whole session).
-#   6. Run the main menu loop; "Einzelspieler" picks a game mode and
+#   8. Run the main menu loop; "Einzelspieler" picks a game mode and
 #      starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
 #      clearing, rendering), finished rounds are recorded in the
@@ -102,15 +113,16 @@
 #      suspended via the pause menu returns to the main menu
 #      unrecorded and continues via its "Fortsetzen" entry; leaving the
 #      game while such a round waits asks for confirmation first.
-#   7. Restore the terminal on exit and close the debug logs.
+#   9. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
 #                [--color-mode auto|basic|extended]
 #                [--color-theme guideline|classic|mono|colorblind]
+#                [--reset config|stats|highscore|save|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.34.1  (2026-07-31)
+# Version: 0.36.1  (2026-08-02)
 
 set -euo pipefail
 
@@ -124,7 +136,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.34.1"
+ROWHAMMER_VERSION="0.36.1"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -164,6 +176,28 @@ DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 # ~/.config/rowhammer (user decision: keep the home directory clean);
 # no migration of the old path per the no-backward-compatibility rule.
 DATA_DIR="${ROWHAMMER_DATA_DIR:-${HOME}/.config/rowhammer}"
+# Reset target: which persistent files below DATA_DIR to delete before
+# the game would start ("" = no reset, the normal case). Deliberately
+# not a config file setting - the config file is one of the things a
+# reset deletes, so honoring it from there would let a file order its
+# own removal on every start. Precedence is therefore default < env <
+# CLI, like the data directory and the debug switches.
+RESET_OPT="${ROWHAMMER_RESET:-}"
+# The accepted reset targets. "highscore" covers both lists (the endless
+# one and the Ultra list) - they are the same kind of data and a caller
+# asking to drop "the highscores" means all of them. "all" includes the
+# savegame, i.e. the wonder progress: it is the plain reading of the
+# word, and "save" exists as its own target for the case where only the
+# wonder progress is meant while config, stats and highscores stay
+# (CLAUDE.md 4.5 left that choice open; this is the decision).
+RESET_TARGETS=(config stats highscore save all)
+# Answer confirmation questions with "yes" instead of asking. Today that
+# is the --reset question; the switch is written as a general one (it may
+# be combined with any other option and is simply without effect where
+# nothing is asked) so a future prompt does not need a second flag. Kept
+# out of the config file for the same reason as the reset target itself:
+# a stored "never ask me again" would defeat the safety net.
+FORCE_OPT="${ROWHAMMER_FORCE:-0}"
 PLAYER_NAME="Player"
 # Color theme: maps piece and gold/silver colors to a named scheme
 # (COLOR_THEMES in lib/pieces.sh). Like the key bindings it is a
@@ -233,6 +267,31 @@ Options:
                 "guideline" (default), "classic", "mono" or "colorblind".
                 Also selectable in the settings menu and persisted there.
                 Env: ROWHAMMER_COLOR_THEME  Default: guideline
+  --reset TARGET
+                Reset persistent data in the data directory and exit
+                without starting the game. TARGET is one of:
+                  config     the config file rowhammer.conf
+                  stats      the statistics file stats
+                  highscore  both highscore lists (highscore and
+                             highscore-ultra)
+                  save       the savegame save (the wonder progress)
+                  all        all of the above
+                Nothing is deleted: every affected file is moved to
+                <file>-YYYYMMDDhhmmss.bak next to it, so a reset can be
+                undone by moving the backup back. Running the same reset
+                twice within one second waits for the next second rather
+                than overwriting the backup just written.
+                On a terminal the affected files are listed and
+                confirmed first ([N/y], the default answer is no);
+                without a tty (scripting, CI) the reset runs right away,
+                since a waiting prompt would hang the script. Files that
+                do not exist are not an error.
+                Env: ROWHAMMER_RESET        Default: (no reset)
+  --force       Answer confirmation questions with "yes" instead of
+                asking. Combines with any other option; currently the
+                only question asked outside the menus is the --reset
+                one, so "--reset all --force" resets without a prompt.
+                Env: ROWHAMMER_FORCE        Default: 0
   --debug       Enable the debug/trace mode: the session is recorded
                 into log files (see below). Logs can grow to several
                 megabytes in long sessions.
@@ -341,6 +400,19 @@ die() {
     exit 1
 }
 
+# reset_opt_required
+# Reject an empty --reset argument during parsing. An unset RESET_OPT
+# means "no reset", so "--reset ''" would otherwise start the game as if
+# nothing had been asked for - the one case the shared validation below
+# cannot tell apart from the option being absent.
+reset_opt_required() {
+    if [ -z "${RESET_OPT}" ]; then
+        printf '%s: --reset expects one of: %s\n' \
+            "${SCRIPT_NAME}" "${RESET_TARGETS[*]}" >&2
+        exit 2
+    fi
+}
+
 # --- Argument parsing (highest precedence) --------------------------------
 while [ "$#" -gt 0 ]; do
     case "${1}" in
@@ -406,6 +478,24 @@ while [ "$#" -gt 0 ]; do
             ;;
         --color-theme=*)
             CLI_COLOR_THEME="${1#*=}"
+            shift
+            ;;
+        --reset)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            RESET_OPT="${2}"
+            reset_opt_required
+            shift 2
+            ;;
+        --reset=*)
+            RESET_OPT="${1#*=}"
+            reset_opt_required
+            shift
+            ;;
+        --force)
+            FORCE_OPT=1
             shift
             ;;
         --debug)
@@ -475,6 +565,29 @@ case "${DEBUG_OPT}" in
         exit 2
         ;;
 esac
+if [ -n "${RESET_OPT}" ]; then
+    _reset_ok=0
+    for _target in "${RESET_TARGETS[@]}"; do
+        if [ "${_target}" = "${RESET_OPT}" ]; then
+            _reset_ok=1
+            break
+        fi
+    done
+    if [ "${_reset_ok}" -eq 0 ]; then
+        printf '%s: --reset expects one of: %s, got: %s\n' \
+            "${SCRIPT_NAME}" "${RESET_TARGETS[*]}" "${RESET_OPT}" >&2
+        exit 2
+    fi
+    unset _reset_ok _target
+fi
+case "${FORCE_OPT}" in
+    0|1) : ;;
+    *)
+        printf '%s: ROWHAMMER_FORCE expects 0 or 1, got: %s\n' \
+            "${SCRIPT_NAME}" "${FORCE_OPT}" >&2
+        exit 2
+        ;;
+esac
 
 # --- Prerequisites --------------------------------------------------------
 # Associative arrays (piece tables) and fractional read timeouts need
@@ -482,9 +595,10 @@ esac
 if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
     die "bash >= 4.0 is required, this is bash ${BASH_VERSION}"
 fi
-if [ ! -t 0 ] || [ ! -t 1 ]; then
-    die "This game needs an interactive terminal (stdin/stdout must be a tty)"
-fi
+# CHANGE 2026-08-02: the tty check moved below the library modules and
+# the --reset block. --reset only deletes files and prints a report, so
+# it must work from a script or a CI job without a terminal - and it
+# needs the file name constants the modules define.
 
 # The fixed board+sidebar layout needs at least this much room. The check
 # runs at startup (below, once the input module is sourced) and, since
@@ -517,6 +631,147 @@ for _lib in debug config pieces board squares highscore save stats wonders input
     . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
 unset _lib
+
+# --- Reset of persistent data (runs before the game starts) ---------------
+# How often reset_run retries when a backup of the current second is
+# already there. One wait is normally enough (the next second brings a
+# free name); more attempts only matter if the clock stands still or
+# jumps back, and after these the reset gives up instead of looping.
+RESET_STAMP_ATTEMPTS=3
+
+# reset_run TARGET
+# Reset the persistent files TARGET stands for below DATA_DIR and report
+# what happened on STDOUT. The file names come from the library modules
+# that own them, so a renamed file never leaves the reset behind.
+# CHANGE 2026-08-02 (user decision): nothing is deleted any more. Every
+# affected file is moved aside to "<file>-YYYYMMDDhhmmss.bak" in the same
+# directory, so a reset stays undoable - a mistyped --reset all used to
+# cost the wonder progress of every round ever played. Should a backup of
+# that very second already exist, the reset ran twice within one second;
+# it then waits for the next second (sleep 1) and tries again with a
+# fresh timestamp rather than overwriting the older backup.
+# This runs before anything touches the terminal: no alternate screen, no
+# raw input mode - which is why the report is plain lines and the
+# confirmation is a plain read instead of menu_confirm, which needs both.
+# Like menu_confirm the question defaults to declining. Returns 0 after a
+# completed or a declined reset; a file that exists but cannot be moved
+# aside is a hard error.
+reset_run() {
+    local target="${1}"
+    local -a names=()
+    local name path backup answer
+    local stamp="" try attempt collision
+    local moved=0 missing=0
+
+    case "${target}" in
+        config)    names=("${CONFIG_NAME}") ;;
+        stats)     names=("${STATS_FILE_NAME}") ;;
+        highscore) names=("${HS_FILE_NAME}" "${HSU_FILE_NAME}") ;;
+        save)      names=("${SAVE_FILE_NAME}") ;;
+        all)       names=("${CONFIG_NAME}" "${STATS_FILE_NAME}"
+                          "${HS_FILE_NAME}" "${HSU_FILE_NAME}"
+                          "${SAVE_FILE_NAME}") ;;
+        # Unreachable: the value is validated against RESET_TARGETS
+        # right after the argument parsing. Kept so a new target added
+        # there without a case here fails loudly instead of silently
+        # resetting nothing.
+        *)         die "Unhandled reset target: ${target}" ;;
+    esac
+
+    printf 'Reset "%s" betrifft diese Dateien in %s:\n' "${target}" "${DATA_DIR}"
+    for name in "${names[@]}"; do
+        path="${DATA_DIR}/${name}"
+        if [ -e "${path}" ]; then
+            printf '  %s\n' "${path}"
+        else
+            printf '  %s (nicht vorhanden)\n' "${path}"
+        fi
+    done
+    printf 'Sie werden nicht geloescht, sondern nach <datei>-YYYYMMDDhhmmss.bak verschoben.\n'
+
+    # Ask first - but only when someone is there to answer and --force
+    # did not answer already. Without a tty (scripting, CI) a waiting
+    # read would hang the caller, so the reset is carried out right away;
+    # asking for it non-interactively is explicit enough.
+    if [ "${FORCE_OPT}" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+        # The declining answer is the default, so it is spelled first and
+        # capitalized - a reset must never be the path of least
+        # resistance (same rule as menu_confirm's preselected "no").
+        printf 'Bist du sicher, dass du %s zuruecksetzen moechtest? [N/y] ' "${target}"
+        # EOF (Ctrl-D) leaves the answer empty and therefore declines.
+        read -r answer || answer=""
+        case "${answer}" in
+            y|Y|yes|YES) : ;;
+            *)
+                printf 'Reset abgebrochen, es wurde nichts verschoben.\n'
+                return 0
+                ;;
+        esac
+    fi
+
+    # One timestamp for the whole run, so the backups of a "--reset all"
+    # belong together visibly. A backup of that second already sitting
+    # there means this very reset just ran; waiting a second yields a
+    # free name instead of clobbering that first backup.
+    for (( attempt = 1; attempt <= RESET_STAMP_ATTEMPTS; attempt++ )); do
+        try="$(date +%Y%m%d%H%M%S)"
+        collision=0
+        for name in "${names[@]}"; do
+            path="${DATA_DIR}/${name}"
+            if [ -e "${path}" ] && [ -e "${path}-${try}.bak" ]; then
+                collision=1
+                break
+            fi
+        done
+        if [ "${collision}" -eq 0 ]; then
+            stamp="${try}"
+            break
+        fi
+        printf 'Backup aus derselben Sekunde vorhanden, warte auf die naechste...\n'
+        sleep 1
+    done
+    if [ -z "${stamp}" ]; then
+        die "Could not find a free backup timestamp after ${RESET_STAMP_ATTEMPTS} attempts in ${DATA_DIR} (is the clock going backwards?)"
+    fi
+
+    for name in "${names[@]}"; do
+        path="${DATA_DIR}/${name}"
+        # A file that is already gone is not an error: the goal of the
+        # reset is reached for it, and there is nothing to back up.
+        if [ ! -e "${path}" ]; then
+            missing=$(( missing + 1 ))
+            continue
+        fi
+        backup="${path}-${stamp}.bak"
+        # Plain mv, no -f: the loop above made sure the backup name is
+        # free, and overwriting an existing backup is exactly what this
+        # must never do.
+        if ! mv -- "${path}" "${backup}"; then
+            die "Failed to move aside: ${path}"
+        fi
+        printf 'Verschoben: %s -> %s\n' "${path}" "${backup}"
+        moved=$(( moved + 1 ))
+    done
+    # The line the user asked for, kept short and always the same, so it
+    # is easy to grep for in a script. The counts follow on their own
+    # line: a reset of a target whose files never existed is a success
+    # too (the goal is reached), and the numbers say which case it was.
+    printf 'Reset erfolgreich\n'
+    printf 'Reset "%s": %d Datei(en) gesichert, %d nicht vorhanden.\n' \
+        "${target}" "${moved}" "${missing}"
+    return 0
+}
+
+if [ -n "${RESET_OPT}" ]; then
+    reset_run "${RESET_OPT}"
+    exit 0
+fi
+
+# The game itself needs a terminal (the reset above does not, see the
+# prerequisites section).
+if [ ! -t 0 ] || [ ! -t 1 ]; then
+    die "This game needs an interactive terminal (stdin/stdout must be a tty)"
+fi
 
 # Terminal size check, now that term_measure (lib/input.sh) is available.
 # It fills TERM_ROWS/TERM_COLS and sets TERM_TOO_SMALL against the minimum

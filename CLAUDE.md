@@ -468,6 +468,10 @@ wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
 `--color-theme guideline|classic|mono|colorblind`
 (`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
 Einstellungsmenue waehlbar und in der Config gespeichert),
+`--reset config|stats|highscore|save|all` (`ROWHAMMER_RESET`, seit
+0.35.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
+beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
+Resets; frei mit anderen Optionen kombinierbar),
 `--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
@@ -820,6 +824,90 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
 - Hinweis: Das Repository hat noch keine Lizenzdatei;
   `debian/copyright` ist entsprechend als "UNLICENSED" markiert und muss
   nachgezogen werden, sobald eine Lizenz festgelegt ist.
+
+### 4.8 Reset persistenter Daten (seit 0.35.0)
+
+`--reset TARGET` (`ROWHAMMER_RESET`) setzt gezielt persistente Dateien
+im Datenverzeichnis (siehe 4.5) zurueck und beendet das Programm, statt
+ins Menue zu starten. Ziele:
+
+| TARGET | betroffene Dateien |
+| --- | --- |
+| `config` | `rowhammer.conf` |
+| `stats` | `stats` |
+| `highscore` | `highscore` **und** `highscore-ultra` |
+| `save` | `save` (Weltwunder-Fortschritt) |
+| `all` | alle fuenf Dateien |
+
+**Reset heisst verschieben, nicht loeschen (seit 0.36.0,
+Nutzerentscheidung).** Jede betroffene Datei wandert nach
+`<datei>-YYYYMMDDhhmmss.bak` im selben Verzeichnis; ein versehentliches
+`--reset all` kostet damit keine Daten mehr, das Zurueckholen ist ein
+`mv`. Der Zeitstempel gilt fuer den ganzen Lauf, sodass die Backups
+eines `all` sichtbar zusammengehoeren. Existiert eine Backup-Datei
+dieser Sekunde bereits, lief derselbe Reset gerade eben schon einmal:
+`reset_run` wartet dann mit `sleep 1` auf die naechste Sekunde und
+nimmt einen frischen Zeitstempel, statt das eben geschriebene Backup zu
+ueberschreiben (`RESET_STAMP_ATTEMPTS`, 3 Versuche; danach Abbruch mit
+Meldung - eine stehende oder zurueckspringende Uhr soll keine
+Endlosschleife ergeben). Verschoben wird mit einfachem `mv` ohne `-f`,
+weil ein vorhandenes Backup nie ueberschrieben werden darf. Die
+`.bak`-Dateien bleiben liegen; das Spiel liest sie nie (kein Dateiname
+passt auf die Konstanten aus 4.5), aufgeraeumt werden sie von Hand.
+
+Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
+
+- **`all` loescht auch das Savegame.** "Alles" heisst alles; wer nur den
+  Weltwunder-Fortschritt zuruecksetzen will, hat dafuer das eigene Ziel
+  `save` (der in der Roadmap angedachte Wert), das die uebrigen Dateien
+  unangetastet laesst.
+- **`highscore` trifft beide Bestenlisten.** Endlos- und Ultra-Liste
+  (seit 0.34.0, siehe 4.5) sind dieselbe Art Daten; eine davon stehen zu
+  lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
+  einen Reset zu fein.
+
+Ablauf und Einordnung:
+
+- **Kein Config-Wert.** Praezedenz Standard < Env < CLI wie beim
+  Datenverzeichnis und den Debug-Schaltern. Die Config-Datei ist eines
+  der Reset-Ziele - wuerde der Reset von dort gelesen, koennte sich eine
+  Datei bei jedem Start selbst loeschen lassen.
+- **Zeitpunkt:** direkt nach dem Sourcen der Module (die Dateinamen
+  kommen aus den Modulen, die sie besitzen: `CONFIG_NAME`,
+  `STATS_FILE_NAME`, `HS_FILE_NAME`/`HSU_FILE_NAME`, `SAVE_FILE_NAME`)
+  und **vor** der TTY-Pruefung. Die TTY-Pruefung ist dafuer aus dem
+  Prerequisites-Block nach unten gewandert: ein Reset loescht nur
+  Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
+  ohne Terminal laufen. Das Terminal wird nie angefasst (kein
+  Alternate-Screen, kein Rohmodus).
+- **Sicherheitsabfrage:** an einem Terminal listet `reset_run` erst die
+  betroffenen Pfade und fragt dann `Bist du sicher, dass du <ziel>
+  zuruecksetzen moechtest? [N/y]`; wie bei `menu_confirm` ist "nein" die
+  Vorgabe - deshalb steht das `N` vorn und gross, und leere Antwort, EOF
+  oder alles ausser `y`/`yes` bricht ab. Nach dem Verschieben meldet der
+  Reset `Reset erfolgreich`, darunter die Bilanz (gesicherte und nicht
+  vorhandene Dateien). **Sprache (seit 0.36.1, Nutzerentscheidung):**
+  der Reset-Dialog ist als Nutzerdialog wie die Menues **deutsch in
+  ASCII** (also "zuruecksetzen"/"moechtest" in der
+  Umlaut-Umschreibung) - eine bewusste
+  Ausnahme von der Konventionsregel "Ausgaben in Englisch", die fuer
+  `--help` und die Fehlermeldungen nach STDERR unveraendert gilt. Das
+  ist derselbe Schnitt wie im Rest des Spiels (Menues deutsch, HUD und
+  `--help` englisch, siehe offener Punkt "UI-Sprache" in Abschnitt 8).
+  Ohne TTY entfaellt die Abfrage, weil ein wartendes `read` den Aufrufer
+  haengen liesse. Die Abfrage ist bewusst ein einfaches `read` statt
+  `menu_confirm`: letzteres braucht Alternate-Screen, Rohmodus und
+  `render_menu_frame`, also genau das, was der Reset nicht aufbaut.
+- **`--force` (`ROWHAMMER_FORCE`, seit 0.36.0)** beantwortet die Abfrage
+  vorab mit "ja". Der Schalter ist bewusst allgemein gehalten und nicht
+  `--reset-force`: er laesst sich mit jeder anderen Option kombinieren
+  und ist ueberall wirkungslos, wo nichts gefragt wird (das Spiel
+  startet mit `--force` also ganz normal). Wie das Reset-Ziel steht er
+  nicht in der Config - ein gespeichertes "frag mich nie wieder" wuerde
+  das Sicherheitsnetz aushebeln -, Praezedenz also Standard < Env < CLI.
+- Nicht vorhandene Dateien sind kein Fehler (Ziel bereits erreicht) und
+  werden nur gemeldet; eine vorhandene Datei, die sich nicht verschieben
+  laesst, bricht mit Fehlermeldung ab.
 
 ## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
 
@@ -1660,25 +1748,37 @@ Feature-Branch oder Pull Request.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
-- [ ] `--reset [config|stats|highscore|all]` einbauen: loescht gezielt
-      persistente Daten im Datenverzeichnis (`${DATA_DIR}`, siehe 4.5),
-      noch vor dem eigentlichen Programmstart. `config` entfernt
-      `rowhammer.conf`, `stats` die Datei `stats`, `highscore` die
-      Datei `highscore`, `all` alle drei zusammen. Wie jeder andere
-      Parameter zusaetzlich per Umgebungsvariable setzbar
-      (`ROWHAMMER_RESET`, Praezedenz wie ueblich Standard < Config <
-      Env < CLI - hier ist "Config" allerdings die Datei, die der
-      Reset selbst treffen kann, das ist beim Zusammenspiel zu
-      beachten). Nach dem Loeschen beendet sich das Programm mit einer
-      Bestaetigungsmeldung auf STDOUT statt ins Menue zu starten; im
-      interaktiven Betrieb vorher eine Sicherheitsabfrage (analog
-      `menu_confirm`), ohne TTY (Skripting, CI) direkt ausfuehren, da
-      ein wartendes `read` das Skript sonst haengen liesse. Nicht
-      vorhandene Dateien sind kein Fehler (Ziel bereits erreicht).
-      Offen: ob `all` zusaetzlich das Savegame (`save`, Weltwunder-
-      Fortschritt) mitloeschen soll oder bewusst nur die drei genannten
-      Dateien trifft - dafuer spraeche ein eigener Wert `save` oder
-      `wonders`, der die drei anderen unangetastet laesst.
+- [x] `--reset config|stats|highscore|save|all` eingebaut (Version
+      0.35.0, siehe 4.8): setzt gezielt persistente Daten im
+      Datenverzeichnis (`${DATA_DIR}`, siehe 4.5) zurueck und beendet
+      sich mit einer Bilanz auf STDOUT, statt ins Menue zu starten. Am
+      Terminal
+      werden die betroffenen Pfade vorher aufgelistet und bestaetigt
+      ("nein" ist wie bei `menu_confirm` die Vorgabe), ohne TTY laeuft
+      der Reset direkt durch, damit ein wartendes `read` kein Skript
+      haengen laesst; nicht vorhandene Dateien sind kein Fehler.
+      Nachgezogen in 0.36.0 (Nutzerentscheidung): der Reset **loescht
+      nicht mehr**, sondern verschiebt jede Datei nach
+      `<datei>-YYYYMMDDhhmmss.bak` (bei einem Backup derselben Sekunde
+      `sleep 1` und neuer Zeitstempel statt Ueberschreiben), und der
+      neue Schalter `--force`
+      (`ROWHAMMER_FORCE`) beantwortet sie automatisch mit "ja" - frei
+      mit anderen Optionen kombinierbar und ueberall wirkungslos, wo
+      nichts gefragt wird.
+      Zusaetzlich per `ROWHAMMER_RESET` setzbar, Praezedenz Standard <
+      Env < CLI: bewusst **ohne** die Config-Stufe, weil die
+      Config-Datei selbst ein Reset-Ziel ist (sie koennte sich sonst bei
+      jedem Start selbst loeschen lassen). Die beiden offen gelassenen
+      Fragen sind in 4.8 entschieden - `all` nimmt das Savegame mit
+      (das eigene Ziel `save` deckt den Fall "nur der
+      Weltwunder-Fortschritt" ab), `highscore` trifft beide
+      Bestenlisten. Umsetzung: `reset_run` in `rowhammer.sh`, direkt
+      nach dem Sourcen der Module (fuer deren Dateinamen-Konstanten) und
+      vor der dorthin verschobenen TTY-Pruefung. In 0.36.1
+      (Nutzerentscheidung) wurde der Dialog auf Deutsch umgestellt:
+      `Bist du sicher, dass du <ziel> zuruecksetzen moechtest? [N/y]`
+      und nach dem Verschieben `Reset erfolgreich` (ASCII wie die
+      Menues, siehe 4.8).
 - [ ] Demo-Aufzeichnung und Demo-Player: eigene Runden als Datei
       mitschneiden (vermutlich Eingabe-Mitschnitt plus Seed statt voller
       Board-Snapshots, analog dem Prinzip des Debug-Modus in 4.6, aber
