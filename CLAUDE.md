@@ -426,9 +426,11 @@ rowhammer/
     mp.sh              # (Phase 5) Client-Seite: Lobby, Peer-Zustaende, Anbindung
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
-  Makefile             # install/uninstall-Ziele (genutzt von deb, spaeter rpm)
+  Makefile             # install/uninstall-Ziele (genutzt von deb und rpm)
   build-deb.sh         # Baut das Debian-Paket, Artefakte nach dist/
+  build-rpm.sh         # Baut das RPM-Paket, Artefakte nach dist/
   debian/              # Debian-Paketierung (debhelper, natives Paket)
+  rowhammer.spec       # RPM-Paketierung (nutzt dasselbe make install)
   CLAUDE.md
   README.md
 ```
@@ -819,10 +821,46 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   `debian/rules` ruft es mit `PREFIX=/usr` auf. Bequemer Build ueber
   `./build-deb.sh` (Artefakte in `dist/`, per `.gitignore`
   ausgeschlossen); Build-Abhaengigkeiten: `dpkg-dev`, `debhelper`.
-- **RPM (geplant):** Spec-Datei soll dasselbe `make install`
-  wiederverwenden; gleiche Pfade (`/usr/share/rowhammer`, `/usr/games`).
+- **RPM (umgesetzt, Version 0.37.0):** Spec-Datei `rowhammer.spec` im
+  Wurzelverzeichnis (dort erwartet sie das RPM-Oekosystem, anders als das
+  `debian/`-Verzeichnis). Sie enthaelt bewusst **keine eigene
+  Installationslogik**, sondern ruft im `%install`-Abschnitt dasselbe
+  `make install DESTDIR=... PREFIX=/usr` auf wie `debian/rules`; beide
+  Pakete liefern damit identische Pfade (`/usr/share/rowhammer`, Starter
+  `/usr/games/rowhammer`), und ein Layout-Wechsel ist nur im `Makefile`
+  nachzuziehen. Das `%make_install`-Makro wird absichtlich nicht genutzt,
+  weil es nicht auf jedem Build-Host definiert ist. Paket-Eigenschaften:
+  `BuildArch: noarch`, `Requires: bash >= 4.0`, `Recommends: ncurses`
+  (`tput` ist optional, siehe 4.1). `/usr/games` ist als Verzeichnis
+  mitverpackt, weil es auf RPM-Distributionen nicht ueberall vom
+  `filesystem`-Paket kommt (Mitbesitz ist bei RPM zulaessig); die
+  Ablage von Spielen in `/usr/games` statt `%{_bindir}` weicht von der
+  Fedora-Gepflogenheit ab und ist die bewusste Entscheidung fuer
+  Gleichlauf mit dem Debian-Paket.
+- Build ueber `./build-rpm.sh` (Script-Konventionen wie `build-deb.sh`):
+  packt das Quell-Tarball aus dem Arbeitsbaum (nicht aus dem letzten
+  Commit, analog zu `dpkg-buildpackage`), laesst `rpmbuild` in einem
+  privaten `_topdir` unterhalb des Ausgabeverzeichnisses laufen - das
+  `~/rpmbuild` des Aufrufers bleibt unberuehrt - und sammelt die Pakete
+  in `dist/`. Optionen: `--output-dir`, `--release N` (erneuter Bau
+  derselben Version, im Spec als `%{rowhammer_release}` verankert),
+  `--srpm` (zusaetzlich das Quellpaket), `--keep-build`, `--verbose`,
+  `--silent`, je mit `ROWHAMMER_RPM_*`-Umgebungsvariable.
+  Build-Abhaengigkeiten: `rpm-build`, `make`, `tar` (GNU-`tar` wegen
+  `--transform`). Zwei bewusste Entscheidungen: (1) Das Skript prueft
+  die `Version` des Specs gegen `ROWHAMMER_VERSION` in `rowhammer.sh`
+  und bricht bei Abweichung ab, statt ein falsch beschriftetes Paket zu
+  bauen (das Spec ist die Versionsquelle des RPMs, so wie
+  `debian/changelog` die des Debian-Pakets). (2) `rpmbuild` laeuft mit
+  `--nodeps`, weil die `BuildRequires` gegen die RPM-Datenbank des Hosts
+  aufgeloest werden - auf einem Debian-Entwicklungsrechner ist die leer,
+  obwohl `make` und `tar` da sind. Das Skript prueft dieselben Werkzeuge
+  vorher selbst per `command -v`; der `BuildRequires`-Eintrag bleibt im
+  Spec, wo ihn `mock`/COPR und ein direkter `rpmbuild`-Lauf auf einer
+  RPM-Distribution regulaer durchsetzen.
 - Hinweis: Das Repository hat noch keine Lizenzdatei;
-  `debian/copyright` ist entsprechend als "UNLICENSED" markiert und muss
+  `debian/copyright` ist entsprechend als "UNLICENSED" markiert
+  (im Spec `License: LicenseRef-UNLICENSED`) und beides muss
   nachgezogen werden, sobald eine Lizenz festgelegt ist.
 
 ### 4.8 Reset persistenter Daten (seit 0.35.0)
@@ -1671,13 +1709,30 @@ Feature-Branch oder Pull Request.
 - [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
       atomar geschrieben, Praezedenz Standard < Config < Env < CLI
 
-### Zwischenschritt - Paketierung (deb umgesetzt, Version 0.17.0)
+### Zwischenschritt - Paketierung (deb umgesetzt 0.17.0, rpm 0.37.0)
 
 - [x] `Makefile` mit install/uninstall (DESTDIR/PREFIX, deb/rpm-tauglich)
 - [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
       Launcher-Symlink `/usr/games/rowhammer`)
 - [x] Build-Skript `build-deb.sh` nach Script-Konventionen
-- [ ] RPM-Paketierung (Spec-Datei, nutzt `make install`)
+- [x] RPM-Paketierung (Version 0.37.0): Spec-Datei `rowhammer.spec` im
+      Wurzelverzeichnis, die im `%install`-Abschnitt dasselbe
+      `make install DESTDIR=... PREFIX=/usr` aufruft wie `debian/rules`,
+      sodass beide Pakete dieselben Pfade liefern und ein Layout-Wechsel
+      nur das `Makefile` betrifft. Dazu `build-rpm.sh` nach den
+      Script-Konventionen als Gegenstueck zu `build-deb.sh`: baut das
+      Quell-Tarball aus dem Arbeitsbaum, laesst `rpmbuild` in einem
+      privaten `_topdir` unter `dist/` laufen (das `~/rpmbuild` des
+      Aufrufers bleibt unberuehrt) und sammelt die Pakete in `dist/`;
+      Optionen `--output-dir`, `--release N`, `--srpm`, `--keep-build`,
+      `--verbose`, `--silent` je mit `ROWHAMMER_RPM_*`-Variable. Das
+      Skript bricht ab, wenn die `Version` im Spec und
+      `ROWHAMMER_VERSION` in `rowhammer.sh` auseinanderlaufen (siehe
+      4.7). Getestet: gebautes Paket ist `noarch`, installiert
+      `/usr/share/rowhammer/` plus Symlink `/usr/games/rowhammer`, und
+      das Spiel startet ueber diesen Starter; das mit `--srpm`
+      erzeugte Quellpaket laesst sich per `rpmbuild --rebuild`
+      eigenstaendig neu bauen.
 - [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
       auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
       naechsten Punkt (opkg-Paketierung) angehen
