@@ -1590,6 +1590,15 @@ Feature-Branch oder Pull Request.
       Launcher-Symlink `/usr/games/rowhammer`)
 - [x] Build-Skript `build-deb.sh` nach Script-Konventionen
 - [ ] RPM-Paketierung (Spec-Datei, nutzt `make install`)
+- [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
+      auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
+      naechsten Punkt (opkg-Paketierung) angehen
+- [ ] opkg-Paketierung implementieren (fuer OpenWrt/Embedded-Systeme,
+      analog zur Debian-Paketierung, nutzt ebenfalls `make install`),
+      vorausgesetzt die Shell-Kompatibilitaetspruefung faellt positiv aus
+- [ ] Release-Struktur auf GitHub aufbauen (Tags, Release Notes, Assets)
+- [ ] Paketierung GitHub-seitig automatisch bauen lassen (CI-Workflow),
+      sobald ein neues Release fertiggestellt ist
 - [ ] Lizenz festlegen und `debian/copyright` aktualisieren
 
 ### Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
