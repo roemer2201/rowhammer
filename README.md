@@ -159,8 +159,10 @@ Spiel eine Sekunde und nimmt einen neuen Zeitstempel, statt das gerade
 geschriebene Backup zu ueberschreiben.
 
 Am Terminal werden die betroffenen Dateien erst aufgelistet und dann
-abgefragt (`Move them aside? [N/y]`); die Vorgabe ist "nein",
-verschoben wird nur nach einem ausdruecklichen `y`. `--force`
+abgefragt (`Bist du sicher, dass du <ziel> zuruecksetzen moechtest?
+[N/y]`); die Vorgabe ist "nein", verschoben wird nur nach einem
+ausdruecklichen `y` - danach meldet das Spiel `Reset erfolgreich`.
+`--force`
 beantwortet die Abfrage automatisch mit "ja" und laesst sich mit allen
 anderen Optionen kombinieren; ohne Terminal (Skript, CI) laeuft der
 Reset ohnehin ohne Rueckfrage durch. Bereits fehlende Dateien sind kein

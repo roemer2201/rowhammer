@@ -122,7 +122,7 @@
 #                [--reset config|stats|highscore|save|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.36.0  (2026-08-02)
+# Version: 0.36.1  (2026-08-02)
 
 set -euo pipefail
 
@@ -136,7 +136,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.36.0"
+ROWHAMMER_VERSION="0.36.1"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -678,16 +678,16 @@ reset_run() {
         *)         die "Unhandled reset target: ${target}" ;;
     esac
 
-    printf 'Reset "%s" affects these files in %s:\n' "${target}" "${DATA_DIR}"
+    printf 'Reset "%s" betrifft diese Dateien in %s:\n' "${target}" "${DATA_DIR}"
     for name in "${names[@]}"; do
         path="${DATA_DIR}/${name}"
         if [ -e "${path}" ]; then
             printf '  %s\n' "${path}"
         else
-            printf '  %s (not present)\n' "${path}"
+            printf '  %s (nicht vorhanden)\n' "${path}"
         fi
     done
-    printf 'They are not deleted but moved to <file>-YYYYMMDDhhmmss.bak.\n'
+    printf 'Sie werden nicht geloescht, sondern nach <datei>-YYYYMMDDhhmmss.bak verschoben.\n'
 
     # Ask first - but only when someone is there to answer and --force
     # did not answer already. Without a tty (scripting, CI) a waiting
@@ -697,13 +697,13 @@ reset_run() {
         # The declining answer is the default, so it is spelled first and
         # capitalized - a reset must never be the path of least
         # resistance (same rule as menu_confirm's preselected "no").
-        printf 'Move them aside? [N/y] '
+        printf 'Bist du sicher, dass du %s zuruecksetzen moechtest? [N/y] ' "${target}"
         # EOF (Ctrl-D) leaves the answer empty and therefore declines.
         read -r answer || answer=""
         case "${answer}" in
             y|Y|yes|YES) : ;;
             *)
-                printf 'Reset cancelled, nothing was moved.\n'
+                printf 'Reset abgebrochen, es wurde nichts verschoben.\n'
                 return 0
                 ;;
         esac
@@ -727,7 +727,7 @@ reset_run() {
             stamp="${try}"
             break
         fi
-        printf 'Backup of this second exists already, waiting for the next one...\n'
+        printf 'Backup aus derselben Sekunde vorhanden, warte auf die naechste...\n'
         sleep 1
     done
     if [ -z "${stamp}" ]; then
@@ -749,10 +749,15 @@ reset_run() {
         if ! mv -- "${path}" "${backup}"; then
             die "Failed to move aside: ${path}"
         fi
-        printf 'Moved: %s -> %s\n' "${path}" "${backup}"
+        printf 'Verschoben: %s -> %s\n' "${path}" "${backup}"
         moved=$(( moved + 1 ))
     done
-    printf 'Reset "%s" done: %d moved aside, %d already absent.\n' \
+    # The line the user asked for, kept short and always the same, so it
+    # is easy to grep for in a script. The counts follow on their own
+    # line: a reset of a target whose files never existed is a success
+    # too (the goal is reached), and the numbers say which case it was.
+    printf 'Reset erfolgreich\n'
+    printf 'Reset "%s": %d Datei(en) gesichert, %d nicht vorhanden.\n' \
         "${target}" "${moved}" "${missing}"
     return 0
 }

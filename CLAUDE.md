@@ -881,9 +881,19 @@ Ablauf und Einordnung:
   ohne Terminal laufen. Das Terminal wird nie angefasst (kein
   Alternate-Screen, kein Rohmodus).
 - **Sicherheitsabfrage:** an einem Terminal listet `reset_run` erst die
-  betroffenen Pfade und fragt dann `Move them aside? [N/y]`; wie bei
-  `menu_confirm` ist "nein" die Vorgabe - deshalb steht das `N` vorn und
-  gross, und leere Antwort, EOF oder alles ausser `y`/`yes` bricht ab.
+  betroffenen Pfade und fragt dann `Bist du sicher, dass du <ziel>
+  zuruecksetzen moechtest? [N/y]`; wie bei `menu_confirm` ist "nein" die
+  Vorgabe - deshalb steht das `N` vorn und gross, und leere Antwort, EOF
+  oder alles ausser `y`/`yes` bricht ab. Nach dem Verschieben meldet der
+  Reset `Reset erfolgreich`, darunter die Bilanz (gesicherte und nicht
+  vorhandene Dateien). **Sprache (seit 0.36.1, Nutzerentscheidung):**
+  der Reset-Dialog ist als Nutzerdialog wie die Menues **deutsch in
+  ASCII** (also "zuruecksetzen"/"moechtest" in der
+  Umlaut-Umschreibung) - eine bewusste
+  Ausnahme von der Konventionsregel "Ausgaben in Englisch", die fuer
+  `--help` und die Fehlermeldungen nach STDERR unveraendert gilt. Das
+  ist derselbe Schnitt wie im Rest des Spiels (Menues deutsch, HUD und
+  `--help` englisch, siehe offener Punkt "UI-Sprache" in Abschnitt 8).
   Ohne TTY entfaellt die Abfrage, weil ein wartendes `read` den Aufrufer
   haengen liesse. Die Abfrage ist bewusst ein einfaches `read` statt
   `menu_confirm`: letzteres braucht Alternate-Screen, Rohmodus und
@@ -1741,8 +1751,8 @@ Feature-Branch oder Pull Request.
       Nachgezogen in 0.36.0 (Nutzerentscheidung): der Reset **loescht
       nicht mehr**, sondern verschiebt jede Datei nach
       `<datei>-YYYYMMDDhhmmss.bak` (bei einem Backup derselben Sekunde
-      `sleep 1` und neuer Zeitstempel statt Ueberschreiben), die Abfrage
-      lautet `[N/y]`, und der neue Schalter `--force`
+      `sleep 1` und neuer Zeitstempel statt Ueberschreiben), und der
+      neue Schalter `--force`
       (`ROWHAMMER_FORCE`) beantwortet sie automatisch mit "ja" - frei
       mit anderen Optionen kombinierbar und ueberall wirkungslos, wo
       nichts gefragt wird.
@@ -1755,7 +1765,11 @@ Feature-Branch oder Pull Request.
       Weltwunder-Fortschritt" ab), `highscore` trifft beide
       Bestenlisten. Umsetzung: `reset_run` in `rowhammer.sh`, direkt
       nach dem Sourcen der Module (fuer deren Dateinamen-Konstanten) und
-      vor der dorthin verschobenen TTY-Pruefung.
+      vor der dorthin verschobenen TTY-Pruefung. In 0.36.1
+      (Nutzerentscheidung) wurde der Dialog auf Deutsch umgestellt:
+      `Bist du sicher, dass du <ziel> zuruecksetzen moechtest? [N/y]`
+      und nach dem Verschieben `Reset erfolgreich` (ASCII wie die
+      Menues, siehe 4.8).
 - [ ] Demo-Aufzeichnung und Demo-Player: eigene Runden als Datei
       mitschneiden (vermutlich Eingabe-Mitschnitt plus Seed statt voller
       Board-Snapshots, analog dem Prinzip des Debug-Modus in 4.6, aber

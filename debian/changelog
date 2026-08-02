@@ -1,3 +1,17 @@
+rowhammer (0.36.1) unstable; urgency=medium
+
+  * Word the reset confirmation as the user asked for it: "Bist du
+    sicher, dass du <target> zuruecksetzen moechtest? [N/y]", and report
+    "Reset erfolgreich" once the files have been moved aside, with the
+    counts on the line below.
+  * Put the rest of the reset dialogue into German as well (the file
+    listing, the backup note, the cancel message and the per-file move
+    lines), so the exchange is in one language. ASCII as everywhere
+    else, like the German menus; --help and the error messages on STDERR
+    stay English per the script conventions.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 21:45:00 +0200
+
 rowhammer (0.36.0) unstable; urgency=medium
 
   * Make --reset non-destructive (user decision): instead of deleting a
