@@ -1,3 +1,25 @@
+rowhammer (0.38.0) unstable; urgency=medium
+
+  * Show the Ultra highscore list (user request). 0.34.0 deliberately
+    shipped its storage without a screen, so the only place a run's rank
+    ever appeared was the round-end box. highscore_ultra_screen
+    (lib/highscore.sh) now draws it in the layout of the Marathon list -
+    two lines per entry, paged via menu_pages, same column widths and
+    the same coloring - but ranked by the shortest play time, printed to
+    the millisecond (fmt_duration_ms, MM:SS.mmm) and carrying the accent
+    color on the time column: time is the score there, where the
+    Marathon list has rows. The rows column stays next to it, since an
+    Ultra run ends at or beyond the target and the overshoot is worth
+    seeing.
+  * Ask for the mode under the "Highscores" main menu entry
+    (menu_highscores, lib/menu.sh): Marathon, Ultra or back. The two
+    lists rank by different numbers and live in separate files, so one
+    merged table would mix two orderings. The picker stays up until
+    "Zurueck" or ESC, so comparing both lists needs no walk back through
+    the main menu, and each screen's title names its mode.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 23:30:00 +0200
+
 rowhammer (0.37.0) unstable; urgency=medium
 
   * Add RPM packaging: rowhammer.spec in the repository root calls the same

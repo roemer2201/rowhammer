@@ -55,12 +55,15 @@
 #   blocks stay tellable apart. All game data (config, persistent top-10 highscore list,
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
-#   ~/.config/rowhammer. Finished rounds enter the highscore list, which the
+#   ~/.config/rowhammer. Finished rounds enter the highscore list of
+#   their mode, which the
 #   main menu shows (two lines per entry: rows, gold/silver squares,
 #   rowhammers, pieces placed and their rate in pieces per minute, play
 #   time and date) and
 #   whose rank appears on the game over screen; the row credit decides
-#   the ranking. The HUD also shows the running round's play time (paused
+#   the ranking of the Marathon list, the play time that of the Ultra
+#   one, so the "Highscores" menu entry asks for the mode before drawing
+#   the list. The HUD also shows the running round's play time (paused
 #   time excluded) and the pieces it has placed.
 #   Every round also feeds persistent statistics (cleared rows, bonus
 #   rows, gold/silver squares built, rowhammers, pieces placed and time
@@ -122,7 +125,7 @@
 #                [--reset config|stats|highscore|save|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.37.0  (2026-08-02)
+# Version: 0.38.0  (2026-08-02)
 
 set -euo pipefail
 
@@ -137,7 +140,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.37.0"
+ROWHAMMER_VERSION="0.38.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -350,7 +353,8 @@ their own list (<data-dir>/highscore-ultra, fastest first) so they never
 displace the endless list's top ten, and only a run that reached the
 target is recorded - an attempt that topped out early has no comparable
 time. Its rows still count toward the wonders and the statistics, like
-any other round.
+any other round. The "Highscores" main menu entry asks which of the two
+lists to show.
 
 Wonders: the row credit of every round is added to a persistent counter
 stored in <data-dir>/save. It builds seven world wonders in a fixed
@@ -367,8 +371,10 @@ shown via the "Statistik" main menu entry.
 
 Settings (player name, key bindings) are stored in the config file
 <data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
-best 10 rounds are kept in <data-dir>/highscore; the list is shown in
-the main menu and a finished round reports its rank on the game over
+best 10 rounds are kept in <data-dir>/highscore (Ultra: the best 10 runs
+in <data-dir>/highscore-ultra); both lists are shown under the
+"Highscores" main menu entry, which asks for the mode first, and a
+finished round reports its rank on the game over
 screen. Key bindings can also be overridden
 via environment variables ROWHAMMER_KEY_LEFT, ROWHAMMER_KEY_RIGHT,
 ROWHAMMER_KEY_ROT_CW, ROWHAMMER_KEY_ROT_CCW, ROWHAMMER_KEY_SOFT,
@@ -1645,7 +1651,10 @@ main() {
                     "Er folgt in einer spaeteren Phase (siehe Roadmap)."
                 ;;
             2)
-                highscore_screen
+                # Picks the mode first (Marathon or Ultra): the two
+                # lists rank by different numbers and are not
+                # comparable, see lib/highscore.sh.
+                menu_highscores
                 ;;
             3)
                 # Progress screen: the current construction site with

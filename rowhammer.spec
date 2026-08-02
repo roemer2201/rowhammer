@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.37.0
+Version:        0.38.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,10 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sun Aug 02 2026 roemer2201 <r.oliver@web.de> - 0.38.0-1
+- Show the Ultra highscore list, reached through a mode picker under the
+  "Highscores" main menu entry.
+
 * Sun Aug 02 2026 roemer2201 <r.oliver@web.de> - 0.37.0-1
 - Initial RPM packaging, reusing the Makefile install target shared with
   the Debian package.

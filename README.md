@@ -99,15 +99,19 @@ Das Startmenue bietet:
   Bestenliste (`~/.config/rowhammer/highscore-ultra`, schnellster Lauf
   zuerst), die die 10 besten endlosen Runden unberuehrt laesst; ein
   Versuch, der vorher im Game Over endet, wird nicht eingetragen, seine
-  Reihen zaehlen aber weiter fuer Weltwunder und Statistik. Die
-  Anzeige dieser Liste im Menue folgt noch (bislang meldet nur das
-  Rundenende-Bild den erreichten Rang)
+  Reihen zaehlen aber weiter fuer Weltwunder und Statistik
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
-- **Highscores** - die besten 10 Runden, je Eintrag zwei Zeilen und
+- **Highscores** - fragt zuerst den Modus ab (**Marathon** oder
+  **Ultra**) und zeigt danach dessen Bestenliste; die Auswahl bleibt
+  stehen, bis "Zurueck" kommt, sodass sich beide Listen vergleichen
+  lassen. Je Liste die besten 10 Runden, je Eintrag zwei Zeilen und
   seitenweise geblaettert: Name, Rows (die Punkte der Runde), Spielzeit
   und Datum in der ersten, Gold-/Silberquadrate, Rowhammer ("RH"),
-  abgelegte Teile ("PCS") und Teile je Minute ("PPM") in der zweiten;
-  ein Game Over zeigt den erreichten Rang direkt an
+  abgelegte Teile ("PCS") und Teile je Minute ("PPM") in der zweiten.
+  Die Ultra-Liste ist nach der kuerzesten Zeit sortiert und zeigt sie
+  auf die Millisekunde genau (MM:SS.mmm) - dort ist die Zeit der Score,
+  in der Marathon-Liste sind es die Rows. Ein Rundenende zeigt den
+  erreichten Rang ausserdem direkt an
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
 - **Statistik** - auf zwei Bildschirmen: Gesamtzaehler ueber alle
@@ -252,8 +256,10 @@ Umgesetzt:
   Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
 - **Spielmodi:** endloses **Marathon** und **Ultra** (150 Rows auf
   Zeit, eigene Bestenliste nach kuerzester Zeit; siehe oben)
-- Persistente Highscore-Liste: die besten 10 Runden in
-  `~/.config/rowhammer/highscore`, Ranganzeige im Game-Over-Bild
+- Persistente Highscore-Listen: die besten 10 Runden in
+  `~/.config/rowhammer/highscore` und die 10 schnellsten Ultra-Laeufe
+  in `~/.config/rowhammer/highscore-ultra`, im Menue ueber eine
+  Modus-Auswahl erreichbar, Ranganzeige im Rundenende-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
   Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der
