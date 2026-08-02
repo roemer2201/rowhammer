@@ -446,7 +446,9 @@ solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue). Das
 Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
 ("Marathon" oder "Ultra", siehe 3.6; der endlose Modus hiess bis
-0.34.1 "Normales Spiel"); die
+0.34.1 "Normales Spiel"), und seit 0.35.0 waehlt der Menuepunkt
+"Highscores" ebenso den Modus der anzuzeigenden Bestenliste
+(`menu_highscores`, siehe 4.5); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -671,15 +673,37 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Normal-Liste): es ist hier das Sortierkriterium, und zwei Versuche auf
   dasselbe Ziel landen oft genug in derselben Sekunde, dass ganze
   Sekunden die Rangfolge nach Eintreffen statt nach Tempo entscheiden
-  wuerden; angezeigt wird das spaeter ueber `fmt_duration_ms` als
+  wuerden; angezeigt wird das ueber `fmt_duration_ms` als
   MM:SS.mmm. Gespeichert werden nur Laeufe, die das Ziel erreicht haben
   (Entscheidung in 3.6). Es gilt die uebliche Arbeitsregel "keine
   Abwaertskompatibilitaet": genau zehn Felder, jede andere Zeile faellt
   bei der Validierung heraus - die Kulanz der Normal-Liste
   (`HS_FIELD_COUNTS`) gibt es hier nicht, weil das Format neu ist und nie
-  in einer kuerzeren Fassung existiert hat. Eine Anzeige gibt es noch
-  nicht (Nutzerentscheidung: erst die Speicherung); der erreichte Rang
-  steht bereits im Rundenende-Kasten.
+  in einer kuerzeren Fassung existiert hat.
+  **Anzeige (seit 0.35.0, Nutzerwunsch):** `highscore_ultra_screen`
+  zeigt die Liste so, wie `highscore_screen` die Marathon-Liste zeigt -
+  seitenweise ueber `menu_pages`, zwei Zeilen je Eintrag, gleiche
+  Spaltenbreiten, gleiche Faerbung (deshalb teilt sie sich auch
+  `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`: gleiche Eintragshoehe, ein zweites
+  Konstantenpaar koennte nur auseinanderlaufen). Zwei Unterschiede,
+  beide aus der Rangordnung nach Zeit: die Zeit-Spalte traegt die
+  Akzentfarbe, die auf dem Marathon-Bildschirm die Rows-Spalte hat (sie
+  ist hier der Score), und die PPM-Spalte rechnet die Millisekunden auf
+  ganze Sekunden herunter, die Einheit von `fmt_ppm`. Die Rows-Spalte
+  bleibt daneben stehen - ein Ultra-Lauf endet bei oder ueber
+  `ULTRA_TARGET_ROWS`, und um wie viel er ueberschossen hat, ist eine
+  Information. Der erreichte Rang steht wie bisher zusaetzlich im
+  Rundenende-Kasten.
+  **Modus-Auswahl:** weil es damit zwei Listen mit zwei Rangordnungen
+  gibt, fragt der Hauptmenuepunkt "Highscores" seit 0.35.0 zuerst nach
+  dem Modus (`menu_highscores` in `lib/menu.sh`: Marathon / Ultra /
+  Zurueck) und zeigt danach die gewaehlte Liste; die Auswahl bleibt
+  stehen, bis "Zurueck" oder `ESC` kommt, sodass ein Vergleich beider
+  Listen nicht durchs Hauptmenue muss. Die Bildschirmtitel nennen ihren
+  Modus ("Highscores - Marathon" bzw. "Highscores - Ultra"), sonst waere
+  nicht zu sehen, welche der beiden gerade auf dem Schirm steht. Eine
+  gemeinsame Liste waere keine Alternative: sie muesste zwei Ordnungen
+  in eine Tabelle mischen (siehe 3.6).
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
@@ -2045,15 +2069,32 @@ Feature-Branch oder Pull Request.
         Ultra mit vertauschten Rollen (feste Zeit, offene Rows), also
         wieder eine eigene Liste (Rangordnung: meiste Rows) und ein
         eigener HUD-Zaehler (verbleibende Zeit).
-      - **Anzeige der Ultra-Bestenliste**: das Datenformat steht
-        (4.5), es fehlt der Bildschirm. Dafuer braucht der Menuepunkt
-        "Highscores" eine vorgeschaltete Modus-Auswahl (oder die
-        Seitenlogik aus `menu_pages` je Modus).
+      - ~~**Anzeige der Ultra-Bestenliste**~~: erledigt in 0.35.0
+        (Nutzerwunsch), siehe den eigenen Punkt weiter unten.
       - **Statistik je Modus**: gespielte Runden je Modus, bei Ultra
         zusaetzlich wie oft das Ziel erreicht wurde. Bewusst noch nicht
         eingebaut - Zaehler ohne Anzeige waeren tote Daten, und die
         Statistik-Bildschirme sind schon zweiseitig (siehe 4.5).
       - **Anleitung**: eine sechste Seite "Spielmodi" (siehe 3.5).
+- [x] **Ultra-Bestenliste anzeigen** (Version 0.35.0, Nutzerwunsch):
+      0.34.0 hatte die Liste bewusst nur gespeichert - der Bildschirm
+      fehlte, und der erreichte Rang stand allein im Rundenende-Kasten.
+      `highscore_ultra_screen` (`lib/highscore.sh`) zeigt sie jetzt im
+      Layout der Marathon-Liste (zwei Zeilen je Eintrag, seitenweise
+      ueber `menu_pages`, dieselben Spaltenbreiten und Farbregeln), nur
+      nach Zeit sortiert und mit der Zeit-Spalte in der Akzentfarbe -
+      sie ist hier der Score, wo es in der Marathon-Liste die Rows sind
+      (`fmt_duration_ms`, MM:SS.mmm; PPM aus den auf Sekunden
+      heruntergerechneten Millisekunden). Weil damit zwei Listen mit
+      zwei Rangordnungen nebeneinander stehen, fragt der Menuepunkt
+      "Highscores" ueber `menu_highscores` (`lib/menu.sh`) zuerst den
+      Modus ab (Marathon / Ultra / Zurueck) und behaelt die Auswahl,
+      bis "Zurueck" oder `ESC` kommt; die Bildschirmtitel nennen ihren
+      Modus. Umgesetzt wurde die in der Roadmap vorgeschlagene
+      Modus-Auswahl und nicht die Alternative "Seitenlogik aus
+      `menu_pages` je Modus": eine durchgeblaetterte Doppelliste haette
+      die zweite Rangordnung hinter den Seiten der ersten versteckt
+      (siehe 4.5).
 
 ### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 
@@ -2255,8 +2296,10 @@ Multi-Server zuletzt.
   3.6). Offen bleibt nur die Justierung: ob 150 Rows die richtige
   Distanz sind, entscheidet Playtesting (`ULTRA_TARGET_ROWS`) - mit den
   Quadrat-Boni ist die Strecke deutlich kuerzer als 150 physische
-  Reihen, das ist so gewollt. Sprint, die Anzeige der Ultra-Liste und
-  die Statistik je Modus stehen noch aus (siehe Roadmap Phase 4).
+  Reihen, das ist so gewollt. Die Anzeige der Ultra-Liste ist mit
+  0.35.0 nachgezogen (Modus-Auswahl unter "Highscores", siehe 4.5);
+  Sprint und die Statistik je Modus stehen noch aus (siehe Roadmap
+  Phase 4).
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

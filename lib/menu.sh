@@ -37,6 +37,10 @@
 #   the endless "Marathon" (renamed from "Normales Spiel" in 0.14.1, user
 #   decision) and "Ultra", the race for ULTRA_TARGET_ROWS rows against the
 #   clock. The entry picked is handed to game_run as its mode name.
+#   Since 0.15.0 (user request) menu_highscores picks the mode of the
+#   list to show as well: the two modes rank by different numbers and
+#   live in separate files (lib/highscore.sh), so the "Highscores" entry
+#   asks which one before drawing it.
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -44,7 +48,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.14.1  (2026-07-31)
+# Version: 0.15.0  (2026-08-02)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -578,6 +582,30 @@ menu_singleplayer() {
             return 0
         fi
         wonder_screen "${TOTAL_ROW_CREDIT}"
+    done
+}
+
+# menu_highscores: the "Highscores" main menu entry. Since 0.15.0 (user
+# request) there are two lists to choose from - the endless Marathon
+# rounds ranked by rows, and the Ultra runs ranked by the shortest time
+# (lib/highscore.sh keeps them in separate files with separate orders,
+# because the two are not comparable). Hence a picker in front of them
+# rather than one screen: merging them would mean two orderings in one
+# table, and appending the Ultra list to the Marathon one would bury it
+# behind the pages of the other.
+# Loops instead of returning after one list, so comparing the two costs
+# no walk back through the main menu; ESC or "Zurueck" leaves.
+menu_highscores() {
+    while :; do
+        menu_run "Highscores" \
+            "Marathon" \
+            "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
+            "Zurueck"
+        case "${MENU_CHOICE}" in
+            0) highscore_screen ;;
+            1) highscore_ultra_screen ;;
+            *) return 0 ;;
+        esac
     done
 }
 

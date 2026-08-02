@@ -46,12 +46,17 @@
 #   functions below: a separate file because a timed attempt ranks by the
 #   shortest time, not by the most rows, and must not push endless rounds
 #   out of the normal top ten. Only runs that reached the goal are
-#   stored, so every entry carries a comparable time. Its screen follows
-#   later (user decision: storage first), hence there is no hsu
-#   counterpart to highscore_screen yet.
+#   stored, so every entry carries a comparable time.
+#   Since 0.11.0 (user decision) that list has its screen as well:
+#   highscore_ultra_screen mirrors highscore_screen down to the column
+#   widths and the coloring, but ranks by the play time (MM:SS.mmm via
+#   fmt_duration_ms) and gives it the accent color the Marathon screen
+#   puts on Rows. Both screens hang off the mode picker of the
+#   "Highscores" menu entry (menu_highscores, lib/menu.sh), which is why
+#   their titles name their mode.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.10.0  (2026-07-31)
+# Version: 0.11.0  (2026-08-02)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -375,6 +380,11 @@ HS_PAGE_LINES=$(( HS_PAGE_ENTRIES * 3 ))
 # play time, see fmt_ppm) on the second. Lines and level stay stored
 # but are not displayed; the rows column is the score and drives the
 # ranking (scoring rebuild, 0.4.0).
+# CHANGE 2026-08-02 (0.11.0): the title says "Marathon" now. The Ultra
+# mode has a list of its own (highscore_ultra_screen below), and both are
+# reached through the mode picker of the "Highscores" menu entry
+# (menu_highscores, lib/menu.sh), so an untitled "Highscores" would no
+# longer say which of the two is on screen.
 # CHANGE 2026-07-28 (user decision, 0.27.0): the entry became two lines.
 # One line has 46 usable characters (the 48-column minimum minus the
 # two-space menu indent), and the pieces and PCS/min columns no longer
@@ -394,7 +404,7 @@ highscore_screen() {
         body+=("")
         body+=("Spiele eine Runde, um dich einzutragen.")
         debug_event "highscore screen shown (0 entries)"
-        menu_message "Highscores" "${body[@]}"
+        menu_message "Highscores - Marathon" "${body[@]}"
         return 0
     fi
     printf -v line '%2s %-12s %6s %5s %10s' \
@@ -443,6 +453,91 @@ highscore_screen() {
         body+=("")
     done
     debug_event "highscore screen shown (${#HS_ENTRIES[@]} entries)"
-    menu_pages "Highscores" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    menu_pages "Highscores - Marathon" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    return 0
+}
+
+# highscore_ultra_screen
+# Show the Ultra list the same way highscore_screen shows the Marathon
+# one: paged via menu_pages, two lines per entry, same column widths and
+# the same coloring rules, so switching between the two screens in the
+# mode picker (menu_highscores, lib/menu.sh) is a change of numbers, not
+# of layout. Reuses HS_PAGE_ENTRIES/HS_PAGE_LINES for that reason - the
+# entry height is identical, so a separate pair of constants could only
+# ever drift apart from them.
+# Two things differ, both because this list ranks by time:
+#   - the time column is the score here, so it carries the accent color
+#     the Marathon screen puts on Rows, and it is printed by
+#     fmt_duration_ms as MM:SS.mmm (the stored value is milliseconds, see
+#     HSU_ENTRIES above) rather than by fmt_duration as MM:SS. Rows stay
+#     visible next to it: an Ultra run ends at or beyond
+#     ULTRA_TARGET_ROWS, and by how far it overshot is worth seeing.
+#   - PPM is computed from the milliseconds divided down to whole
+#     seconds, the unit fmt_ppm takes (and the unit the Marathon list
+#     stores in the first place).
+# Added 0.11.0 (user decision): 0.10.0 deliberately shipped the storage
+# without a screen, this is the screen.
+highscore_ultra_screen() {
+    local -a body=()
+    local i line plain rank rank_sgr hsu_time hsu_rows hsu_name hsu_date
+    local hsu_gold hsu_silver hsu_hammers hsu_pieces
+    if [ "${#HSU_ENTRIES[@]}" -eq 0 ]; then
+        body+=("Noch keine Eintraege.")
+        body+=("")
+        body+=("Erreiche das Ziel von ${ULTRA_TARGET_ROWS} Rows in einer")
+        body+=("Ultra-Runde, um dich einzutragen. Ein Versuch,")
+        body+=("der vorher im Game Over endet, wird nicht")
+        body+=("gewertet.")
+        debug_event "highscore ultra screen shown (0 entries)"
+        menu_message "Highscores - Ultra" "${body[@]}"
+        return 0
+    fi
+    printf -v line '%2s %-12s %6s %9s %10s' \
+        "Nr" "Name" "Rows" "Zeit" "Datum"
+    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    for i in "${!HSU_ENTRIES[@]}"; do
+        IFS='|' read -r hsu_time hsu_rows _ _ hsu_name hsu_date hsu_gold \
+            hsu_silver hsu_hammers hsu_pieces <<< "${HSU_ENTRIES[i]}"
+        fmt_duration_ms "${hsu_time}"
+        rank=$(( i + 1 ))
+        printf -v plain '%2d %-12.12s %6d %9s %10s' \
+            "${rank}" "${hsu_name}" "${hsu_rows}" "${FMT_DURATION_MS}" \
+            "${hsu_date}"
+        # Same guard as the Marathon screen: color only while the line
+        # stays within the 46-char budget, so a hand-edited file with
+        # implausible numbers costs the colors, never a cut escape
+        # sequence.
+        if [ "${#plain}" -le 46 ]; then
+            rank_sgr="${TXT_ACCENT_SGR}"
+            case "${rank}" in
+                1) rank_sgr="${TXT_GOLD_SGR}" ;;
+                2) rank_sgr="${TXT_SILVER_SGR}" ;;
+            esac
+            printf -v line '%s%2d%s %-12.12s %6d %s%9s%s %10s' \
+                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hsu_name}" \
+                "${hsu_rows}" "${TXT_ACCENT_SGR}" "${FMT_DURATION_MS}" \
+                "${TXT_RESET_SGR}" "${hsu_date}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
+        fmt_ppm "${hsu_pieces}" "$(( hsu_time / 1000 ))"
+        printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+            "${hsu_gold}" "${hsu_silver}" "${hsu_hammers}" "${hsu_pieces}" \
+            "${FMT_PPM}"
+        if [ "${#plain}" -le 46 ]; then
+            printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+                "${TXT_GOLD_SGR}" "${hsu_gold}" "${TXT_RESET_SGR}" \
+                "${TXT_SILVER_SGR}" "${hsu_silver}" "${TXT_RESET_SGR}" \
+                "${TXT_WARN_SGR}" "${hsu_hammers}" "${TXT_RESET_SGR}" \
+                "${hsu_pieces}" "${FMT_PPM}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
+        body+=("")
+    done
+    debug_event "highscore ultra screen shown (${#HSU_ENTRIES[@]} entries)"
+    menu_pages "Highscores - Ultra" 1 "${HS_PAGE_LINES}" "${body[@]}"
     return 0
 }
