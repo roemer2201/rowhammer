@@ -138,9 +138,25 @@ Optionen:
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen (auch Standard-`NO_COLOR`, s. u.) |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
+| `--reset ZIEL`   | `ROWHAMMER_RESET`        | Persistente Daten loeschen und beenden (s. unten) |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
 | `--debug-dir DIR`| `ROWHAMMER_DEBUG_DIR`    | Zielverzeichnis fuer die Debug-Logs      |
 | `-h/--help`      | -                        | Hilfe mit allen Optionen und Tasten      |
+
+`--reset ZIEL` loescht gezielt gespeicherte Daten im Datenverzeichnis
+und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
+`config` (die Konfigurationsdatei `rowhammer.conf`), `stats` (die
+Statistik), `highscore` (beide Bestenlisten - `highscore` und
+`highscore-ultra`), `save` (der Weltwunder-Fortschritt) oder `all`
+(alles zusammen). Am Terminal werden die betroffenen Dateien erst
+aufgelistet und dann abgefragt; die Vorgabe ist "nein", geloescht wird
+nur nach einem ausdruecklichen `y`. Ohne Terminal (Skript, CI) laeuft
+der Reset ohne Rueckfrage durch. Bereits fehlende Dateien sind kein
+Fehler.
+
+```
+rowhammer.sh --reset highscore
+```
 
 Der Debug-Modus zeichnet die komplette Session in drei korrelierte
 Log-Dateien auf (Standardziel:
@@ -238,6 +254,9 @@ Umgesetzt:
   `~/.config/rowhammer/save`, Anzeige nach jeder Runde und im Menue
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
   `~/.config/rowhammer/rowhammer.conf`
+- **Gezielter Reset:** `--reset config|stats|highscore|save|all`
+  loescht die gespeicherten Daten einzeln oder komplett - am Terminal
+  mit Sicherheitsabfrage, im Skript ohne (s. o.)
 
 Geplant:
 

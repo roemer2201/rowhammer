@@ -1,3 +1,21 @@
+rowhammer (0.35.0) unstable; urgency=medium
+
+  * Add --reset config|stats|highscore|save|all (ROWHAMMER_RESET): delete
+    persistent data in the data directory and exit instead of starting
+    the game. "config" removes rowhammer.conf, "stats" the statistics,
+    "highscore" both highscore lists (highscore and highscore-ultra),
+    "save" the savegame with the wonder progress and "all" every one of
+    them.
+  * Ask before deleting on a terminal: the affected paths are listed
+    first and the question defaults to no, like the in-game confirmation
+    does. Without a tty (scripting, CI) the reset runs right away, since
+    a waiting prompt would hang the caller. Files that are already gone
+    are reported but are not an error.
+  * Move the tty check below the library modules so a reset also works
+    without a terminal; the game itself still requires one.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 12:00:00 +0200
+
 rowhammer (0.34.1) unstable; urgency=medium
 
   * Rename the endless singleplayer mode from "Normales Spiel" to
