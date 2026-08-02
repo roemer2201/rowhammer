@@ -469,7 +469,9 @@ wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
 (`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
 Einstellungsmenue waehlbar und in der Config gespeichert),
 `--reset config|stats|highscore|save|all` (`ROWHAMMER_RESET`, seit
-0.35.0, siehe 4.8),
+0.35.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
+beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
+Resets; frei mit anderen Optionen kombinierbar),
 `--debug` (`ROWHAMMER_DEBUG`),
 `--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
 zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
@@ -825,17 +827,33 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
 
 ### 4.8 Reset persistenter Daten (seit 0.35.0)
 
-`--reset TARGET` (`ROWHAMMER_RESET`) loescht gezielt persistente Dateien
-im Datenverzeichnis (siehe 4.5) und beendet das Programm, statt ins
-Menue zu starten. Ziele:
+`--reset TARGET` (`ROWHAMMER_RESET`) setzt gezielt persistente Dateien
+im Datenverzeichnis (siehe 4.5) zurueck und beendet das Programm, statt
+ins Menue zu starten. Ziele:
 
-| TARGET | geloeschte Dateien |
+| TARGET | betroffene Dateien |
 | --- | --- |
 | `config` | `rowhammer.conf` |
 | `stats` | `stats` |
 | `highscore` | `highscore` **und** `highscore-ultra` |
 | `save` | `save` (Weltwunder-Fortschritt) |
 | `all` | alle fuenf Dateien |
+
+**Reset heisst verschieben, nicht loeschen (seit 0.36.0,
+Nutzerentscheidung).** Jede betroffene Datei wandert nach
+`<datei>-YYYYMMDDhhmmss.bak` im selben Verzeichnis; ein versehentliches
+`--reset all` kostet damit keine Daten mehr, das Zurueckholen ist ein
+`mv`. Der Zeitstempel gilt fuer den ganzen Lauf, sodass die Backups
+eines `all` sichtbar zusammengehoeren. Existiert eine Backup-Datei
+dieser Sekunde bereits, lief derselbe Reset gerade eben schon einmal:
+`reset_run` wartet dann mit `sleep 1` auf die naechste Sekunde und
+nimmt einen frischen Zeitstempel, statt das eben geschriebene Backup zu
+ueberschreiben (`RESET_STAMP_ATTEMPTS`, 3 Versuche; danach Abbruch mit
+Meldung - eine stehende oder zurueckspringende Uhr soll keine
+Endlosschleife ergeben). Verschoben wird mit einfachem `mv` ohne `-f`,
+weil ein vorhandenes Backup nie ueberschrieben werden darf. Die
+`.bak`-Dateien bleiben liegen; das Spiel liest sie nie (kein Dateiname
+passt auf die Konstanten aus 4.5), aufgeraeumt werden sie von Hand.
 
 Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
 
@@ -863,15 +881,22 @@ Ablauf und Einordnung:
   ohne Terminal laufen. Das Terminal wird nie angefasst (kein
   Alternate-Screen, kein Rohmodus).
 - **Sicherheitsabfrage:** an einem Terminal listet `reset_run` erst die
-  betroffenen Pfade und fragt dann nach; wie bei `menu_confirm` ist
-  "nein" die Vorgabe (leere Antwort, EOF oder alles ausser `y`/`yes`
-  bricht ab). Ohne TTY entfaellt die Abfrage, weil ein wartendes `read`
-  den Aufrufer haengen liesse. Die Abfrage ist bewusst ein einfaches
-  `read` statt `menu_confirm`: letzteres braucht Alternate-Screen,
-  Rohmodus und `render_menu_frame`, also genau das, was der Reset nicht
-  aufbaut.
+  betroffenen Pfade und fragt dann `Move them aside? [N/y]`; wie bei
+  `menu_confirm` ist "nein" die Vorgabe - deshalb steht das `N` vorn und
+  gross, und leere Antwort, EOF oder alles ausser `y`/`yes` bricht ab.
+  Ohne TTY entfaellt die Abfrage, weil ein wartendes `read` den Aufrufer
+  haengen liesse. Die Abfrage ist bewusst ein einfaches `read` statt
+  `menu_confirm`: letzteres braucht Alternate-Screen, Rohmodus und
+  `render_menu_frame`, also genau das, was der Reset nicht aufbaut.
+- **`--force` (`ROWHAMMER_FORCE`, seit 0.36.0)** beantwortet die Abfrage
+  vorab mit "ja". Der Schalter ist bewusst allgemein gehalten und nicht
+  `--reset-force`: er laesst sich mit jeder anderen Option kombinieren
+  und ist ueberall wirkungslos, wo nichts gefragt wird (das Spiel
+  startet mit `--force` also ganz normal). Wie das Reset-Ziel steht er
+  nicht in der Config - ein gespeichertes "frag mich nie wieder" wuerde
+  das Sicherheitsnetz aushebeln -, Praezedenz also Standard < Env < CLI.
 - Nicht vorhandene Dateien sind kein Fehler (Ziel bereits erreicht) und
-  werden nur gemeldet; eine vorhandene Datei, die sich nicht loeschen
+  werden nur gemeldet; eine vorhandene Datei, die sich nicht verschieben
   laesst, bricht mit Fehlermeldung ab.
 
 ## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
@@ -1705,13 +1730,22 @@ Feature-Branch oder Pull Request.
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
 - [x] `--reset config|stats|highscore|save|all` eingebaut (Version
-      0.35.0, siehe 4.8): loescht gezielt persistente Daten im
-      Datenverzeichnis (`${DATA_DIR}`, siehe 4.5) und beendet sich mit
-      einer Bilanz auf STDOUT, statt ins Menue zu starten. Am Terminal
+      0.35.0, siehe 4.8): setzt gezielt persistente Daten im
+      Datenverzeichnis (`${DATA_DIR}`, siehe 4.5) zurueck und beendet
+      sich mit einer Bilanz auf STDOUT, statt ins Menue zu starten. Am
+      Terminal
       werden die betroffenen Pfade vorher aufgelistet und bestaetigt
       ("nein" ist wie bei `menu_confirm` die Vorgabe), ohne TTY laeuft
       der Reset direkt durch, damit ein wartendes `read` kein Skript
       haengen laesst; nicht vorhandene Dateien sind kein Fehler.
+      Nachgezogen in 0.36.0 (Nutzerentscheidung): der Reset **loescht
+      nicht mehr**, sondern verschiebt jede Datei nach
+      `<datei>-YYYYMMDDhhmmss.bak` (bei einem Backup derselben Sekunde
+      `sleep 1` und neuer Zeitstempel statt Ueberschreiben), die Abfrage
+      lautet `[N/y]`, und der neue Schalter `--force`
+      (`ROWHAMMER_FORCE`) beantwortet sie automatisch mit "ja" - frei
+      mit anderen Optionen kombinierbar und ueberall wirkungslos, wo
+      nichts gefragt wird.
       Zusaetzlich per `ROWHAMMER_RESET` setzbar, Praezedenz Standard <
       Env < CLI: bewusst **ohne** die Config-Stufe, weil die
       Config-Datei selbst ein Reset-Ziel ist (sie koennte sich sonst bei

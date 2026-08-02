@@ -72,10 +72,13 @@
 #   the rules, the current key bindings, hold and preview, the
 #   gold/silver squares with their row bonus and the wonder construction
 #   (menu_help in lib/menu.sh).
-#   --reset deletes persistent data on purpose: the config file, the
+#   --reset resets persistent data on purpose: the config file, the
 #   statistics, the highscore lists, the wonder savegame or all of them
-#   at once. It runs before the game starts, asks for confirmation on a
-#   terminal and then exits instead of entering the menu.
+#   at once. Nothing is deleted - each file is moved to
+#   <file>-YYYYMMDDhhmmss.bak beside it, so a reset can be undone. It
+#   runs before the game starts, asks for confirmation on a terminal
+#   (unless --force answers for the caller) and then exits instead of
+#   entering the menu.
 #   A debug mode (--debug) traces the whole session into log
 #   files: every screen update 1:1, every key press and every game
 #   action (see lib/debug.sh). The fixed play screen needs a
@@ -89,9 +92,9 @@
 #   2. Verify the bash version (>= 4).
 #   3. Source the library modules (debug, config, pieces, board,
 #      squares, highscore, save, stats, wonders, input, render, menu).
-#   4. Carry out --reset if requested: delete the selected persistent
-#      files below the data directory and exit, without ever touching
-#      the terminal.
+#   4. Carry out --reset if requested: move the selected persistent
+#      files below the data directory aside to timestamped .bak copies
+#      and exit, without ever touching the terminal.
 #   5. Verify the remaining prerequisites (interactive terminal, minimum
 #      size; the size is rechecked live via SIGWINCH while running).
 #   6. Resolve settings with precedence default < config file < env <
@@ -116,10 +119,10 @@
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
 #                [--color-mode auto|basic|extended]
 #                [--color-theme guideline|classic|mono|colorblind]
-#                [--reset config|stats|highscore|save|all]
+#                [--reset config|stats|highscore|save|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.35.0  (2026-08-02)
+# Version: 0.36.0  (2026-08-02)
 
 set -euo pipefail
 
@@ -133,7 +136,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above.
-ROWHAMMER_VERSION="0.35.0"
+ROWHAMMER_VERSION="0.36.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -188,6 +191,13 @@ RESET_OPT="${ROWHAMMER_RESET:-}"
 # wonder progress is meant while config, stats and highscores stay
 # (CLAUDE.md 4.5 left that choice open; this is the decision).
 RESET_TARGETS=(config stats highscore save all)
+# Answer confirmation questions with "yes" instead of asking. Today that
+# is the --reset question; the switch is written as a general one (it may
+# be combined with any other option and is simply without effect where
+# nothing is asked) so a future prompt does not need a second flag. Kept
+# out of the config file for the same reason as the reset target itself:
+# a stored "never ask me again" would defeat the safety net.
+FORCE_OPT="${ROWHAMMER_FORCE:-0}"
 PLAYER_NAME="Player"
 # Color theme: maps piece and gold/silver colors to a named scheme
 # (COLOR_THEMES in lib/pieces.sh). Like the key bindings it is a
@@ -258,7 +268,7 @@ Options:
                 Also selectable in the settings menu and persisted there.
                 Env: ROWHAMMER_COLOR_THEME  Default: guideline
   --reset TARGET
-                Delete persistent data in the data directory and exit
+                Reset persistent data in the data directory and exit
                 without starting the game. TARGET is one of:
                   config     the config file rowhammer.conf
                   stats      the statistics file stats
@@ -266,12 +276,22 @@ Options:
                              highscore-ultra)
                   save       the savegame save (the wonder progress)
                   all        all of the above
-                On a terminal the files to be deleted are listed and
-                confirmed first (the default answer is no); without a
-                tty (scripting, CI) the deletion runs right away, since
-                a waiting prompt would hang the script. Files that do
-                not exist are not an error.
+                Nothing is deleted: every affected file is moved to
+                <file>-YYYYMMDDhhmmss.bak next to it, so a reset can be
+                undone by moving the backup back. Running the same reset
+                twice within one second waits for the next second rather
+                than overwriting the backup just written.
+                On a terminal the affected files are listed and
+                confirmed first ([N/y], the default answer is no);
+                without a tty (scripting, CI) the reset runs right away,
+                since a waiting prompt would hang the script. Files that
+                do not exist are not an error.
                 Env: ROWHAMMER_RESET        Default: (no reset)
+  --force       Answer confirmation questions with "yes" instead of
+                asking. Combines with any other option; currently the
+                only question asked outside the menus is the --reset
+                one, so "--reset all --force" resets without a prompt.
+                Env: ROWHAMMER_FORCE        Default: 0
   --debug       Enable the debug/trace mode: the session is recorded
                 into log files (see below). Logs can grow to several
                 megabytes in long sessions.
@@ -474,6 +494,10 @@ while [ "$#" -gt 0 ]; do
             reset_opt_required
             shift
             ;;
+        --force)
+            FORCE_OPT=1
+            shift
+            ;;
         --debug)
             DEBUG_OPT=1
             shift
@@ -556,6 +580,14 @@ if [ -n "${RESET_OPT}" ]; then
     fi
     unset _reset_ok _target
 fi
+case "${FORCE_OPT}" in
+    0|1) : ;;
+    *)
+        printf '%s: ROWHAMMER_FORCE expects 0 or 1, got: %s\n' \
+            "${SCRIPT_NAME}" "${FORCE_OPT}" >&2
+        exit 2
+        ;;
+esac
 
 # --- Prerequisites --------------------------------------------------------
 # Associative arrays (piece tables) and fractional read timeouts need
@@ -601,21 +633,35 @@ done
 unset _lib
 
 # --- Reset of persistent data (runs before the game starts) ---------------
+# How often reset_run retries when a backup of the current second is
+# already there. One wait is normally enough (the next second brings a
+# free name); more attempts only matter if the clock stands still or
+# jumps back, and after these the reset gives up instead of looping.
+RESET_STAMP_ATTEMPTS=3
+
 # reset_run TARGET
-# Delete the persistent files TARGET stands for below DATA_DIR and
-# report what happened on STDOUT. The file names come from the library
-# modules that own them, so a renamed file never leaves the reset behind.
+# Reset the persistent files TARGET stands for below DATA_DIR and report
+# what happened on STDOUT. The file names come from the library modules
+# that own them, so a renamed file never leaves the reset behind.
+# CHANGE 2026-08-02 (user decision): nothing is deleted any more. Every
+# affected file is moved aside to "<file>-YYYYMMDDhhmmss.bak" in the same
+# directory, so a reset stays undoable - a mistyped --reset all used to
+# cost the wonder progress of every round ever played. Should a backup of
+# that very second already exist, the reset ran twice within one second;
+# it then waits for the next second (sleep 1) and tries again with a
+# fresh timestamp rather than overwriting the older backup.
 # This runs before anything touches the terminal: no alternate screen, no
 # raw input mode - which is why the report is plain lines and the
 # confirmation is a plain read instead of menu_confirm, which needs both.
 # Like menu_confirm the question defaults to declining. Returns 0 after a
-# completed or a declined reset; a file that exists but cannot be deleted
-# is a hard error.
+# completed or a declined reset; a file that exists but cannot be moved
+# aside is a hard error.
 reset_run() {
     local target="${1}"
     local -a names=()
-    local name path answer
-    local removed=0 missing=0
+    local name path backup answer
+    local stamp="" try attempt collision
+    local moved=0 missing=0
 
     case "${target}" in
         config)    names=("${CONFIG_NAME}") ;;
@@ -628,7 +674,7 @@ reset_run() {
         # Unreachable: the value is validated against RESET_TARGETS
         # right after the argument parsing. Kept so a new target added
         # there without a case here fails loudly instead of silently
-        # deleting nothing.
+        # resetting nothing.
         *)         die "Unhandled reset target: ${target}" ;;
     esac
 
@@ -641,40 +687,73 @@ reset_run() {
             printf '  %s (not present)\n' "${path}"
         fi
     done
+    printf 'They are not deleted but moved to <file>-YYYYMMDDhhmmss.bak.\n'
 
-    # Ask first - but only when someone is there to answer. Without a tty
-    # (scripting, CI) a waiting read would hang the caller, so the reset
-    # is carried out right away; asking for it non-interactively is
-    # explicit enough.
-    if [ -t 0 ] && [ -t 1 ]; then
-        printf 'Delete them? [y/N] '
+    # Ask first - but only when someone is there to answer and --force
+    # did not answer already. Without a tty (scripting, CI) a waiting
+    # read would hang the caller, so the reset is carried out right away;
+    # asking for it non-interactively is explicit enough.
+    if [ "${FORCE_OPT}" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+        # The declining answer is the default, so it is spelled first and
+        # capitalized - a reset must never be the path of least
+        # resistance (same rule as menu_confirm's preselected "no").
+        printf 'Move them aside? [N/y] '
         # EOF (Ctrl-D) leaves the answer empty and therefore declines.
         read -r answer || answer=""
         case "${answer}" in
             y|Y|yes|YES) : ;;
             *)
-                printf 'Reset cancelled, nothing was deleted.\n'
+                printf 'Reset cancelled, nothing was moved.\n'
                 return 0
                 ;;
         esac
     fi
 
+    # One timestamp for the whole run, so the backups of a "--reset all"
+    # belong together visibly. A backup of that second already sitting
+    # there means this very reset just ran; waiting a second yields a
+    # free name instead of clobbering that first backup.
+    for (( attempt = 1; attempt <= RESET_STAMP_ATTEMPTS; attempt++ )); do
+        try="$(date +%Y%m%d%H%M%S)"
+        collision=0
+        for name in "${names[@]}"; do
+            path="${DATA_DIR}/${name}"
+            if [ -e "${path}" ] && [ -e "${path}-${try}.bak" ]; then
+                collision=1
+                break
+            fi
+        done
+        if [ "${collision}" -eq 0 ]; then
+            stamp="${try}"
+            break
+        fi
+        printf 'Backup of this second exists already, waiting for the next one...\n'
+        sleep 1
+    done
+    if [ -z "${stamp}" ]; then
+        die "Could not find a free backup timestamp after ${RESET_STAMP_ATTEMPTS} attempts in ${DATA_DIR} (is the clock going backwards?)"
+    fi
+
     for name in "${names[@]}"; do
         path="${DATA_DIR}/${name}"
         # A file that is already gone is not an error: the goal of the
-        # reset is reached for it.
+        # reset is reached for it, and there is nothing to back up.
         if [ ! -e "${path}" ]; then
             missing=$(( missing + 1 ))
             continue
         fi
-        if ! rm -f -- "${path}"; then
-            die "Failed to delete: ${path}"
+        backup="${path}-${stamp}.bak"
+        # Plain mv, no -f: the loop above made sure the backup name is
+        # free, and overwriting an existing backup is exactly what this
+        # must never do.
+        if ! mv -- "${path}" "${backup}"; then
+            die "Failed to move aside: ${path}"
         fi
-        printf 'Deleted: %s\n' "${path}"
-        removed=$(( removed + 1 ))
+        printf 'Moved: %s -> %s\n' "${path}" "${backup}"
+        moved=$(( moved + 1 ))
     done
-    printf 'Reset "%s" done: %d deleted, %d already absent.\n' \
-        "${target}" "${removed}" "${missing}"
+    printf 'Reset "%s" done: %d moved aside, %d already absent.\n' \
+        "${target}" "${moved}" "${missing}"
     return 0
 }
 

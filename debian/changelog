@@ -1,3 +1,23 @@
+rowhammer (0.36.0) unstable; urgency=medium
+
+  * Make --reset non-destructive (user decision): instead of deleting a
+    file it is moved to <file>-YYYYMMDDhhmmss.bak next to it, so a reset
+    can be undone with a single mv. One timestamp is used for the whole
+    run, so the backups of a "--reset all" belong together visibly.
+  * Wait for the next second when a backup of the current second already
+    exists (the same reset ran twice in a row): sleep 1, take a fresh
+    timestamp and retry rather than overwrite the backup just written.
+    After RESET_STAMP_ATTEMPTS (3) tries the reset gives up with a
+    message instead of looping on a stuck clock.
+  * Spell the reset question "[N/y]" so the declining default is visible
+    in the prompt itself.
+  * Add --force (ROWHAMMER_FORCE): answer confirmation questions with
+    "yes" instead of asking. Combines with any other option and is
+    without effect where nothing is asked, so the game starts normally
+    with it; today it covers the --reset question.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 02 Aug 2026 21:30:00 +0200
+
 rowhammer (0.35.0) unstable; urgency=medium
 
   * Add --reset config|stats|highscore|save|all (ROWHAMMER_RESET): delete
