@@ -1,0 +1,174 @@
+# Release workflow for rowhammer.
+#
+# Triggered by pushing a tag "v<version>" (the tag tools/release.sh
+# creates) and builds the release for it: the Debian package, the RPM
+# package, the source packages, a checksum file, and the GitHub release
+# that carries them as assets. The release notes are the changelog stanza
+# for the version, extracted by tools/release.sh, so the release text and
+# debian/changelog can never tell different stories.
+#
+# The workflow only ever builds what the tag points at. It refuses a tag
+# whose name disagrees with the version inside the tree, which is the one
+# mistake that would otherwise produce a mislabelled package.
+#
+# Re-running the workflow for a tag whose release already exists updates
+# that release instead of failing, so a run that broke halfway through can
+# simply be repeated.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build the release for (e.g. v0.40.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Everything that must be true before a package is built at all: the tag
+  # matches the version in the tree, both changelogs document it, and the
+  # input layer still passes its regression test. CI has usually checked
+  # the commit already, but a tag can be pushed to any commit, so the
+  # release verifies it for itself.
+  # ---------------------------------------------------------------------
+  verify:
+    name: Verify the tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Check out the tagged state
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Derive the version from the tag
+        id: tag
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          version="${tag#v}"
+          # Plain MAJOR.MINOR.PATCH only, no pre-release suffix: rowhammer
+          # is packaged as a native Debian package, and a native package
+          # version must not contain a hyphen. A "v0.40.0-rc1" tag could
+          # therefore never be built as a .deb, so it is rejected here
+          # rather than failing later in dpkg-buildpackage. The 0.x series
+          # is the project's pre-release phase.
+          if ! printf '%s' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '${tag}' is not of the form v<major>.<minor>.<patch>"
+            exit 1
+          fi
+          {
+            echo "tag=${tag}"
+            echo "version=${version}"
+          } >>"${GITHUB_OUTPUT}"
+
+      # The tag name is what users see; the version inside the tree is
+      # what the packages are labelled with. Building while they disagree
+      # would publish a package that contradicts its own release page.
+      - name: Check the version against the tree
+        run: ./tools/release.sh --mode check --expect "${{ steps.tag.outputs.version }}" --verbose
+
+      - name: Replay the input layer regression test
+        run: ./tools/key-scan.sh --silent
+
+  # ---------------------------------------------------------------------
+  # Build both packages and collect the release assets. Both builds and
+  # their smoke tests are the same ones CI runs; what is added here is the
+  # source tarball and the checksum file.
+  # ---------------------------------------------------------------------
+  build:
+    name: Build the release assets
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - name: Check out the tagged state
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper rpm make tar
+
+      - name: Build the Debian package
+        run: ./build-deb.sh --verbose
+
+      - name: Build the RPM packages
+        run: ./build-rpm.sh --srpm --verbose
+
+      - name: Build the source tarball
+        run: |
+          set -euo pipefail
+          version="${{ needs.verify.outputs.version }}"
+          # git archive packages exactly the tagged commit, so the tarball
+          # matches the tag rather than whatever the build left lying
+          # around in the working tree.
+          git archive --format=tar.gz \
+            --prefix="rowhammer-${version}/" \
+            -o "dist/rowhammer-${version}.tar.gz" HEAD
+
+      - name: Install the Debian package and smoke-test it
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y ./dist/rowhammer_*_all.deb
+          test -L /usr/games/rowhammer
+          /usr/games/rowhammer --help
+          /usr/games/rowhammer --data-dir "$(mktemp -d)" --reset all --force
+          sudo apt-get purge -y rowhammer
+
+      # Only the installable and the source packages become assets; the
+      # .changes and .buildinfo files dpkg-buildpackage leaves in dist/
+      # are build metadata nobody downloads.
+      - name: Collect the release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp -- dist/*.deb dist/*.rpm dist/*.tar.gz release-assets/
+          cd release-assets
+          sha256sum -- * >SHA256SUMS
+          ls -l
+
+      - name: Write the release notes
+        run: |
+          set -euo pipefail
+          ./tools/release.sh --mode notes \
+            --expect "${{ needs.verify.outputs.version }}" \
+            --output "${RUNNER_TEMP}/release-notes.md"
+          cat -- "${RUNNER_TEMP}/release-notes.md"
+
+      # gh is preinstalled on the runner, so the release is created with
+      # the GitHub CLI rather than a third-party action - one dependency
+      # less in a workflow that has write access to the repository.
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.verify.outputs.tag }}"
+          version="${{ needs.verify.outputs.version }}"
+          # An existing release is updated rather than treated as an
+          # error, so a run that failed after creating it can be repeated.
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} exists, updating it"
+            gh release edit "${tag}" \
+              --title "rowhammer ${version}" \
+              --notes-file "${RUNNER_TEMP}/release-notes.md"
+            gh release upload "${tag}" release-assets/* --clobber
+          else
+            gh release create "${tag}" \
+              --title "rowhammer ${version}" \
+              --notes-file "${RUNNER_TEMP}/release-notes.md" \
+              release-assets/*
+          fi
+          gh release view "${tag}"

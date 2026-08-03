@@ -67,6 +67,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.37.0 | RPM-Paketierung | 4.7 |
 | 0.38.0 | Ultra-Bestenliste anzeigen, Modus-Auswahl unter "Highscores" | 4.5 |
 | 0.39.0 | Sprint-Modus samt eigener Bestenliste, Anleitungsseite "Spielmodi" | 3.5, 3.6, 4.5 |
+| 0.40.0 | Release-Struktur auf GitHub und CI-Paketbau | 4.7, 4.9 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -102,7 +103,7 @@ Einstellungen kennen seit 0.21.0 zusaetzlich das Farbschema. Der
 Config-Pfad wanderte in 0.7.0 ins Datenverzeichnis und mit diesem in
 0.13.0 nach `${HOME}/.config/rowhammer` (siehe CLAUDE.md 4.2, 4.5)._
 
-## Zwischenschritt - Paketierung (deb umgesetzt 0.17.0, rpm 0.37.0)
+## Zwischenschritt - Paketierung (deb umgesetzt 0.17.0, rpm 0.37.0, Release/CI 0.40.0)
 
 - [x] `Makefile` mit install/uninstall (DESTDIR/PREFIX, deb/rpm-tauglich)
 - [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
@@ -126,9 +127,65 @@ Config-Pfad wanderte in 0.7.0 ins Datenverzeichnis und mit diesem in
       das Spiel startet ueber diesen Starter; das mit `--srpm`
       erzeugte Quellpaket laesst sich per `rpmbuild --rebuild`
       eigenstaendig neu bauen.
+- [x] **Release-Struktur auf GitHub** (Version 0.40.0): ein Release ist
+      das Tag `v<version>`, und mehr als dessen Push braucht es nicht.
+      Werkzeug dafuer ist `tools/release.sh` nach den
+      Script-Konventionen - das einzige Stueck Code, das alle drei
+      Stellen kennt, an denen die Version steht (`ROWHAMMER_VERSION` in
+      `rowhammer.sh`, die oberste Strophe von `debian/changelog`, die
+      `Version` samt `%changelog` in `rowhammer.spec`). Es prueft, ob sie
+      uebereinstimmen **und** ob beide Changelogs die Version wirklich
+      dokumentieren, gibt die Release-Notes aus und legt das annotierte
+      Tag mit diesen Notes als Nachricht an.
+      Drei Entscheidungen dabei: (1) **Die Release-Notes sind die
+      Changelog-Strophe**, kein eigener Text - die Strophe muss fuers
+      Debian-Paket ohnehin geschrieben werden, und ein zweiter,
+      unabhaengiger Text wuerde frueher oder spaeter etwas anderes
+      erzaehlen als das Paket, das danebenliegt. (2) **Keine
+      Vorab-Tags** wie `v0.40.0-rc1`: rowhammer ist ein *natives*
+      Debian-Paket, dessen Version keinen Bindestrich tragen darf - ein
+      solches Tag liesse sich gar nicht als `.deb` bauen und wird
+      deshalb sofort abgewiesen statt spaet in `dpkg-buildpackage`.
+      (3) **Assets sind `.deb`, `.rpm`, `.src.rpm`, Quell-Tarball und
+      `SHA256SUMS`**; die `.changes`- und `.buildinfo`-Dateien bleiben
+      draussen, weil sie Build-Metadaten sind, die niemand herunterlaedt.
+      Der Ablauf ist in `docs/release-process.md` dokumentiert.
+- [x] **Paketierung GitHub-seitig automatisch bauen** (Version 0.40.0):
+      zwei Workflows unter `.github/workflows/` (siehe CLAUDE.md 4.9).
+      `ci.yml` laeuft bei jedem Push und Pull Request und prueft
+      Bash-Syntax, ShellCheck, die ASCII-Regel, die Versions-Konsistenz,
+      den Eingabe-Regressionstest `tools/key-scan.sh` (auch mit
+      Byte-Luecke, dem Fall aus Issue #7) und baut beide Pakete.
+      `release.yml` reagiert auf ein `v*`-Tag, baut dieselben Pakete plus
+      Quell-Tarball und Pruefsummen und veroeffentlicht das GitHub-
+      Release.
+      Vier Entscheidungen: (1) **ShellCheck blockiert nur auf Stufe
+      `error`** - dort ist der Baum sauber, waehrend die 75 verbleibenden
+      Warnungen Fehlalarme der Modul-Architektur sind (`lib/*.sh` wird
+      gesourct, seine Variablen wirken einzeln geprueft ungenutzt und
+      seine Arrays wie Skalare: SC2034, SC2128, SC2178); der volle
+      Bericht wird trotzdem ausgegeben. (2) **Die Pakete werden nicht nur
+      gebaut, sondern installiert und aufgerufen** - der Starter ist ein
+      relativer Symlink nach `/usr/share`, ein falscher Pfad faellt also
+      erst nach der Installation auf. Als Spielprogramm laeuft rowhammer
+      im CI nur so weit, wie es ohne Terminal geht; das sind `--help` und
+      `--reset`, und genau die nutzen die Smoke-Tests. (3) **Das RPM wird
+      zusaetzlich in einem Fedora-Container installiert**: nur dort wird
+      der `%files`-Abschnitt wirklich geprueft, samt des bewusst
+      mitbesessenen Verzeichnisses `/usr/games` (siehe 4.7). (4) **Das
+      Release entsteht mit der `gh`-CLI des Runners** statt mit einer
+      fremden Action - eine Abhaengigkeit weniger in einem Workflow mit
+      Schreibrechten aufs Repository.
+      Dabei fiel ein Fehler auf: `build-deb.sh` und `build-rpm.sh` gaben
+      ihre Meldungen nur bei erkanntem Terminal aus (`[ -t 1 ]`, gemaess
+      der Logging-Regel der Script-Konventionen). Ein CI-Runner hat weder
+      Terminal noch ein Journal, in das jemand schaut - beide Skripte
+      scheiterten dort also vollstaendig lautlos, Fehlermeldungen
+      inklusive. Seit 0.40.0 schaltet ein gesetztes `CI` die
+      Konsolenausgabe zusaetzlich frei (beide Skripte auf 1.1.0).
 
 Die offenen Punkte dieses Zwischenschritts (Shell-Kompatibilitaet, opkg,
-GitHub-Releases samt CI, Lizenz) stehen weiterhin in der Roadmap.
+Lizenz) stehen weiterhin in der Roadmap.
 
 ## Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
 

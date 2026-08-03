@@ -1,3 +1,45 @@
+rowhammer (0.40.0) unstable; urgency=medium
+
+  * Release structure on GitHub: a release is the tag "v<version>", and
+    pushing it is the only thing a release takes. tools/release.sh is the
+    one tool that knows about all three places the version lives
+    (ROWHAMMER_VERSION in rowhammer.sh, the top stanza of
+    debian/changelog and the Version tag plus %changelog of
+    rowhammer.spec). It verifies that they agree and that both changelogs
+    document the version, prints the release notes, and creates the
+    annotated tag with those notes as its message. Pre-release tags such
+    as v0.40.0-rc1 are rejected on purpose: rowhammer is a native Debian
+    package, and a native package version cannot contain a hyphen.
+  * The release notes are the changelog stanza for the version rather
+    than a text of their own - the stanza has to be written for the
+    Debian package anyway, and a second, independent release text would
+    sooner or later contradict the package sitting next to it.
+  * CI workflow (.github/workflows/ci.yml) on every push and pull
+    request: bash syntax, ShellCheck, the ASCII rule, version
+    consistency, the key-scan regression test (also with a byte gap, the
+    issue #7 case) and both packages. The Debian package is installed and
+    the installed game is run, because the starter is a relative symlink
+    into /usr/share and a wrong path only shows after installing; the RPM
+    is installed in a Fedora container, the only place where the spec's
+    %files section - including the deliberately co-owned /usr/games - is
+    really tested. ShellCheck gates at error severity, where the tree is
+    clean; the remaining warnings are artefacts of sourcing lib/*.sh into
+    the main script and are reported without failing the job.
+  * Release workflow (.github/workflows/release.yml) on a v* tag: it
+    checks that the tag name and the version in the tree agree, builds
+    the .deb, the .rpm, the .src.rpm and a source tarball of the tagged
+    commit, adds SHA256SUMS and publishes the GitHub release with those
+    assets. It uses the runner's own gh CLI rather than a third-party
+    action, and updates an existing release instead of failing, so an
+    interrupted run can simply be repeated.
+  * build-deb.sh and build-rpm.sh now print their status messages when
+    the environment variable CI is set, not only on a terminal. A CI
+    runner has neither a terminal nor a journal anybody reads, so both
+    scripts used to fail there in complete silence, error messages
+    included.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 03 Aug 2026 18:00:00 +0200
+
 rowhammer (0.39.0) unstable; urgency=medium
 
   * New game mode "Sprint" (user request): score as much row credit as
