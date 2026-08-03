@@ -195,17 +195,30 @@ Die fuer uns relevanten Merkmale des Originals:
   das erste Wunder (Maya) ist dort bei 2.500 Zeilen fertig, das letzte
   bei 500.000. Finale Liste (Reihen-Kosten je Wunder in Klammern,
   justierbar in `WONDER_COSTS`):
-  1. Maya-Tempel / Chichen Itza (100)
-  2. Stonehenge (200)
-  3. Sphinx von Gizeh (400)
-  4. Pantheon, Rom (800)
-  5. Chinesische Mauer (1600)
-  6. Taj Mahal (3200)
-  7. Basilius-Kathedrale, Moskau (6400)
+  1. Maya-Tempel / Chichen Itza (10.000)
+  2. Stonehenge (20.000)
+  3. Sphinx von Gizeh (40.000)
+  4. Pantheon, Rom (80.000)
+  5. Chinesische Mauer (160.000)
+  6. Taj Mahal (320.000)
+  7. Basilius-Kathedrale, Moskau (640.000)
   Chinesische Mauer und Taj Mahal fuellen die zwei nicht verifizierbaren
   Plaetze. Die Kosten verdoppeln sich je Wunder (grob geometrisch wie im
-  Original), sind aber auf Einzelrechner-Spielzeit herunterskaliert
-  (12.700 gewichtete Reihen insgesamt statt 500.000 Zeilen).
+  Original) und liegen seit 0.44.0 auch in dessen Groessenordnung
+  (1.270.000 gewichtete Reihen insgesamt).
+  **Kosten-Umstellung 0.44.0 (Nutzerentscheidung):** die urspruengliche
+  Reihe 100..6.400 (12.700 insgesamt) war bewusst auf
+  Einzelrechner-Spielzeit herunterskaliert und damit deutlich zu billig -
+  ein Wunder fiel in wenigen Runden. Jede Kostenstelle wurde mit 100
+  multipliziert; die Verdopplung je Wunder und die Wunder-Liste selbst
+  bleiben unveraendert, nur der Massstab wandert an den des Originals
+  (dort 2.500 bis 500.000 Zeilen je Wunder) heran, sodass ein Wunder
+  wieder ein Langfrist-Ziel ist. Ein vorhandener Spielstand behaelt
+  seinen Reihenzaehler (`save`, siehe 4.5), kauft damit aber weniger
+  Fortschritt: die Baustelle faellt auf ein frueheres Wunder und eine
+  fruehere Baustufe zurueck. Das ist Absicht und kein Datenverlust - der
+  Zaehler ist die einzige gespeicherte Groesse, Wunder und Baustufe
+  werden aus ihm abgeleitet (siehe 4.5).
 - Jedes Wunder ist **eine** ASCII-Art-Datei (`assets/wonders/`, 12
   Zeilen, max. 44 Spalten, reines ASCII). Die Baustufen werden nicht als
   separate Dateien gepflegt, sondern durch **zeilenweises Aufdecken von
@@ -1989,13 +2002,17 @@ stehen.
   abgebaute Reihe jedes Accounts zahlt dann doppelt ein: auf den
   eigenen (Account-)Zaehler und auf einen gemeinsamen Server-Zaehler.
 - **Konsequenz fuer die Kostentabelle:** Die bestehende
-  `WONDER_COSTS`-Reihe (100..6400, insgesamt 12.700 Reihen, siehe 3.3)
-  ist auf Einzelrechner-Spielzeit herunterskaliert und waere von vielen
-  gleichzeitig spielenden Accounts binnen Stunden durchgespielt. Der
-  Server-Fortschritt braucht **eine eigene, deutlich groessere
-  Kostentabelle** (`SERVER_WONDER_COSTS`) - naeher an der
-  Original-Groessenordnung (2.500 bis 500.000 Zeilen je Wunder, siehe
-  3.3) oder sogar darueber, je nach erwarteter Serverlast. Beide
+  `WONDER_COSTS`-Reihe (seit 0.44.0 10.000..640.000, insgesamt 1.270.000
+  Reihen, siehe 3.3) ist auf einen einzelnen Spieler ausgelegt und waere
+  von vielen
+  gleichzeitig spielenden Accounts durchgespielt, lange bevor ein
+  gemeinsames Wunder etwas Gemeinsames haette. Der
+  Server-Fortschritt braucht deshalb weiterhin **eine eigene, deutlich
+  groessere Kostentabelle** (`SERVER_WONDER_COSTS`) - die Umstellung in
+  0.44.0 hat den Abstand nur verkleinert, nicht aufgehoben: sie bringt
+  die Einzelspieler-Reihe erst auf die Original-Groessenordnung (2.500
+  bis 500.000 Zeilen je Wunder, siehe 3.3), die Server-Reihe muss
+  darueber liegen, je nach erwarteter Serverlast. Beide
   Tabellen nutzen dieselbe Wunder-Liste und -Logik (`lib/wonders.sh`),
   nur mit unterschiedlichem Kosten-Array und unterschiedlichem
   Zaehlerstand.
@@ -2368,9 +2385,11 @@ Multi-Server zuletzt.
   frueher offene Frage nach den Punkten fuer die Quadrat-Bildung hat
   sich damit erledigt (es gibt bewusst keine Bildungs-Punkte mehr).
 - Weltwunder-Liste und Baustufen sind seit 0.8.0 festgelegt (siehe
-  3.3). Offen bleibt: Die Reihen-Kosten je Wunder (100..6400) sind
-  gegenueber dem Original bewusst herunterskaliert und sollten nach
-  Playtesting ggf. nachjustiert werden (`WONDER_COSTS`).
+  3.3). Die Reihen-Kosten je Wunder waren gegenueber dem Original
+  bewusst herunterskaliert (100..6400) und sind mit 0.44.0 auf
+  Nutzerentscheidung mit 100 multipliziert worden (10.000..640.000,
+  Original-Groessenordnung). Offen bleibt wie bisher nur die
+  Feinjustierung nach Playtesting (`WONDER_COSTS`).
 - Mindest-Terminalgroesse: seit 0.26.0 48x22 (vorher 48x24 - die zwei
   Statuszeilen sind mit dem HUD-Umbau entfallen, siehe 3.4), seit
   0.19.0 auch waehrend des Spiels ueberwacht (SIGWINCH, siehe HISTORY.md,

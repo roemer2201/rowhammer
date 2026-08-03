@@ -60,7 +60,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.18.0  (2026-08-03)
+# Version: 0.18.1  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -393,7 +393,10 @@ menu_help_body() {
                   "" \
                   "Gewertete Reihen je Weltwunder:")
             for (( i = 0; i < ${#WONDER_NAMES_DE[@]}; i++ )); do
-                printf -v line '  %d. %-28s %5d' "$(( i + 1 ))" \
+                # Six digits since 0.44.0 (costs multiplied by 100, see
+                # lib/wonders.sh): with %5d the six-digit entries would
+                # push out of their field and break the column.
+                printf -v line '  %d. %-28s %6d' "$(( i + 1 ))" \
                     "${WONDER_NAMES_DE[i]}" "${WONDER_COSTS[i]}"
                 HELP_BODY+=("${line}")
             done
