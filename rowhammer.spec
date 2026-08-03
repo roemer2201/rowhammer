@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.43.0
+Version:        0.44.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,15 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.44.0-1
+- The end of a round asks for the name its highscore entry is filed
+  under; the player name from the settings comes preselected, so Enter
+  keeps it and typing replaces it. The name applies to that round only.
+- Asked only for a round that really enters a list (cleared rows, and
+  for Ultra and Sprint a run that reached its goal).
+- Both name prompts share one line editor that draws and reads the
+  input itself, so the session-wide raw input mode has no exception
+  left; only valid name characters can be entered, at most 16.
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.43.0-1
 - The pause menu (Esc/x) gained a "Neustarten" entry below "Fortsetzen":
   it gives up the running round and starts a fresh one in the same mode.

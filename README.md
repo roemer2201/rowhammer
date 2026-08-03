@@ -142,7 +142,13 @@ Das Startmenue bietet:
   stuende dort zehnmal gleich. Die Time-Attack-Liste behaelt die
   Zeitspalte dagegen - sie zeigt, wie lange sich ein Lauf am Leben
   gehalten hat. Ein Rundenende zeigt den
-  erreichten Rang ausserdem direkt an
+  erreichten Rang ausserdem direkt an.
+  **Wer in der Liste steht, fragt das Spiel am Ende jeder Runde**, die
+  in eine der vier Listen kommt: Der Spielername aus den Einstellungen
+  steht dort vormarkiert - Enter uebernimmt ihn, das erste getippte
+  Zeichen ersetzt ihn (eine Pfeiltaste hebt die Markierung auf, wenn
+  der Name nur ergaenzt werden soll). Der eingegebene Name gilt fuer
+  diese Runde; die Einstellung bleibt unveraendert
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
 - **Statistik** - auf drei Bildschirmen: Gesamtzaehler ueber alle
@@ -157,7 +163,8 @@ Das Startmenue bietet:
   (`guideline`, `classic`, `mono` oder `colorblind`, jeweils mit einer
   Farbvorschau in der Liste) und Spielernamen setzen; alles drei wird in
   der Konfigurationsdatei gespeichert (Standard:
-  `~/.config/rowhammer/rowhammer.conf`)
+  `~/.config/rowhammer/rowhammer.conf`). Der Spielername ist die
+  Vorgabe der Namensabfrage am Rundenende (siehe unten)
 - **Anleitung** - kurze Spielerklaerung auf sieben Bildschirmen, mit
   den Pfeiltasten links/rechts durchblaetterbar (umlaufend):
   Spielprinzip, Steuerung (mit der gerade eingestellten
@@ -330,6 +337,11 @@ Umgesetzt:
   `~/.config/rowhammer/highscore-timeattack`, im Menue
   ueber eine
   Modus-Auswahl erreichbar, Ranganzeige im Rundenende-Bild
+- **Namensabfrage am Rundenende:** jede Runde, die in eine Bestenliste
+  kommt, fragt vorher nach dem Namen fuer den Eintrag - mit dem
+  Spielernamen aus den Einstellungen als vormarkierter Vorgabe, die ein
+  einziger Tastendruck ersetzt. Der eingegebene Name gilt nur fuer diese
+  Runde
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
   Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der

@@ -520,6 +520,61 @@ wo sie passen, und weicht an genau einer Stelle begruendet ab:
 - **`r` im Rundenende-Bild startet im selben Modus neu**, wie bei den
   anderen Modi (`game_reset` ohne Argument).
 
+### 3.7 Namensabfrage am Rundenende (seit 0.44.0)
+
+Am Ende einer Runde fragt das Spiel nach dem Namen, unter dem die Runde
+in ihrer Bestenliste steht (Nutzerwunsch). Der **Spielername aus den
+Einstellungen ist die Vorgabe** und steht **vormarkiert** in der
+Eingabezeile - wie in einem grafischen Textfeld: das erste getippte
+Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
+
+- **Wann:** in `record_round` (`rowhammer.sh`), also an jedem echten
+  Rundenende (Game Over, "Runde beenden", "Neustarten", Programmende
+  mit wartender Runde, siehe 3.3) und dank `ROUND_RECORDED` genau
+  einmal je Runde. Und zwar **vor** dem Listeneintrag: dort geht der
+  Name hinein, und dort entsteht der Rang, den der Rundenende-Kasten
+  anschliessend zeigt.
+- **Nur fuer eine Runde, die wirklich in eine Liste kommt**
+  (`round_is_ranked`): Sie spiegelt die Modus-Regeln aus 3.6 (nur ein
+  erfolgreicher Ultra-/Sprint-Lauf wird gelistet) und die
+  Null-Pruefungen der Listenfunktionen selbst (`lib/highscore.sh`
+  verwirft eine Runde ohne Rows bzw. ohne gemessene Zeit). Eine Runde,
+  die nirgends abgelegt wird, hat keinen Namen zu erfragen; alles
+  andere, was sie noch speist - Weltwunder-Fortschritt und Statistik -,
+  ist ohnehin namenlos.
+- **Der eingegebene Name gilt fuer diese eine Runde**, die Einstellung
+  bleibt unveraendert (und damit die Vorgabe der naechsten Runde). Das
+  ist genau der Fall, fuer den die Abfrage da ist - jemand anderes
+  spielt eine Runde mit -, und es laesst den Einstellungs-Eintrag die
+  eine Stelle sein, die die Vorgabe bestimmt. `record_round` haelt den
+  Namen deshalb in einer lokalen Variablen und gibt ihn an die
+  `highscore_*_add`-Funktionen weiter, statt `PLAYER_NAME` zu
+  ueberschreiben.
+- **Bedienung** (`menu_text_input` in `lib/menu.sh`, gemeinsam genutzt
+  mit der Namensabfrage im Einstellungsmenue): Tippen ersetzt die
+  markierte Vorgabe, Backspace auf ihr loescht sie, eine **Pfeiltaste
+  hebt die Markierung auf und behaelt den Text** (die Vorgabe laesst
+  sich also auch bearbeiten statt ersetzen). Danach verhaelt sich die
+  Zeile wie eine gewoehnliche Eingabe: Zeichen haengen an, Backspace
+  loescht das letzte. Enter uebernimmt, `ESC` laesst alles beim Alten,
+  eine leer gemachte Zeile ebenfalls. Es gibt keinen Cursor **im**
+  Text - bei maximal 16 Zeichen wird vom Ende her editiert.
+- **Nur gueltige Zeichen kommen ueberhaupt an** (`MENU_INPUT_RE`,
+  `MENU_INPUT_MAX`: dasselbe Muster, gegen das der Spielername beim
+  Start und beim Laden der Config geprueft wird, max. 16 Zeichen). Der
+  Editor kann damit keinen ungueltigen Namen erzeugen, und die frueher
+  noetige Fehlermeldung nach der Eingabe entfaellt. Eine
+  Buchstabentaste ist hier ein Buchstabe und keine Spielaktion - `x`
+  schliesst den Dialog also nicht, dafuer ist `ESC` da.
+- **Darstellung:** ein regulaerer, zentrierter Menue-Frame
+  (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level und
+  Zeit der Runde ueber der Eingabezeile. Die Markierung ist invertierter
+  Text (`\e[7m`), nach ihrem Aufheben steht ein invertierter Block als
+  Cursor hinter dem Text - der echte Cursor bleibt die ganze Sitzung
+  ueber ausgeblendet. Danach setzt `prompt_round_name` `RENDER_FULL=1`,
+  damit das Spielfeld samt Rundenende-Kasten vollstaendig neu gezeichnet
+  wird.
+
 ## 4. Technisches Konzept
 
 ### 4.1 Rahmenbedingungen
@@ -605,7 +660,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.43.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.44.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
@@ -630,7 +685,10 @@ Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
 "Rows" ist die gewichtete Reihenwertung (1/5/10), die den
 Weltwunder-Fortschritt speist und seit 0.16.0 zugleich der Score der
 Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
-treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
+treibt das Level. Seit 0.44.0 fragt jede Runde, die in eine
+Bestenliste kommt, an ihrem Ende nach dem Namen fuer den Eintrag
+(vormarkierte Vorgabe aus den Einstellungen, siehe 3.7).
+CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
 `--no-color` (`ROWHAMMER_NO_COLOR`; seit 0.28.0 wird zusaetzlich die
@@ -675,10 +733,24 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   an die Cursorposition, also hinter die zuletzt geschriebene Zeile.
   Seit dem inkrementellen Rendering (0.22.0) wird eine unveraenderte
   Zeile nicht mehr neu geschrieben, sodass das echote `^[[C` stehen
-  blieb (frueher hatte der naechste Voll-Frame es uebermalt). Einzige
-  Ausnahme ist die Namensabfrage (`prompt_player_name`), die fuer ihren
-  zeilenweisen `read` per `term_input_line` in den kanonischen Modus mit
-  Echo zurueckschaltet und danach wieder `term_input_raw` setzt.
+  blieb (frueher hatte der naechste Voll-Frame es uebermalt). **Seit
+  0.44.0 gilt der Rohmodus ausnahmslos:** die einzige Ausnahme war die
+  Namensabfrage, die per `term_input_line` in den kanonischen Modus mit
+  Echo zurueckschaltete; mit dem gemeinsamen Zeileneditor `menu_text_input`
+  (siehe 3.7) zeichnet das Spiel die getippte Zeile selbst, `term_input_line`
+  ist ersatzlos entfallen.
+  Der Editor liest ueber denselben `read_key`, nur im **Textmodus**
+  (`KEY_TEXT`, `lib/input.sh`): eine gesetzte Flagge aendert allein die
+  Behandlung einfacher Bytes in `key_plain` - das Zeichen wird so
+  gemeldet, wie es getippt wurde (statt kleingeschrieben), und die
+  beiden Loeschbytes (0x08/0x7f) werden zur Taste `BACKSPACE`, statt als
+  inert verworfen zu werden. Beides ist fuer das Spiel falsch (`A` und
+  `a` sind dieselbe Bindung, an Backspace haengt nichts) und fuer eine
+  Namenseingabe unverzichtbar. Escape-Sequenzen laufen unveraendert
+  durch den Zustandsautomaten unten, sodass Pfeiltasten, Mausmeldungen,
+  Terminalantworten und Paste im Textmodus genauso behandelt werden wie
+  im Spiel. Die Flagge wird nur um den einzelnen `read_key`-Aufruf herum
+  gesetzt, damit kein Rueckgabepfad sie in den Game-Loop traegt.
   Escape-Sequenzen laufen seit 0.23.0 (Issue #7,
   Analyse in `docs/input-analysis.md`) durch einen **Zustandsautomaten**
   (`key_feed` und die `key_in_*`-Helfer in `lib/input.sh`), dessen
@@ -775,9 +847,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   der neue nicht mehr abdeckt - ein Voll-Loeschen je Tastendruck wuerde
   beim Blaettern flackern. Das Flag `MENU_FULL` merkt sich dagegen, dass
   ein **anderer** Bildschirm zuletzt dran war (Spielblock ueber
-  `render_flush`, "resize me"-Overlay, Resize ueber `layout_update`, die
-  echoende Namensabfrage ueber `render_menu_dirty`); dann loescht der
-  naechste Menue-Frame zuerst den ganzen Bildschirm. Nach einem Resize
+  `render_flush`, "resize me"-Overlay, Resize ueber `layout_update` -
+  jede dieser Stellen setzt das Flag selbst); dann loescht der
+  naechste Menue-Frame zuerst den ganzen Bildschirm. Der Helfer
+  `render_menu_dirty`, ueber den frueher die echoende Namensabfrage das
+  Flag setzte, ist mit ihr in 0.44.0 entfallen (siehe 3.7): der neue
+  Zeileneditor ist selbst ein regulaerer Menue-Frame. Nach einem Resize
   bauen die Warteschleifen ihren Frame neu auf, statt den gespeicherten
   erneut auszugeben - er traegt absolute Cursor-Positionen der alten
   Terminalgroesse.
@@ -823,7 +898,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Werte werden validiert und single-quoted geschrieben, da die Datei
   gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
   und beim Laden gegen die bekannten Schemata validiert (unbekannt =
-  Abbruch mit Meldung).
+  Abbruch mit Meldung). Der Spielername ist die **Vorgabe** der
+  Namensabfrage am Rundenende (siehe 3.7); geaendert wird er nur hier im
+  Einstellungsmenue, seit 0.44.0 mit demselben Zeileneditor
+  (`menu_text_input`) und dem bisherigen Namen vormarkiert.
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
   `rows|lines|level|name|date|gold|silver|time|rowhammers|pieces`,
@@ -856,7 +934,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
   Beenden der Runde, siehe 3.3; 0 Rows zaehlt nicht, gleiche Rows
-  rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
+  rangieren hinter dem aelteren Eintrag). Das Feld `name` ist seit
+  0.44.0 nicht mehr zwangslaeufig der Spielername aus den Einstellungen,
+  sondern der am Rundenende abgefragte (siehe 3.7) - fuer alle vier
+  Listen gleichermassen. Der erreichte Rang erscheint im Game-Over-Bild,
   die Liste unter "Highscores" im Hauptmenue. Angezeigt wird je
   Eintrag seit 0.27.0 ein **Zwei-Zeilen-Block** (Nutzerentscheidung:
   die Anzeige darf dafuer mehrzeilig werden): erste Zeile Rang, Name,

@@ -71,6 +71,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.41.0 | Umschaltbarer Render-Modus (`partial`/`full`) | 4.3 |
 | 0.42.0 | Time-Attack-Modus samt Bestenliste, Statistik je Modus | 3.5, 3.6, 4.5 |
 | 0.43.0 | "Neustarten" im Pausenmenue | 3.1, 3.3 |
+| 0.44.0 | Namensabfrage am Rundenende (vormarkierte Vorgabe) | 3.7, 4.3, 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -504,6 +505,10 @@ CLAUDE.md 3.3, 3.4)._
       Sitzung (`term_input_raw`), die Namensabfrage holt sich fuer ihren
       `read` per `term_input_line` kurz das Zeilen-Echo zurueck (siehe
       4.3)
+      _Spaeter ueberholt: diese eine Ausnahme entfiel mit 0.44.0 - die
+      Namensabfragen zeichnen ihre Zeile selbst und lesen sie im
+      Textmodus der Eingabeschicht, `term_input_line` gibt es nicht
+      mehr._
 - [x] Highscore-Eintraege ueberleben fehlende Zaehlerfelder (Version
       0.29.0, Nutzerentscheidung): `highscore_load` verlangte bislang
       alle zehn Felder und verwarf jede kuerzere Zeile ganz - jede
@@ -884,3 +889,67 @@ CLAUDE.md 3.3, 3.4)._
       Unterscheidung zwischen der konfigurierbaren Buchstabentaste und
       den fest verdrahteten Sekundaertasten. Dieselbe veraltete Angabe
       stand im Kopfkommentar von `handle_key` ("2 for hold").
+- [x] **Namensabfrage am Rundenende** (Version 0.44.0, Nutzerwunsch):
+      Am Ende einer Runde fragt das Spiel nach dem Namen, unter dem sie
+      in ihre Bestenliste kommt; die Vorgabe ist der Spielername aus den
+      Einstellungen und steht **vormarkiert** in der Eingabezeile, sodass
+      ein einziges getipptes Zeichen sie ersetzt (aktueller Stand:
+      CLAUDE.md 3.7). Bis dahin trug jeder Eintrag den Namen aus den
+      Einstellungen, und wer ihn fuer eine Runde aendern wollte, musste
+      vorher ins Einstellungsmenue.
+      Fuenf Entscheidungen dahinter:
+      - **Die Abfrage sitzt in `record_round`.** Das ist der eine
+        Trichter, durch den jedes echte Rundenende laeuft (Game Over,
+        "Runde beenden", "Neustarten", Programmende mit wartender
+        Runde) und der ueber `ROUND_RECORDED` genau einmal je Runde
+        ausgefuehrt wird - eine Abfrage an jedem einzelnen dieser Wege
+        haette dieselbe Logik viermal gebraucht. Sie laeuft **vor** dem
+        Listeneintrag, denn dort geht der Name hinein und dort entsteht
+        der Rang, den der Rundenende-Kasten anschliessend zeigt.
+      - **Gefragt wird nur, wenn die Runde wirklich in eine Liste
+        kommt** (`round_is_ranked`): Die Funktion spiegelt die
+        Modus-Regeln aus 3.6 (nur ein erfolgreicher Ultra-/Sprint-Lauf
+        wird gelistet) und die Null-Pruefungen der Listenfunktionen
+        selbst. Eine Runde, die nirgends abgelegt wird, hat keinen
+        Namen zu erfragen - Weltwunder-Fortschritt und Statistik, die
+        sie weiterhin speist, sind namenlos. Ohne diese Bedingung
+        haette jede versehentlich gestartete und sofort beendete Runde
+        einen Dialog gezeigt.
+      - **Der Name gilt fuer die Runde, nicht fuer die Einstellung.**
+        `record_round` haelt ihn in einer lokalen Variablen und reicht
+        ihn an die `highscore_*_add`-Funktionen weiter, statt
+        `PLAYER_NAME` zu ueberschreiben. Das ist genau der Fall, fuer
+        den die Abfrage da ist (jemand anderes spielt eine Runde mit),
+        und es laesst den Einstellungs-Eintrag die eine Stelle sein,
+        die die Vorgabe bestimmt; ein Zurueckschreiben haette die
+        Einstellung stattdessen zum Protokoll der letzten Runde
+        gemacht.
+      - **Ein gemeinsamer Zeileneditor** (`menu_text_input`) fuer die
+        neue Abfrage und die im Einstellungsmenue. Zwei verschiedene
+        Eingabefelder fuer dieselbe Sache waeren schwer zu erklaeren,
+        und die alte Abfrage konnte das Verlangte gar nicht: sie liess
+        das Terminal die Zeile einlesen und anzeigen
+        (`term_input_line`, kanonischer Modus mit Echo), und ein
+        Terminal kann keine vormarkierte Vorgabe darstellen. Der Editor
+        zeichnet die Zeile jetzt selbst als regulaeren, zentrierten
+        Menue-Frame. Mitgenommen: `term_input_line` und
+        `render_menu_dirty` sind ersatzlos entfallen - beide gab es nur
+        wegen des Echos der alten Abfrage -, und die Eingabe ist damit
+        die letzte Stelle, an der der Rohmodus der Sitzung noch eine
+        Ausnahme hatte (Issue #33, 0.28.1).
+      - **Textmodus in der Eingabeschicht statt eines zweiten Lesers**
+        (`KEY_TEXT`, `lib/input.sh`): Die Flagge aendert allein die
+        Behandlung einfacher Bytes in `key_plain` - Gross-/Kleinschreibung
+        bleibt erhalten, die Loeschbytes werden zur Taste `BACKSPACE`.
+        Escape-Sequenzen laufen unveraendert durch den Zustandsautomaten
+        aus 0.23.0, sodass die Haertung gegen Issue #7 (in Stuecken
+        zugestellte Sequenzen, Mausmeldungen, Terminalantworten, Paste)
+        auch fuer die Eingabe gilt, statt neben ihr noch einmal
+        entstehen zu muessen. Gesetzt wird sie nur um den einzelnen
+        `read_key`-Aufruf, damit sie kein Rueckgabepfad in den
+        Game-Loop traegt.
+      Gefiltert wird beim Tippen: nur Zeichen, die dem Namensmuster
+      genuegen, und hoechstens 16 davon kommen ueberhaupt in die Zeile
+      (`MENU_INPUT_RE`, `MENU_INPUT_MAX`). Der Editor kann damit keinen
+      ungueltigen Namen erzeugen, und die frueher noetige Fehlermeldung
+      nach der Eingabe entfaellt.

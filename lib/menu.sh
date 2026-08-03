@@ -53,6 +53,14 @@
 #   asks which one before drawing it. The Anleitung explains all four
 #   on a "Spielmodi" page of its own (menu_help_body, since 0.16.0),
 #   with their highscore rules on the page after it (since 0.17.0).
+#   Since 0.19.0 (user request) the two places that ask for a name share
+#   one editor, menu_text_input: the settings entry and the new prompt at
+#   the end of a round (prompt_round_name), which asks which name the
+#   finished round enters its highscore list under. Both start with the
+#   name from the settings preselected the way a graphical text field
+#   would be - the first character typed replaces it, Enter keeps it -
+#   which is why the editor draws and reads the line itself instead of
+#   handing the terminal back into line mode as the old prompt did.
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -60,7 +68,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.18.0  (2026-08-03)
+# Version: 0.19.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -928,46 +936,195 @@ prompt_rebind() {
     return 0
 }
 
-# prompt_player_name
-# Line-based name input (canonical mode, so backspace editing works).
-# An empty input keeps the current name; valid input is persisted.
-prompt_player_name() {
+# --- Name input -----------------------------------------------------------
+# What a name may consist of and how long it may get. Both mirror the
+# pattern the player name is validated against on startup and on loading
+# the config (rowhammer.sh, lib/config.sh): the editor below refuses
+# every key that would not pass that check, so it cannot produce an
+# invalid name and no validation step is needed behind it.
+MENU_INPUT_RE='^[A-Za-z0-9_ -]$'
+MENU_INPUT_MAX=16
+MENU_INPUT=""
+
+# menu_text_input TITLE DEFAULT LINE...
+# Ask for a short text with DEFAULT preselected. TITLE and the LINEs are
+# shown above the input line; the result lands in MENU_INPUT. Returns 0
+# when the player confirmed with Enter (MENU_INPUT may be empty then -
+# what an empty input means is the caller's decision) and 1 when they
+# left with ESC, in which case MENU_INPUT is not to be used.
+#
+# "Preselected" is meant as in a graphical text field (2026-08-03, user
+# request): the default starts out marked (drawn in reverse video), and
+# the first character typed replaces it as a whole instead of being
+# appended - changing the name is typing it, keeping it is pressing
+# Enter. Backspace on the marked default clears it; any cursor key lifts
+# the marking and keeps the text, so the default can also be edited
+# rather than replaced. Once the marking is gone the line behaves like an
+# ordinary input: characters append, backspace erases the last one.
+#
+# The frame is drawn by this function rather than by the terminal (the
+# session stays in raw mode, see lib/input.sh): a terminal-side line
+# editor cannot show a marked default, and its echo would land wherever
+# the cursor is instead of inside the centered menu block. The keys come
+# from read_key in text mode (KEY_TEXT), which is what keeps upper case
+# and reports backspace.
+menu_text_input() {
+    local title="${1}" value="${2}"
+    shift 2
+    local -a body=("$@")
     local -a lines
-    local name=""
-    # The input line is the last one of the frame, so the cursor ends up
-    # right behind the prompt where the typed name appears.
-    lines=("  Spielername" ""
-           "  Aktueller Name: ${PLAYER_NAME}" ""
-           "  Neuer Name (leer = unveraendert, max. 16 Zeichen,"
-           "  erlaubt: A-Z a-z 0-9 Leerzeichen _ -)" ""
-           "  > ")
-    render_menu_frame "${lines[@]}"
-    screen_write "${RENDER_MENU_FRAME}"
-    # Show the cursor while typing, hide it again afterwards.
-    screen_write $'\e[?25h'
-    # The session runs with echo and canonical mode off (term_input_raw,
-    # see issue #33); this is the one prompt that wants the terminal to
-    # show the typed name and to handle backspace, so line mode is turned
-    # on for the read and off again right after.
-    term_input_line
-    IFS= read -r name || name=""
-    term_input_raw
-    screen_write $'\e[?25l'
-    # The echoed input is on screen but not part of any menu frame; let
-    # the next one clear the terminal rather than draw around it.
-    render_menu_dirty
-    if [ -z "${name}" ]; then
+    local marked=1 dirty=1 line shown ins
+    while :; do
+        if [ "${dirty}" -eq 1 ]; then
+            lines=("  ${title}" "")
+            for line in "${body[@]}"; do
+                lines+=("  ${line}")
+            done
+            # The marked default is shown in reverse video; once the
+            # marking is gone a reverse-video block behind the text
+            # stands in for the cursor, which stays hidden all session.
+            if [ "${marked}" -eq 1 ] && [ -n "${value}" ]; then
+                shown=$'\e[7m'"${value}"$'\e[0m'
+            else
+                shown="${value}"$'\e[7m \e[0m'
+            fi
+            lines+=("" "  > ${shown}" "")
+            lines+=("  Tippen ersetzt den markierten Text.")
+            lines+=("  Enter: OK   ESC: unveraendert")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        # Text mode only for the read itself, so no return path can leave
+        # it switched on for the game loop.
+        KEY_TEXT=1
+        read_key
+        KEY_TEXT=0
+        # Repaint after a resize (read_key cleared the screen); rebuilt
+        # rather than re-emitted like in every other wait loop here.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+            continue
+        fi
+        ins=""
+        case "${KEY}" in
+            ENTER)
+                MENU_INPUT="${value}"
+                debug_event "text input '${title}': '${value}'"
+                return 0
+                ;;
+            ESC)
+                MENU_INPUT=""
+                debug_event "text input '${title}': cancelled"
+                return 1
+                ;;
+            BACKSPACE)
+                if [ "${marked}" -eq 1 ]; then
+                    value=""
+                    marked=0
+                else
+                    value="${value%?}"
+                fi
+                dirty=1
+                ;;
+            LEFT|RIGHT|UP|DOWN)
+                # Editing instead of replacing: keep the text, drop the
+                # marking. There is no cursor to move inside the text -
+                # the line is at most MENU_INPUT_MAX characters long and
+                # is edited from its end.
+                if [ "${marked}" -eq 1 ]; then
+                    marked=0
+                    dirty=1
+                fi
+                ;;
+            SPACE) ins=" " ;;
+            # A single character is a typed character (the multi-character
+            # symbols are all handled above), including the letters the
+            # game binds elsewhere: in this prompt "x" is an x.
+            ?) ins="${KEY}" ;;
+        esac
+        if [ -n "${ins}" ] && [[ "${ins}" =~ ${MENU_INPUT_RE} ]]; then
+            if [ "${marked}" -eq 1 ]; then
+                value="${ins}"
+                marked=0
+                dirty=1
+            elif [ "${#value}" -lt "${MENU_INPUT_MAX}" ]; then
+                value="${value}${ins}"
+                dirty=1
+            fi
+        fi
+    done
+}
+
+# prompt_player_name
+# Change the player name kept in the settings (and in the config file).
+# The current name is the preselected default, an unchanged or empty
+# input leaves everything alone, and so does leaving with ESC.
+prompt_player_name() {
+    local -a body
+    body=("Aktueller Name: ${PLAYER_NAME}" ""
+          "Erlaubt sind max. ${MENU_INPUT_MAX} Zeichen aus"
+          "A-Z a-z 0-9 Leerzeichen _ -")
+    if ! menu_text_input "Spielername" "${PLAYER_NAME}" "${body[@]}"; then
         return 0
     fi
-    local re='^[A-Za-z0-9_ -]{1,16}$'
-    if [[ "${name}" =~ ${re} ]]; then
-        PLAYER_NAME="${name}"
-        debug_event "player name changed to '${name}'"
-        config_save
-    else
-        menu_message "Spielername" \
-            "Ungueltiger Name: ${name}" \
-            "Erlaubt sind max. 16 Zeichen aus A-Z a-z 0-9 Leerzeichen _ -"
+    if [ -z "${MENU_INPUT}" ] || [ "${MENU_INPUT}" = "${PLAYER_NAME}" ]; then
+        return 0
     fi
+    PLAYER_NAME="${MENU_INPUT}"
+    debug_event "player name changed to '${PLAYER_NAME}'"
+    config_save
+    return 0
+}
+
+# The name the round that just ended is filed under; set by
+# prompt_round_name and read by record_round (rowhammer.sh).
+ROUND_NAME=""
+
+# prompt_round_name
+# Ask at the end of a round which name it enters its highscore list
+# under (2026-08-03, user request). The settings name is the preselected
+# default, so keeping it is one Enter, and typing replaces it - see
+# menu_text_input for the editing rules.
+#
+# The entered name applies to this one round; the settings name (and with
+# it the default of the next round) stays untouched. That is what keeps
+# the prompt useful for the case it exists for - somebody else playing a
+# round on this machine - and it keeps the settings entry the one place
+# that decides what the default is. Whoever wants to change the default
+# changes it in the settings menu.
+#
+# Called from record_round, and only for a round that really enters one
+# of the lists: a round nobody files anywhere has no name to ask for.
+# Everything else the round feeds - wonder progress, statistics - is
+# nameless anyway.
+prompt_round_name() {
+    local -a body
+    local mode_label
+    case "${GAME_MODE}" in
+        ultra)      mode_label="Ultra" ;;
+        sprint)     mode_label="Sprint" ;;
+        timeattack) mode_label="Time Attack" ;;
+        *)          mode_label="Marathon" ;;
+    esac
+    fmt_duration "$(( PLAY_MS / 1000 ))"
+    body=("Modus: ${mode_label}"
+          "Rows: ${ROW_CREDIT}   Lines: ${CLEARED_TOTAL}"
+          "Level: ${LEVEL}   Zeit: ${FMT_DURATION}" ""
+          "Name fuer die Bestenliste:")
+    ROUND_NAME="${PLAYER_NAME}"
+    if menu_text_input "Runde beendet" "${PLAYER_NAME}" "${body[@]}"; then
+        # An empty line means the same as ESC here: nothing to file the
+        # round under, so it keeps the name from the settings.
+        if [ -n "${MENU_INPUT}" ]; then
+            ROUND_NAME="${MENU_INPUT}"
+        fi
+    fi
+    debug_event "round name: '${ROUND_NAME}' (default '${PLAYER_NAME}')"
+    # The prompt owned the whole screen; whatever the caller returns to -
+    # the board with its result box, or another menu - has to be redrawn
+    # in full. (A following menu frame needs no such flag: this was one.)
+    RENDER_FULL=1
     return 0
 }
