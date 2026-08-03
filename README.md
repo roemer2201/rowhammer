@@ -156,8 +156,9 @@ Das Startmenue bietet:
 - **Demos** - die aufgezeichneten Runden, neueste zuerst, mit Datum,
   Modus, Spielzeit und Rows. Die ausgewaehlte Aufnahme laesst sich
   **abspielen** oder **loeschen**. Aufbewahrt werden die 10 neuesten
-  Runden; Aufnahmen, die noch einen Highscore-Eintrag belegen, bleiben
-  darueber hinaus erhalten (erkennbar am Hash im Dateinamen)
+  Runden; Aufnahmen, die noch einen Highscore-Eintrag belegen, sind mit
+  `*` markiert und bleiben darueber hinaus erhalten (verknuepft ueber
+  einen Hash im Dateinamen)
 - **Einstellungen** - Tastenbelegung aendern, Farbschema waehlen
   (`guideline`, `classic`, `mono` oder `colorblind`, jeweils mit einer
   Farbvorschau in der Liste), Spielernamen setzen und die
@@ -321,6 +322,11 @@ Umgesetzt:
   Vorschau/Hold, Gold- und Silberbloecken, Weltwunderbau, den
   Spielmodi, den Bestenlisten und den Demos; die
   Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
+- **Highscore-Eintraege mit Runden-Hash:** jede gewertete Runde bekommt
+  einen kurzen Hash aus ihren eigenen Ergebnissen. Er steht im
+  Highscore-Eintrag und im Dateinamen der zugehoerigen Demo - so ist die
+  Aufnahme zu einem Highscore identifizierbar und wird beim Aufraeumen
+  nie geloescht, solange der Eintrag in der Liste steht
 - **Demo-Aufzeichnung und -Wiedergabe:** jede Runde wird mitgeschnitten
   und laesst sich ueber den Menuepunkt "Demos" noch einmal ansehen.
   Aufgezeichnet werden die Zuege, die Gravitationsschritte und die
@@ -332,7 +338,9 @@ Umgesetzt:
   wandert die fertige Aufnahme ins Datenverzeichnis (`demos/`, die 10
   neuesten). Die Wiedergabe laesst sich anhalten und zwischen 0.25x und
   4x Tempo abspielen; gewertet wird sie nie (kein Highscore, kein
-  Weltwunder-Fortschritt, keine Statistik)
+  Weltwunder-Fortschritt, keine Statistik). Aufnahmen, die noch einen
+  Highscore-Eintrag halten, sind in der Liste mit `*` markiert und
+  bleiben ueber die 10 hinaus erhalten
 - **Spielmodi:** endloses **Marathon**, **Ultra** (150 Rows auf
   Zeit, eigene Bestenliste nach kuerzester Zeit), **Sprint**
   (3 Minuten auf Rows, eigene Bestenliste nach den meisten Rows) und

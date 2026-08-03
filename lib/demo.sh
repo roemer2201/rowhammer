@@ -160,10 +160,14 @@ DEMO_HDR_TIME=0
 DEMO_HDR_ROWS=0
 DEMO_HDR_END="quit"
 
-# Entries of the demo list screen, filled by demo_scan: the file paths and
-# the menu labels belonging to them, newest first.
+# Entries of the demo list screen, filled by demo_scan: the file paths,
+# the menu labels belonging to them and, per entry, whether the recording
+# is protected by a highscore entry - newest first. DEMO_LIST_KEPT is how
+# many of them are, which the list screen needs for its legend.
 DEMO_LIST_FILE=()
 DEMO_LIST_LABEL=()
+DEMO_LIST_MARKED=()
+DEMO_LIST_KEPT=0
 
 # demo_dir
 # Path of the recording directory. A function rather than a constant
@@ -314,17 +318,22 @@ demo_record_discard() {
     return 0
 }
 
-# demo_record_finish END
+# demo_record_finish END [HASH]
 # Close the recording of a finished round and move it into the data
 # directory. END is how the round ended: "goal" (Ultra target reached or
 # Sprint time survived), "over" (topped out) or "quit" (ended from the
-# pause menu). Called from record_round (rowhammer.sh), so a round is
+# pause menu). HASH is the round's identifier (round_hash in
+# rowhammer.sh), which goes into the file name: the same hash is stored
+# with the round's highscore entry, so demo_prune can tell which
+# recordings still back a place on one of the lists and has to keep
+# them. It is part of the name rather than of the file so that listing
+# and pruning never have to open a single recording. Called from record_round (rowhammer.sh), so a round is
 # stored exactly once and at the same moment it enters the highscore
 # list, the wonder counter and the statistics.
 # A round without a single event is dropped: it was started and left
 # again, and an empty recording is only noise in the list.
 demo_record_finish() {
-    local end="${1}" name path tmp i suffix
+    local end="${1}" hash="${2:--}" name path tmp i suffix
     if [ "${DEMO_RECORDING}" -eq 0 ]; then
         return 0
     fi
@@ -344,12 +353,18 @@ demo_record_finish() {
     # name and the pruning below needs no stat calls. A second recording
     # within the same second (possible for two very short rounds) gets a
     # counter appended rather than overwriting the first one.
-    name="$(date +%Y%m%d-%H%M%S)-${GAME_MODE}"
-    path="${DEMO_DIR}/${name}${DEMO_FILE_EXT}"
+    # <date>-<mode>-<hash>: the date first so the glob is sorted
+    # chronologically, the hash last so it can be read back off the name
+    # with a single expansion (demo_file_hash). A counter for a second
+    # recording within the same second goes between date and mode, which
+    # keeps that expansion right - two rounds finishing in the same
+    # second is unlikely, two of them also sharing a hash impossible.
+    name="$(date +%Y%m%d-%H%M%S)"
+    path="${DEMO_DIR}/${name}-${GAME_MODE}-${hash}${DEMO_FILE_EXT}"
     i=2
     while [ -e "${path}" ] && [ "${i}" -le 9 ]; do
         printf -v suffix '%s-%d' "${name}" "${i}"
-        path="${DEMO_DIR}/${suffix}${DEMO_FILE_EXT}"
+        path="${DEMO_DIR}/${suffix}-${GAME_MODE}-${hash}${DEMO_FILE_EXT}"
         i=$(( i + 1 ))
     done
     if ! tmp="$(mktemp -- "${DEMO_DIR}/.demo.XXXXXX")"; then
@@ -396,13 +411,54 @@ demo_record_finish() {
     return 0
 }
 
+# demo_file_hash FILE
+# The round hash a recording carries in its name, into the global
+# DEMO_FILE_HASH ("-" when the name has none, which is what a file from
+# before 0.43.0 or a renamed one looks like). Reading it off the name
+# instead of out of the file is the whole point of putting it there:
+# listing and pruning stay free of file reads.
+DEMO_FILE_HASH="-"
+demo_file_hash() {
+    local base="${1##*/}"
+    base="${base%${DEMO_FILE_EXT}}"
+    DEMO_FILE_HASH="${base##*-}"
+    if ! [[ "${DEMO_FILE_HASH}" =~ ^[0-9a-f]{8}$ ]]; then
+        DEMO_FILE_HASH="-"
+    fi
+    return 0
+}
+
+# demo_protected FILE
+# True when this recording still backs an entry on one of the highscore
+# lists, which is what keeps it from being pruned. Expects
+# highscore_hash_set to have filled HS_HASH_SET.
+demo_protected() {
+    demo_file_hash "${1}"
+    if [ "${DEMO_FILE_HASH}" = "-" ]; then
+        return 1
+    fi
+    [ -n "${HS_HASH_SET[${DEMO_FILE_HASH}]:-}" ]
+}
+
 # demo_prune
-# Keep only the DEMO_MAX newest recordings. The file names start with the
-# date, so the glob is sorted oldest first and the surplus is simply its
-# beginning.
+# Keep the DEMO_MAX newest ordinary recordings, deleting older ones -
+# the file names start with the date, so the glob is already in that
+# order. A recording that still backs a highscore entry is never deleted
+# (user decision): the run behind a top ten place must stay watchable for
+# as long as it holds that place, and it gives up that protection by
+# itself the moment a better round pushes its entry off the list.
+# The cap counts the ordinary recordings only, not the protected ones.
+# Counting them together looks tidier but breaks down exactly where the
+# feature matters: with DEMO_MAX highscore-backed recordings on disk, the
+# budget would be used up by them alone and every freshly played round
+# would lose its recording the moment it was written. The directory can
+# therefore hold more than DEMO_MAX files - at worst the four lists' ten
+# entries each plus DEMO_MAX ordinary ones, some fifty recordings or a
+# few megabytes at the very most.
 demo_prune() {
     local -a files
-    local n drop i
+    local -a ordinary=()
+    local i over
     demo_dir
     files=("${DEMO_DIR}"/*"${DEMO_FILE_EXT}")
     # An unmatched glob stays unexpanded; that single non-existing entry
@@ -410,14 +466,23 @@ demo_prune() {
     if [ ! -e "${files[0]}" ]; then
         return 0
     fi
-    n="${#files[@]}"
-    if [ "${n}" -le "${DEMO_MAX}" ]; then
+    if [ "${#files[@]}" -le "${DEMO_MAX}" ]; then
+        # Cannot be over the cap either way, so the highscore lists do
+        # not even have to be looked at.
         return 0
     fi
-    drop=$(( n - DEMO_MAX ))
-    for (( i = 0; i < drop; i++ )); do
-        rm -f -- "${files[i]}"
-        debug_event "demo: pruned ${files[i]} (keeping ${DEMO_MAX})"
+    highscore_hash_set
+    for (( i = 0; i < ${#files[@]}; i++ )); do
+        if demo_protected "${files[i]}"; then
+            debug_event "demo: kept ${files[i]} (hash ${DEMO_FILE_HASH} still holds a highscore)"
+            continue
+        fi
+        ordinary+=("${files[i]}")
+    done
+    over=$(( ${#ordinary[@]} - DEMO_MAX ))
+    for (( i = 0; i < over; i++ )); do
+        rm -f -- "${ordinary[i]}"
+        debug_event "demo: pruned ${ordinary[i]} (keeping ${DEMO_MAX} ordinary recordings)"
     done
     return 0
 }
@@ -759,14 +824,18 @@ demo_play() {
 # demo_scan
 # Fill DEMO_LIST_FILE/DEMO_LIST_LABEL with the recordings on disk, newest
 # first. The label is one menu line: date, mode, play time and the rows
-# scored - the three things that tell two rounds apart. A file whose
+# scored - the three things that tell two rounds apart - led by a "*"
+# when the recording still backs a highscore entry and is therefore kept
+# regardless of DEMO_MAX (see demo_prune). A file whose
 # header does not validate is listed as defective instead of hidden, so
 # it can still be deleted from the menu.
 demo_scan() {
     local -a files
-    local i f label mode_label
+    local i f label mode_label mark
     DEMO_LIST_FILE=()
     DEMO_LIST_LABEL=()
+    DEMO_LIST_MARKED=()
+    DEMO_LIST_KEPT=0
     demo_dir
     if [ ! -d "${DEMO_DIR}" ]; then
         return 0
@@ -775,14 +844,24 @@ demo_scan() {
     if [ ! -e "${files[0]}" ]; then
         return 0
     fi
+    # Which recordings are protected is read fresh here rather than kept
+    # around: a round played in between changes the lists.
+    highscore_hash_set
     # Names start with the date, so the glob is oldest first; walk it
     # backwards for a newest-first list.
     for (( i = ${#files[@]} - 1; i >= 0; i-- )); do
         f="${files[i]}"
+        if demo_protected "${f}"; then
+            mark="*"
+            DEMO_LIST_KEPT=$(( DEMO_LIST_KEPT + 1 ))
+        else
+            mark=" "
+        fi
         if ! demo_header_read "${f}"; then
-            printf -v label '%-16s %s' "(defekt)" "$(basename -- "${f}")"
+            printf -v label '%s%-16s %s' "${mark}" "(defekt)" "${f##*/}"
             DEMO_LIST_FILE+=("${f}")
-            DEMO_LIST_LABEL+=("${label:0:42}")
+            DEMO_LIST_LABEL+=("${label:0:43}")
+            DEMO_LIST_MARKED+=("${mark}")
             continue
         fi
         # Eight columns for the mode, which is what the label format
@@ -795,11 +874,15 @@ demo_scan() {
             *)          mode_label="Marathon" ;;
         esac
         fmt_duration $(( DEMO_HDR_TIME / 1000 ))
-        printf -v label '%s %-8s %s %5d Rows' \
-            "${DEMO_HDR_DATE}" "${mode_label}" "${FMT_DURATION}" \
+        # 1 + 16 + 1 + 8 + 1 + 5 + 1 + 5 + 5 = 43 characters, which the
+        # menu's three-column indent leaves room for in the 48-column
+        # minimum (see menu_run in lib/menu.sh).
+        printf -v label '%s%s %-8s %s %5d Rows' \
+            "${mark}" "${DEMO_HDR_DATE}" "${mode_label}" "${FMT_DURATION}" \
             "${DEMO_HDR_ROWS}"
         DEMO_LIST_FILE+=("${f}")
         DEMO_LIST_LABEL+=("${label}")
+        DEMO_LIST_MARKED+=("${mark}")
     done
     return 0
 }

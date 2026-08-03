@@ -1216,6 +1216,36 @@ fmt_ppm() {
     return 0
 }
 
+# round_hash VALUE...
+# Build the short identifier of a finished round into the global
+# ROUND_HASH: eight hex digits over the values handed in. It is what ties
+# the round's highscore entry to its demo recording - the entry stores it
+# as its last field (lib/highscore.sh), the recording carries it in its
+# file name (lib/demo.sh), and the pruning of old recordings keeps every
+# file whose hash is still on one of the lists.
+# The algorithm is FNV-1a (32 bit), written out here rather than shelled
+# out to cksum or sha256sum: it costs no fork, it cannot differ between
+# systems the way a checksum tool's variants can, and eight hex digits
+# are short enough for a file name. Collision resistance against an
+# attacker is not a goal and not needed - the values include the round's
+# play time in milliseconds, so two different rounds colliding is not a
+# case that occurs in practice, and a collision would at worst keep one
+# recording longer than necessary.
+# Bash arithmetic is 64 bit, so masking back to 32 bits after each step
+# keeps the intermediate product (at most 2^56) well inside its range.
+ROUND_HASH=""
+round_hash() {
+    local s="$*" i c
+    local h=2166136261
+    for (( i = 0; i < ${#s}; i++ )); do
+        printf -v c '%d' "'${s:i:1}"
+        h=$(( (h ^ c) & 0xFFFFFFFF ))
+        h=$(( (h * 16777619) & 0xFFFFFFFF ))
+    done
+    printf -v ROUND_HASH '%08x' "${h}"
+    return 0
+}
+
 # play_clock_tick: account the play time elapsed since the last accounted
 # moment into PLAY_MS (and refresh NOW_MS on the way). The game loop does
 # this once per tick; the Ultra mode calls it again at the very moment
@@ -1302,6 +1332,17 @@ record_round() {
         return 0
     fi
     ROUND_RECORDED=1
+    # The round's identifier, computed once and handed to both books it
+    # appears in: the highscore entry stores it as its last field, and
+    # the demo recording carries it in its file name, which is what lets
+    # the demo pruning keep the recording of a run that still holds a
+    # highscore place (see round_hash, lib/highscore.sh, lib/demo.sh).
+    # The values are the round's own results, including the play time in
+    # milliseconds - two different rounds cannot realistically produce
+    # the same ones.
+    round_hash "${GAME_MODE}" "${PLAYER_NAME}" "${PLAY_MS}" "${ROW_CREDIT}" \
+        "${CLEARED_TOTAL}" "${LEVEL}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
+        "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
     # Round play time in whole seconds, the round's four-row clears and
     # the pieces it placed; all three are stored with the highscore entry
     # (play time and pieces are what its PCS/min column is computed from).
@@ -1314,7 +1355,7 @@ record_round() {
             highscore_ultra_add "${PLAY_MS}" "${ROW_CREDIT}" \
                 "${CLEARED_TOTAL}" "${LEVEL}" "${PLAYER_NAME}" \
                 "${GOLD_COUNT}" "${SILVER_COUNT}" "${ROWHAMMER_COUNT}" \
-                "${PIECE_COUNT}"
+                "${PIECE_COUNT}" "${ROUND_HASH}"
         else
             HSU_LAST_RANK=0
             debug_event "ultra run not recorded: goal not reached (rows=${ROW_CREDIT}/${ULTRA_TARGET_ROWS})"
@@ -1330,7 +1371,7 @@ record_round() {
             highscore_sprint_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" \
                 "${LEVEL}" "${PLAYER_NAME}" "${GOLD_COUNT}" \
                 "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
-                "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
+                "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "${ROUND_HASH}"
         else
             HSS_LAST_RANK=0
             debug_event "sprint run not recorded: topped out early (time=${PLAY_MS}ms/${SPRINT_TIME_MS}ms rows=${ROW_CREDIT})"
@@ -1349,11 +1390,12 @@ record_round() {
         highscore_timeattack_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" \
             "${LEVEL}" "${PLAYER_NAME}" "${GOLD_COUNT}" \
             "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
-            "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
+            "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "${ROUND_HASH}"
     else
         highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
             "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
-            "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
+            "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" \
+            "${ROUND_HASH}"
     fi
     # Every cleared row counts toward the wonder, even from an aborted
     # round - like the original, where all modes feed the line total.
@@ -1386,7 +1428,7 @@ record_round() {
     elif [ "${GAME_OVER}" -eq 1 ]; then
         demo_end="over"
     fi
-    demo_record_finish "${demo_end}"
+    demo_record_finish "${demo_end}" "${ROUND_HASH}"
     return 0
 }
 

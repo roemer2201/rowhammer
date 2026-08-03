@@ -524,7 +524,9 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
   Bildschirmaenderung den halben Bildschirm. Damit ist auch die in der
   Roadmap offen gelassene Frage nach einer Obergrenze entschieden: eine
   reine **Stueckzahl** (`DEMO_MAX`, 10 wie die Bestenlisten) reicht, ein
-  Gesamtgroessen-Budget waere Aufwand ohne Gegenwert.
+  Gesamtgroessen-Budget waere Aufwand ohne Gegenwert. Die Grenze gilt
+  seit 0.43.0 nur fuer die **gewoehnlichen** Aufnahmen; eine, die noch
+  einen Highscore-Eintrag haelt, wird nie geloescht (siehe unten).
 - **Unabhaengigkeit vom Terminal.** Die Datei enthaelt kein einziges
   ANSI-Byte. Terminalgroesse, Farbmodus, Farbschema und - ausdruecklich
   auch - der **Render-Modus** (`--render-mode partial|full`, siehe 4.3)
@@ -558,6 +560,47 @@ Frage - Pause und Vorspulen: beides, plus Zeitlupe):
   `render_status_box` (siehe 3.6), der bewusst **vor** allen anderen
   greift: auch eine Runde, die im Game Over endete, zeigt beim Abspielen
   den Demo-Kasten, weil dessen Tasten die der Wiedergabe sein muessen.
+
+**Aufnahmen zu Highscore-Eintraegen bleiben erhalten** (Nutzerwunsch,
+seit 0.43.0). Jede beendete Runde bekommt einen kurzen Hash aus ihren
+eigenen Ergebnissen (`round_hash` in `rowhammer.sh`); er steht als
+letztes Feld im Highscore-Eintrag (siehe 4.5) und im **Dateinamen** der
+Aufnahme (siehe 4.10). Damit weiss das Aufraeumen, welche Aufnahme zu
+einem noch gueltigen Highscore gehoert, und laesst sie stehen. Die
+Entscheidungen dahinter:
+
+- **Der Hash steht im Dateinamen, nicht in der Datei.** Liste und
+  Pruning kommen so ohne einen einzigen Dateizugriff aus - bei bis zu
+  fuenfzig Aufnahmen ist das der Unterschied zwischen einem Glob und
+  fuenfzig geoeffneten Dateien je Menue-Aufruf.
+- **Die Grenze `DEMO_MAX` zaehlt nur die ungeschuetzten Aufnahmen.**
+  Zusammenzuzaehlen sieht ordentlicher aus, versagt aber genau dort, wo
+  die Funktion gebraucht wird: liegen `DEMO_MAX` Aufnahmen zu
+  Highscore-Eintraegen auf der Platte, waere das Budget schon von ihnen
+  aufgebraucht, und jede frisch gespielte Runde haette ihre Aufnahme
+  im selben Moment wieder verloren. Das Verzeichnis darf deshalb ueber
+  die Grenze hinauswachsen - schlimmstenfalls auf die 4 x 10 Eintraege
+  der Bestenlisten plus `DEMO_MAX`, also rund fuenfzig Aufnahmen oder
+  wenige Megabyte.
+- **Der Schutz endet von selbst.** Verdraengt eine bessere Runde den
+  Eintrag aus der Liste, ist auch sein Hash weg und die Aufnahme beim
+  naechsten Aufraeumen wieder normal dran. Es gibt keinen Zustand, den
+  jemand pflegen muesste.
+- **Von Hand loeschen darf man sie trotzdem** - der Menuepunkt sagt
+  vorher, dass sie einen Highscore haelt. Ein einzelner, bewusster
+  Loeschbefehl ist etwas anderes als das automatische Aufraeumen.
+- **Markiert sind sie mit einem `*`** in der Demo-Liste, samt Legende
+  im Titel. Weil die Liste damit laenger als der Bildschirm werden kann,
+  blaettert `menu_run` seit 0.43.0 mit der Auswahl durch lange Listen
+  (`MENU_LIST_MAX`, siehe `lib/menu.sh`) - die Demo-Liste ist das erste
+  Menue, dessen Laenge nicht von einer Konstanten begrenzt ist.
+- **Der Hash ist FNV-1a (32 Bit) in reinem Bash**, kein Aufruf von
+  `cksum` oder `sha256sum`: kein Fork, kein Unterschied zwischen
+  Systemen, und acht Hex-Ziffern sind kurz genug fuer einen Dateinamen.
+  Angriffssicherheit ist kein Ziel; in die Berechnung geht die Spielzeit
+  in Millisekunden ein, sodass zwei verschiedene Runden praktisch nicht
+  kollidieren koennen - und eine Kollision wuerde hoechstens eine
+  Aufnahme laenger als noetig aufheben.
 
 **Weitere Entscheidungen:**
 
@@ -902,7 +945,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Abbruch mit Meldung).
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
-  `rows|lines|level|name|date|gold|silver|time|rowhammers|pieces`,
+  `rows|lines|level|name|date|gold|silver|time|rowhammers|pieces|hash`,
   absteigend nach Rows
   sortiert. Seit dem Punktesystem-Umbau (0.16.0) ist die gewichtete
   Reihenwertung der einzige Score: das fruehere fuehrende
@@ -911,13 +954,21 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   die Spielzeit der Runde in ganzen Sekunden, `rowhammers` (seit
   0.25.0) die Zahl der Vierfach-Abbaeue der Runde und das
   abschliessende Feld `pieces` (seit 0.27.0) die Zahl der abgelegten
-  Teile.
+  Teile. Seit 0.43.0 folgt darauf `hash`, der aus den Ergebnissen der
+  Runde berechnete Kennwert (`round_hash` in `rowhammer.sh`, acht
+  Hex-Ziffern oder `-` fuer einen aelteren Eintrag ohne). Er verbindet
+  den Eintrag mit der Aufzeichnung derselben Runde, die ihn im
+  Dateinamen traegt: solange ein Eintrag in einer der Listen steht, wird
+  seine Demo nicht weggeraeumt (siehe 3.7 und 4.10). Alle vier Listen
+  tragen ihn als **letztes** Feld, sodass `highscore_hash_set` sie mit
+  einer einzigen Expansion einsammeln kann.
   Seit 0.29.0 (Nutzerentscheidung, bewusste Ausnahme von der
   Arbeitsregel "keine Abwaertskompatibilitaet"): eine Zeile muss nicht
-  mehr alle zehn Felder tragen. Akzeptiert werden 5, 7, 8, 9 oder 10
+  mehr alle elf Felder tragen. Akzeptiert werden 5, 7, 8, 9, 10 oder 11
   Felder - genau die Laengen, die das Format seit dem Punktesystem-
   Umbau (0.16.0, Rows fuehrend) beim schrittweisen Anhaengen von
-  Gold/Silber, Zeit, Rowhammer und Pieces tatsaechlich durchlaufen hat
+  Gold/Silber, Zeit, Rowhammer, Pieces und - seit 0.43.0 - dem
+  Runden-Hash tatsaechlich durchlaufen hat
   (`HS_FIELD_COUNTS`, `highscore_parse_line` in `lib/highscore.sh`).
   Fehlende Zaehler werden beim Laden als `0` ergaenzt statt die ganze
   Runde zu verwerfen - eine Runde soll nicht verschwinden, nur weil sie
@@ -944,7 +995,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   **Ultra-Bestenliste (seit 0.34.0, siehe 3.6):** die Ergebnisse des
   Ultra-Modus liegen in einer **eigenen** Datei `${DATA_DIR}/highscore-ultra`
   mit eigener Ordnung - Zeilenformat
-  `time|rows|lines|level|name|date|gold|silver|rowhammers|pieces`,
+  `time|rows|lines|level|name|date|gold|silver|rowhammers|pieces|hash`,
   aufsteigend nach `time` sortiert (schnellster Lauf zuerst, gleiche
   Zeit rangiert hinter dem aelteren Eintrag), ebenfalls Top 10
   (`HSU_*` in `lib/highscore.sh`). Zwei Gruende fuer die getrennte
@@ -958,10 +1009,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   wuerden; angezeigt wird das ueber `fmt_duration_ms` als
   MM:SS.mmm. Gespeichert werden nur Laeufe, die das Ziel erreicht haben
   (Entscheidung in 3.6). Es gilt die uebliche Arbeitsregel "keine
-  Abwaertskompatibilitaet": genau zehn Felder, jede andere Zeile faellt
-  bei der Validierung heraus - die Kulanz der Normal-Liste
-  (`HS_FIELD_COUNTS`) gibt es hier nicht, weil das Format neu ist und nie
-  in einer kuerzeren Fassung existiert hat.
+  Abwaertskompatibilitaet": seit 0.43.0 elf Felder, oder zehn fuer eine Zeile
+  ohne den Runden-Hash; jede andere faellt bei der Validierung heraus.
+  Die Kulanz um genau diese eine Laenge kam mit dem Hash: das Format hat
+  seither doch in einer kuerzeren Fassung existiert, und es gilt derselbe
+  Grund wie bei der Marathon-Liste - ein Eintrag soll nicht
+  verschwinden, nur weil er aelter ist als ein Feld.
   **Anzeige (seit 0.38.0, Nutzerwunsch):** `highscore_ultra_screen`
   zeigt die Liste so, wie `highscore_screen` die Marathon-Liste zeigt -
   seitenweise ueber `menu_pages`, zwei Zeilen je Eintrag, gleiche
@@ -980,7 +1033,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Ergebnisse des Sprint-Modus liegen in einer dritten Datei
   `${DATA_DIR}/highscore-sprint`, Zeilenformat und Rangordnung wie die
   Marathon-Liste
-  (`rows|lines|level|name|date|gold|silver|time|rowhammers|pieces`,
+  (`rows|lines|level|name|date|gold|silver|time|rowhammers|pieces|hash`,
   absteigend nach Rows, gleiche Rows rangieren hinter dem aelteren
   Eintrag), ebenfalls Top 10 (`HSS_*` in `lib/highscore.sh`). Das
   gleiche Format ist Absicht: gewertet wird dieselbe Zahl in derselben
@@ -990,10 +1043,9 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   sind nicht dasselbe - die Rows der endlosen Liste wuerden die kurzen
   Laeufe schlicht verdraengen. Gespeichert werden nur Laeufe, die ihre
   volle Zeit gespielt haben (Entscheidung in 3.6). Wie bei der
-  Ultra-Liste gilt die Arbeitsregel "keine Abwaertskompatibilitaet":
-  genau zehn Felder, jede andere Zeile faellt bei der Validierung heraus
-  - die Kulanz der Marathon-Liste (`HS_FIELD_COUNTS`) gibt es hier
-  nicht, weil das Format neu ist.
+  Ultra-Liste werden seit 0.43.0 elf Felder erwartet, oder zehn fuer
+  eine Zeile ohne den Runden-Hash; jede andere faellt bei der
+  Validierung heraus.
   **Anzeige:** `highscore_sprint_screen` zeigt die Liste im Layout der
   beiden anderen (seitenweise ueber `menu_pages`, dieselben
   `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`, zwei Zeilen je Eintrag, gleiche
@@ -1010,8 +1062,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${DATA_DIR}/highscore-timeattack`, Zeilenformat und Rangordnung
   wieder wie die Marathon-Liste (absteigend nach Rows, gleiche Rows
   hinter dem aelteren Eintrag), ebenfalls Top 10 (`HSA_*` in
-  `lib/highscore.sh`), ebenfalls genau zehn Felder ohne die Kulanz der
-  Marathon-Liste. Dass die Rows und nicht die ueberlebte Zeit die
+  `lib/highscore.sh`), seit 0.43.0 ebenfalls elf Felder mit dem
+  Runden-Hash am Ende (oder zehn ohne ihn, wie bei den anderen Listen). Dass die Rows und nicht die ueberlebte Zeit die
   Wertung sind, ist in 3.6 begruendet (beide ergeben dieselbe
   Rangfolge). Eine eigene Datei ist noetig, weil ein Lauf auf einer
   selbst erspielten Minute nicht die Leistung einer endlosen Runde ist.

@@ -54,8 +54,12 @@
 #   with their highscore rules on the page after it (since 0.17.0).
 #   Since 0.18.0 menu_demos is the "Demos" main menu entry: the recorded
 #   rounds (lib/demo.sh) newest first, each of them to watch again or to
-#   delete. It refuses to start a replay while a round is suspended in
+#   delete, the ones still backing a highscore entry marked with a "*".
+#   It refuses to start a replay while a round is suspended in
 #   the main menu, because a replay runs through the same game state.
+#   That list is also the first menu that can outgrow the screen, so
+#   menu_run scrolls its window with the selection since 0.19.0
+#   (MENU_LIST_MAX).
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -63,7 +67,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.18.0  (2026-08-03)
+# Version: 0.19.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -77,6 +81,19 @@ KEY_LABELS=("Links" "Rechts" "Drehen rechts" "Drehen links"
             "Soft-Drop" "Hard-Drop" "Pause" "Zurueck ins Menue" "Hold")
 
 MENU_CHOICE=-1
+
+# How many entries a selection list shows at once. A menu spends four
+# terminal rows on its frame (title, blank, blank, footer), so this is
+# what the smallest supported terminal leaves for the entries themselves.
+# A longer list scrolls with the selection instead of running off the
+# screen (see menu_run); the two outermost rows then carry the "there is
+# more above / below" markers, which is why the window is two smaller.
+# Added 0.19.0 with the demo list, which is the first menu that can
+# outgrow the screen: recordings backing a highscore entry are kept
+# beyond DEMO_MAX (lib/demo.sh), so its length is not bounded by a
+# constant any more.
+MENU_LIST_MAX=$(( MIN_TERM_ROWS - 4 ))
+MENU_LIST_WINDOW=$(( MENU_LIST_MAX - 2 ))
 
 # menu_run TITLE ENTRY...
 # Draw a selection list and navigate it with the arrow keys (plus w/s).
@@ -99,17 +116,45 @@ menu_run() {
     shift
     local -a entries=("$@")
     local -a lines
-    local n="${#entries[@]}" sel=0 dirty=1 i
+    local n="${#entries[@]}" sel=0 dirty=1 i first last
     while :; do
         if [ "${dirty}" -eq 1 ]; then
             lines=("  ${title}" "")
-            for (( i = 0; i < n; i++ )); do
+            # Which slice of the list is on screen. Everything fits in
+            # the common case; a longer list shows a window that follows
+            # the selection, with the marker rows always present so the
+            # menu does not change height while scrolling.
+            first=0
+            last=$(( n - 1 ))
+            if [ "${n}" -gt "${MENU_LIST_MAX}" ]; then
+                first=$(( sel - MENU_LIST_WINDOW / 2 ))
+                if [ "${first}" -lt 0 ]; then
+                    first=0
+                fi
+                if [ "${first}" -gt $(( n - MENU_LIST_WINDOW )) ]; then
+                    first=$(( n - MENU_LIST_WINDOW ))
+                fi
+                last=$(( first + MENU_LIST_WINDOW - 1 ))
+                if [ "${first}" -gt 0 ]; then
+                    lines+=("      ^ ${first} weitere")
+                else
+                    lines+=("")
+                fi
+            fi
+            for (( i = first; i <= last; i++ )); do
                 if (( i == sel )); then
                     lines+=($'  \e[7m '"${entries[i]}"$' \e[0m')
                 else
                     lines+=("   ${entries[i]} ")
                 fi
             done
+            if [ "${n}" -gt "${MENU_LIST_MAX}" ]; then
+                if [ "${last}" -lt $(( n - 1 )) ]; then
+                    lines+=("      v $(( n - 1 - last )) weitere")
+                else
+                    lines+=("")
+                fi
+            fi
             lines+=("" "  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck")
             render_menu_frame "${lines[@]}"
             screen_write "${RENDER_MENU_FRAME}"
@@ -488,12 +533,13 @@ menu_help_body() {
                   "Bildschirm - die Wiedergabe spielt die Runde" \
                   "wirklich noch einmal." \
                   "")
-            printf -v line 'Aufbewahrt werden die %d neuesten Runden,' \
+            printf -v line 'Aufbewahrt werden die %d neuesten Runden;' \
                 "${DEMO_MAX}"
             HELP_BODY+=("${line}")
-            HELP_BODY+=("aeltere fallen weg. Einzelne Aufnahmen kannst" \
-                   "du im Demo-Menue loeschen, die Aufzeichnung" \
-                   "in den Einstellungen abschalten." \
+            HELP_BODY+=("Aufnahmen mit * halten noch einen Highscore" \
+                   "und bleiben darueber hinaus erhalten." \
+                   "Einzelne loeschen kannst du im Demo-Menue," \
+                   "die Aufzeichnung in den Einstellungen." \
                    "" \
                    "Waehrend der Wiedergabe:")
             menu_help_keys "Leertaste" KEY_PAUSE
@@ -763,7 +809,7 @@ menu_highscores() {
 # round is only ever a "Fortsetzen" away from being finished.
 menu_demos() {
     local -a entries
-    local n choice file
+    local n choice file title hint
     while :; do
         demo_scan
         n="${#DEMO_LIST_FILE[@]}"
@@ -787,7 +833,16 @@ menu_demos() {
             return 0
         fi
         entries=("${DEMO_LIST_LABEL[@]}" "Zurueck")
-        menu_run "Demos (${n}/${DEMO_MAX})" "${entries[@]}"
+        # The count is not "n of DEMO_MAX" any more: a recording that
+        # backs a highscore entry is kept beyond that cap, so the list
+        # can legitimately be longer. The legend explains the marker
+        # those entries carry; it only appears when there is one.
+        if [ "${DEMO_LIST_KEPT}" -gt 0 ]; then
+            title="Demos (${n})   * = haelt einen Highscore"
+        else
+            title="Demos (${n}/${DEMO_MAX})"
+        fi
+        menu_run "${title}" "${entries[@]}"
         choice="${MENU_CHOICE}"
         if [ "${choice}" -lt 0 ] || [ "${choice}" -ge "${n}" ]; then
             return 0
@@ -815,9 +870,19 @@ menu_demos() {
                 render_menu_dirty
                 ;;
             1)
+                # A protected recording can still be deleted - it is an
+                # explicit choice on a single entry, not the sweeping
+                # pruning - but it says so first, because that recording
+                # is the one the pruning would have kept.
+                if [ "${DEMO_LIST_MARKED[choice]}" = "*" ]; then
+                    hint="Sie haelt noch einen Highscore-Eintrag."
+                else
+                    hint=""
+                fi
                 if menu_confirm "Demo loeschen?" \
                     "Ja, loeschen" "Nein, behalten" \
                     "${DEMO_LIST_LABEL[choice]}" \
+                    "${hint}" \
                     "" \
                     "Die Aufzeichnung wird wirklich geloescht" \
                     "und laesst sich nicht zurueckholen."; then

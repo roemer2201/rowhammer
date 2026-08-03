@@ -865,6 +865,24 @@ CLAUDE.md 3.3, 3.4)._
       ins Datenverzeichnis; die **Demo-Verwaltung** ist ein eigener
       Menuepunkt mit Datum, Modus, Spielzeit und Rows je Eintrag,
       Abspielen und einzelnem Loeschen.
+      **Nachgereicht auf Nutzerwunsch (gleiche Version):** jeder
+      Highscore-Eintrag bekam einen Hash aus den Ergebnissen seiner
+      Runde (`round_hash`), der als letztes Feld in allen vier Listen
+      und im Dateinamen der zugehoerigen Aufnahme steht. Damit weiss das
+      Aufraeumen, welche Aufnahme zu einem noch gueltigen Highscore
+      gehoert, und laesst sie stehen; verliert der Eintrag seinen Platz,
+      endet der Schutz von selbst. Drei Entscheidungen dazu:
+      `DEMO_MAX` zaehlt nur die ungeschuetzten Aufnahmen (sonst waere
+      das Budget bei zehn Highscore-Demos aufgebraucht und jede neue
+      Runde haette ihre Aufnahme sofort wieder verloren - genau das
+      brachte der Test ans Licht); der Hash steht im Dateinamen statt in
+      der Datei, damit Liste und Pruning ohne Dateizugriffe auskommen;
+      und er ist FNV-1a in reinem Bash statt eines `cksum`-Aufrufs.
+      Weil die Demo-Liste damit laenger als der Bildschirm werden kann,
+      blaettert `menu_run` seither mit der Auswahl durch lange Listen.
+      Die vier Listenformate wurden dafuer um ein Feld erweitert und
+      akzeptieren beide Laengen - dieselbe Kulanz, die die
+      Marathon-Liste seit 0.29.0 hat, aus demselben Grund.
       Drei Dinge kamen bei der Umsetzung dazu, die die Roadmap nicht
       vorgesehen hatte:
       - Eine **Wiedergabe wird nie gewertet** (Guard in `record_round`
