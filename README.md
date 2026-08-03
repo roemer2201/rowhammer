@@ -160,6 +160,7 @@ Optionen:
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen (auch Standard-`NO_COLOR`, s. u.) |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
 | `--color-theme N`| `ROWHAMMER_COLOR_THEME`  | Farbschema: `guideline` (Standard), `classic`, `mono`, `colorblind` |
+| `--render-mode M`| `ROWHAMMER_RENDER_MODE`  | Bildaufbau: `partial` (Standard, nur geaenderte Zeilen), `full` (ganzer Block je Frame) |
 | `--reset ZIEL`   | `ROWHAMMER_RESET`        | Persistente Daten zuruecksetzen und beenden (s. unten) |
 | `--force`        | `ROWHAMMER_FORCE`        | Sicherheitsabfragen automatisch mit "ja" beantworten |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
@@ -262,7 +263,12 @@ Umgesetzt:
 - **Inkrementelles Rendering:** je Frame werden nur die tatsaechlich
   geaenderten Zeilen neu geschrieben, unveraenderte Spielfeldreihen
   kommen aus einem Cache - rund 2x schnellerer Frame-Aufbau und ein
-  Bruchteil der Terminal-Ausgabe gegenueber dem Voll-Frame
+  Bruchteil der Terminal-Ausgabe gegenueber dem Voll-Frame.
+  `--render-mode full` schaltet zurueck auf den Voll-Aufbau (jede Zeile
+  je Frame) - gedacht als Rueckfalloption fuer Terminals oder
+  Multiplexer, bei denen das inkrementelle Update falsch dargestellt
+  wird, und um im Debug-Frame-Log ganze Frames zu sehen;
+  `partial` bleibt der ressourcenschonende Standard
 - **Reagiert auf Groessenaenderungen des Terminals** (SIGWINCH):
   zeichnet nach einem Resize sauber neu; wird das Terminal kleiner als
   das benoetigte 48x22, pausiert die Runde hinter einem Hinweis, bis

@@ -1,3 +1,30 @@
+rowhammer (0.41.0) unstable; urgency=medium
+
+  * The play screen can be pushed to the terminal in two ways now:
+    --render-mode partial|full (ROWHAMMER_RENDER_MODE, default partial).
+    "partial" is the incremental renderer of 0.22.0 - only the lines
+    that really changed are rewritten - and stays the default because it
+    is the cheaper mode by roughly half the time and a fourteenth of the
+    output per frame. "full" rewrites the whole 48x22 block on every
+    frame, the way the renderer worked before 0.22.0, as a compatibility
+    fallback for terminals and multiplexers on which the incremental
+    update draws incorrectly, and as a debugging aid when the frame log
+    has to show whole frames.
+  * Like --color-mode the switch is not a config file setting
+    (precedence default < env < CLI): it is a property of the terminal
+    in use rather than a matter of taste, and it has to stay reachable
+    without editing a file when the screen output is the thing that is
+    broken.
+  * The screen is still cleared only when RENDER_FULL says so (menu,
+    resize, round start), not once per frame: holding that flag at 1
+    permanently would send an erase sequence with every frame and make
+    the fallback mode flicker, the opposite of what it exists for.
+  * The debug session header records the render mode (# render: in
+    events.log), without which a frame log entry cannot be told apart as
+    a whole frame or just the changed lines of one.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 03 Aug 2026 20:00:00 +0200
+
 rowhammer (0.40.0) unstable; urgency=medium
 
   * Release structure on GitHub: a release is the tag "v<version>", and

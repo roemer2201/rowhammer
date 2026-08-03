@@ -27,7 +27,11 @@
 #   line is built to exactly LAYOUT_W visible columns, which is what makes
 #   the diff safe without per-line erase sequences. RENDER_FULL forces a
 #   complete repaint (screen cleared first) after menus, resizes and at
-#   round start.
+#   round start. RENDER_MODE (--render-mode, since 0.21.0) can switch the
+#   line diff off entirely: in "full" mode every frame rewrites all
+#   LAYOUT_H lines, the behavior this renderer had before 0.12.0, as a
+#   fallback for terminals or multiplexers that show the incremental
+#   update incorrectly; "partial" stays the default.
 #   Blocks are drawn with per-piece SGR sequences precomputed by
 #   render_colors_init from the active color theme (COLOR_THEME,
 #   lib/pieces.sh) for the resolved color mode: basic (8/16-color ANSI,
@@ -57,7 +61,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.20.0  (2026-08-03)
+# Version: 0.21.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -147,6 +151,19 @@ FLASH_STATE=0
 declare -a FRAME_LINES=()
 declare -a PREV_LINES=()
 RENDER_FULL=1
+
+# Rendering mode (--render-mode / ROWHAMMER_RENDER_MODE, since 0.21.0):
+# "partial" is the default and the reason the buffers above exist - only
+# the changed lines go out. "full" turns the diff off and rewrites all
+# LAYOUT_H lines on every frame, the way this renderer worked before
+# 0.12.0. It exists as a compatibility fallback for terminals and
+# multiplexers on which the incremental update draws incorrectly, and as
+# a debugging aid when a frame log has to show whole frames.
+# RENDER_MODE itself is owned by rowhammer.sh (defaults/env/CLI blocks)
+# and only read here, exactly like COLOR_MODE. It deliberately gets no
+# default of its own: the modules are sourced after the arguments are
+# parsed, so an assignment here would overwrite the value the command
+# line just set.
 
 # Cache of the settled board rows (index = board y, content = the 20
 # visible characters of that row without the active piece). Rebuilt only
@@ -762,14 +779,25 @@ render_status_box() {
 # built to exactly LAYOUT_W visible columns, a changed line always fully
 # covers its predecessor - no erase sequences needed. Nothing is written at
 # all when the frame is identical to the last one.
+# In RENDER_MODE=full the diff is skipped and every line is written on
+# every frame. The two conditions are deliberately kept apart: the screen
+# is still cleared only when RENDER_FULL says so (menu, resize, round
+# start), not once per frame. Holding RENDER_FULL at 1 permanently - the
+# shorter route the roadmap sketched - would send \e[2J with every frame
+# and make the fallback mode flicker, which is the opposite of what a
+# compatibility fallback is for.
 render_flush() {
-    local out="" i pos
+    local out="" i pos write_all
+    write_all="${RENDER_FULL}"
+    if [ "${RENDER_MODE}" = "full" ]; then
+        write_all=1
+    fi
     if [ "${RENDER_FULL}" -eq 1 ]; then
         out=$'\e[2J'
         PREV_LINES=()
     fi
     for (( i = 0; i < LAYOUT_H; i++ )); do
-        if [ "${RENDER_FULL}" -eq 0 ] \
+        if [ "${write_all}" -eq 0 ] \
             && [ "${FRAME_LINES[i]}" = "${PREV_LINES[i]:-}" ]; then
             continue
         fi

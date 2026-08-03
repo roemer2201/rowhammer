@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.40.0
+Version:        0.41.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.41.0-1
+- Switchable render mode --render-mode partial|full
+  (ROWHAMMER_RENDER_MODE, default partial): the incremental line diff of
+  0.22.0 or a full rewrite of the play screen per frame, the latter as a
+  fallback for terminals that draw the incremental update incorrectly.
+
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.40.0-1
 - Release structure on GitHub (tag v<version>, release notes from
   debian/changelog, packages as release assets) plus the CI and release

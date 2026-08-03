@@ -23,7 +23,9 @@
 #   upcoming pieces top right; pause and game
 #   over appear as a box over the board. Frames are pushed out
 #   incrementally - only the lines that changed are rewritten (see
-#   lib/render.sh). Menus, info screens and prompts are centered the
+#   lib/render.sh); --render-mode full switches that off and rewrites
+#   the whole block per frame, for terminals on which the incremental
+#   update draws wrong. Menus, info screens and prompts are centered the
 #   same way (render_menu_frame), so they line up with the play screen
 #   instead of sitting in the top left corner. Pressing the quit key (x/ESC) in
 #   a running round opens a pause menu instead of aborting: resume,
@@ -125,10 +127,11 @@
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
 #                [--color-mode auto|basic|extended]
 #                [--color-theme guideline|classic|mono|colorblind]
+#                [--render-mode partial|full]
 #                [--reset config|stats|highscore|save|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.40.0  (2026-08-03)
+# Version: 0.41.0  (2026-08-03)
 
 set -euo pipefail
 
@@ -143,7 +146,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.40.0"
+ROWHAMMER_VERSION="0.41.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -173,6 +176,17 @@ fi
 # basic/extended force the respective palette. --no-color disables
 # colors entirely and makes the mode irrelevant.
 COLOR_MODE="${ROWHAMMER_COLOR_MODE:-auto}"
+# Rendering mode: "partial" (the default) rewrites only the lines that
+# actually changed, "full" rewrites the whole block on every frame the
+# way the renderer worked before 0.22.0. Partial is what a normal run
+# wants - it is the cheaper mode by roughly half the time and a
+# fourteenth of the output per frame; full exists for terminals and
+# multiplexers on which the incremental update draws incorrectly and for
+# reading whole frames out of a debug frame log. Like the color mode it
+# is not a config file setting: it is a per-terminal workaround, not a
+# taste, and it must stay reachable without editing a file when the
+# screen is the thing that is broken. Precedence default < env < CLI.
+RENDER_MODE="${ROWHAMMER_RENDER_MODE:-partial}"
 DEBUG_OPT="${ROWHAMMER_DEBUG:-0}"
 DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 # Data directory for everything the game persists (rowhammer.conf,
@@ -275,6 +289,17 @@ Options:
                 "guideline" (default), "classic", "mono" or "colorblind".
                 Also selectable in the settings menu and persisted there.
                 Env: ROWHAMMER_COLOR_THEME  Default: guideline
+  --render-mode MODE
+                How the play screen is pushed to the terminal:
+                "partial" rewrites only the lines that changed since the
+                previous frame (the default - about half the time and a
+                fourteenth of the output of a full frame); "full"
+                rewrites the whole 48x22 block on every frame, the way
+                the renderer worked before 0.22.0. Use "full" on a
+                terminal or multiplexer that draws the incremental
+                update incorrectly, or to read whole frames out of the
+                debug frame log.
+                Env: ROWHAMMER_RENDER_MODE  Default: partial
   --reset TARGET
                 Reset persistent data in the data directory and exit
                 without starting the game. TARGET is one of:
@@ -484,6 +509,18 @@ while [ "$#" -gt 0 ]; do
             COLOR_MODE="${1#*=}"
             shift
             ;;
+        --render-mode)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            RENDER_MODE="${2}"
+            shift 2
+            ;;
+        --render-mode=*)
+            RENDER_MODE="${1#*=}"
+            shift
+            ;;
         --color-theme)
             if [ "$#" -lt 2 ]; then
                 printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
@@ -570,6 +607,14 @@ case "${COLOR_MODE}" in
     *)
         printf '%s: --color-mode expects auto, basic or extended, got: %s\n' \
             "${SCRIPT_NAME}" "${COLOR_MODE}" >&2
+        exit 2
+        ;;
+esac
+case "${RENDER_MODE}" in
+    partial|full) : ;;
+    *)
+        printf '%s: --render-mode expects partial or full, got: %s\n' \
+            "${SCRIPT_NAME}" "${RENDER_MODE}" >&2
         exit 2
         ;;
 esac
