@@ -1,7 +1,10 @@
 # CLAUDE.md - rowhammer
 
 Diese Datei gibt Claude Code (und menschlichen Mitwirkenden) den Kontext,
-das Konzept und die Arbeitsregeln fuer dieses Repository.
+das Konzept und die Arbeitsregeln fuer dieses Repository. Sie beschreibt
+den **aktuellen** Stand und das, was noch aussteht; die abgeschlossenen
+Roadmap-Punkte samt ihrer Begruendung liegen im Archiv
+[HISTORY.md](HISTORY.md).
 
 ## 1. Projektueberblick
 
@@ -431,11 +434,12 @@ rowhammer/
   build-rpm.sh         # Baut das RPM-Paket, Artefakte nach dist/
   debian/              # Debian-Paketierung (debhelper, natives Paket)
   rowhammer.spec       # RPM-Paketierung (nutzt dasselbe make install)
-  CLAUDE.md
+  CLAUDE.md            # Konzept, Architektur, offene Roadmap
+  HISTORY.md           # Archiv der erledigten Roadmap-Punkte
   README.md
 ```
 
-Stand (Version 0.23.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.38.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
@@ -538,8 +542,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `term_resize_apply` an (neu messen mit `term_measure`, Bildschirm
   loeschen, `REDRAW_PENDING` fuer die aufrufende Schleife setzen) und
   blockiert bei Unterschreitung des 48x22-Minimums hinter der
-  "resize me"-Overlay, bis das Terminal wieder gross genug ist (siehe
-  Phase 4 "Anpassung an Terminalgroesse").
+  "resize me"-Overlay, bis das Terminal wieder gross genug ist
+  (HISTORY.md, 0.19.0 "Anpassung an Terminalgroesse").
 - **Rendering (inkrementell seit 0.22.0):** `draw_frame` baut den
   Spielbildschirm zeilenweise in das Array `FRAME_LINES`; `render_flush`
   vergleicht es mit dem zuletzt ausgegebenen Stand (`PREV_LINES`) und
@@ -1632,8 +1636,8 @@ stehen.
   ohne Bewegung. Nutzerwunsch: der Bildschirm soll "etwas mehr
   animiert" sein.
 - **Vorschlag:** kurze **asciinema-Aufnahmen** (`.cast`-Dateien, wie
-  bereits fuer die README-Democlips genutzt, siehe Phase 4 "README mit
-  Screenshots/Asciinema aktualisieren") je Wunder-Uebergang, die beim
+  bereits fuer die README-Democlips genutzt, siehe HISTORY.md, 0.19.0
+  "README mit Screenshots/Asciinema aktualisieren") je Wunder-Uebergang, die beim
   Erreichen einer neuen Baustufe bzw. bei Fertigstellung eines Wunders
   einmalig abgespielt werden (z. B. ein kurzer Bau-Effekt oder ein
   Glanz-Effekt ueber der ASCII-Art). Zwei Umsetzungswege: entweder ein
@@ -1701,6 +1705,25 @@ hier nachrangig, die uebrigen Regeln gelten uneingeschraenkt.
 Diese CLAUDE.md (Konzept, Roadmap) ist bei jeder inhaltlichen Aenderung
 mitzupflegen.
 
+Arbeitsregel: **Erledigte Roadmap-Punkte wandern nach HISTORY.md.** Die
+Roadmap (Abschnitt 7) fuehrt nur Offenes; ist ein Punkt umgesetzt, wird
+er samt seiner Begruendung nach [HISTORY.md](HISTORY.md) verschoben
+(Archiv, nach Version geordnet, mit Uebersichtstabelle). Zum Verschieben
+gehoert dazu:
+
+1. **Aktuellen Zustand nachziehen.** Was die Funktion *heute* tut, gehoert
+   in die Abschnitte 1 bis 5 dieser Datei - und, soweit es Spielerinnen
+   und Spieler sehen (Menuepunkte, Tasten, CLI-Optionen, Dateien im
+   Datenverzeichnis), zusaetzlich in die README.md. HISTORY.md beschreibt
+   nur den Stand zum Umsetzungszeitpunkt und ist keine Quelle fuer den
+   aktuellen Zustand.
+2. **Ueberholtes markieren.** Loest die neue Version eine aeltere ab,
+   bekommt der aeltere Eintrag in HISTORY.md eine Zeile
+   _"Spaeter ueberholt: ..."_ mit Verweis auf die abloesende Version.
+3. **Querverweise pruefen.** Zeigt eine Stelle in CLAUDE.md auf einen
+   Roadmap-Punkt ("siehe Phase 4 ..."), wird der Verweis auf HISTORY.md
+   samt Version umgeschrieben.
+
 Arbeitsregel: **Keine Abwaertskompatibilitaet noetig.** Das Projekt wird
 sequenziell entwickelt und war nie anderswo installiert; Migrationslogik
 fuer alte Config-/Savegame-Formate oder alte Schnittstellen ist unnoetig
@@ -1708,55 +1731,36 @@ und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
 
 Arbeitsregel: **Aenderungen an der ToDo-Liste (Abschnitt 7) duerfen
 direkt auf dem `main`-Branch vorgenommen werden**, auch ohne eigenen
-Feature-Branch oder Pull Request.
+Feature-Branch oder Pull Request. Dasselbe gilt fuer HISTORY.md, soweit
+nur bereits erledigte Punkte dorthin verschoben oder dort nachgetragen
+werden.
 
 ## 7. Roadmap / Todo-Liste
 
-### Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
+Diese Liste fuehrt nur noch die **offenen** Punkte. Ein erledigter Punkt
+wandert samt seiner Begruendung nach [HISTORY.md](HISTORY.md) - dem
+Archiv der abgeschlossenen Roadmap-Punkte, nach Version geordnet. Der
+**aktuelle** Zustand der jeweiligen Funktion steht danach nicht dort,
+sondern in den Abschnitten 1 bis 5 dieser Datei und - soweit
+spielersichtbar - in der README.md (Arbeitsregel in Abschnitt 6).
 
-- [x] Projektgeruest anlegen (`rowhammer.sh`, `lib/`-Module, Header nach Konvention)
-- [x] Terminal-Handling: Raw-Mode, alternativer Screen-Buffer, sauberes
-      Aufraeumen per `trap`
-- [x] Nicht-blockierender Input inkl. Pfeiltasten-Escape-Sequenzen
-- [x] Spielfeld-Datenmodell und Kollisionspruefung
-- [x] Baustein-Definitionen mit Rotationstabellen, 7-Bag-Randomizer
-- [x] Game-Loop mit Gravitation, Lock, Reihenabbau
-- [x] Rendering mit Double-Buffering und Farben
-- [x] Soft-/Hard-Drop, Pause, Game Over (mit Neustart per `r`)
+Erledigt und nach HISTORY.md verschoben:
 
-### Zwischenschritt - Menue und Konfiguration (umgesetzt, Version 0.2.0)
+- **Phase 1 - Spielbarer Kern** (0.1.0), vollstaendig
+- **Zwischenschritt - Menue und Konfiguration** (0.2.0), vollstaendig
+- **Phase 2 - The-New-Tetris-Mechaniken** (0.3.0, Bonuswerte 0.4.0),
+  vollstaendig
+- **Zwischenschritt - Debug-Modus** (0.6.0), vollstaendig
+- **Phase 3 - Weltwunder** (0.8.0), vollstaendig
+- **Zwischenschritt - Paketierung**: `Makefile`, Debian-Paketierung und
+  `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0);
+  die restlichen Punkte dieses Zwischenschritts stehen unten
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.38.0
+  (Anzeige der Ultra-Bestenliste); die Uebersichtstabelle in HISTORY.md
+  listet jede Version mit ihrem Thema. Offen sind die fuenf Punkte unten
 
-- [x] Startmenue: Einzelspieler / Mehrspieler / Einstellungen / Beenden
-- [x] Einzelspieler-Untermenue mit "Normales Spiel" (weitere Modi spaeter)
-- [x] Mehrspieler als Platzhalter ohne Funktion (Hinweis-Bildschirm)
-- [x] Einstellungen: Tastenbelegung im Spiel aenderbar, Spielername
-- [x] Nutzer-Konfigurationsdatei (`rowhammer.conf`) nach Konvention,
-      atomar geschrieben, Praezedenz Standard < Config < Env < CLI
+### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0 und rpm 0.37.0 erledigt, siehe HISTORY.md)
 
-### Zwischenschritt - Paketierung (deb umgesetzt 0.17.0, rpm 0.37.0)
-
-- [x] `Makefile` mit install/uninstall (DESTDIR/PREFIX, deb/rpm-tauglich)
-- [x] Debian-Paketierung (`debian/` mit debhelper, natives Paket,
-      Launcher-Symlink `/usr/games/rowhammer`)
-- [x] Build-Skript `build-deb.sh` nach Script-Konventionen
-- [x] RPM-Paketierung (Version 0.37.0): Spec-Datei `rowhammer.spec` im
-      Wurzelverzeichnis, die im `%install`-Abschnitt dasselbe
-      `make install DESTDIR=... PREFIX=/usr` aufruft wie `debian/rules`,
-      sodass beide Pakete dieselben Pfade liefern und ein Layout-Wechsel
-      nur das `Makefile` betrifft. Dazu `build-rpm.sh` nach den
-      Script-Konventionen als Gegenstueck zu `build-deb.sh`: baut das
-      Quell-Tarball aus dem Arbeitsbaum, laesst `rpmbuild` in einem
-      privaten `_topdir` unter `dist/` laufen (das `~/rpmbuild` des
-      Aufrufers bleibt unberuehrt) und sammelt die Pakete in `dist/`;
-      Optionen `--output-dir`, `--release N`, `--srpm`, `--keep-build`,
-      `--verbose`, `--silent` je mit `ROWHAMMER_RPM_*`-Variable. Das
-      Skript bricht ab, wenn die `Version` im Spec und
-      `ROWHAMMER_VERSION` in `rowhammer.sh` auseinanderlaufen (siehe
-      4.7). Getestet: gebautes Paket ist `noarch`, installiert
-      `/usr/share/rowhammer/` plus Symlink `/usr/games/rowhammer`, und
-      das Spiel startet ueber diesen Starter; das mit `--srpm`
-      erzeugte Quellpaket laesst sich per `rpmbuild --rebuild`
-      eigenstaendig neu bauen.
 - [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
       auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
       naechsten Punkt (opkg-Paketierung) angehen
@@ -1768,51 +1772,8 @@ Feature-Branch oder Pull Request.
       sobald ein neues Release fertiggestellt ist
 - [ ] Lizenz festlegen und `debian/copyright` aktualisieren
 
-### Phase 2 - The-New-Tetris-Mechaniken (umgesetzt, Version 0.3.0)
+### Phase 4 - Politur (offene Punkte; die erledigten stehen in HISTORY.md)
 
-- [x] Stein-Instanz-Tracking (IDs, "zerschnitten"-Markierung)
-- [x] 4x4-Quadrat-Erkennung nach jedem Lock
-- [x] Gold-/Silber-Darstellung und Bonus-Reihenwertung (1/5/10, justierbar
-      in `lib/squares.sh`)
-- [x] Vorschau (3 Teile) und Hold-Funktion (Taste `c`, konfigurierbar)
-- [x] Level-/Geschwindigkeitskurve (Tabelle `LEVEL_SPEEDS`), Punktesystem
-      (urspruenglich: Reihen skalieren mit Level, Quadrat-Bonus
-      2000/1000; in 0.16.0 durch die Reihenwertung als einziges
-      Punktesystem ersetzt, siehe 3.2)
-- [x] Bonus-Werte gegen das Original verifiziert (Recherche, siehe 3.2:
-      additiv je Quadrat, Tetris +1) und in 0.4.0 umgesetzt
-
-### Zwischenschritt - Debug-Modus (umgesetzt, Version 0.6.0)
-
-- [x] `--debug`/`--debug-dir` mit Session-Verzeichnis und drei
-      korrelierten Log-Dateien (`frames.log`, `input.log`, `events.log`),
-      Konzept siehe 4.6
-- [x] Zentraler Ausgabe-Trichter `screen_write` (Frames 1:1 auch fuer
-      Menues und Terminal-Setup)
-- [x] Instrumentierung aller Spielaktionen inkl. blockierter Versuche,
-      Board-Snapshots nach jedem Lock
-
-### Phase 3 - Weltwunder (umgesetzt, Version 0.8.0)
-
-- [x] Wunder-Liste final festgelegt (Abgleich mit dem Original per
-      Recherche; verifizierte Bauwerke uebernommen, Kosten skaliert,
-      siehe 3.3)
-- [x] ASCII-Art je Wunder (`assets/wonders/`, eine Datei je Wunder;
-      Baustufen durch zeilenweises Aufdecken von unten, siehe 3.3)
-- [x] Persistenter Gesamt-Reihenzaehler und Savegame (`save.sh`, atomar)
-- [x] Fortschrittsanzeige im HUD, Wunder-Bildschirm nach Rundenende
-      und Hauptmenuepunkt "Weltwunder"
-- [x] Freischalt-Logik: naechstes Wunder nach Fertigstellung; nach dem
-      letzten Wunder "Alle Weltwunder errichtet"
-
-### Phase 4 - Politur
-
-- [x] Konfigurierbare Farben (Version 0.21.0: benannte Farbschemata
-      `guideline`/`classic`/`mono`/`colorblind`, Auswahl im
-      Einstellungsmenue mit Live-Vorschau, `--color-theme` bzw.
-      `ROWHAMMER_COLOR_THEME`, gespeichert als `COLOR_THEME` in der
-      Config; symbolische Farbnamen mit Basic- und Extended-Bedeutung,
-      siehe 4.1)
 - [ ] Umschaltbar zwischen Voll-Frame- und Partial-Rendering: seit
       0.22.0 zeichnet `render_flush` (`lib/render.sh`) standardmaessig
       nur die tatsaechlich geaenderten Zeilen (siehe 4.3); fuer
@@ -1827,37 +1788,6 @@ Feature-Branch oder Pull Request.
       dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
       der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
       dem ersten Frame wieder freizugeben.
-- [x] `--reset config|stats|highscore|save|all` eingebaut (Version
-      0.35.0, siehe 4.8): setzt gezielt persistente Daten im
-      Datenverzeichnis (`${DATA_DIR}`, siehe 4.5) zurueck und beendet
-      sich mit einer Bilanz auf STDOUT, statt ins Menue zu starten. Am
-      Terminal
-      werden die betroffenen Pfade vorher aufgelistet und bestaetigt
-      ("nein" ist wie bei `menu_confirm` die Vorgabe), ohne TTY laeuft
-      der Reset direkt durch, damit ein wartendes `read` kein Skript
-      haengen laesst; nicht vorhandene Dateien sind kein Fehler.
-      Nachgezogen in 0.36.0 (Nutzerentscheidung): der Reset **loescht
-      nicht mehr**, sondern verschiebt jede Datei nach
-      `<datei>-YYYYMMDDhhmmss.bak` (bei einem Backup derselben Sekunde
-      `sleep 1` und neuer Zeitstempel statt Ueberschreiben), und der
-      neue Schalter `--force`
-      (`ROWHAMMER_FORCE`) beantwortet sie automatisch mit "ja" - frei
-      mit anderen Optionen kombinierbar und ueberall wirkungslos, wo
-      nichts gefragt wird.
-      Zusaetzlich per `ROWHAMMER_RESET` setzbar, Praezedenz Standard <
-      Env < CLI: bewusst **ohne** die Config-Stufe, weil die
-      Config-Datei selbst ein Reset-Ziel ist (sie koennte sich sonst bei
-      jedem Start selbst loeschen lassen). Die beiden offen gelassenen
-      Fragen sind in 4.8 entschieden - `all` nimmt das Savegame mit
-      (das eigene Ziel `save` deckt den Fall "nur der
-      Weltwunder-Fortschritt" ab), `highscore` trifft beide
-      Bestenlisten. Umsetzung: `reset_run` in `rowhammer.sh`, direkt
-      nach dem Sourcen der Module (fuer deren Dateinamen-Konstanten) und
-      vor der dorthin verschobenen TTY-Pruefung. In 0.36.1
-      (Nutzerentscheidung) wurde der Dialog auf Deutsch umgestellt:
-      `Bist du sicher, dass du <ziel> zuruecksetzen moechtest? [N/y]`
-      und nach dem Verschieben `Reset erfolgreich` (ASCII wie die
-      Menues, siehe 4.8).
 - [ ] Demo-Aufzeichnung und Demo-Player: eigene Runden als Datei
       mitschneiden (vermutlich Eingabe-Mitschnitt plus Seed statt voller
       Board-Snapshots, analog dem Prinzip des Debug-Modus in 4.6, aber
@@ -1905,326 +1835,6 @@ Feature-Branch oder Pull Request.
       serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
       keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
       umsetzbar.
-- [x] Hauptmenue ebenfalls zentriert darstellen (Version 0.28.0): das
-      Spielfeld-Layout wird seit 0.22.0 per `layout_update` mittig im
-      Terminal ausgerichtet (siehe 3.4, 4.3), das Hauptmenue
-      (`lib/menu.sh`) blieb aber oben links. Umgesetzt ueber
-      `render_menu_frame` (`lib/render.sh`): jeder Menue-, Info- und
-      Eingabebildschirm wird jetzt als Liste reiner Inhaltszeilen
-      gebaut und von dieser einen Funktion platziert - linke Kante wie
-      der Spielblock (Zentrierung von `LAYOUT_W`), vertikal nach der
-      eigenen Hoehe zentriert. Betroffen sind alle Bildschirme aus
-      `lib/menu.sh` (`menu_run`, `menu_message`/`menu_pages`,
-      `menu_confirm`, `menu_colors`, `prompt_rebind`,
-      `prompt_player_name`) und der Weltwunder-Bildschirm
-      (`wonder_screen` in `lib/wonders.sh`), damit nicht ausgerechnet
-      der Bildschirm nach jeder Runde aus der Reihe faellt (siehe 4.3).
-- [x] Weltwunder-Fortschritt aus der Ingame-Statusanzeige entfernen:
-      umgesetzt als Teil des Rowhammer-Zaehlers in Version 0.25.0 (siehe
-      naechster Punkt) - der freigewordene Platz auf der zweiten
-      Statuszeile ist genau der Grund, warum der Zaehler dort Platz
-      fand.
-- [x] "rowhammer"-Zaehler einbauen (Version 0.24.0): zaehlt, wie oft
-      vier Reihen auf einmal abgebaut wurden (der Tetris, hier nach dem
-      Projekt benannt). Hochgezaehlt wird er dort, wo `clear_lines`
-      (`lib/board.sh`) den Fall ohnehin ueber `CLEARED -eq 4` erkennt
-      und `ROWS_TETRIS` addiert; der Rundenzaehler `ROWHAMMER_COUNT`
-      liegt bei `GOLD_COUNT`/`SILVER_COUNT` in `rowhammer.sh` und wird
-      in `game_reset` zurueckgesetzt (Rundenzustand - kein
-      `ROWHAMMER_*`-Einstellungsparameter, trotz des Namens).
-      Aufnahme in die Statistik (Nutzerfrage, bejaht): neuer
-      Gesamtzaehler `rowhammers` als weitere `key=value`-Zeile in
-      `lib/stats.sh` (`STATS_LINE_RE` erweitert, `STATS_ROWHAMMERS`,
-      fuenfter Parameter an `stats_add_round`, uebergeben in
-      `record_round`) und eine eigene Zeile "Rowhammer (4 Reihen)" im
-      "Statistik"-Bildschirm unter den Gold-/Silberbloecken.
-      Mit 0.25.0 (Nutzerentscheidung) kam der Zaehler an die drei
-      Stellen, die 0.24.0 noch offen gelassen hatte - jede davon
-      bezahlt mit vorhandenem Platz, weil alle drei Layouts am
-      48-Spalten-Minimum sitzen:
-      - **HUD:** der Weltwunder-Fortschritt raeumt seinen Platz auf der
-        zweiten Statuszeile (`render_status` in `lib/render.sh`, Feld
-        unveraendert 17 Zeichen breit); das Wunder bleibt auf dem
-        Weltwunder-Bildschirm. Der Wunder-Zustand wird dadurch nicht
-        mehr je Reihenabbau nachgerechnet (`wonders_update` faellt in
-        `lock_and_next` weg, siehe 3.3).
-      - **`recent=`-Liste:** neues Feld vor dem Datum
-        (`lines|bonus|gold|silver|rowhammers|date`, `STATS_RECENT_RE`
-        auf vier Zahlenfelder erweitert), Anzeige als Spalte "RH" aus
-        den letzten vier freien Spalten der Tabelle.
-      - **Highscore:** neues Feld am Zeilenende
-        (`...|time|rowhammers`, `HS_LINE_RE` um ein Zahlenfeld
-        erweitert), Anzeige als Spalte "RH"; dafuer wurde der Name in
-        der Anzeige von 8 auf 6 Zeichen gekuerzt und "Silber" zu
-        "Silb".
-      Alte Highscore- und `recent=`-Zeilen fallen gemaess der
-      Arbeitsregel "keine Abwaertskompatibilitaet" bei der Validierung
-      heraus.
-- [x] Zaehler der abgelegten Teile einbauen (Version 0.27.0,
-      Nutzerentscheidung): Rundenzaehler `PIECE_COUNT` in
-      `rowhammer.sh`, hochgezaehlt in `lock_and_next` - der einzigen
-      Stelle, an der ein Stein wirklich festgesetzt wird - und in
-      `game_reset` zurueckgesetzt. Anzeige im HUD als "Pieces" in der
-      linken Spalte unter der Spielzeit (Zeile 13, siehe 3.4); in
-      Statistik und Highscore zusammen mit der Spielzeit als PCS und
-      PCS/Minute (`fmt_ppm` rechnet in Zehnteln, weil Bash keine
-      Fliesskommazahlen kennt). Dateiformate wachsen entsprechend
-      (siehe 4.5): Highscore-Zeile um ein abschliessendes `pieces`,
-      `recent=`-Zeile um `pieces` und `time` vor dem Datum, Statistik
-      um die Gesamtzaehler `pieces` und `play_time`; alte Zeilen fallen
-      gemaess der Arbeitsregel "keine Abwaertskompatibilitaet" bei der
-      Validierung heraus. Beide Tabellen waren am 48-Spalten-Minimum
-      randvoll, deshalb (Nutzerentscheidung: die Anzeige darf
-      mehrzeilig werden) je Eintrag zwei Zeilen - und weil das die
-      17 Zeilen eines 22-Zeilen-Terminals sprengt, zeigt `menu_pages`
-      (`lib/menu.sh`) die Highscore-Liste seitenweise und die
-      Statistik auf zwei Bildschirmen.
-- [x] Steine im farblosen Modus unterscheidbar machen (Version 0.28.0):
-      `--no-color` zeichnete zuvor jede Sorte als `[]`, sodass abgelegte
-      Steine ununterscheidbar wurden und Gold-/Silber-Quadrate nicht
-      planbar waren. Jede Sorte hat jetzt ein eigenes Zwei-Zeichen-Glyph
-      (`PIECE_GLYPH`), Gold-/Silber-Quadrate eigene Nicht-Buchstaben-
-      Glyphen (`##`/`%%`, siehe 4.1)
-- [x] Standard-`NO_COLOR`-Umgebungsvariable beachten (Version 0.28.0):
-      neben `--no-color`/`ROWHAMMER_NO_COLOR` schaltet auch das
-      De-facto-Standardsignal `NO_COLOR` (https://no-color.org/) die
-      Farben ab, wenn es gesetzt und nicht leer ist; Praezedenz
-      Standard-`NO_COLOR` < `ROWHAMMER_NO_COLOR` < `--no-color`
-      (siehe 4.2)
-- [x] Standard-Tastenbelegung geaendert (siehe 3.1, Version 0.5.0):
-      `w`/Pfeil hoch **und** Leertaste fuer Hard-Drop, `e` fuer Rotation
-      im Uhrzeigersinn, `c`/`2` fuer Hold/Tauschen. Pfeil hoch und
-      Leertaste liegen als feste Sekundaerbelegung auf dem Hard-Drop,
-      `2` fest auf Hold; `w`, `e` und `c` sind die konfigurierbaren
-      Primaertasten.
-- [x] Standard-Tastenbelegung erneut geaendert (siehe 3.1, Version
-      0.31.0, Nutzerentscheidung): Rotation liegt jetzt auf `a` (gegen
-      den Uhrzeigersinn) und `d` (im Uhrzeigersinn), die feste
-      Hold-Sekundaertaste ist `w` statt `2`. Links/Rechts und der
-      Hard-Drop geben ihre Buchstabentasten dafuer ab und laufen ueber
-      ihre festen Sekundaertasten (Pfeile bzw. Leertaste/Pfeil hoch);
-      neu ist der Bindungswert `NONE` fuer "keine Buchstabentaste"
-      (Standard fuer `KEY_LEFT`/`KEY_RIGHT`, von der Dubletten-Pruefung
-      ausgenommen).
-- [x] Highscore-Liste (Version 0.7.0: Top 10 im Datenverzeichnis,
-      Anzeige im Hauptmenue, Rang im Game-Over-Bild; siehe 4.5)
-- [x] 256-Farben-Modus (Version 0.9.0: `--color-mode auto|basic|extended`,
-      `auto` erkennt 256-Farben-Terminals selbst; erweiterte Palette mit
-      Guideline-Farben inkl. echtem Orange fuer L sowie satterem
-      Gold/Silber, siehe 4.1)
-- [x] Spielstatistik (Version 0.10.0: persistente Zaehler fuer
-      abgebaute Reihen, Bonusreihen und gebaute Gold-/Silberquadrate
-      in `${DATA_DIR}/stats`, Anzeige im Hauptmenuepunkt "Statistik";
-      seit 0.11.0 zusaetzlich die Ergebnisse der letzten drei Spiele,
-      siehe 4.5)
-- [x] Pausenmenue und fortsetzbare Runden (Version 0.12.0, Issue #12):
-      `Esc`/`x` im Spiel oeffnet ein Pausenmenue (Fortsetzen / Ins
-      Hauptmenue / Runde beenden); eine ins Hauptmenue gelegte Runde
-      bleibt ueber den Eintrag "Fortsetzen" (im Hauptmenue und im
-      Einzelspieler-Menue) wieder aufnehmbar
-      und wird erst beim echten Rundenende gewertet (siehe 3.1, 3.3)
-- [x] Lock Delay einbauen (Version 0.18.0): ein aufsetzender Stein wird
-      nicht sofort gelockt, sondern ruht ein Gnadenfenster
-      (`LOCK_DELAY_MS`, 250 ms) und kann darin weiter verschoben/gedreht
-      werden; der Touchdown-Timer wird nur zurueckgesetzt, wenn der Stein
-      durch die Verschiebung wieder ins Fallen geraet (siehe 3.1)
-- [x] Anpassung an Terminalgroesse (Version 0.19.0): das feste
-      Layout braucht weiterhin mindestens 48x24, aber eine
-      Groessenaenderung waehrend des Spiels wird jetzt live behandelt.
-      Ein SIGWINCH-Trap (scharf ab `term_setup`) setzt nur ein Flag
-      (`TERM_RESIZED`, signal-sicher), das `read_key` beim naechsten
-      Tick ueber `term_resize_apply` anwendet: Groesse neu messen
-      (`term_measure`), Bildschirm loeschen und die aufrufende Schleife
-      neu zeichnen lassen (`REDRAW_PENDING`). Faellt das Terminal unter
-      das Minimum, blockiert das Spiel hinter einer kompakten
-      "resize me"-Overlay (`term_too_small_screen` in `lib/render.sh`,
-      zeigt Soll- und Ist-Groesse), bis es wieder gross genug ist; im
-      Spiel-Loop werden Fall- und Spielzeituhr nach dem Resize neu
-      angesetzt (`play_clock_resume`), damit das blockierte Intervall
-      weder als Fallzeit noch als Spielzeit zaehlt. Menues und
-      Info-Bildschirme zeichnen nach einem Resize ebenfalls neu
-      (`REDRAW_PENDING` in `menu_run`, `menu_message`, `prompt_rebind`
-      und `wonder_screen`)
-- [x] Blinkeffekt beim Reihenabbau (Version 0.20.0): abgebaute Reihen
-      blinken kurz auf, bevor sie entfernt werden und das naechste Teil
-      erscheint (`board_full_rows`, `flash_rows`, `FLASH_ROWS`/
-      `FLASH_STATE`; Dauer ueber `FLASH_MS`/`FLASH_CYCLES`, siehe 3.1)
-- [x] Performance-Optimierung des Renderings (Version 0.22.0): der
-      Frame wird in `FRAME_LINES` gebaut, `render_flush` schreibt nur
-      die geaenderten Zeilen mit eigener Cursor-Positionierung, und die
-      liegenden Feldreihen liegen in einem Cache, der nur nach echten
-      Brettaenderungen verfaellt (`render_board_dirty`). Ein bewegter
-      Stein kostet damit hoechstens vier Reihen statt aller 200 Zellen;
-      gemessen rund halbe Frame-Zeit und ein Vierzehntel der
-      Terminal-Ausgabe (siehe 4.3)
-- [x] Layout anpassen (Version 0.22.0): der feste 48x24-Block wird
-      mittig im Terminal ausgerichtet (`layout_update`), Hold-Stein und
-      Tastenlegende stehen links, das Spielfeld in der Mitte, die
-      naechsten drei Steine oben rechts und die Rundenzaehler auf den
-      zwei unteren Statuszeilen; Pause und Game Over erscheinen als
-      Kasten ueber dem Spielfeld (siehe 3.4)
-- [x] HUD-Zaehler in die linke Spalte verlegen (Version 0.26.0,
-      Nutzerentscheidung): die Rundenzaehler stehen jetzt untereinander
-      unter dem Hold-Stein (`pane_stat`/`render_pane_left` in
-      `lib/render.sh`, Label 6 Zeichen + Wert 5 Zeichen), die
-      Tastenlegende ist ersatzlos entfallen (`hud_keys_build` samt
-      seinen Aufrufen in `rowhammer.sh` und `prompt_rebind`), ebenso
-      der Spielername (12 Spalten sind fuer bis zu 16 Namenszeichen zu
-      schmal; er bleibt in der Highscore-Liste). Damit fallen die zwei
-      Statuszeilen unter dem Feld weg (`render_status`, `STATUS_ROW_*`):
-      der Block ist nur noch 22 Zeilen hoch (`LAYOUT_H`), und das
-      Terminal-Minimum sinkt entsprechend auf 48x22 (`MIN_TERM_ROWS`;
-      der hoechste Menuebildschirm, die Weltwunder-Baustelle, braucht
-      20 Zeilen) (siehe 3.4)
-- [x] README mit Screenshots/Asciinema aktualisieren (Abschnitt
-      "Vorschau" im README): vier kurze, echte Spielsequenzen als
-      asciinema-Aufnahmen (`.cast`) und GIF unter `docs/demo/` - Tetris
-      (Vierfach-Abbau), Silber-Quadrat (vier gemischte Teile),
-      Gold-Quadrat (vier gleiche Teile) und die Weltwunder-Baustelle.
-      Die Clips sind mit festem `--seed` reproduzierbar aufgenommen
-- [x] Spielzeit-Counter fuer die aktuelle Runde einbauen (Version
-      0.17.0: Anzeige im HUD als "Time" MM:SS, Zeitmessung analog zum
-      Game-Loop ueber `${EPOCHREALTIME}`/`now_ms`; nur aktive Spielzeit
-      zaehlt, Pausen und Game-Over-Bildschirm nicht; die Spielzeit wird
-      zusaetzlich mit dem Highscore-Eintrag gespeichert, siehe 3.4/4.5)
-- [x] Highscore-Liste um Anzahl erzeugter Silber- und Gold-Bloecke
-      erweitern (Version 0.15.0: zusaetzliche Felder im Zeilenformat,
-      siehe 4.5; bei Eintraegen ohne diese Felder gilt als
-      Standardwert 0. Gold/Silber werden als Spalten angezeigt, die
-      Score-Spalte ist dafuer auf Nutzerwunsch aus der Anzeige
-      entfernt - der Score bleibt gespeichert und bestimmt weiterhin
-      die Rangfolge)
-- [x] "Wollen Sie wirklich beenden?"-Abfrage beim Schliessen des Spiels
-      (Version 0.22.0): liegt beim Verlassen ueber "Beenden" oder `Esc`
-      im Hauptmenue noch eine pausierte Runde im Zwischenspeicher, fragt
-      `menu_confirm` (lib/menu.sh) vorher nach und zeigt deren Stand
-      (Lines/Rows/Level); die ablehnende Antwort ist vorausgewaehlt und
-      `Esc` gilt ebenfalls als Ablehnung. Erst nach Bestaetigung wird die
-      Runde beendet und gewertet
-- [x] Anzeige des Datums in der Highscore-Liste nachruesten (Version
-      0.14.0: das gespeicherte Feld `date` wird als eigene Spalte
-      angezeigt, Name in der Anzeige auf 14 Zeichen gekuerzt; die
-      Statistik speichert und zeigt seither ebenfalls das Datum der
-      letzten drei Spiele, siehe 4.5)
-- [x] Fehlinterpretierte Tastendruecke behoben (Version 0.16.1,
-      Issue #7): zerrissen zugestellte Pfeiltasten-Sequenzen loesten
-      ueber ihre Restbytes (`[`, `C` -> Taste `c`) ungewollte
-      Hold-Wechsel aus; per Debug-Log nachgewiesen. `read_key` liest
-      Escape-Sequenzen jetzt byteweise bis zum Endbyte mit
-      grosszuegigerem Timeout und wertet auch ein im Timeout-Moment
-      geliefertes Byte aus (siehe 4.3)
-- [x] Eingabeschicht gehaertet (Version 0.23.0, Nachfassen zu Issue #7,
-      Analyse in `docs/input-analysis.md`): eine Vermessung aller
-      Byte-Folgen, die ein Terminal senden kann (neues Werkzeug
-      `tools/key-scan.sh`, 72 Faelle), zeigte 12 Folgen, die eine
-      falsche Spielaktion ausloesten - zerrissene Pfeiltasten ab rund
-      45 ms Byte-Abstand (der 0.16.1-Fix hatte das Fenster nur von
-      20 ms auf 50 ms vergroessert, und `ESC` oeffnet seit 0.12.0
-      zusaetzlich das Pausenmenue), X10-Mausklicks (drei Rohbytes nach
-      `ESC [ M`, jeder Klick ein Hard-Drop), OSC-/DCS-Antworten des
-      Terminals (ganze Nutzlast als Tasten), 8-Bit-CSI (`0x9b`),
-      CSI-Sequenzen ueber der 16-Byte-Bremse und eingefuegter Text
-      (Mittelklick-Paste). Umgesetzt sind die Vorschlaege L1-L6 aus dem
-      Analyse-Dokument (Zustandsautomat ueber Tick-Grenzen, OSC/DCS,
-      X10-Maus, Bracketed Paste, 8-Bit-CSI und groessere Laengenbremse,
-      Verwerfen wirkungsloser Bytes; siehe 4.3). L7 (Burst-Bremse)
-      wurde bewusst weggelassen, weil sie auch legitimes Autorepeat
-      beschneiden wuerde. `tools/key-scan.sh` laeuft ohne Befund durch,
-      auch mit `--gap 0.2`; jenseits von `ESC_LONE_MS` (300 ms
-      Byte-Abstand) wird ein `Esc` gemeldet, der Sequenzschwanz aber
-      weiterhin geschluckt - der Hold-Wechsel aus Issue #7 kann nicht
-      mehr auftreten
-- [x] Tastendruck-Artefakte auf dem Bildschirm behoben (Version 0.28.1,
-      Issue #33): Neben dem Spielfeld standen echote Tastenbytes
-      (`^[[C`, einzelne Buchstaben), die auf dem Pause- und
-      Game-Over-Bildschirm dauerhaft blieben. Ursache war der fehlende
-      Terminal-Modus: das Spiel verliess sich auf den Modus, den
-      `read -rsn1` je Read kurz setzt, sodass zwischen zwei Reads Echo
-      und kanonischer Modus aktiv waren - und seit dem inkrementellen
-      Rendering (0.22.0) uebermalt kein Voll-Frame das Echo mehr.
-      `term_setup` schaltet den Rohmodus jetzt einmal fuer die ganze
-      Sitzung (`term_input_raw`), die Namensabfrage holt sich fuer ihren
-      `read` per `term_input_line` kurz das Zeilen-Echo zurueck (siehe
-      4.3)
-- [x] Highscore-Eintraege ueberleben fehlende Zaehlerfelder (Version
-      0.29.0, Nutzerentscheidung): `highscore_load` verlangte bislang
-      alle zehn Felder und verwarf jede kuerzere Zeile ganz - jede
-      Formaterweiterung (Gold/Silber in 0.4.0, Zeit in 0.5.0,
-      Rowhammer in 0.6.0, Pieces in 0.7.0, jeweils Versionsstand von
-      `lib/highscore.sh`) liess dadurch bestehende Eintraege beim
-      naechsten Laden-und-wieder-Speichern still verschwinden. Akzeptiert
-      werden jetzt 5, 7, 8, 9 oder 10 Felder (`HS_FIELD_COUNTS`,
-      `highscore_parse_line`), fehlende Zaehler werden als `0` ergaenzt.
-      Zeilen von vor dem Punktesystem-Umbau (fuehrendes `score`-Feld,
-      Rows an dritter statt erster Stelle) bleiben aussen vor, da deren
-      andere Spaltenreihenfolge sonst den alten Score als Rows
-      einordnen wuerde (siehe 4.5).
-- [x] Punktesystem-Umbau (Version 0.16.0, Nutzerentscheidung):
-      abgebaute Reihen sind die einzige Punktquelle, der Score ist
-      identisch mit der gewichteten Reihenwertung "Rows" (1 je Reihe,
-      +5 je Silber-, +10 je Gold-Streifen, +1 je Tetris, siehe 3.2).
-      Entfallen sind Drop-Punkte, Quadrat-Bildungs-Boni (2000/1000)
-      und die Level-Skalierung; Highscore (Rangfolge nach Rows) und
-      Statistik speichern kein separates Score-Feld mehr (siehe 4.5)
-- [x] Anleitung im Hauptmenue (Version 0.32.0, Nutzerwunsch): neuer
-      Menuepunkt "Anleitung" zwischen "Einstellungen" und "Beenden",
-      der das Spiel auf fuenf Info-Bildschirmen erklaert - Spielprinzip,
-      Steuerung, Vorschau/Hold, Gold-/Silber-Quadrate mit ihrer
-      Reihenwertung und zum Schluss den Weltwunderbau (`menu_help`,
-      `menu_help_keys` in `lib/menu.sh`, siehe 3.5). Tastenbelegung und
-      Wunder-Kosten stammen aus dem laufenden Zustand, damit ein Rebind
-      oder ein justiertes `WONDER_COSTS` die Anleitung nicht veralten
-      laesst.
-- [x] Highscores und Statistik farbig darstellen (Version 0.30.0):
-      beide Bildschirme waren reiner Text, obwohl das Spiel laengst ein
-      Theme-System fuer Farben hat (0.21.0, siehe 4.1). `render_colors_init`
-      (`lib/render.sh`) leitet jetzt zusaetzlich reine Text-SGR-Farben aus
-      dem aktiven Theme ab (`TXT_GOLD_SGR`, `TXT_SILVER_SGR`,
-      `TXT_ACCENT_SGR`, `TXT_WARN_SGR`, `TXT_BOLD_SGR`, `TXT_RESET_SGR`);
-      `highscore_screen` und `stats_screen` faerben damit Rang 1/2
-      (Gold-/Silber-Medaille), die Rows-/Gesamtsumme-Spalte sowie die
-      Gold-/Silber-/Rowhammer-Werte. Die Warnfarbe greift bewusst auf die
-      Z-Stein-Farbe des Themas zurueck statt auf ein festes Rot, damit
-      `colorblind` (das Rot/Gruen meidet) konsistent bleibt. In
-      `--no-color`/`NO_COLOR` bleiben alle `TXT_*`-Variablen leer, die
-      Anzeige bleibt dann byteidentisch zur bisherigen Fassung; eine
-      Zeile, die trotz der 46-Zeichen-Grenze zu lang wuerde, faellt auf
-      unkolorierten, abgeschnittenen Text zurueck statt eine
-      Escape-Sequenz zu zerschneiden (siehe 4.5).
-- [x] Anleitung mit den Pfeiltasten blaetterbar machen (Version 0.33.0,
-      Nutzerwunsch, siehe 3.5): zuvor fuehrte jede beliebige Taste zur
-      naechsten der fuenf Seiten, ohne Weg zurueck (eine feste Folge von
-      `menu_message`-Aufrufen). `menu_help` (`lib/menu.sh`) ist jetzt
-      eine eigene Warteschleife: Pfeil links/rechts blaettert umlaufend
-      zwischen den Seiten, Enter/Leertaste/`x`/`ESC` schliessen die
-      Anleitung. Der Seiteninhalt kommt aus `menu_help_body`, einem
-      `case`-Switch je Seitenindex, damit jede Seite direkt angesprungen
-      werden kann statt nur der Reihe nach.
-- [x] **Ultra-Modus** einbauen (Version 0.34.0, Nutzerwunsch): im Menue
-      "Einzelspieler" steht neben "Normales Spiel" jetzt "Ultra" -
-      `ULTRA_TARGET_ROWS` (150) Rows so schnell wie moeglich abbauen,
-      die Runde endet im Zielmoment und die Spielzeit ist das Ergebnis
-      (`GAME_MODE`, `GOAL_REACHED`, Zielpruefung in `lock_and_next`,
-      siehe 3.6). Die drei offen gelassenen Punkte sind dort
-      entschieden: gemessen werden **Rows** (nicht Lines), ein vor dem
-      Ziel abgebrochener Versuch kommt **nicht** in die Bestenliste
-      (seine Reihen zaehlen aber wie bei jeder abgebrochenen Runde in
-      Weltwunder und Statistik), und der HUD zeigt den Fortschritt in
-      zwei der acht freien Zeilen der linken Spalte ("Goal"/"Left", nur
-      im Ultra-Modus). Speicherung in einer eigenen Liste
-      `${DATA_DIR}/highscore-ultra` mit eigener Rangordnung (kuerzeste
-      Zeit zuerst, Zeit in Millisekunden), damit ein zeitlich
-      begrenzter Lauf die Top 10 der endlosen Liste nicht verdraengt
-      (`HSU_*` in `lib/highscore.sh`, siehe 4.5).
-- [x] **Endlosen Modus in "Marathon" umbenannt** (Version 0.34.1,
-      Nutzerentscheidung): der bisherige Menuepunkt "Normales Spiel"
-      heisst jetzt "Marathon" (`lib/menu.sh`), der interne Modusname
-      `GAME_MODE` wechselt entsprechend von `normal` zu `marathon`
-      (Standardwert und `game_run`-Argument in `rowhammer.sh`, siehe
-      3.6). Reine Umbenennung ohne Verhaltensaenderung: `GAME_MODE`
-      wird nicht persistiert (siehe 4.5), betrifft also weder Savegame
-      noch Highscore-Dateien; einzig `events.log` des Debug-Modus
-      protokolliert den neuen Namen.
 - [ ] **Sprint-Modus** und die Anzeige-Seiten der Modi (Rest des
       Modus-Themas, Nutzerentscheidung: die Anzeige folgt getrennt von
       der Speicherung). Offen sind:
@@ -2234,31 +1844,12 @@ Feature-Branch oder Pull Request.
         wieder eine eigene Liste (Rangordnung: meiste Rows) und ein
         eigener HUD-Zaehler (verbleibende Zeit).
       - ~~**Anzeige der Ultra-Bestenliste**~~: erledigt in 0.38.0
-        (Nutzerwunsch), siehe den eigenen Punkt weiter unten.
+        (Nutzerwunsch), siehe HISTORY.md und 4.5.
       - **Statistik je Modus**: gespielte Runden je Modus, bei Ultra
         zusaetzlich wie oft das Ziel erreicht wurde. Bewusst noch nicht
         eingebaut - Zaehler ohne Anzeige waeren tote Daten, und die
         Statistik-Bildschirme sind schon zweiseitig (siehe 4.5).
       - **Anleitung**: eine sechste Seite "Spielmodi" (siehe 3.5).
-- [x] **Ultra-Bestenliste anzeigen** (Version 0.38.0, Nutzerwunsch):
-      0.34.0 hatte die Liste bewusst nur gespeichert - der Bildschirm
-      fehlte, und der erreichte Rang stand allein im Rundenende-Kasten.
-      `highscore_ultra_screen` (`lib/highscore.sh`) zeigt sie jetzt im
-      Layout der Marathon-Liste (zwei Zeilen je Eintrag, seitenweise
-      ueber `menu_pages`, dieselben Spaltenbreiten und Farbregeln), nur
-      nach Zeit sortiert und mit der Zeit-Spalte in der Akzentfarbe -
-      sie ist hier der Score, wo es in der Marathon-Liste die Rows sind
-      (`fmt_duration_ms`, MM:SS.mmm; PPM aus den auf Sekunden
-      heruntergerechneten Millisekunden). Weil damit zwei Listen mit
-      zwei Rangordnungen nebeneinander stehen, fragt der Menuepunkt
-      "Highscores" ueber `menu_highscores` (`lib/menu.sh`) zuerst den
-      Modus ab (Marathon / Ultra / Zurueck) und behaelt die Auswahl,
-      bis "Zurueck" oder `ESC` kommt; die Bildschirmtitel nennen ihren
-      Modus. Umgesetzt wurde die in der Roadmap vorgeschlagene
-      Modus-Auswahl und nicht die Alternative "Seitenlogik aus
-      `menu_pages` je Modus": eine durchgeblaetterte Doppelliste haette
-      die zweite Rangordnung hinter den Seiten der ersten versteckt
-      (siehe 4.5).
 
 ### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 
@@ -2427,8 +2018,8 @@ Multi-Server zuletzt.
   Playtesting ggf. nachjustiert werden (`WONDER_COSTS`).
 - Mindest-Terminalgroesse: seit 0.26.0 48x22 (vorher 48x24 - die zwei
   Statuszeilen sind mit dem HUD-Umbau entfallen, siehe 3.4), seit
-  0.19.0 auch waehrend des Spiels ueberwacht (SIGWINCH, siehe Phase 4
-  "Anpassung an Terminalgroesse"): ein Resize zeichnet sauber neu, ein
+  0.19.0 auch waehrend des Spiels ueberwacht (SIGWINCH, siehe HISTORY.md,
+  0.19.0 "Anpassung an Terminalgroesse"): ein Resize zeichnet sauber neu, ein
   Unterschreiten des Minimums pausiert die Runde hinter einer
   "resize me"-Overlay bis das Terminal wieder gross genug ist. Das feste
   Layout skaliert bewusst nicht mit, wird aber seit 0.22.0 mittig im
