@@ -38,8 +38,8 @@
 #   suspend the round into the main menu (it stays resumable via the
 #   "Fortsetzen" entry offered in the main menu and in the singleplayer
 #   menu) or end it; a round is recorded only when it really ends -
-#   which a given-up round does, so a restart banks it first. The
-#   restart is the one entry that asks back before it acts.
+#   which a given-up round does, so a restart banks it first. The two
+#   entries that discard the round ask back before they act.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
 #   cleared rows worth bonus row credit (the "Rows" counter). Since

@@ -8,10 +8,11 @@ rowhammer (0.43.0) unstable; urgency=medium
   * A round given up that way is recorded before the fresh one replaces
     it, so its rows still count toward the wonder progress and the
     statistics like those of any other aborted round.
-  * The restart asks back ("Wirklich neu starten?", with the round's
-    lines, rows and level), because it is the only pause menu exit that
-    throws the round away without leaving the game. Declining returns to
-    the pause menu.
+  * Both pause menu entries that discard the round - "Neustarten" and
+    "Runde beenden" - ask back first, showing the round's lines, rows and
+    level. "Fortsetzen" and "Ins Hauptmenue" do not: neither loses
+    anything, a suspended round waits in the main menu. Declining a
+    confirmation returns to the pause menu.
   * Fixed the controls block of --help, which still listed the bindings
     from before 0.31.0 (e/q rotating, w hard-dropping, 2 holding). It now
     matches the actual defaults: arrow keys move, d/a rotate, space or
