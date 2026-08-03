@@ -54,9 +54,18 @@
 #   puts on Rows. Both screens hang off the mode picker of the
 #   "Highscores" menu entry (menu_highscores, lib/menu.sh), which is why
 #   their titles name their mode.
+#   Since 0.12.0 the Sprint mode (as much row credit as possible within
+#   SPRINT_TIME_MS, see rowhammer.sh) has a list of its own as well, in
+#   ${DATA_DIR}/highscore-sprint, built from the HSS_* globals and
+#   functions at the end of this file. It ranks by rows like the Marathon
+#   list, but three minutes and an open-ended round measure entirely
+#   different things, so they must not share a top ten either. Only runs
+#   that used their full time are stored, mirroring the Ultra rule - a
+#   Sprint attempt that topped out after a minute has fewer rows for a
+#   reason that has nothing to do with how well it was played.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.11.0  (2026-08-02)
+# Version: 0.12.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -539,5 +548,231 @@ highscore_ultra_screen() {
     done
     debug_event "highscore ultra screen shown (${#HSU_ENTRIES[@]} entries)"
     menu_pages "Highscores - Ultra" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    return 0
+}
+
+# --- Sprint mode list -----------------------------------------------------
+# The Sprint mode (added 0.12.0) is the mirror image of Ultra: score as
+# much row credit as possible within SPRINT_TIME_MS - three minutes - of
+# play time (see rowhammer.sh). Its results live in their own file for
+# the same reason the Ultra ones do, even though this list ranks by rows
+# just like the Marathon one: a run cut off after three minutes and an
+# endless round that ends only on a top-out are not the same achievement,
+# and mixing them would mean the endless list's top ten decides how a
+# three minute run "did".
+HSS_MAX=10
+HSS_FILE_NAME="highscore-sprint"
+
+# In-memory list, one
+# "rows|lines|level|name|date|gold|silver|time|rowhammers|pieces" string
+# per element, sorted by rows descending. HSS_LAST_RANK is the rank the
+# most recently added run reached (1-based, 0 = not on the list).
+#
+# Deliberately the same field layout as the Marathon list: a Sprint run
+# is scored by the same number in the same unit, so a second layout
+# would only be a second thing to keep in step. The time field is the
+# run's play time in whole seconds - practically always SPRINT_TIME_MS
+# divided down, but it is what the PCS/min column is computed from, and
+# it is the honest record of how long the run really ran.
+HSS_ENTRIES=()
+HSS_LAST_RANK=0
+
+# Field count of a stored Sprint line. A single accepted count, like the
+# Ultra list and unlike the Marathon one (HS_FIELD_COUNTS, which
+# tolerates lines written before a trailing counter existed): this format
+# is new and has never shipped in a shorter shape, so the project's usual
+# no-backward-compatibility rule applies unchanged.
+HSS_FIELDS=10
+
+# highscore_sprint_parse_line LINE
+# Validate one stored Sprint line and, on success, append it to
+# HSS_ENTRIES. Field patterns are shared with the other two lists; the
+# layout is the Marathon one. A line that fails anywhere is dropped
+# silently, so a damaged file costs single entries instead of the game.
+highscore_sprint_parse_line() {
+    local line="${1}"
+    local -a f=()
+    local i
+
+    IFS='|' read -r -a f <<< "${line}"
+    [ "${#f[@]}" -eq "${HSS_FIELDS}" ] || return 0
+
+    # rows, lines, level.
+    for ((i = 0; i < 3; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+    [[ "${f[3]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
+    [[ "${f[4]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
+    # gold, silver, time, rowhammers, pieces.
+    for ((i = 5; i < HSS_FIELDS; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+
+    HSS_ENTRIES+=("${line}")
+    return 0
+}
+
+# highscore_sprint_load
+# Read the Sprint list into HSS_ENTRIES. Missing file = empty list,
+# malformed lines are skipped (see highscore_sprint_parse_line).
+highscore_sprint_load() {
+    HSS_ENTRIES=()
+    local f="${DATA_DIR}/${HSS_FILE_NAME}" line
+    if [ ! -r "${f}" ]; then
+        return 0
+    fi
+    while IFS= read -r line; do
+        highscore_sprint_parse_line "${line}"
+        if [ "${#HSS_ENTRIES[@]}" -ge "${HSS_MAX}" ]; then
+            break
+        fi
+    done < "${f}"
+    debug_event "highscore sprint loaded: ${#HSS_ENTRIES[@]} entries from ${f}"
+    return 0
+}
+
+# highscore_sprint_save
+# Write HSS_ENTRIES atomically (temp file + mv), like highscore_save.
+highscore_sprint_save() {
+    local f="${DATA_DIR}/${HSS_FILE_NAME}" tmp
+    mkdir -p -- "${DATA_DIR}"
+    tmp="$(mktemp -- "${DATA_DIR}/.${HSS_FILE_NAME}.XXXXXX")"
+    # Expanding an empty array under set -u errors on bash < 4.4, so the
+    # empty list writes an empty file explicitly.
+    if [ "${#HSS_ENTRIES[@]}" -gt 0 ]; then
+        printf '%s\n' "${HSS_ENTRIES[@]}" > "${tmp}"
+    else
+        : > "${tmp}"
+    fi
+    mv -f -- "${tmp}" "${f}"
+    debug_event "highscore sprint saved: ${f} (${#HSS_ENTRIES[@]} entries)"
+    return 0
+}
+
+# highscore_sprint_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS PIECES
+# Insert one finished Sprint run into the sorted list and persist it.
+# Arguments and order are the Marathon list's (highscore_add), TIME again
+# the play time in whole seconds; equal row credits rank below existing
+# ones, so the older entry keeps its place. Runs without a single row are
+# ignored, and nothing is written when the run does not make the list;
+# HSS_LAST_RANK reports the outcome either way.
+#
+# Whether a run may be recorded at all is the caller's decision, not this
+# function's: record_round (rowhammer.sh) only calls it for a run that
+# played its full three minutes, because an attempt that topped out early
+# had less time to score in and cannot be compared with the others.
+highscore_sprint_add() {
+    local rows="${1}" lines="${2}" level="${3}" name="${4}"
+    local gold="${5}" silver="${6}" time="${7}" hammers="${8}"
+    local pieces="${9}"
+    local entry e placed=0 rank=0
+    local -a merged=()
+    HSS_LAST_RANK=0
+    if [ "${rows}" -le 0 ]; then
+        return 0
+    fi
+    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}"
+    if [ "${#HSS_ENTRIES[@]}" -gt 0 ]; then
+        for e in "${HSS_ENTRIES[@]}"; do
+            if [ "${placed}" -eq 0 ] && [ "${rows}" -gt "${e%%|*}" ]; then
+                merged+=("${entry}")
+                rank="${#merged[@]}"
+                placed=1
+            fi
+            merged+=("${e}")
+        done
+    fi
+    # Not better than any existing entry: append only while there is room.
+    if [ "${placed}" -eq 0 ]; then
+        if [ "${#merged[@]}" -ge "${HSS_MAX}" ]; then
+            debug_event "highscore sprint: '${name}' rows=${rows} below the top ${HSS_MAX}"
+            return 0
+        fi
+        merged+=("${entry}")
+        rank="${#merged[@]}"
+    fi
+    HSS_ENTRIES=("${merged[@]:0:HSS_MAX}")
+    HSS_LAST_RANK="${rank}"
+    debug_event "highscore sprint: '${name}' rows=${rows} enters at rank ${rank}"
+    highscore_sprint_save
+    return 0
+}
+
+# highscore_sprint_screen
+# Show the Sprint list the way the other two screens show theirs: paged
+# via menu_pages (HS_PAGE_ENTRIES/HS_PAGE_LINES again - identical entry
+# height, and a fourth pair of constants could only drift), two lines per
+# entry, same column widths and the same coloring rules. Rows rank this
+# list and therefore carry the accent color, as on the Marathon screen.
+# One column differs: where the Marathon screen shows the round's play
+# time, this one shows the physical lines cleared. Every entry here ran
+# the same three minutes, so a time column would print the same value ten
+# times; the lines are the interesting number next to the weighted rows -
+# together they show how much of the score came out of the gold and
+# silver squares. The play time stays stored (it is what the PPM column
+# on the second line is computed from), it is just not worth a column of
+# its own in this mode.
+highscore_sprint_screen() {
+    local -a body=()
+    local i line plain rank rank_sgr hss_rows hss_lines hss_name hss_date
+    local hss_gold hss_silver hss_time hss_hammers hss_pieces
+    if [ "${#HSS_ENTRIES[@]}" -eq 0 ]; then
+        fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+        body+=("Noch keine Eintraege.")
+        body+=("")
+        body+=("Spiele eine Sprint-Runde ueber die vollen")
+        body+=("${FMT_DURATION} Minuten, um dich einzutragen. Ein")
+        body+=("Versuch, der vorher im Game Over endet, wird")
+        body+=("nicht gewertet.")
+        debug_event "highscore sprint screen shown (0 entries)"
+        menu_message "Highscores - Sprint" "${body[@]}"
+        return 0
+    fi
+    printf -v line '%2s %-12s %6s %5s %10s' \
+        "Nr" "Name" "Rows" "Lines" "Datum"
+    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    for i in "${!HSS_ENTRIES[@]}"; do
+        IFS='|' read -r hss_rows hss_lines _ hss_name hss_date hss_gold \
+            hss_silver hss_time hss_hammers hss_pieces <<< "${HSS_ENTRIES[i]}"
+        rank=$(( i + 1 ))
+        printf -v plain '%2d %-12.12s %6d %5d %10s' \
+            "${rank}" "${hss_name}" "${hss_rows}" "${hss_lines}" \
+            "${hss_date}"
+        # Same guard as the other two screens: color only while the line
+        # stays within the 46-char budget, so a hand-edited file with
+        # implausible numbers costs the colors, never a cut escape
+        # sequence.
+        if [ "${#plain}" -le 46 ]; then
+            rank_sgr="${TXT_ACCENT_SGR}"
+            case "${rank}" in
+                1) rank_sgr="${TXT_GOLD_SGR}" ;;
+                2) rank_sgr="${TXT_SILVER_SGR}" ;;
+            esac
+            printf -v line '%s%2d%s %-12.12s %s%6d%s %5d %10s' \
+                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hss_name}" \
+                "${TXT_ACCENT_SGR}" "${hss_rows}" "${TXT_RESET_SGR}" \
+                "${hss_lines}" "${hss_date}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
+        fmt_ppm "${hss_pieces}" "${hss_time}"
+        printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+            "${hss_gold}" "${hss_silver}" "${hss_hammers}" "${hss_pieces}" \
+            "${FMT_PPM}"
+        if [ "${#plain}" -le 46 ]; then
+            printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+                "${TXT_GOLD_SGR}" "${hss_gold}" "${TXT_RESET_SGR}" \
+                "${TXT_SILVER_SGR}" "${hss_silver}" "${TXT_RESET_SGR}" \
+                "${TXT_WARN_SGR}" "${hss_hammers}" "${TXT_RESET_SGR}" \
+                "${hss_pieces}" "${FMT_PPM}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
+        body+=("")
+    done
+    debug_event "highscore sprint screen shown (${#HSS_ENTRIES[@]} entries)"
+    menu_pages "Highscores - Sprint" 1 "${HS_PAGE_LINES}" "${body[@]}"
     return 0
 }

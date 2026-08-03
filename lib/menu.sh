@@ -22,11 +22,12 @@
 #   suspended. menu_pages (since 0.10.0) shows a table that outgrew one
 #   screen as a sequence of info screens with a repeated table head, which
 #   is what the two-line highscore entries need. menu_help (since
-#   0.12.0, user request) is the "Anleitung" main menu entry: five info
+#   0.12.0, user request) is the "Anleitung" main menu entry: six info
 #   screens explaining the game, the controls, hold and preview, the
-#   gold/silver squares and the wonder construction, with the key
-#   bindings and the wonder costs read from the live state instead of
-#   spelled out. Since 0.13.0 (user request) its pages are browsed with
+#   gold/silver squares, the wonder construction and the game modes,
+#   with the key bindings, the wonder costs and the mode goals read from
+#   the live state instead of spelled out. Since 0.13.0 (user request)
+#   its pages are browsed with
 #   the left/right arrow keys instead of "any key advances" - built from
 #   one case switch (menu_help_body) indexed by page instead of a fixed
 #   sequence of menu_message calls, so any page can be jumped to
@@ -35,12 +36,15 @@
 #   does not leave a menu or info screen blank (since 0.7.0).
 #   Since 0.14.0 (user request) menu_singleplayer offers the game modes:
 #   the endless "Marathon" (renamed from "Normales Spiel" in 0.14.1, user
-#   decision) and "Ultra", the race for ULTRA_TARGET_ROWS rows against the
-#   clock. The entry picked is handed to game_run as its mode name.
+#   decision), "Ultra", the race for ULTRA_TARGET_ROWS rows against the
+#   clock, and - since 0.16.0, user request - "Sprint", as many rows as
+#   possible within SPRINT_TIME_MS. The entry picked is handed to
+#   game_run as its mode name.
 #   Since 0.15.0 (user request) menu_highscores picks the mode of the
-#   list to show as well: the two modes rank by different numbers and
+#   list to show as well: the modes rank by different numbers and
 #   live in separate files (lib/highscore.sh), so the "Highscores" entry
-#   asks which one before drawing it.
+#   asks which one before drawing it. The Anleitung explains all three
+#   on a "Spielmodi" page of its own (menu_help_body, since 0.16.0).
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -48,7 +52,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.15.0  (2026-08-02)
+# Version: 0.16.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -206,9 +210,9 @@ menu_pages() {
 }
 
 # Number of screens menu_help walks through; used both to number the
-# titles ("Anleitung (2/5)") and to wrap the left/right paging
+# titles ("Anleitung (2/6)") and to wrap the left/right paging
 # (menu_help below), so the pages stay self-describing.
-MENU_HELP_PAGES=5
+MENU_HELP_PAGES=6
 
 # menu_help_keys FIXED VAR
 # Build the key list for one action as the help screen shows it:
@@ -391,20 +395,54 @@ menu_help_body() {
                    "unten Zeile fuer Zeile und steht bei 100" \
                    "Prozent fertig da - ebenso nach jeder Runde.")
             ;;
+        5)
+            # Added 0.16.0 with the Sprint mode: the manual predates the
+            # game modes entirely (it was written when there was only the
+            # endless round), and with three of them a page explaining
+            # what they are was overdue. Ziel and time limit come from
+            # the live constants for the same reason the wonder page
+            # reads WONDER_COSTS - a retuned goal must not leave the
+            # manual lying.
+            fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+            HELP_BODY=("Spielmodi (Menuepunkt \"Einzelspieler\"):" \
+                  "" \
+                  "Marathon - die endlose Runde. Sie endet," \
+                  "  wenn kein neuer Stein mehr Platz hat." \
+                  "")
+            printf -v line 'Ultra - %s Rows so schnell wie moeglich.' \
+                "${ULTRA_TARGET_ROWS}"
+            HELP_BODY+=("${line}")
+            HELP_BODY+=("  Ergebnis ist die Spielzeit; die Runde" \
+                   "  endet, sobald das Ziel erreicht ist." \
+                   "")
+            printf -v line 'Sprint - in %s Minuten so viele Rows' \
+                "${FMT_DURATION}"
+            HELP_BODY+=("${line}")
+            HELP_BODY+=("  wie moeglich. Ergebnis sind die Rows;" \
+                   "  die Runde endet mit Ablauf der Zeit." \
+                   "" \
+                   "Jeder Modus hat eine eigene Bestenliste" \
+                   "(Menuepunkt \"Highscores\"). Bei Ultra und" \
+                   "Sprint zaehlt nur ein Lauf, der das Ziel" \
+                   "bzw. die volle Zeit erreicht hat - ein" \
+                   "Game Over davor wird nicht gewertet.")
+            ;;
     esac
     return 0
 }
 
 # menu_help
 # The "Anleitung" main menu entry (added 0.12.0, user request): a short
-# tour through the game on five info screens - what the game is about,
-# the controls, hold and preview, the gold/silver squares and the wonder
-# construction (menu_help_body builds each page's content). Two things
-# are read from the live state
+# tour through the game on six info screens - what the game is about,
+# the controls, hold and preview, the gold/silver squares, the wonder
+# construction and the game modes (menu_help_body builds each page's
+# content). Three things are read from the live state
 # instead of being spelled out: the control page prints the current
-# bindings (menu_help_keys), and the wonder page lists the names and costs
-# from lib/wonders.sh - a rebind or a retuned
-# WONDER_COSTS must never leave the manual lying. Text is German like
+# bindings (menu_help_keys), the wonder page lists the names and costs
+# from lib/wonders.sh, and the modes page names the Ultra row target and
+# the Sprint time limit - a rebind, a retuned
+# WONDER_COSTS or a retuned goal must never leave the manual lying.
+# Text is German like
 # the rest of the menus and ASCII only (script conventions); every line
 # stays within the 46 characters the 48-column minimum leaves next to
 # the two-column menu indent, and every page within MENU_BODY_MAX lines.
@@ -536,8 +574,8 @@ menu_pause() {
 
 # menu_singleplayer: the game modes. "Marathon" is the endless
 # round, "Ultra" the race for ULTRA_TARGET_ROWS rows against the clock
-# (0.14.0, user request); a "Sprint" mode - most rows within a time
-# limit - is planned as a third entry (see CLAUDE.md). The chosen entry
+# (0.14.0, user request) and "Sprint" its mirror image - as many rows as
+# possible within SPRINT_TIME_MS (0.16.0, user request). The chosen entry
 # is passed to game_run as the mode name, so adding one is a matter of
 # an entry plus its case branch. After a
 # game session the wonder construction site is shown with the freshly
@@ -556,8 +594,14 @@ menu_singleplayer() {
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             entries+=("Fortsetzen")
         fi
+        # The two timed modes name their target in the entry, so the
+        # difference between them is readable without the manual. Both
+        # read the live constants (fmt_duration for the Sprint limit),
+        # which keeps the menu honest if either is retuned.
+        fmt_duration $(( SPRINT_TIME_MS / 1000 ))
         entries+=("Marathon" \
                   "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
+                  "Sprint (${FMT_DURATION} Minuten auf Rows)" \
                   "Zurueck")
         menu_run "Einzelspieler" "${entries[@]}"
         choice="${MENU_CHOICE}"
@@ -576,6 +620,7 @@ menu_singleplayer() {
         case "${choice}" in
             0) game_run marathon ;;
             1) game_run ultra ;;
+            2) game_run sprint ;;
             *) return 0 ;;
         esac
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -586,24 +631,30 @@ menu_singleplayer() {
 }
 
 # menu_highscores: the "Highscores" main menu entry. Since 0.15.0 (user
-# request) there are two lists to choose from - the endless Marathon
-# rounds ranked by rows, and the Ultra runs ranked by the shortest time
-# (lib/highscore.sh keeps them in separate files with separate orders,
-# because the two are not comparable). Hence a picker in front of them
-# rather than one screen: merging them would mean two orderings in one
-# table, and appending the Ultra list to the Marathon one would bury it
-# behind the pages of the other.
-# Loops instead of returning after one list, so comparing the two costs
+# request) there is a list per game mode to choose from - the endless
+# Marathon rounds ranked by rows, the Ultra runs ranked by the shortest
+# time and, since 0.16.0, the Sprint runs ranked by the rows scored in
+# three minutes (lib/highscore.sh keeps them in separate files with
+# separate orders, because they are not comparable). Hence a picker in
+# front of them rather than one screen: merging them would mean several
+# orderings in one table, and appending one list to another would bury
+# it behind the pages of the other.
+# The entries mirror the singleplayer menu's, down to the wording of the
+# goals, so the same mode reads the same way wherever it is picked.
+# Loops instead of returning after one list, so comparing them costs
 # no walk back through the main menu; ESC or "Zurueck" leaves.
 menu_highscores() {
     while :; do
+        fmt_duration $(( SPRINT_TIME_MS / 1000 ))
         menu_run "Highscores" \
             "Marathon" \
             "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
+            "Sprint (${FMT_DURATION} Minuten auf Rows)" \
             "Zurueck"
         case "${MENU_CHOICE}" in
             0) highscore_screen ;;
             1) highscore_ultra_screen ;;
+            2) highscore_sprint_screen ;;
             *) return 0 ;;
         esac
     done

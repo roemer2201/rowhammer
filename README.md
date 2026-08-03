@@ -69,7 +69,7 @@ Einstellungen und einer kurzen Anleitung;
 die besten
 10 Runden werden dauerhaft gespeichert. Dazu kommen die Politur-Schritte
 aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
-(Marathon/Ultra), Anleitung, Lock Delay und der gezielte Reset
+(Marathon/Ultra/Sprint), Anleitung, Lock Delay und der gezielte Reset
 gespeicherter Daten. Das vollstaendige Konzept
 und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
 abgeschlossenen Entwicklungsschritte je Version in
@@ -95,27 +95,36 @@ Das Startmenue bietet:
   ins Hauptmenue gelegte Runde wartet, und nimmt sie wieder auf; der
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
 - **Einzelspieler** - die Spielmodi: **Marathon** (endlos, Ende
-  durch Game Over) und **Ultra** - 150 Rows so schnell wie moeglich
-  abbauen. Die Ultra-Runde endet in dem Moment, in dem das Ziel
-  erreicht ist; das Ergebnis ist die Spielzeit, und der HUD zeigt
-  waehrenddessen Ziel ("Goal") und Restbedarf ("Left"). Gewertete Rows
+  durch Game Over), **Ultra** - 150 Rows so schnell wie moeglich
+  abbauen - und **Sprint** - in 3 Minuten so viele Rows wie moeglich.
+  Die Ultra-Runde endet in dem Moment, in dem das Ziel
+  erreicht ist; das Ergebnis ist die Spielzeit. Die Sprint-Runde endet,
+  wenn die Zeit abgelaufen ist; das Ergebnis sind die Rows. In beiden
+  Modi zeigt der HUD Ziel ("Goal") und Rest ("Left") - bei Ultra die
+  noch fehlenden Rows, bei Sprint die verbleibende Zeit. Gewertete Rows
   zaehlen, nicht physische Reihen - Gold- und Silberquadrate sind also
-  die Abkuerzung ins Ziel. Erfolgreiche Laeufe landen in einer eigenen
-  Bestenliste (`~/.config/rowhammer/highscore-ultra`, schnellster Lauf
+  in beiden Modi die Abkuerzung. Erfolgreiche Laeufe landen in einer
+  eigenen Bestenliste je Modus
+  (`~/.config/rowhammer/highscore-ultra`, schnellster Lauf
+  zuerst, bzw. `~/.config/rowhammer/highscore-sprint`, meiste Rows
   zuerst), die die 10 besten endlosen Runden unberuehrt laesst; ein
   Versuch, der vorher im Game Over endet, wird nicht eingetragen, seine
   Reihen zaehlen aber weiter fuer Weltwunder und Statistik
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
-- **Highscores** - fragt zuerst den Modus ab (**Marathon** oder
-  **Ultra**) und zeigt danach dessen Bestenliste; die Auswahl bleibt
-  stehen, bis "Zurueck" kommt, sodass sich beide Listen vergleichen
+- **Highscores** - fragt zuerst den Modus ab (**Marathon**, **Ultra**
+  oder **Sprint**) und zeigt danach dessen Bestenliste; die Auswahl
+  bleibt
+  stehen, bis "Zurueck" kommt, sodass sich die Listen vergleichen
   lassen. Je Liste die besten 10 Runden, je Eintrag zwei Zeilen und
   seitenweise geblaettert: Name, Rows (die Punkte der Runde), Spielzeit
   und Datum in der ersten, Gold-/Silberquadrate, Rowhammer ("RH"),
   abgelegte Teile ("PCS") und Teile je Minute ("PPM") in der zweiten.
   Die Ultra-Liste ist nach der kuerzesten Zeit sortiert und zeigt sie
   auf die Millisekunde genau (MM:SS.mmm) - dort ist die Zeit der Score,
-  in der Marathon-Liste sind es die Rows. Ein Rundenende zeigt den
+  in der Marathon- und der Sprint-Liste sind es die Rows. Die
+  Sprint-Liste zeigt an der Stelle der Spielzeit die physischen Reihen
+  ("Lines"): jeder Lauf dauert dieselben 3 Minuten, eine Zeitspalte
+  stuende dort zehnmal gleich. Ein Rundenende zeigt den
   erreichten Rang ausserdem direkt an
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
@@ -129,13 +138,14 @@ Das Startmenue bietet:
   Farbvorschau in der Liste) und Spielernamen setzen; alles drei wird in
   der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`)
-- **Anleitung** - kurze Spielerklaerung auf fuenf Bildschirmen, mit
+- **Anleitung** - kurze Spielerklaerung auf sechs Bildschirmen, mit
   den Pfeiltasten links/rechts durchblaetterbar (umlaufend):
   Spielprinzip, Steuerung (mit der gerade eingestellten
   Tastenbelegung), Vorschau und Hold, Gold-/Silber-Quadrate mit ihrer
-  Reihenwertung und der Weltwunderbau
+  Reihenwertung, der Weltwunderbau und die drei Spielmodi
 
-Alle Spieldaten (Konfiguration, Highscores inklusive der Ultra-Liste,
+Alle Spieldaten (Konfiguration, Highscores inklusive der Ultra- und
+der Sprint-Liste,
 Weltwunder-Spielstand,
 Statistik) liegen im Datenverzeichnis
 `~/.config/rowhammer`, aenderbar per `--data-dir`.
@@ -159,8 +169,9 @@ Optionen:
 `--reset ZIEL` setzt gezielt gespeicherte Daten im Datenverzeichnis
 zurueck und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
 `config` (die Konfigurationsdatei `rowhammer.conf`), `stats` (die
-Statistik), `highscore` (beide Bestenlisten - `highscore` und
-`highscore-ultra`), `save` (der Weltwunder-Fortschritt) oder `all`
+Statistik), `highscore` (alle Bestenlisten - `highscore`,
+`highscore-ultra` und `highscore-sprint`), `save` (der
+Weltwunder-Fortschritt) oder `all`
 (alles zusammen).
 
 **Geloescht wird dabei nichts:** jede betroffene Datei wird nach
@@ -268,14 +279,19 @@ Umgesetzt:
   (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
   Weltwunder, Statistik, Einstellungen und Anleitung
-- **Anleitung im Spiel:** fuenf Bildschirme zu Spielprinzip, Steuerung,
-  Vorschau/Hold, Gold- und Silberbloecken und Weltwunderbau; die
+- **Anleitung im Spiel:** sechs Bildschirme zu Spielprinzip, Steuerung,
+  Vorschau/Hold, Gold- und Silberbloecken, Weltwunderbau und den
+  Spielmodi; die
   Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
-- **Spielmodi:** endloses **Marathon** und **Ultra** (150 Rows auf
-  Zeit, eigene Bestenliste nach kuerzester Zeit; siehe oben)
+- **Spielmodi:** endloses **Marathon**, **Ultra** (150 Rows auf
+  Zeit, eigene Bestenliste nach kuerzester Zeit) und **Sprint**
+  (3 Minuten auf Rows, eigene Bestenliste nach den meisten Rows;
+  siehe oben)
 - Persistente Highscore-Listen: die besten 10 Runden in
-  `~/.config/rowhammer/highscore` und die 10 schnellsten Ultra-Laeufe
-  in `~/.config/rowhammer/highscore-ultra`, im Menue ueber eine
+  `~/.config/rowhammer/highscore`, die 10 schnellsten Ultra-Laeufe
+  in `~/.config/rowhammer/highscore-ultra` und die 10 besten
+  Sprint-Laeufe in `~/.config/rowhammer/highscore-sprint`, im Menue
+  ueber eine
   Modus-Auswahl erreichbar, Ranganzeige im Rundenende-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
