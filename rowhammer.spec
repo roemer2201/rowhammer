@@ -84,6 +84,9 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
   it gives up the running round and starts a fresh one in the same mode.
 - Such a given-up round is recorded before the fresh one replaces it, so
   its rows keep counting toward wonder progress and statistics.
+- The controls block of --help listed the key bindings from before
+  0.31.0; it now matches the actual defaults (arrows move, d/a rotate,
+  space or arrow up hard-drops, c or w holds).
 
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.42.0-1
 - New game mode "Time Attack": the round starts with one minute of play

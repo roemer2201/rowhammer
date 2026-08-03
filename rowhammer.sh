@@ -362,20 +362,21 @@ reproducible:
   frames.log    every screen update byte for byte (1:1, ANSI included).
 The log directory is printed when the game exits.
 
-Controls (defaults; rebindable in the settings menu):
-  a / d or arrow left/right   move piece
-  e                           rotate clockwise
-  q                           rotate counter-clockwise
+Controls (defaults). The letter key of every action is rebindable in the
+settings menu; the arrow keys, space and w listed beside them are wired
+in on top of the bindings and always work:
+  arrow left / right          move piece (no letter key by default)
+  d                           rotate clockwise
+  a                           rotate counter-clockwise
   s or arrow down             soft drop
-  w, arrow up or space        hard drop
-  c or 2                      hold / swap piece (once per piece)
+  space or arrow up           hard drop (no letter key by default)
+  c or w                      hold / swap piece (once per piece)
   p                           pause / resume
   x or ESC                    open the pause menu: resume, restart the
-                              round, go to the
-                              main menu with the round suspended
-                              (resumable via the "Fortsetzen" entry in
-                              the main and singleplayer menus), or
-                              end the round
+                              round in the same mode, go to the main
+                              menu with the round suspended (resumable
+                              via the "Fortsetzen" entry in the main and
+                              singleplayer menus), or end the round
   r                           restart (on the game over screen)
 
 Square mechanics (The New Tetris): fill a 4x4 area with exactly four
@@ -1599,7 +1600,8 @@ hard_drop() {
 # keys are ignored while paused or on the game over screen. Letter keys
 # come from the configurable bindings; a fixed secondary layout is always
 # active on top of them: the arrow keys (left/right move, up = hard drop,
-# down = soft drop), space for hard drop and 2 for hold.
+# down = soft drop), space for hard drop and w for hold (w replaced the
+# earlier 2 in 0.31.0, see the note at the hold branch below).
 handle_key() {
     if [ -z "${KEY}" ]; then
         return 0

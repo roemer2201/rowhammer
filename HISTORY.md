@@ -856,3 +856,11 @@ CLAUDE.md 3.3, 3.4)._
       Neustart in einer Zeile ("Neustart: [r] im Game Over oder
       Pausenmenue") statt nur `r`: die Seite sitzt mit 18 Zeilen genau
       auf `MENU_BODY_MAX` und vertraegt keine zusaetzliche.
+      Mitgenommen: der Controls-Block von `--help` fuehrte noch die
+      Belegung vor 0.31.0 (`e`/`q` drehen, `w` Hard-Drop, `2` Hold) und
+      damit fuer drei Aktionen die falschen Tasten; er nennt jetzt die
+      tatsaechlichen Vorgaben (Pfeiltasten bewegen, `d`/`a` drehen,
+      Leertaste bzw. Pfeil hoch setzt fest, `c`/`w` holdet) samt der
+      Unterscheidung zwischen der konfigurierbaren Buchstabentaste und
+      den fest verdrahteten Sekundaertasten. Dieselbe veraltete Angabe
+      stand im Kopfkommentar von `handle_key` ("2 for hold").
