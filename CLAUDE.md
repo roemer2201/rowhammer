@@ -476,17 +476,27 @@ rowhammer/
     mp.sh              # (Phase 5) Client-Seite: Lobby, Peer-Zustaende, Anbindung
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
+  tools/
+    key-scan.sh        # Regressionstest der Eingabeschicht (Issue #7)
+    release.sh         # Versions-Abgleich, Release-Notes, Release-Tag
+    demo/              # Werkzeuge fuer die asciinema-Democlips
+  .github/workflows/
+    ci.yml             # Pruefungen und Paketbau bei Push/Pull Request
+    release.yml        # Paketbau und GitHub-Release bei einem v*-Tag
   Makefile             # install/uninstall-Ziele (genutzt von deb und rpm)
   build-deb.sh         # Baut das Debian-Paket, Artefakte nach dist/
   build-rpm.sh         # Baut das RPM-Paket, Artefakte nach dist/
   debian/              # Debian-Paketierung (debhelper, natives Paket)
   rowhammer.spec       # RPM-Paketierung (nutzt dasselbe make install)
+  docs/
+    release-process.md # Ablauf eines Releases und was die Workflows tun
+    input-analysis.md  # Analyse der Eingabeschicht (Nachfassen Issue #7)
   CLAUDE.md            # Konzept, Architektur, offene Roadmap
   HISTORY.md           # Archiv der erledigten Roadmap-Punkte
   README.md
 ```
 
-Stand (Version 0.39.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.40.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
@@ -968,10 +978,19 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   vorher selbst per `command -v`; der `BuildRequires`-Eintrag bleibt im
   Spec, wo ihn `mock`/COPR und ein direkter `rpmbuild`-Lauf auf einer
   RPM-Distribution regulaer durchsetzen.
+- Beide Build-Skripte geben ihre Statusmeldungen seit 0.40.0 nicht nur
+  bei erkanntem Terminal aus, sondern auch, wenn die Umgebungsvariable
+  `CI` gesetzt ist. Ein CI-Runner hat weder ein Terminal noch ein
+  Journal, in das jemand schaut; vorher scheiterten beide Skripte dort
+  vollstaendig lautlos, Fehlermeldungen inklusive.
+- Gebaut werden beide Pakete zusaetzlich automatisch auf GitHub - bei
+  jedem Push zur Kontrolle, bei einem Release-Tag als Release-Asset
+  (siehe 4.9).
 - Hinweis: Das Repository hat noch keine Lizenzdatei;
   `debian/copyright` ist entsprechend als "UNLICENSED" markiert
   (im Spec `License: LicenseRef-UNLICENSED`) und beides muss
-  nachgezogen werden, sobald eine Lizenz festgelegt ist.
+  nachgezogen werden, sobald eine Lizenz festgelegt ist. Aus demselben
+  Grund werden die Pakete unsigniert gebaut (siehe 4.9).
 
 ### 4.8 Reset persistenter Daten (seit 0.35.0)
 
@@ -1058,6 +1077,93 @@ Ablauf und Einordnung:
 - Nicht vorhandene Dateien sind kein Fehler (Ziel bereits erreicht) und
   werden nur gemeldet; eine vorhandene Datei, die sich nicht verschieben
   laesst, bricht mit Fehlermeldung ab.
+
+### 4.9 Release-Struktur und CI (seit 0.40.0)
+
+Der ausfuehrliche Ablauf steht in `docs/release-process.md`; hier die
+Struktur und die Entscheidungen dahinter.
+
+**Ein Release ist ein Tag.** Der Tag heisst `v<version>` (`v0.40.0`),
+und mehr als sein Push braucht ein Release nicht: der Release-Workflow
+baut daraufhin die Pakete und legt das GitHub-Release samt Assets an.
+**Vorab-Versionen (`v0.40.0-rc1`) sind bewusst ausgeschlossen** -
+rowhammer ist ein *natives* Debian-Paket, und eine native Paketversion
+darf keinen Bindestrich enthalten; ein RC-Tag liesse sich also gar nicht
+als `.deb` bauen und wird deshalb sofort abgewiesen statt spaet in
+`dpkg-buildpackage`. Die `0.x`-Reihe ist ohnehin die Vorab-Phase des
+Projekts.
+
+**`tools/release.sh`** (Script-Konventionen, `ROWHAMMER_RELEASE_*`) ist
+das einzige Stueck Code, das alle drei Stellen mit der Version kennt:
+`ROWHAMMER_VERSION` in `rowhammer.sh` (Referenz - was das Spiel ueber
+sich selbst sagt), die oberste Strophe von `debian/changelog` und die
+`Version` samt `%changelog` in `rowhammer.spec`. Vier Modi
+(`--mode check|version|notes|tag`):
+
+- `check` vergleicht die drei Nummern **und** prueft, ob beide
+  Changelogs die Version wirklich dokumentieren - eine Version ohne
+  Changelog-Eintrag ergaebe ein Release ohne Release-Notes.
+  `--expect VERSION` prueft zusaetzlich gegen einen Wert von aussen (im
+  Workflow: den Namen des gepushten Tags).
+- `notes` baut die Release-Notes, `tag` legt das annotierte Tag mit
+  diesen Notes als Nachricht an (nach `check`, bei sauberem Arbeitsbaum,
+  niemals ein vorhandenes Tag verschiebend) und pusht es mit `--push`.
+
+**Die Release-Notes sind die Changelog-Strophe** zur Version, nicht ein
+eigener Text. Die Strophe muss fuers Debian-Paket ohnehin geschrieben
+werden; ein zweiter, davon unabhaengiger Release-Text wuerde frueher
+oder spaeter etwas anderes erzaehlen als das Paket, das danebenliegt.
+Der angehaengte Installationsabschnitt nennt bewusst keine festen
+RPM-Dateinamen (dort stehen Release-Nummer und Distributions-Tag mit
+drin, ein hart geschriebenes Beispiel veraltete beim ersten Rebuild).
+
+**Assets eines Releases:** `.deb`, `.rpm`, `.src.rpm`, ein
+Quell-Tarball des getaggten Commits (`git archive`, damit er zum Tag
+gehoert und nicht zum Arbeitsbaum des Builds) und `SHA256SUMS`. Die
+`.changes`- und `.buildinfo`-Dateien aus dem Debian-Build bleiben
+draussen: Build-Metadaten, die niemand herunterlaedt. Signiert wird
+nicht (`dpkg-buildpackage -us -uc`), solange es weder Lizenz noch
+oeffentliche Paketquelle gibt (siehe 4.7).
+
+**Zwei Workflows unter `.github/workflows/`:**
+
+- `ci.yml` bei jedem Push auf `main`/`claude/**` und jedem Pull Request:
+  Bash-Syntax, ShellCheck, ASCII-Pruefung und `release.sh --mode check`;
+  der Eingabe-Regressionstest `tools/key-scan.sh`, einmal normal und
+  einmal mit `--gap 0.06` (die stueckweise Zustellung aus Issue #7);
+  Bau beider Pakete.
+- `release.yml` bei einem `v*`-Tag: prueft Tag gegen Baum, baut die
+  Assets und veroeffentlicht das Release. Ein bereits vorhandenes
+  Release wird aktualisiert statt als Fehler behandelt, sodass ein auf
+  halber Strecke abgebrochener Lauf wiederholbar ist
+  (`workflow_dispatch` mit dem Tag als Eingabe).
+
+Entscheidungen zu den Workflows:
+
+- **ShellCheck blockiert nur auf Stufe `error`.** Dort ist der Baum
+  sauber; die verbleibenden Warnungen sind Fehlalarme der
+  Modul-Architektur - `lib/*.sh` wird ins Hauptskript gesourct, seine
+  Variablen wirken einzeln geprueft ungenutzt (SC2034) und seine Arrays
+  wie Skalare (SC2128, SC2178). Der vollstaendige Bericht wird trotzdem
+  ausgegeben, nur ohne den Job scheitern zu lassen.
+- **Die Pakete werden installiert, nicht nur gebaut.** Der Starter ist
+  ein relativer Symlink nach `/usr/share` (siehe 4.7), ein falscher Pfad
+  faellt also erst nach der Installation auf; anschliessend wird das
+  Paket wieder entfernt und geprueft, dass nichts liegen bleibt. Als
+  Spielprogramm laeuft rowhammer im CI nur so weit, wie es ohne Terminal
+  geht - das sind `--help` und `--reset` (siehe 4.8), und genau die
+  nutzen die Smoke-Tests.
+- **Das RPM wird zusaetzlich in einem Fedora-Container installiert.**
+  Gebaut wird es auf dem Ubuntu-Runner (`build-rpm.sh` gibt dafuer
+  `--nodeps` mit, siehe 4.7), aber erst die Installation auf einer
+  RPM-Distribution prueft den `%files`-Abschnitt wirklich, samt des
+  bewusst mitbesessenen Verzeichnisses `/usr/games`.
+- **Das Release entsteht mit der `gh`-CLI des Runners** statt mit einer
+  fremden Action - eine Abhaengigkeit weniger in einem Workflow, der
+  Schreibrechte aufs Repository hat (`permissions: contents: write`).
+- **Der Release-Workflow prueft selbst nach**, statt sich auf den
+  CI-Lauf des Branches zu verlassen: ein Tag darf auf jedem beliebigen
+  Commit sitzen.
 
 ## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
 
@@ -1837,13 +1943,14 @@ Erledigt und nach HISTORY.md verschoben:
 - **Zwischenschritt - Debug-Modus** (0.6.0), vollstaendig
 - **Phase 3 - Weltwunder** (0.8.0), vollstaendig
 - **Zwischenschritt - Paketierung**: `Makefile`, Debian-Paketierung und
-  `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0);
+  `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
+  Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
 - **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.39.0
   (Sprint-Modus); die Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen sind die fuenf Punkte unten
 
-### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0 und rpm 0.37.0 erledigt, siehe HISTORY.md)
+### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
 
 - [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
       auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
@@ -1851,10 +1958,12 @@ Erledigt und nach HISTORY.md verschoben:
 - [ ] opkg-Paketierung implementieren (fuer OpenWrt/Embedded-Systeme,
       analog zur Debian-Paketierung, nutzt ebenfalls `make install`),
       vorausgesetzt die Shell-Kompatibilitaetspruefung faellt positiv aus
-- [ ] Release-Struktur auf GitHub aufbauen (Tags, Release Notes, Assets)
-- [ ] Paketierung GitHub-seitig automatisch bauen lassen (CI-Workflow),
-      sobald ein neues Release fertiggestellt ist
-- [ ] Lizenz festlegen und `debian/copyright` aktualisieren
+- [ ] Lizenz festlegen und `debian/copyright` aktualisieren. Haengt
+      inzwischen mehr dran als die beiden Dateien: solange es keine
+      Lizenz gibt, werden die Release-Pakete bewusst unsigniert gebaut
+      und es gibt keine oeffentliche Paketquelle (siehe 4.9). Ein
+      Signier-Schritt im Release-Workflow (Schluessel als Secret) waere
+      der naechste Schritt, sobald die Lizenzfrage entschieden ist.
 
 ### Phase 4 - Politur (offene Punkte; die erledigten stehen in HISTORY.md)
 

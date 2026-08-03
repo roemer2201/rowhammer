@@ -20,7 +20,7 @@
 # Usage:
 #   build-deb.sh [-o|--output-dir DIR] [-v|--verbose] [-s|--silent] [-h|--help]
 #
-# Version: 1.0.0  (2026-07-18)
+# Version: 1.1.0  (2026-08-03)
 
 set -euo pipefail
 
@@ -57,6 +57,10 @@ Silent and verbose are mutually exclusive; setting both is an error.
 Precedence for every option: command-line argument > environment variable
 > built-in default.
 
+Status messages go to the system log and, when STDOUT is a terminal, to
+the console. A set CI environment variable enables the console output as
+well, so the build is visible in a CI log.
+
 Build dependencies: dpkg-dev (dpkg-buildpackage) and debhelper.
 
 Example:
@@ -67,8 +71,9 @@ EOF
 # log LEVEL MESSAGE...
 # Always records the entry in syslog/journal via logger so CI/automated
 # runs leave a trace; additionally prints to the console when STDOUT is a
-# terminal (errors/warnings to STDERR, debug only in verbose mode, silent
-# mode limits console output to errors).
+# terminal or the environment variable CI is set (errors/warnings to
+# STDERR, debug only in verbose mode, silent mode limits console output to
+# errors).
 log() {
     local level="${1}"
     shift
@@ -83,8 +88,18 @@ log() {
     if [ "${level}" = "debug" ] && [ "${VERBOSE}" -ne 1 ]; then
         return 0
     fi
-    logger -t "${SCRIPT_NAME}" -p "${priority}" -- "${message}"
-    if [ -t 1 ]; then
+    # logger is part of util-linux and present on the usual systems, but a
+    # slim CI container may lack it; a missing system log must not abort a
+    # package build, so the call is guarded instead of relied upon.
+    if command -v logger >/dev/null 2>&1; then
+        logger -t "${SCRIPT_NAME}" -p "${priority}" -- "${message}"
+    fi
+    # CHANGE 2026-08-03: console output also when CI is set. A CI runner
+    # has no terminal and no journal anybody will ever read, so its
+    # console log is the only trace of what the build did - without this
+    # the script failed there completely silently, error messages
+    # included.
+    if [ -t 1 ] || [ -n "${CI:-}" ]; then
         if [ "${SILENT}" -eq 1 ] && [ "${level}" != "error" ]; then
             return 0
         fi

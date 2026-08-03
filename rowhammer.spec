@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.39.0
+Version:        0.40.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.40.0-1
+- Release structure on GitHub (tag v<version>, release notes from
+  debian/changelog, packages as release assets) plus the CI and release
+  workflows that build and publish them; tools/release.sh keeps the
+  version in sync across rowhammer.sh, debian/changelog and this spec.
+
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.39.0-1
 - New game mode "Sprint" (as many rows as possible in 3 minutes) with a
   highscore list of its own and a manual page explaining the game modes.

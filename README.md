@@ -318,6 +318,21 @@ Geplant:
 
 - Spaeter: **Multiplayer** ueber das Netzwerk mit Garbage-Reihen
 
+## Installation aus einem Release
+
+Der schnellste Weg: unter
+[Releases](https://github.com/roemer2201/rowhammer/releases) haengt an
+jeder Version ein fertiges Paket.
+
+```
+sudo apt install ./rowhammer_<version>_all.deb      # Debian, Ubuntu
+sudo dnf install ./rowhammer-<version>-*.noarch.rpm # Fedora, RHEL, openSUSE
+```
+
+Ausserdem liegen dort das RPM-Quellpaket, ein Quell-Tarball und
+`SHA256SUMS` mit den Pruefsummen aller Dateien. Wer lieber selbst baut,
+findet die beiden Wege in den naechsten zwei Abschnitten.
+
 ## Installation als Debian-Paket
 
 Das Repository enthaelt eine vollstaendige Debian-Paketierung (`debian/`,
@@ -405,3 +420,24 @@ jede Weiterentwicklung. Was bereits umgesetzt ist - jeder erledigte
 Roadmap-Punkt mit seiner Begruendung und der Version, in der er kam -
 steht im Archiv [HISTORY.md](HISTORY.md); den *aktuellen* Zustand einer
 Funktion beschreiben dagegen CLAUDE.md und diese README.
+
+### Pruefungen und Releases
+
+Jeder Push und jeder Pull Request laeuft durch den CI-Workflow
+(`.github/workflows/ci.yml`): Bash-Syntax, ShellCheck, die
+ASCII-Konvention, der Versions-Abgleich, der Eingabe-Regressionstest
+`tools/key-scan.sh` sowie der Bau **und** die Installation von
+Debian- und RPM-Paket. Vieles davon laesst sich lokal genauso aufrufen:
+
+```
+./tools/key-scan.sh              # Regressionstest der Eingabeschicht
+./tools/key-scan.sh --gap 0.06   # dasselbe mit zerrissenen Sequenzen
+./tools/release.sh --mode check  # stimmen alle Versionsangaben ueberein?
+```
+
+Ein Release ist das Tag `v<version>`; sein Push startet den
+Release-Workflow, der die Pakete baut und das GitHub-Release mit seinen
+Assets anlegt. Die Release-Notes sind die zugehoerige Strophe aus
+`debian/changelog`. Den ganzen Ablauf - inklusive der drei Stellen, an
+denen die Versionsnummer steht - beschreibt
+[docs/release-process.md](docs/release-process.md).

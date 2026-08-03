@@ -1,0 +1,231 @@
+# CI workflow for rowhammer.
+#
+# Runs on every push to a development branch and on every pull request
+# towards main. It checks the sources against the project conventions
+# (bash syntax, ShellCheck, ASCII only, version consistency), replays the
+# input-layer regression test and builds both packages so a broken
+# packaging tree is found before a release is tagged - the release
+# workflow (release.yml) runs the very same build steps, it just adds the
+# GitHub release on top.
+#
+# The package jobs upload their artifacts for download from the run
+# summary; those are build products for inspection, not release assets.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Static checks: the rules from CLAUDE.md section 6 that a machine can
+  # verify. All of them pass on the current tree, so any failure here is
+  # something the change introduced.
+  # ---------------------------------------------------------------------
+  checks:
+    name: Shell checks and conventions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Syntax-check every shell script
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r script; do
+            if ! bash -n "${script}"; then
+              echo "::error file=${script}::bash syntax error"
+              status=1
+            fi
+          done < <(find . -path ./.git -prune -o -name '*.sh' -print | sort)
+          exit "${status}"
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      # ShellCheck gates at "error" severity only. The tree is clean at
+      # that level, while the remaining warnings are false positives of
+      # the module architecture: lib/*.sh is sourced into the main script,
+      # so its variables look unused (SC2034) and its arrays look like
+      # scalars (SC2128, SC2178) when a file is checked on its own.
+      - name: ShellCheck (blocking, error severity)
+        run: |
+          set -euo pipefail
+          find . -path ./.git -prune -o -name '*.sh' -print0 \
+            | xargs -0 shellcheck --severity=error --
+
+      - name: ShellCheck full report (advisory)
+        if: always()
+        run: |
+          set -uo pipefail
+          find . -path ./.git -prune -o -name '*.sh' -print0 \
+            | xargs -0 shellcheck --format=gcc -- || true
+
+      # ASCII only, for the sources and for everything the game prints or
+      # packages. Documentation is excluded on purpose: it is prose, and
+      # docs/demo carries binary recordings.
+      - name: Check for non-ASCII characters
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r file; do
+            if LC_ALL=C grep -nP '[^\x00-\x7F]' -- "${file}"; then
+              echo "::error file=${file}::non-ASCII character (see CLAUDE.md section 6)"
+              status=1
+            fi
+          done < <(
+            {
+              find . -path ./.git -prune -o -name '*.sh' -print
+              find assets -type f -print
+              printf '%s\n' Makefile rowhammer.spec \
+                debian/control debian/changelog debian/rules debian/copyright
+            } | sort
+          )
+          exit "${status}"
+
+      # The version lives in three files; release.sh is the one place that
+      # knows about all of them. Catching a drift here means the release
+      # workflow never has to refuse a pushed tag.
+      - name: Check version consistency
+        run: ./tools/release.sh --mode check --verbose
+
+  # ---------------------------------------------------------------------
+  # The input layer is the part with the most subtle failure mode (issue
+  # #7: a torn escape sequence applied as an unrelated key), and it has a
+  # headless regression test. Second run with a byte gap reproduces the
+  # split delivery seen over SSH and in tmux.
+  # ---------------------------------------------------------------------
+  input-regression:
+    name: Input layer regression test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Replay all key sequences
+        run: ./tools/key-scan.sh --silent
+
+      - name: Replay all key sequences with a byte gap
+        run: ./tools/key-scan.sh --gap 0.06 --silent
+
+  # ---------------------------------------------------------------------
+  # Debian package: build it, install it and run the installed game far
+  # enough to prove the layout works (the starter is a relative symlink
+  # into /usr/share, so a wrong path only shows up after installing).
+  # ---------------------------------------------------------------------
+  package-deb:
+    name: Build the Debian package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper
+
+      - name: Build the package
+        run: ./build-deb.sh --verbose
+
+      - name: Install the package
+        run: sudo apt-get install -y ./dist/rowhammer_*_all.deb
+
+      - name: Smoke-test the installed game
+        run: |
+          set -euo pipefail
+          test -L /usr/games/rowhammer
+          test -x /usr/share/rowhammer/rowhammer.sh
+          test -d /usr/share/rowhammer/lib
+          test -d /usr/share/rowhammer/assets/wonders
+          # --help and --reset are the two paths that run without a TTY,
+          # so they are what a runner can exercise of the real program.
+          /usr/games/rowhammer --help
+          /usr/games/rowhammer --data-dir "$(mktemp -d)" --reset all --force
+
+      - name: Remove the package again
+        run: |
+          set -euo pipefail
+          sudo apt-get purge -y rowhammer
+          test ! -e /usr/games/rowhammer
+          test ! -e /usr/share/rowhammer
+
+      - name: Upload the build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: dist/
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # RPM package: rpmbuild runs on the Ubuntu runner (build-rpm.sh passes
+  # --nodeps for exactly this case, see the comment in the script), the
+  # result is then installed on a real RPM distribution in verify-rpm.
+  # ---------------------------------------------------------------------
+  package-rpm:
+    name: Build the RPM package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y rpm make tar
+
+      - name: Build the package
+        run: ./build-rpm.sh --srpm --verbose
+
+      - name: List the package contents
+        run: rpm -qlp dist/*.noarch.rpm
+
+      - name: Upload the build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-package
+          path: dist/
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # Installing the RPM on Fedora is the only place where the spec's
+  # %files section is really tested - including the deliberately co-owned
+  # /usr/games directory (CLAUDE.md section 4.7), which an rpm database
+  # from another distribution cannot verify.
+  # ---------------------------------------------------------------------
+  verify-rpm:
+    name: Install the RPM package on Fedora
+    runs-on: ubuntu-latest
+    needs: package-rpm
+    container: fedora:latest
+    steps:
+      - name: Download the built package
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-package
+          path: dist
+
+      - name: Install the package
+        run: dnf install -y ./dist/*.noarch.rpm
+
+      - name: Smoke-test the installed game
+        run: |
+          set -euo pipefail
+          test -L /usr/games/rowhammer
+          test -x /usr/share/rowhammer/rowhammer.sh
+          /usr/games/rowhammer --help
+          /usr/games/rowhammer --data-dir "$(mktemp -d)" --reset all --force
+
+      - name: Remove the package again
+        run: |
+          set -euo pipefail
+          dnf remove -y rowhammer
+          test ! -e /usr/games/rowhammer
+          test ! -e /usr/share/rowhammer
