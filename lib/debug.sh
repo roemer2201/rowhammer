@@ -8,7 +8,8 @@
 #   directory (default ${XDG_STATE_HOME:-~/.local/state}/rowhammer/debug/
 #   <timestamp>.<pid>, overridable with --debug-dir / ROWHAMMER_DEBUG_DIR):
 #     events.log - session header (version, bash, terminal, seed, player,
-#                  key bindings, data directory, loaded config files)
+#                  render mode, key bindings, data directory, loaded
+#                  config files)
 #                  followed by every
 #                  game action: spawns, moves and rotations (including
 #                  blocked attempts), gravity falls, locks, square
@@ -20,6 +21,10 @@
 #                  key (empty = unmapped sequence).
 #     frames.log - every screen update byte for byte (1:1, ANSI escape
 #                  sequences included), one delimited entry per write.
+#                  How much of the play screen one entry holds depends on
+#                  the render mode, which the session header therefore
+#                  records: only the changed lines in the default
+#                  "partial" mode, the whole block in "full".
 #   Every log line carries the elapsed milliseconds since session start
 #   and the screen update counter ("f N"): an entry tagged f 42 happened
 #   after screen update 42 was drawn and before update 43. That lets the
@@ -29,7 +34,7 @@
 #   rowhammer.sh (defaults/env/CLI blocks); this module only reads them.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.1  (2026-07-26)
+# Version: 0.4.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -84,6 +89,10 @@ debug_init() {
         printf '# seed:     %s\n' "${SEED:-unset (random)}"
         printf '# player:   %s  color=%s mode=%s theme=%s\n' \
             "${PLAYER_NAME}" "${USE_COLOR}" "${COLOR_MODE}" "${COLOR_THEME}"
+        # The render mode decides whether a frame log entry holds the
+        # whole block or only the changed lines - without it the frame
+        # log cannot be read correctly.
+        printf '# render:   %s\n' "${RENDER_MODE}"
         printf '# keys:     %s\n' "${keys}"
         printf '# data:     %s\n' "${DATA_DIR}"
         printf '# config:   %s\n' "${CONFIG_LOADED_FILES:-none}"

@@ -68,6 +68,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.38.0 | Ultra-Bestenliste anzeigen, Modus-Auswahl unter "Highscores" | 4.5 |
 | 0.39.0 | Sprint-Modus samt eigener Bestenliste, Anleitungsseite "Spielmodi" | 3.5, 3.6, 4.5 |
 | 0.40.0 | Release-Struktur auf GitHub und CI-Paketbau | 4.7, 4.9 |
+| 0.41.0 | Umschaltbarer Render-Modus (`partial`/`full`) | 4.3 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -679,3 +680,41 @@ CLAUDE.md 3.3, 3.4)._
       Zeitlimit liest die Seite aus `ULTRA_TARGET_ROWS` bzw.
       `SPRINT_TIME_MS`, aus demselben Grund, aus dem die Wunder-Seite
       ihre Kosten aus `lib/wonders.sh` liest.
+- [x] **Umschaltbar zwischen Voll-Frame- und Partial-Rendering**
+      (Version 0.41.0): `--render-mode partial|full`
+      (`ROWHAMMER_RENDER_MODE`, Standard `partial`) waehlt, wie der
+      Spielbildschirm ans Terminal geht - der Zeilen-Diff aus 0.22.0
+      oder der Voll-Aufbau, den der Renderer davor hatte (siehe 4.3).
+      `partial` bleibt der Standard, weil es die ressourcenschonende
+      Variante ist (rund die Haelfte der Zeit je Frame und etwa ein
+      Vierzehntel der Terminal-Ausgabe); `full` ist der
+      Kompatibilitaets-Rueckfall fuer Terminals und Multiplexer, bei
+      denen sich das inkrementelle Update falsch darstellt, und der
+      Debugging-Fall, in dem das Frame-Log ganze Frames statt einzelner
+      geaenderter Zeilen zeigen soll. Der Schalter folgt wie in der
+      Roadmap vorgesehen dem Muster von `--color-mode` und ist damit
+      **kein Config-Wert** (Praezedenz Standard < Env < CLI): er ist
+      eine Eigenschaft des benutzten Terminals, keine Geschmacksfrage,
+      und muss ohne das Bearbeiten einer Datei erreichbar bleiben, wenn
+      gerade die Bildausgabe das Defekte ist.
+      Zwei Punkte weichen von der Skizze in der Roadmap ab, beide aus
+      der Umsetzung heraus:
+      1. Die Roadmap schlug vor, im Full-Modus einfach `RENDER_FULL`
+         dauerhaft auf 1 zu halten. Dieses Flag loescht aber zusaetzlich
+         den Bildschirm (`\e[2J`), was pro Frame ein Loeschen bedeutet
+         haette - der Rueckfallmodus haette also geflackert, das
+         Gegenteil dessen, wozu er da ist. Stattdessen entscheidet in
+         `render_flush` eine eigene lokale Variable (`write_all`)
+         darueber, ob alle Zeilen geschrieben werden, waehrend das
+         Loeschen weiterhin allein an `RENDER_FULL` haengt (Menue,
+         Resize, Rundenstart).
+      2. `lib/render.sh` bekam bewusst **keinen** eigenen Vorgabewert
+         fuer `RENDER_MODE`. Die Module werden erst nach dem Parsen der
+         Argumente gesourct; eine Zuweisung im Modul ueberschrieb den
+         gerade gesetzten CLI-Wert (im ersten Anlauf genau so
+         passiert). Die Variable gehoert damit wie `COLOR_MODE` zu
+         `rowhammer.sh`, das Modul liest sie nur.
+      Der Sitzungskopf des Debug-Modus nennt den Modus jetzt mit
+      (`# render:` in `events.log`, siehe 4.6) - ohne ihn ist nicht zu
+      entscheiden, ob ein Eintrag im Frame-Log einen ganzen Frame oder
+      nur dessen geaenderte Zeilen enthaelt.

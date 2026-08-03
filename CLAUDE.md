@@ -534,6 +534,8 @@ wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
 `--color-theme guideline|classic|mono|colorblind`
 (`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
 Einstellungsmenue waehlbar und in der Config gespeichert),
+`--render-mode partial|full` (`ROWHAMMER_RENDER_MODE`, Standard
+`partial`, seit 0.41.0, siehe 4.3),
 `--reset config|stats|highscore|save|all` (`ROWHAMMER_RESET`, seit
 0.35.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
 beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
@@ -620,6 +622,30 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   hoechstens vier Reihen unter dem Stein statt aller 200 Zellen.
   Gemessen gegen den frueheren Voll-Frame-Renderer: rund die Haelfte der
   Zeit je Frame und etwa ein Vierzehntel der Terminal-Ausgabe.
+- **Umschaltbar seit 0.41.0:** `--render-mode partial|full`
+  (`ROWHAMMER_RENDER_MODE`, Standard `partial`) waehlt zwischen dem
+  Zeilen-Diff oben und dem Voll-Aufbau, wie ihn der Renderer vor 0.22.0
+  hatte (jede der `LAYOUT_H` Zeilen je Frame). `partial` bleibt der
+  Standard, weil es die ressourcenschonende Variante ist; `full` ist
+  der Kompatibilitaets-Rueckfall fuer Terminals und Multiplexer, bei
+  denen das inkrementelle Update falsch dargestellt wird, und der
+  Debugging-Fall, in dem das Frame-Log ganze Frames zeigen soll (der
+  Modus steht deshalb im Kopf von `events.log`, siehe 4.6). Der
+  Schalter ist wie `--color-mode` **kein Config-Wert** (Praezedenz
+  Standard < Env < CLI): er ist eine Eigenschaft des benutzten
+  Terminals, keine Geschmacksfrage, und muss erreichbar bleiben, ohne
+  eine Datei zu bearbeiten, wenn gerade die Bildausgabe das Defekte
+  ist. Die Variable gehoert `rowhammer.sh`; `lib/render.sh` liest sie
+  nur und setzt bewusst **keinen** eigenen Vorgabewert - die Module
+  werden nach dem Parsen der Argumente gesourct, eine Zuweisung dort
+  wuerde den gerade gesetzten CLI-Wert ueberschreiben.
+  Umgesetzt in `render_flush`: das Flag entscheidet allein darueber, ob
+  alle Zeilen geschrieben werden; **ob der Bildschirm geloescht wird,
+  haengt weiterhin allein an `RENDER_FULL`** (Menue, Resize,
+  Rundenstart). Der kuerzere Weg, den die Roadmap skizziert hatte -
+  `RENDER_FULL` dauerhaft auf 1 halten - haette mit jedem Frame ein
+  `\e[2J` geschickt und den Rueckfallmodus flackern lassen, also genau
+  das Gegenteil dessen bewirkt, wozu er da ist.
   Cursor verstecken, alternativen Screen-Buffer nutzen, und im
   Alternate-Screen ist der **Auto-Wrap abgeschaltet** (`\e[?7l`): bei
   exakt 48x22 fuellt das Layout die letzte Bildschirmzelle, was mit
@@ -912,6 +938,11 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
     noch die geaenderten Zeilen samt ihrer Cursor-Positionierung, nicht
     mehr den ganzen Bildschirm - die Datei bleibt damit die exakte
     Kopie dessen, was ans Terminal ging, wird aber deutlich kleiner.
+    Wie viel eine Ausgabe umfasst, haengt seit 0.41.0 vom Render-Modus
+    ab (siehe 4.3); der Sitzungskopf in `events.log` nennt ihn deshalb
+    (`# render:`), sonst waere das Frame-Log nicht richtig zu lesen.
+    Wer ganze Frames sehen will, laesst die Sitzung mit
+    `--render-mode full` laufen.
   - `input.log`: jeder Tastendruck mit Rohbytes (`printf %q`-quotiert)
     und gemapptem Symbol; auch nicht zuordenbare Escape-Sequenzen.
   - `events.log`: Session-Header (Version, Bash, Terminal, Seed,
@@ -1946,9 +1977,9 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.39.0
-  (Sprint-Modus); die Uebersichtstabelle in HISTORY.md
-  listet jede Version mit ihrem Thema. Offen sind die fuenf Punkte unten
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.41.0
+  (umschaltbarer Render-Modus); die Uebersichtstabelle in HISTORY.md
+  listet jede Version mit ihrem Thema. Offen sind die vier Punkte unten
 
 ### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
 
@@ -1967,20 +1998,6 @@ Erledigt und nach HISTORY.md verschoben:
 
 ### Phase 4 - Politur (offene Punkte; die erledigten stehen in HISTORY.md)
 
-- [ ] Umschaltbar zwischen Voll-Frame- und Partial-Rendering: seit
-      0.22.0 zeichnet `render_flush` (`lib/render.sh`) standardmaessig
-      nur die tatsaechlich geaenderten Zeilen (siehe 4.3); fuer
-      Terminals/Multiplexer, bei denen sich das inkrementelle Update
-      falsch darstellt (Debugging-Fall, Kompatibilitaets-Fallback),
-      soll ein Schalter zurueck auf den alten Voll-Neuaufbau jeder
-      Zeile erlauben - **Partial-Rendering bleibt der Standard**.
-      Umsetzung nach dem Muster von `--color-mode`
-      (`--render-mode full|partial`, `ROWHAMMER_RENDER_MODE`, Standard
-      `partial`): ein globales Flag, das `render_flush` vor der
-      Zeilen-Diff-Pruefung abfragt und im Full-Modus `RENDER_FULL`
-      dauerhaft auf 1 haelt (das ist im Code bereits der Mechanismus,
-      der einen kompletten Neuaufbau erzwingt, siehe 4.3) statt es nach
-      dem ersten Frame wieder freizugeben.
 - [ ] Demo-Aufzeichnung und Demo-Player: eigene Runden als Datei
       mitschneiden (vermutlich Eingabe-Mitschnitt plus Seed statt voller
       Board-Snapshots, analog dem Prinzip des Debug-Modus in 4.6, aber
