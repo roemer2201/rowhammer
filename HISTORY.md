@@ -70,7 +70,8 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.40.0 | Release-Struktur auf GitHub und CI-Paketbau | 4.7, 4.9 |
 | 0.41.0 | Umschaltbarer Render-Modus (`partial`/`full`) | 4.3 |
 | 0.42.0 | Time-Attack-Modus samt Bestenliste, Statistik je Modus | 3.5, 3.6, 4.5 |
-| 0.43.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.7, 4.10 |
+| 0.43.0 | "Neustarten" im Pausenmenue | 3.1, 3.3 |
+| 0.44.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.7, 4.10 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -819,8 +820,73 @@ CLAUDE.md 3.3, 3.4)._
       gespielte Runde), und ein unbekannter Modusname wird nirgends
       gezaehlt statt Marathon zugeschlagen - lieber eine Luecke als
       eine falsche Zuordnung.
+- [x] **"Neustarten" im Pausenmenue** (Version 0.43.0, Nutzerwunsch):
+      Das Pausenmenue (`Esc`/`x`) hatte drei Eintraege, von denen zwei
+      die Runde verlassen; wer eine verkorkste Runde einfach noch
+      einmal spielen wollte, musste sie beenden, den
+      Weltwunder-Bildschirm wegdruecken und den Modus im
+      Einzelspieler-Menue erneut waehlen. Der neue Eintrag macht daraus
+      zwei Tastendruecke: er gibt die laufende Runde auf und startet
+      sofort eine frische im selben Modus (`menu_pause` setzt
+      `GAME_RESTART`, `handle_key` fuehrt es aus - erst `record_round`,
+      dann `game_reset` ohne Argument, siehe 3.1).
+      Drei Entscheidungen dahinter:
+      - **Erst verbuchen, dann zuruecksetzen.** Eine aufgegebene Runde
+        zaehlt wie jede abgebrochene fuer Weltwunder-Fortschritt und
+        Statistik (3.3), und `game_reset` loescht genau die Zaehler,
+        die `record_round` liest. Es ist dieselbe Reihenfolge, mit der
+        `game_run` eine noch pausierte Runde verbucht, bevor eine neue
+        startet. Die Taste `r` im Game-Over-Bild kommt ohne den Aufruf
+        aus, weil die Runde dort beim Game Over schon verbucht wurde -
+        `record_round` waere ueber `ROUND_RECORDED` ohnehin ein No-Op.
+      - **Ein Flag statt eines `game_reset` im Menue.** `lib/menu.sh`
+        entscheidet, `rowhammer.sh` handelt - wie schon bei `GAME_EXIT`
+        und `GAME_SUSPENDED`. Das Menue kennt die Rundenzaehler nicht
+        und soll die Reihenfolge oben nicht kennen muessen.
+      - **Der Eintrag steht direkt unter "Fortsetzen"**, weil er der
+        andere Weg ist weiterzuspielen; die beiden Eintraege, die die
+        Runde verlassen, bleiben unten, wo sie im bisherigen
+        Dreier-Menue standen.
+      - **Sicherheitsabfrage fuer beide Eintraege, die die Runde
+        wegwerfen** (Nutzerwunsch, in zwei Schritten gewachsen): Der
+        erste Anlauf hatte ganz auf sie verzichtet, weil "Runde
+        beenden" die Runde ebenso ohne Rueckfrage verwarf. Auf
+        Nutzerwunsch bekam zuerst "Neustarten" eine Abfrage - es ist
+        der einzige Ausgang, der die Runde wegwirft, ohne das Spiel zu
+        verlassen: der Bildschirm zeigt danach eine leere Wanne und den
+        naechsten Stein, ein Fehlgriff waere also verschwunden, bevor
+        er auffaellt. Auf den zweiten Nutzerwunsch hin fragt jetzt auch
+        "Runde beenden" zurueck; das ist die konsequentere Loesung,
+        denn der Eintrag sitzt direkt unter dem, der die Runde nur
+        pausiert - eine Zeile daneben und die Runde ist vorbei, statt
+        im Hauptmenue zu warten. "Fortsetzen" und "Ins Hauptmenue"
+        fragen weiterhin nicht: keiner von beiden verliert etwas.
+        Beide Abfragen nutzen `menu_confirm`
+        (vorausgewaehltes "Nein", `ESC` lehnt ab) und zeigen den Stand
+        der Runde - Lines, Rows und Level sind das, woran eine Runde
+        haengt, und genau die deckt der Kasten gerade zu. Ein "Nein"
+        fuehrt zurueck ins Pausenmenue statt in die Runde, weil ein
+        Spieler, der den Eintrag nicht wollte, meist trotzdem etwas
+        aus diesem Menue wollte; `menu_pause` ist dafuer von einem
+        einmaligen `menu_run` zu einer Schleife geworden.
+      Der Wunder-Bildschirm erscheint beim Neustart bewusst nicht: er
+      gehoert ans Ende einer Spielsitzung (`menu_singleplayer` zeigt
+      ihn, wenn `game_run` zurueckkehrt), nicht zwischen zwei Runden.
+      Verbucht ist der Fortschritt trotzdem.
+      Die Anleitungsseite "Steuerung" nennt jetzt beide Wege zum
+      Neustart in einer Zeile ("Neustart: [r] im Game Over oder
+      Pausenmenue") statt nur `r`: die Seite sitzt mit 18 Zeilen genau
+      auf `MENU_BODY_MAX` und vertraegt keine zusaetzliche.
+      Mitgenommen: der Controls-Block von `--help` fuehrte noch die
+      Belegung vor 0.31.0 (`e`/`q` drehen, `w` Hard-Drop, `2` Hold) und
+      damit fuer drei Aktionen die falschen Tasten; er nennt jetzt die
+      tatsaechlichen Vorgaben (Pfeiltasten bewegen, `d`/`a` drehen,
+      Leertaste bzw. Pfeil hoch setzt fest, `c`/`w` holdet) samt der
+      Unterscheidung zwischen der konfigurierbaren Buchstabentaste und
+      den fest verdrahteten Sekundaertasten. Dieselbe veraltete Angabe
+      stand im Kopfkommentar von `handle_key` ("2 for hold").
 
-- [x] **Demo-Aufzeichnung und Demo-Player** (Version 0.43.0): eigene
+- [x] **Demo-Aufzeichnung und Demo-Player** (Version 0.44.0): eigene
       Runden werden mitgeschnitten und lassen sich ueber den neuen
       Hauptmenuepunkt "Demos" noch einmal ansehen (`lib/demo.sh`,
       `menu_demos` in `lib/menu.sh`; aktueller Stand siehe 3.7 und

@@ -407,14 +407,14 @@ demo_record_finish() {
     fi
     debug_event "demo: recording saved to ${path} (end=${end} time=${PLAY_MS}ms rows=${ROW_CREDIT} pieces=${#DEMO_PIECES})"
     demo_record_discard
-    demo_prune
+    demo_prune "${path}"
     return 0
 }
 
 # demo_file_hash FILE
 # The round hash a recording carries in its name, into the global
 # DEMO_FILE_HASH ("-" when the name has none, which is what a file from
-# before 0.43.0 or a renamed one looks like). Reading it off the name
+# before 0.44.0 or a renamed one looks like). Reading it off the name
 # instead of out of the file is the whole point of putting it there:
 # listing and pruning stay free of file reads.
 DEMO_FILE_HASH="-"
@@ -440,7 +440,7 @@ demo_protected() {
     [ -n "${HS_HASH_SET[${DEMO_FILE_HASH}]:-}" ]
 }
 
-# demo_prune
+# demo_prune [KEEP]
 # Keep the DEMO_MAX newest ordinary recordings, deleting older ones -
 # the file names start with the date, so the glob is already in that
 # order. A recording that still backs a highscore entry is never deleted
@@ -455,10 +455,17 @@ demo_protected() {
 # therefore hold more than DEMO_MAX files - at worst the four lists' ten
 # entries each plus DEMO_MAX ordinary ones, some fifty recordings or a
 # few megabytes at the very most.
+# KEEP is the recording just written. It counts against the cap like any
+# other, but it is sorted to the end of the list rather than left where
+# its name puts it: it is the newest recording by definition, while
+# "newest" is otherwise decided by the file name and therefore by the
+# clock. Without that, a clock that jumped backwards would let the round
+# a player just finished lose its recording in the same breath.
 demo_prune() {
+    local keep="${1:-}"
     local -a files
     local -a ordinary=()
-    local i over
+    local i over keep_found=0
     demo_dir
     files=("${DEMO_DIR}"/*"${DEMO_FILE_EXT}")
     # An unmatched glob stays unexpanded; that single non-existing entry
@@ -473,12 +480,21 @@ demo_prune() {
     fi
     highscore_hash_set
     for (( i = 0; i < ${#files[@]}; i++ )); do
+        if [ -n "${keep}" ] && [ "${files[i]}" = "${keep}" ]; then
+            keep_found=1
+            continue
+        fi
         if demo_protected "${files[i]}"; then
             debug_event "demo: kept ${files[i]} (hash ${DEMO_FILE_HASH} still holds a highscore)"
             continue
         fi
         ordinary+=("${files[i]}")
     done
+    # Appended last, so the deletion below - which works from the front,
+    # oldest first - reaches it only once nothing else is left.
+    if [ "${keep_found}" -eq 1 ]; then
+        ordinary+=("${keep}")
+    fi
     over=$(( ${#ordinary[@]} - DEMO_MAX ))
     for (( i = 0; i < over; i++ )); do
         rm -f -- "${ordinary[i]}"

@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.43.0
+Version:        0.44.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,7 +79,7 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
-* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.43.0-1
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.44.0-1
 - Demo recording and playback: every round is recorded as its moves,
   gravity steps and piece stream (not as screen output) and can be
   watched again from the new "Demos" menu entry, paused and played
@@ -90,6 +90,18 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
   recording takes into its file name.
 - New option --demo-record on|off (ROWHAMMER_DEMO_RECORD) and new reset
   target --reset demo.
+
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.43.0-1
+- The pause menu (Esc/x) gained a "Neustarten" entry below "Fortsetzen":
+  it gives up the running round and starts a fresh one in the same mode.
+- Such a given-up round is recorded before the fresh one replaces it, so
+  its rows keep counting toward wonder progress and statistics.
+- Both pause menu entries that discard the round ("Neustarten" and
+  "Runde beenden") are confirmed first, showing the round's lines, rows
+  and level; declining returns to the pause menu.
+- The controls block of --help listed the key bindings from before
+  0.31.0; it now matches the actual defaults (arrows move, d/a rotate,
+  space or arrow up hard-drops, c or w holds).
 
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.42.0-1
 - New game mode "Time Attack": the round starts with one minute of play

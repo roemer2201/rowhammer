@@ -34,9 +34,12 @@
 #   same way (render_menu_frame), so they line up with the play screen
 #   instead of sitting in the top left corner. Pressing the quit key (x/ESC) in
 #   a running round opens a pause menu instead of aborting: resume,
+#   restart the round in the same mode,
 #   suspend the round into the main menu (it stays resumable via the
 #   "Fortsetzen" entry offered in the main menu and in the singleplayer
-#   menu) or end it; a round is recorded only when it really ends.
+#   menu) or end it; a round is recorded only when it really ends -
+#   which a given-up round does, so a restart banks it first. The two
+#   entries that discard the round ask back before they act.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
 #   cleared rows worth bonus row credit (the "Rows" counter). Since
@@ -138,7 +141,9 @@
 #      settings changes are written back to the config file. A round
 #      suspended via the pause menu returns to the main menu
 #      unrecorded and continues via its "Fortsetzen" entry; leaving the
-#      game while such a round waits asks for confirmation first.
+#      game while such a round waits asks for confirmation first. A
+#      round restarted via the pause menu is recorded like any other
+#      abandoned one before the fresh round replaces it.
 #   9. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
@@ -149,7 +154,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.43.0  (2026-08-03)
+# Version: 0.44.0  (2026-08-03)
 
 set -euo pipefail
 
@@ -164,7 +169,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.43.0"
+ROWHAMMER_VERSION="0.44.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -386,19 +391,21 @@ reproducible:
   frames.log    every screen update byte for byte (1:1, ANSI included).
 The log directory is printed when the game exits.
 
-Controls (defaults; rebindable in the settings menu):
-  a / d or arrow left/right   move piece
-  e                           rotate clockwise
-  q                           rotate counter-clockwise
+Controls (defaults). The letter key of every action is rebindable in the
+settings menu; the arrow keys, space and w listed beside them are wired
+in on top of the bindings and always work:
+  arrow left / right          move piece (no letter key by default)
+  d                           rotate clockwise
+  a                           rotate counter-clockwise
   s or arrow down             soft drop
-  w, arrow up or space        hard drop
-  c or 2                      hold / swap piece (once per piece)
+  space or arrow up           hard drop (no letter key by default)
+  c or w                      hold / swap piece (once per piece)
   p                           pause / resume
-  x or ESC                    open the pause menu: resume, go to the
-                              main menu with the round suspended
-                              (resumable via the "Fortsetzen" entry in
-                              the main and singleplayer menus), or
-                              end the round
+  x or ESC                    open the pause menu: resume, restart the
+                              round in the same mode, go to the main
+                              menu with the round suspended (resumable
+                              via the "Fortsetzen" entry in the main and
+                              singleplayer menus), or end the round
   r                           restart (on the game over screen)
 
 Square mechanics (The New Tetris): fill a 4x4 area with exactly four
@@ -1049,6 +1056,12 @@ REDRAW_PENDING=0
 # state in the globals above; this flag marks it as waiting for the
 # "Fortsetzen" main menu entry (issue #12).
 GAME_SUSPENDED=0
+# Set by the pause menu's "Neustarten" entry (2026-08-03, user request)
+# and cleared by handle_key, which does the actual restart. A flag rather
+# than a direct game_reset in the menu for the same reason GAME_EXIT and
+# GAME_SUSPENDED are flags: lib/menu.sh decides, rowhammer.sh acts - and
+# the running round has to be recorded before its counters are wiped.
+GAME_RESTART=0
 NOW_MS=0; LAST_FALL=0
 # Lock delay (2026-07-22): a piece that cannot fall is not locked on the
 # spot but rests for a short grace window (LOCK_DELAY_MS below), during
@@ -1743,7 +1756,8 @@ hard_drop() {
 # keys are ignored while paused or on the game over screen. Letter keys
 # come from the configurable bindings; a fixed secondary layout is always
 # active on top of them: the arrow keys (left/right move, up = hard drop,
-# down = soft drop), space for hard drop and 2 for hold.
+# down = soft drop), space for hard drop and w for hold (w replaced the
+# earlier 2 in 0.31.0, see the note at the hold branch below).
 handle_key() {
     if [ -z "${KEY}" ]; then
         return 0
@@ -1778,10 +1792,30 @@ handle_key() {
         "${KEY_QUIT}"|ESC)
             # Since 0.12.0 the quit key no longer aborts the round on
             # the spot (issue #12): the pause menu asks whether to
-            # resume, suspend the round into the main menu or end it
-            # (lib/menu.sh sets GAME_EXIT/GAME_SUSPENDED accordingly).
+            # resume, restart, suspend the round into the main menu or
+            # end it (lib/menu.sh sets
+            # GAME_EXIT/GAME_SUSPENDED/GAME_RESTART accordingly).
             debug_event "pause menu opened"
             menu_pause
+            # "Neustarten" (2026-08-03, user request): the running round
+            # is given up for a fresh one in the same mode (game_reset
+            # without an argument keeps GAME_MODE, like the game over
+            # screen's restart key). menu_pause has confirmed the
+            # discard at this point - the flag is only set on a "yes".
+            # Its books are closed first -
+            # an abandoned round counts toward the wonder and the
+            # statistics like any other aborted one (see CLAUDE.md 3.3),
+            # and game_reset is about to wipe the counters record_round
+            # reads. That is the same order game_run uses when a new
+            # round replaces a suspended one. The restart key on the game
+            # over screen needs no such call: there the round was already
+            # recorded when it ended.
+            if [ "${GAME_RESTART}" -eq 1 ]; then
+                GAME_RESTART=0
+                debug_event "restart from pause menu (mode=${GAME_MODE} lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+                record_round
+                game_reset
+            fi
             # The menu overdrew the game screen and consumed time: force
             # a full repaint (the diff renderer cannot know what the menu
             # put on screen) and restart the gravity and play-time clocks
