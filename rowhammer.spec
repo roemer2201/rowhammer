@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.42.0
+Version:        0.43.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.43.0-1
+- The pause menu (Esc/x) gained a "Neustarten" entry below "Fortsetzen":
+  it gives up the running round and starts a fresh one in the same mode.
+- Such a given-up round is recorded before the fresh one replaces it, so
+  its rows keep counting toward wonder progress and statistics.
+
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.42.0-1
 - New game mode "Time Attack": the round starts with one minute of play
   time counting down and every row of credit scored adds a second back,

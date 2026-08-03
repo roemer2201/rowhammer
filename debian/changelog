@@ -1,3 +1,16 @@
+rowhammer (0.43.0) unstable; urgency=medium
+
+  * The pause menu (Esc/x) gained a "Neustarten" entry right below
+    "Fortsetzen" (user request): it gives up the running round and starts
+    a fresh one in the same mode, instead of forcing the player through
+    "Runde beenden", the wonder screen and the singleplayer menu to play
+    the same mode again.
+  * A round given up that way is recorded before the fresh one replaces
+    it, so its rows still count toward the wonder progress and the
+    statistics like those of any other aborted round.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 03 Aug 2026 12:00:00 +0000
+
 rowhammer (0.42.0) unstable; urgency=medium
 
   * New game mode "Time Attack" (user request): the round starts with one

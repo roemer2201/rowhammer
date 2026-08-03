@@ -57,9 +57,26 @@ Die fuer uns relevanten Merkmale des Originals:
     Buchstabentaste)
   - Hold: `c` bzw. `w`
   - Pause: `p`; `Esc`/`x` oeffnet das Pausenmenue (seit 0.12.0, Issue
-    #12): Fortsetzen, Ins Hauptmenue (Runde pausiert, wieder aufnehmbar
+    #12): Fortsetzen, Neustarten (seit 0.43.0, Nutzerwunsch), Ins
+    Hauptmenue (Runde pausiert, wieder aufnehmbar
     ueber den Eintrag "Fortsetzen", der dann im Hauptmenue und im
-    Einzelspieler-Menue an erster Stelle steht) oder Runde beenden
+    Einzelspieler-Menue an erster Stelle steht) oder Runde beenden.
+    **"Neustarten"** gibt die laufende Runde auf und startet sofort
+    eine frische im selben Modus (`GAME_RESTART` in `rowhammer.sh`,
+    gesetzt von `menu_pause`, ausgefuehrt in `handle_key`): erst
+    `record_round`, dann `game_reset` ohne Argument. Die Reihenfolge
+    ist zwingend - eine aufgegebene Runde zaehlt wie jede abgebrochene
+    (siehe 3.3), und `game_reset` loescht genau die Zaehler, die
+    `record_round` liest. Es ist dieselbe Reihenfolge, mit der
+    `game_run` eine noch pausierte Runde verbucht, bevor eine neue
+    startet. Der Eintrag steht direkt unter "Fortsetzen", weil er der
+    andere Weg ist weiterzuspielen; die beiden Eintraege, die die Runde
+    verlassen, bleiben unten, wo sie im bisherigen Dreier-Menue standen.
+    Der Wunder-Bildschirm erscheint dabei nicht (er gehoert ans Ende
+    der Spielsitzung, nicht zwischen zwei Runden); verbucht ist der
+    Fortschritt trotzdem. Die Taste `r` im Game-Over-Bild macht
+    dasselbe ohne `record_round` - dort ist die Runde beim Game Over
+    schon verbucht
 - **Belegungswechsel 0.31.0 (Nutzerentscheidung):** `q`/`e` (Rotation)
   wurden zu `a`/`d`, die feste Hold-Sekundaertaste `2` zu `w`. Die drei
   Buchstaben waren zuvor mit Links, Rechts und Hard-Drop belegt; diese
@@ -188,7 +205,9 @@ Die fuer uns relevanten Merkmale des Originals:
 - Der Baufortschritt wird **ueber Sitzungen hinweg gespeichert**
   (Savegame `${DATA_DIR}/save`, siehe 4.5). Der Rundenkredit ("Rows")
   wird genau einmal je Runde verbucht, und zwar beim echten Rundenende:
-  Game Over, "Runde beenden" im Pausenmenue oder - falls noch eine
+  Game Over, "Runde beenden" oder "Neustarten" im Pausenmenue (seit
+  0.43.0; die aufgegebene Runde wird verbucht, bevor die neue ihre
+  Zaehler ueberschreibt, siehe 3.1) oder - falls noch eine
   pausierte Runde wartet - beim Start einer neuen Runde bzw. beim
   Beenden des Programms (auch abgebrochene Runden zaehlen, wie im
   Original). Eine ueber das Pausenmenue ins Hauptmenue gelegte Runde
@@ -294,7 +313,10 @@ in fester Reihenfolge einmal durchzureichen:
 1. Spielprinzip: Bausteine, volle Reihen als "Rows", 7-Bag,
    Level/Tempo, Rundenende.
 2. Steuerung: alle Aktionen mit ihren aktuellen Tasten, dazu die
-   Menue-Bedienung und `r` im Game-Over-Bild.
+   Menue-Bedienung und die beiden Wege zum Neustart (`r` im
+   Game-Over-Bild, "Neustarten" im Pausenmenue; die Zeile nennt seit
+   0.43.0 beide, weil die Seite mit 18 Zeilen genau auf
+   `MENU_BODY_MAX` sitzt und keine zusaetzliche vertraegt).
 3. Vorschau ("Next") und Hold (ein Tausch je Zug).
 4. Gold-/Silber-Quadrate und die Reihenwertung (Werte aus
    `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`, siehe 3.2).
@@ -571,7 +593,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.42.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.43.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und

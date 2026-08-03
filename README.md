@@ -267,8 +267,11 @@ Umgesetzt:
   auf (zweimal hell/normal, zusammen rund 280 ms), bevor sie
   verschwinden und das naechste Teil erscheint
 - **Pausenmenue statt hartem Abbruch:** `Esc`/`x` unterbricht die
-  Runde; sie kann ins Hauptmenue gelegt und dort ueber "Fortsetzen"
-  wieder aufgenommen werden - gewertet wird erst beim echten Rundenende.
+  Runde; sie kann fortgesetzt, im selben Modus neu gestartet, ins
+  Hauptmenue gelegt und dort ueber "Fortsetzen"
+  wieder aufgenommen oder beendet werden - gewertet wird erst beim
+  echten Rundenende (ein Neustart gibt die alte Runde auf, verbucht sie
+  aber wie jede abgebrochene Runde).
   Wer das Spiel verlaesst, waehrend noch eine pausierte Runde wartet,
   wird vorher gefragt
 - Levelkurve (schneller je 10 Reihen)
@@ -437,7 +440,7 @@ stehen jetzt die Rundenzaehler:
 | Leertaste, Pfeil hoch     | Hard-Drop                   |
 | `c` / `w`                 | Hold / Tauschen             |
 | `p`                       | Pause                       |
-| `Esc` / `x`               | Pausenmenue (Fortsetzen / Ins Hauptmenue / Runde beenden) |
+| `Esc` / `x`               | Pausenmenue (Fortsetzen / Neustarten / Ins Hauptmenue / Runde beenden) |
 | `r`                       | Neustart (im Game-Over-Bild)|
 
 Links, Rechts und Hard-Drop haben in der Standardbelegung bewusst keine
