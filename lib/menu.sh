@@ -20,7 +20,9 @@
 #   and in the singleplayer menu) or to end the round. menu_confirm
 #   (since 0.8.0) asks a yes/no question with the declining option
 #   preselected; it guards leaving the game while a round is still
-#   suspended. menu_pages (since 0.10.0) shows a table that outgrew one
+#   suspended and, since 0.18.0, the two pause menu entries that
+#   discard the running round.
+#   menu_pages (since 0.10.0) shows a table that outgrew one
 #   screen as a sequence of info screens with a repeated table head, which
 #   is what the two-line highscore entries need. menu_help (since
 #   0.12.0, user request) is the "Anleitung" main menu entry: seven info
@@ -591,7 +593,8 @@ menu_confirm() {
 # to suspend the round and go to the main menu
 # (where it stays resumable via the "Fortsetzen" entry, offered in the
 # main menu and in the singleplayer menu) or to end the
-# round for good; ESC/back counts as resume. Only sets GAME_EXIT,
+# round for good; ESC/back counts as resume. The two entries that
+# discard the round are confirmed first (see below). Only sets GAME_EXIT,
 # GAME_RESTART and
 # GAME_SUSPENDED - recording the round and starting the fresh one stay
 # with the caller (rowhammer.sh), so the
@@ -600,29 +603,65 @@ menu_confirm() {
 # way to keep playing; the two entries that leave the round stay at the
 # bottom, where the muscle memory of the previous three-entry menu
 # expects them.
+# The two entries that discard the round - "Neustarten" and "Runde
+# beenden" - ask back before they act (user request); "Fortsetzen" and
+# "Ins Hauptmenue" do not, because neither loses anything (a suspended
+# round waits in the main menu). Declining returns to this menu rather
+# than to the round, because a player who did not mean to discard it
+# usually still meant to pick something here; hence the loop.
 menu_pause() {
-    menu_run "Pause" \
-        "Fortsetzen" \
-        "Neustarten" \
-        "Ins Hauptmenue (Runde pausiert)" \
-        "Runde beenden"
-    case "${MENU_CHOICE}" in
-        1)
-            GAME_RESTART=1
-            ;;
-        2)
-            GAME_SUSPENDED=1
-            GAME_EXIT=1
-            ;;
-        3)
-            GAME_EXIT=1
-            ;;
-        *)
-            # "Fortsetzen" or ESC: straight back into the round.
-            :
-            ;;
-    esac
-    return 0
+    while :; do
+        menu_run "Pause" \
+            "Fortsetzen" \
+            "Neustarten" \
+            "Ins Hauptmenue (Runde pausiert)" \
+            "Runde beenden"
+        case "${MENU_CHOICE}" in
+            1)
+                # The counters come from the round state in rowhammer.sh;
+                # showing them is what makes the question answerable - a
+                # round worth keeping is recognized by them, not by the
+                # board, which the confirmation covers up.
+                if menu_confirm "Wirklich neu starten?" \
+                    "Ja, neu starten" "Nein, zurueck" \
+                    "Die laufende Runde wird aufgegeben:" \
+                    "${CLEARED_TOTAL} Lines, ${ROW_CREDIT} Rows, Level ${LEVEL}." \
+                    "" \
+                    "Sie wird gewertet (Weltwunder und Statistik)" \
+                    "und danach im selben Modus neu gestartet."; then
+                    GAME_RESTART=1
+                    return 0
+                fi
+                # Declined: back to the pause menu.
+                ;;
+            2)
+                GAME_SUSPENDED=1
+                GAME_EXIT=1
+                return 0
+                ;;
+            3)
+                # Confirmed like the restart (user request): both throw
+                # the round away, and "Runde beenden" sits right below
+                # the entry that only suspends it - one line off and the
+                # round is over instead of waiting in the main menu.
+                if menu_confirm "Runde wirklich beenden?" \
+                    "Ja, beenden" "Nein, zurueck" \
+                    "Die laufende Runde wird beendet:" \
+                    "${CLEARED_TOTAL} Lines, ${ROW_CREDIT} Rows, Level ${LEVEL}." \
+                    "" \
+                    "Sie wird gewertet und ist danach nicht mehr" \
+                    "fortsetzbar."; then
+                    GAME_EXIT=1
+                    return 0
+                fi
+                # Declined: back to the pause menu.
+                ;;
+            *)
+                # "Fortsetzen" or ESC: straight back into the round.
+                return 0
+                ;;
+        esac
+    done
 }
 
 # menu_singleplayer: the game modes. "Marathon" is the endless

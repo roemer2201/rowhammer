@@ -61,8 +61,8 @@ Die fuer uns relevanten Merkmale des Originals:
     Hauptmenue (Runde pausiert, wieder aufnehmbar
     ueber den Eintrag "Fortsetzen", der dann im Hauptmenue und im
     Einzelspieler-Menue an erster Stelle steht) oder Runde beenden.
-    **"Neustarten"** gibt die laufende Runde auf und startet sofort
-    eine frische im selben Modus (`GAME_RESTART` in `rowhammer.sh`,
+    **"Neustarten"** gibt die laufende Runde auf und startet eine
+    frische im selben Modus (`GAME_RESTART` in `rowhammer.sh`,
     gesetzt von `menu_pause`, ausgefuehrt in `handle_key`): erst
     `record_round`, dann `game_reset` ohne Argument. Die Reihenfolge
     ist zwingend - eine aufgegebene Runde zaehlt wie jede abgebrochene
@@ -76,7 +76,19 @@ Die fuer uns relevanten Merkmale des Originals:
     der Spielsitzung, nicht zwischen zwei Runden); verbucht ist der
     Fortschritt trotzdem. Die Taste `r` im Game-Over-Bild macht
     dasselbe ohne `record_round` - dort ist die Runde beim Game Over
-    schon verbucht
+    schon verbucht.
+    **Sicherheitsabfragen (seit 0.43.0, Nutzerwunsch):** Die beiden
+    Eintraege, die die Runde wegwerfen - "Neustarten" und "Runde
+    beenden" -, fragen vorher zurueck (`menu_confirm`): "Wirklich neu
+    starten?" bzw. "Runde wirklich beenden?", je mit dem Stand der
+    Runde (Lines, Rows, Level) und dem Hinweis, dass sie gewertet wird.
+    Wie ueberall ist "Nein" vorausgewaehlt, und `ESC` lehnt ebenfalls
+    ab. Die beiden anderen Eintraege fragen nicht: "Fortsetzen"
+    aendert nichts, und eine ins Hauptmenue gelegte Runde geht nicht
+    verloren, sondern wartet dort. Abgelehnt fuehrt die Abfrage
+    **zurueck ins Pausenmenue**, nicht in die Runde - wer den Eintrag
+    nicht wollte, wollte meist trotzdem etwas aus diesem Menue;
+    `menu_pause` ist dafuer eine Schleife um `menu_run`
 - **Belegungswechsel 0.31.0 (Nutzerentscheidung):** `q`/`e` (Rotation)
   wurden zu `a`/`d`, die feste Hold-Sekundaertaste `2` zu `w`. Die drei
   Buchstaben waren zuvor mit Links, Rechts und Hard-Drop belegt; diese

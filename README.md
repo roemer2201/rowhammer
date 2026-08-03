@@ -271,9 +271,11 @@ Umgesetzt:
   Hauptmenue gelegt und dort ueber "Fortsetzen"
   wieder aufgenommen oder beendet werden - gewertet wird erst beim
   echten Rundenende (ein Neustart gibt die alte Runde auf, verbucht sie
-  aber wie jede abgebrochene Runde).
+  aber wie jede abgebrochene Runde). Die beiden Eintraege, die die Runde
+  wegwerfen - "Neustarten" und "Runde beenden" -, fragen vorher mit dem
+  Stand der Runde nach, ob es wirklich sein soll.
   Wer das Spiel verlaesst, waehrend noch eine pausierte Runde wartet,
-  wird vorher gefragt
+  wird ebenfalls vorher gefragt
 - Levelkurve (schneller je 10 Reihen)
 - **Zentriertes Spielfeld-Layout:** ein festes 48x22-Feld, mittig im
   Terminal ausgerichtet - links der Hold-Stein und darunter die

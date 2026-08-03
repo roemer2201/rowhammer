@@ -38,7 +38,8 @@
 #   suspend the round into the main menu (it stays resumable via the
 #   "Fortsetzen" entry offered in the main menu and in the singleplayer
 #   menu) or end it; a round is recorded only when it really ends -
-#   which a given-up round does, so a restart banks it first.
+#   which a given-up round does, so a restart banks it first. The two
+#   entries that discard the round ask back before they act.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
 #   cleared rows worth bonus row credit (the "Rows" counter). Since
@@ -362,20 +363,21 @@ reproducible:
   frames.log    every screen update byte for byte (1:1, ANSI included).
 The log directory is printed when the game exits.
 
-Controls (defaults; rebindable in the settings menu):
-  a / d or arrow left/right   move piece
-  e                           rotate clockwise
-  q                           rotate counter-clockwise
+Controls (defaults). The letter key of every action is rebindable in the
+settings menu; the arrow keys, space and w listed beside them are wired
+in on top of the bindings and always work:
+  arrow left / right          move piece (no letter key by default)
+  d                           rotate clockwise
+  a                           rotate counter-clockwise
   s or arrow down             soft drop
-  w, arrow up or space        hard drop
-  c or 2                      hold / swap piece (once per piece)
+  space or arrow up           hard drop (no letter key by default)
+  c or w                      hold / swap piece (once per piece)
   p                           pause / resume
   x or ESC                    open the pause menu: resume, restart the
-                              round, go to the
-                              main menu with the round suspended
-                              (resumable via the "Fortsetzen" entry in
-                              the main and singleplayer menus), or
-                              end the round
+                              round in the same mode, go to the main
+                              menu with the round suspended (resumable
+                              via the "Fortsetzen" entry in the main and
+                              singleplayer menus), or end the round
   r                           restart (on the game over screen)
 
 Square mechanics (The New Tetris): fill a 4x4 area with exactly four
@@ -1599,7 +1601,8 @@ hard_drop() {
 # keys are ignored while paused or on the game over screen. Letter keys
 # come from the configurable bindings; a fixed secondary layout is always
 # active on top of them: the arrow keys (left/right move, up = hard drop,
-# down = soft drop), space for hard drop and 2 for hold.
+# down = soft drop), space for hard drop and w for hold (w replaced the
+# earlier 2 in 0.31.0, see the note at the hold branch below).
 handle_key() {
     if [ -z "${KEY}" ]; then
         return 0
@@ -1642,7 +1645,9 @@ handle_key() {
             # "Neustarten" (2026-08-03, user request): the running round
             # is given up for a fresh one in the same mode (game_reset
             # without an argument keeps GAME_MODE, like the game over
-            # screen's restart key). Its books are closed first -
+            # screen's restart key). menu_pause has confirmed the
+            # discard at this point - the flag is only set on a "yes".
+            # Its books are closed first -
             # an abandoned round counts toward the wonder and the
             # statistics like any other aborted one (see CLAUDE.md 3.3),
             # and game_reset is about to wipe the counters record_round

@@ -845,9 +845,29 @@ CLAUDE.md 3.3, 3.4)._
       - **Der Eintrag steht direkt unter "Fortsetzen"**, weil er der
         andere Weg ist weiterzuspielen; die beiden Eintraege, die die
         Runde verlassen, bleiben unten, wo sie im bisherigen
-        Dreier-Menue standen. Keine Sicherheitsabfrage - "Runde
-        beenden" verwirft die Runde ebenso ohne Rueckfrage, und eine
-        Abfrage nur hier waere inkonsequent.
+        Dreier-Menue standen.
+      - **Sicherheitsabfrage fuer beide Eintraege, die die Runde
+        wegwerfen** (Nutzerwunsch, in zwei Schritten gewachsen): Der
+        erste Anlauf hatte ganz auf sie verzichtet, weil "Runde
+        beenden" die Runde ebenso ohne Rueckfrage verwarf. Auf
+        Nutzerwunsch bekam zuerst "Neustarten" eine Abfrage - es ist
+        der einzige Ausgang, der die Runde wegwirft, ohne das Spiel zu
+        verlassen: der Bildschirm zeigt danach eine leere Wanne und den
+        naechsten Stein, ein Fehlgriff waere also verschwunden, bevor
+        er auffaellt. Auf den zweiten Nutzerwunsch hin fragt jetzt auch
+        "Runde beenden" zurueck; das ist die konsequentere Loesung,
+        denn der Eintrag sitzt direkt unter dem, der die Runde nur
+        pausiert - eine Zeile daneben und die Runde ist vorbei, statt
+        im Hauptmenue zu warten. "Fortsetzen" und "Ins Hauptmenue"
+        fragen weiterhin nicht: keiner von beiden verliert etwas.
+        Beide Abfragen nutzen `menu_confirm`
+        (vorausgewaehltes "Nein", `ESC` lehnt ab) und zeigen den Stand
+        der Runde - Lines, Rows und Level sind das, woran eine Runde
+        haengt, und genau die deckt der Kasten gerade zu. Ein "Nein"
+        fuehrt zurueck ins Pausenmenue statt in die Runde, weil ein
+        Spieler, der den Eintrag nicht wollte, meist trotzdem etwas
+        aus diesem Menue wollte; `menu_pause` ist dafuer von einem
+        einmaligen `menu_run` zu einer Schleife geworden.
       Der Wunder-Bildschirm erscheint beim Neustart bewusst nicht: er
       gehoert ans Ende einer Spielsitzung (`menu_singleplayer` zeigt
       ihn, wenn `game_run` zurueckkehrt), nicht zwischen zwei Runden.
@@ -856,3 +876,11 @@ CLAUDE.md 3.3, 3.4)._
       Neustart in einer Zeile ("Neustart: [r] im Game Over oder
       Pausenmenue") statt nur `r`: die Seite sitzt mit 18 Zeilen genau
       auf `MENU_BODY_MAX` und vertraegt keine zusaetzliche.
+      Mitgenommen: der Controls-Block von `--help` fuehrte noch die
+      Belegung vor 0.31.0 (`e`/`q` drehen, `w` Hard-Drop, `2` Hold) und
+      damit fuer drei Aktionen die falschen Tasten; er nennt jetzt die
+      tatsaechlichen Vorgaben (Pfeiltasten bewegen, `d`/`a` drehen,
+      Leertaste bzw. Pfeil hoch setzt fest, `c`/`w` holdet) samt der
+      Unterscheidung zwischen der konfigurierbaren Buchstabentaste und
+      den fest verdrahteten Sekundaertasten. Dieselbe veraltete Angabe
+      stand im Kopfkommentar von `handle_key` ("2 for hold").
