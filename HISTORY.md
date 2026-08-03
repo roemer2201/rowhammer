@@ -236,7 +236,9 @@ Lizenz) stehen weiterhin in der Roadmap.
 
 _Spaeter ueberholt: der Baufortschritt hat den HUD in 0.25.0 verlassen
 und steht seither nur noch auf dem Weltwunder-Bildschirm (siehe
-CLAUDE.md 3.3, 3.4)._
+CLAUDE.md 3.3, 3.4). Die hier skalierten Reihen-Kosten (100..6400) sind
+in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
+(10.000..640.000, siehe CLAUDE.md 3.3)._
 
 ## Phase 4 - Politur (erledigte Punkte, nach Version sortiert)
 

@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.43.0
+Version:        0.44.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,15 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.44.0-1
+- Retuned the wonder goals: every WONDER_COSTS entry multiplied by 100, so
+  a wonder costs 10000 to 640000 weighted rows instead of 100 to 6400
+  (1270000 for all seven instead of 12700) - the order of magnitude of the
+  original, where a wonder is a long-term goal again.
+- The wonder page of the manual widened its cost column to six digits.
+- Existing savegames keep their row total, but it buys less progress: the
+  construction site falls back to an earlier wonder and build stage.
+
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.43.0-1
 - The pause menu (Esc/x) gained a "Neustarten" entry below "Fortsetzen":
   it gives up the running round and starts a fresh one in the same mode.
