@@ -14,7 +14,8 @@
 #   menus 1:1 as well. Leaving a game session shows the wonder
 #   construction site (lib/wonders.sh) with the round's credit banked.
 #   The pause menu (menu_pause, issue #12) opens on the quit key during
-#   a round and offers to resume, to suspend the round into the main
+#   a round and offers to resume, to restart the round (since 0.18.0,
+#   user request), to suspend the round into the main
 #   menu (resumable via the "Fortsetzen" entry shown in the main menu
 #   and in the singleplayer menu) or to end the round. menu_confirm
 #   (since 0.8.0) asks a yes/no question with the declining option
@@ -57,7 +58,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.17.0  (2026-08-03)
+# Version: 0.18.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -324,7 +325,7 @@ menu_help_body() {
             HELP_BODY+=("" \
                    "Soft-Drop laesst den Stein schneller fallen," \
                    "Hard-Drop setzt ihn sofort fest." \
-                   "Nach einem Game Over startet [r] neu." \
+                   "Neustart: [r] im Game Over oder Pausenmenue." \
                    "In den Menues: Pfeile oder w/s waehlen," \
                    "Enter bestaetigt, ESC geht zurueck.")
             ;;
@@ -586,23 +587,34 @@ menu_confirm() {
 
 # menu_pause: opened by the quit key (ESC/x) during a running round
 # (issue #12: quitting used to end the round on the spot). The player
-# chooses to resume, to suspend the round and go to the main menu
+# chooses to resume, to restart the round (since 0.18.0, user request),
+# to suspend the round and go to the main menu
 # (where it stays resumable via the "Fortsetzen" entry, offered in the
 # main menu and in the singleplayer menu) or to end the
-# round for good; ESC/back counts as resume. Only sets GAME_EXIT and
-# GAME_SUSPENDED - recording the round stays with game_run, so the
+# round for good; ESC/back counts as resume. Only sets GAME_EXIT,
+# GAME_RESTART and
+# GAME_SUSPENDED - recording the round and starting the fresh one stay
+# with the caller (rowhammer.sh), so the
 # books close only when the round really ends.
+# "Neustarten" sits right below "Fortsetzen" because it is the other
+# way to keep playing; the two entries that leave the round stay at the
+# bottom, where the muscle memory of the previous three-entry menu
+# expects them.
 menu_pause() {
     menu_run "Pause" \
         "Fortsetzen" \
+        "Neustarten" \
         "Ins Hauptmenue (Runde pausiert)" \
         "Runde beenden"
     case "${MENU_CHOICE}" in
         1)
+            GAME_RESTART=1
+            ;;
+        2)
             GAME_SUSPENDED=1
             GAME_EXIT=1
             ;;
-        2)
+        3)
             GAME_EXIT=1
             ;;
         *)
