@@ -6,7 +6,8 @@
 #   Menu system for rowhammer: a generic list-selection widget plus the
 #   application menus (main menu, singleplayer with its game modes,
 #   multiplayer placeholder,
-#   settings with key bindings, color theme and player name). Menu labels are German
+#   settings with key bindings, color theme, player name and demo
+#   recording, and the demo list). Menu labels are German
 #   on purpose (requested UI language); code and comments stay English
 #   per the script conventions. All screen output goes through
 #   screen_write (lib/render.sh) and selections, rebinds and name
@@ -22,10 +23,12 @@
 #   suspended. menu_pages (since 0.10.0) shows a table that outgrew one
 #   screen as a sequence of info screens with a repeated table head, which
 #   is what the two-line highscore entries need. menu_help (since
-#   0.12.0, user request) is the "Anleitung" main menu entry: six info
+#   0.12.0, user request) is the "Anleitung" main menu entry: seven info
 #   screens explaining the game, the controls, hold and preview, the
-#   gold/silver squares, the wonder construction and the game modes,
-#   with the key bindings, the wonder costs and the mode goals read from
+#   gold/silver squares, the wonder construction, the game modes and
+#   (since 0.17.0) the demos,
+#   with the key bindings, the wonder costs, the mode goals and the
+#   playback keys read from
 #   the live state instead of spelled out. Since 0.13.0 (user request)
 #   its pages are browsed with
 #   the left/right arrow keys instead of "any key advances" - built from
@@ -45,6 +48,10 @@
 #   live in separate files (lib/highscore.sh), so the "Highscores" entry
 #   asks which one before drawing it. The Anleitung explains all three
 #   on a "Spielmodi" page of its own (menu_help_body, since 0.16.0).
+#   Since 0.17.0 menu_demos is the "Demos" main menu entry: the recorded
+#   rounds (lib/demo.sh) newest first, each of them to watch again or to
+#   delete. It refuses to start a replay while a round is suspended in
+#   the main menu, because a replay runs through the same game state.
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -52,7 +59,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.16.0  (2026-08-03)
+# Version: 0.17.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -212,7 +219,7 @@ menu_pages() {
 # Number of screens menu_help walks through; used both to number the
 # titles ("Anleitung (2/6)") and to wrap the left/right paging
 # (menu_help below), so the pages stay self-describing.
-MENU_HELP_PAGES=6
+MENU_HELP_PAGES=7
 
 # menu_help_keys FIXED VAR
 # Build the key list for one action as the help screen shows it:
@@ -426,6 +433,36 @@ menu_help_body() {
                    "Sprint zaehlt nur ein Lauf, der das Ziel" \
                    "bzw. die volle Zeit erreicht hat - ein" \
                    "Game Over davor wird nicht gewertet.")
+            ;;
+        6)
+            # Added 0.17.0 with the demo feature. The count and the
+            # playback keys are read from the live state (DEMO_MAX,
+            # KEY_PAUSE, KEY_QUIT) for the same reason as the pages
+            # before: a retuned constant or a rebound key must not leave
+            # the manual lying.
+            HELP_BODY=("Demos (Menuepunkt \"Demos\"):" \
+                  "" \
+                  "Jede gespielte Runde wird mitgeschnitten und" \
+                  "kann spaeter noch einmal angesehen werden." \
+                  "Aufgezeichnet werden die Zuege, nicht der" \
+                  "Bildschirm - die Wiedergabe spielt die Runde" \
+                  "wirklich noch einmal." \
+                  "")
+            printf -v line 'Aufbewahrt werden die %d neuesten Runden,' \
+                "${DEMO_MAX}"
+            HELP_BODY+=("${line}")
+            HELP_BODY+=("aeltere fallen weg. Einzelne Aufnahmen kannst" \
+                   "du im Demo-Menue loeschen, die Aufzeichnung" \
+                   "in den Einstellungen abschalten." \
+                   "" \
+                   "Waehrend der Wiedergabe:")
+            menu_help_keys "Leertaste" KEY_PAUSE
+            printf -v line '%-17s %s' "Pause / weiter" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
+            HELP_BODY+=("Tempo             Pfeil links/rechts")
+            menu_help_keys "ESC" KEY_QUIT
+            printf -v line '%-17s %s' "Zurueck" "${MENU_HELP_KEYS}"
+            HELP_BODY+=("${line}")
             ;;
     esac
     return 0
@@ -660,19 +697,120 @@ menu_highscores() {
     done
 }
 
-# menu_settings: key bindings and player name; every change is written
-# to the user config file immediately.
-menu_settings() {
+# menu_demos: the "Demos" main menu entry. Lists the recorded rounds
+# (lib/demo.sh) newest first and offers to watch or delete the one
+# picked. The list is rebuilt on every pass, so a deleted entry is gone
+# from it at once and a round played in between shows up.
+# Playing is refused while a round is suspended in the main menu: a
+# replay runs through the very game state that round is parked in
+# (board, counters, queue), so starting one would silently throw the
+# suspended round away. Refusing is the honest way around that - the
+# round is only ever a "Fortsetzen" away from being finished.
+menu_demos() {
+    local -a entries
+    local n choice file
     while :; do
+        demo_scan
+        n="${#DEMO_LIST_FILE[@]}"
+        if [ "${n}" -eq 0 ]; then
+            if [ "${DEMO_RECORD}" = "on" ]; then
+                menu_message "Demos" \
+                    "Noch keine Aufzeichnungen." \
+                    "" \
+                    "Jede gespielte Runde wird automatisch" \
+                    "mitgeschnitten und erscheint hier, sobald" \
+                    "sie beendet ist. Es werden die ${DEMO_MAX}" \
+                    "neuesten Runden aufbewahrt."
+            else
+                menu_message "Demos" \
+                    "Noch keine Aufzeichnungen." \
+                    "" \
+                    "Die Demo-Aufzeichnung ist derzeit" \
+                    "ausgeschaltet. Du kannst sie in den" \
+                    "Einstellungen wieder einschalten."
+            fi
+            return 0
+        fi
+        entries=("${DEMO_LIST_LABEL[@]}" "Zurueck")
+        menu_run "Demos (${n}/${DEMO_MAX})" "${entries[@]}"
+        choice="${MENU_CHOICE}"
+        if [ "${choice}" -lt 0 ] || [ "${choice}" -ge "${n}" ]; then
+            return 0
+        fi
+        file="${DEMO_LIST_FILE[choice]}"
+        menu_run "Demo" \
+            "Abspielen" \
+            "Loeschen" \
+            "Zurueck"
+        case "${MENU_CHOICE}" in
+            0)
+                if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                    menu_message "Demo" \
+                        "Eine pausierte Runde wartet noch." \
+                        "" \
+                        "Eine Wiedergabe benutzt dasselbe Spielfeld" \
+                        "wie die laufende Runde und wuerde sie" \
+                        "verwerfen. Setze sie fort oder beende sie" \
+                        "ueber das Pausenmenue, dann klappt es."
+                    continue
+                fi
+                demo_play "${file}"
+                # The replay owned the whole screen; the next menu frame
+                # has to clear it before drawing.
+                render_menu_dirty
+                ;;
+            1)
+                if menu_confirm "Demo loeschen?" \
+                    "Ja, loeschen" "Nein, behalten" \
+                    "${DEMO_LIST_LABEL[choice]}" \
+                    "" \
+                    "Die Aufzeichnung wird wirklich geloescht" \
+                    "und laesst sich nicht zurueckholen."; then
+                    if ! demo_delete "${file}"; then
+                        menu_message "Demo" \
+                            "Die Aufzeichnung konnte nicht geloescht" \
+                            "werden:" \
+                            "" \
+                            "${file}"
+                    fi
+                fi
+                ;;
+        esac
+    done
+}
+
+# menu_settings: key bindings, color theme, player name and whether
+# rounds are recorded as demos; every change is written to the user
+# config file immediately.
+menu_settings() {
+    local demo_label
+    while :; do
+        if [ "${DEMO_RECORD}" = "on" ]; then
+            demo_label="an"
+        else
+            demo_label="aus"
+        fi
         menu_run "Einstellungen" \
             "Tasten konfigurieren" \
             "Farbschema (aktuell: ${COLOR_THEME_LABEL[${COLOR_THEME}]})" \
             "Spielername aendern (aktuell: ${PLAYER_NAME})" \
+            "Demo-Aufzeichnung (aktuell: ${demo_label})" \
             "Zurueck"
         case "${MENU_CHOICE}" in
             0) menu_keys ;;
             1) menu_colors ;;
             2) prompt_player_name ;;
+            3)
+                # A plain toggle rather than a picker: there are two
+                # states and the entry above names the current one.
+                if [ "${DEMO_RECORD}" = "on" ]; then
+                    DEMO_RECORD="off"
+                else
+                    DEMO_RECORD="on"
+                fi
+                debug_event "settings: demo recording ${DEMO_RECORD}"
+                config_save
+                ;;
             *) return 0 ;;
         esac
     done

@@ -14,7 +14,7 @@
 #   bag refill is logged with the shuffled piece order.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.6.0  (2026-07-28)
+# Version: 0.7.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -144,13 +144,30 @@ QUEUE=()
 PREVIEW_COUNT=3
 
 # queue_fill: top the queue up from the bag (refilling the bag as needed).
+# This is the one place pieces enter a round, which makes it the place the
+# demo layer (lib/demo.sh) hooks into: while a demo is being replayed the
+# pieces come from its recorded stream instead of the bag, and while a
+# round is being recorded every piece drawn here is noted for that stream.
+# Storing the pieces themselves rather than an RNG seed is deliberate -
+# RANDOM is seeded once per session, not per round, and its generator
+# differs between bash versions, so a seed would not replay reliably.
 queue_fill() {
+    # A plain variable instead of indexing the queue back, so the code
+    # stays within the bash 4.0 the game asks for (negative array indices
+    # need 4.2).
+    local piece
     while [ "${#QUEUE[@]}" -lt $(( PREVIEW_COUNT + 1 )) ]; do
+        if [ "${DEMO_PLAYING}" -eq 1 ] && demo_next_piece; then
+            QUEUE+=("${DEMO_NEXT_PIECE}")
+            continue
+        fi
         if [ "${#BAG[@]}" -eq 0 ]; then
             bag_refill
         fi
-        QUEUE+=("${BAG[0]}")
+        piece="${BAG[0]}"
+        QUEUE+=("${piece}")
         BAG=("${BAG[@]:1}")
+        demo_record_piece "${piece}"
     done
 }
 

@@ -17,7 +17,10 @@
 #   and game over are drawn as a box over the board, the latter with the
 #   achieved highscore rank - or, for a finished Ultra run, with its time
 #   and Ultra rank, resp. for a finished Sprint run with its rows and
-#   Sprint rank.
+#   Sprint rank. During a demo playback (since 0.22.0, lib/demo.sh) the
+#   pane carries the replay speed and the same box shows the end of the
+#   recording, taking precedence over the game over box because it has to
+#   carry the keys of the replay.
 #   Since 0.12.0 frames are no longer pushed out as a whole: draw_frame
 #   builds the block into FRAME_LINES and render_flush emits only the lines
 #   that actually changed since the previous frame, each with its own
@@ -61,7 +64,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.21.0  (2026-08-03)
+# Version: 0.22.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -653,6 +656,15 @@ render_pane_left() {
         fmt_duration $(( (left + 999) / 1000 ))
         pane_stat 16 "Left" "${FMT_DURATION}"
     fi
+    # Demo playback (2026-08-03): the replay speed, on one of the pane's
+    # free rows (see CLAUDE.md 3.4). It is the only thing about a replay
+    # that is not visible from the board itself - that it is a replay at
+    # all is what the "Demo" label says, and the paused state reuses the
+    # box over the board. Row 18, two rows below the goal counters, so a
+    # replayed Ultra or Sprint run keeps showing its own two lines.
+    if [ "${DEMO_PLAYING}" -eq 1 ]; then
+        pane_stat 18 "Demo" "${DEMO_SPEED_LABEL}"
+    fi
     return 0
 }
 
@@ -686,6 +698,36 @@ render_pane_right() {
 render_status_box() {
     local i line
     BOX_LINES=()
+    # A finished demo takes the box before anything else, even when the
+    # replayed round ended in a real top-out (which sets GAME_OVER while
+    # the replay runs): the box has to carry the keys of the replay, and
+    # "r = restart" would otherwise read as restarting the round. It uses
+    # the same eight body lines as the game over box below, so the
+    # borders sit in the same place either way.
+    if [ "${DEMO_PLAYING}" -eq 1 ] && [ "${DEMO_ENDED}" -eq 1 ]; then
+        local -a demo_body=("")
+        demo_body+=("    DEMO ENDE")
+        demo_body+=("   Rows ${ROW_CREDIT}")
+        fmt_duration $(( PLAY_MS / 1000 ))
+        demo_body+=("   Time ${FMT_DURATION}")
+        # How the recorded round ended, which the counters alone do not
+        # say: a top-out, a reached goal or a round left from the menu.
+        case "${DEMO_HDR_END}" in
+            over) demo_body+=("  Game Over") ;;
+            goal) demo_body+=("  Ziel erreicht") ;;
+            *)    demo_body+=("  Abgebrochen") ;;
+        esac
+        demo_body+=("  r = nochmal")
+        demo_body+=("  ${KEY_QUIT} = zurueck")
+        demo_body+=("")
+        BOX_LINES[6]="${BOX_SGR}+------------------+${RESET_SGR}"
+        for (( i = 0; i < ${#demo_body[@]}; i++ )); do
+            printf -v line '|%-18.18s|' "${demo_body[i]}"
+            BOX_LINES["$(( 7 + i ))"]="${BOX_SGR}${line}${RESET_SGR}"
+        done
+        BOX_LINES[15]="${BOX_SGR}+------------------+${RESET_SGR}"
+        return 0
+    fi
     if [ "${GAME_OVER}" -eq 1 ]; then
         local -a body=()
         body+=("")

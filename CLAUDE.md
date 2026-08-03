@@ -257,8 +257,12 @@ Die fuer uns relevanten Merkmale des Originals:
     Zwei davon (Zeile 15 und 16) nutzt seit 0.34.0 der Ultra-Modus fuer
     "Goal" und "Left"; seit 0.39.0 nutzt der Sprint-Modus dieselben
     beiden Zeilen fuer sein Zeitlimit und die Restzeit (die Modi laufen
-    nie gleichzeitig). Beides nur, solange eine Runde des jeweiligen
-    Modus laeuft; im Marathon bleiben alle acht Zeilen frei (siehe 3.6).
+    nie gleichzeitig). Eine weitere (Zeile 18) nutzt seit 0.42.0 die
+    Demo-Wiedergabe fuer das Abspieltempo (Label "Demo", siehe 3.7);
+    sie liegt zwei Zeilen unter den Ziel-Zaehlern, damit eine
+    wiedergegebene Ultra- oder Sprint-Runde ihre beiden weiter zeigt.
+    Alle drei nur, solange die jeweilige Runde bzw. Wiedergabe laeuft;
+    im Marathon bleiben alle acht Zeilen frei (siehe 3.6).
 - Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
   aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
   Pausenmenue) sowie der Game-Over-Bildschirm zaehlen nicht; die Zeit
@@ -305,16 +309,23 @@ in fester Reihenfolge einmal durchzureichen:
    urspruenglichen fuenf Seiten stammen aus der Zeit, als es nur die
    endlose Runde gab, und mit Sprint liessen sich alle drei Modi in
    einem Zug erklaeren, statt die Seite zweimal umzubauen.
+7. Demos (seit 0.42.0): dass jede Runde mitgeschnitten wird, dass die
+   Zuege und nicht der Bildschirm aufgezeichnet werden (und die
+   Wiedergabe die Runde deshalb wirklich noch einmal spielt), wie viele
+   Aufnahmen aufbewahrt werden, wo sich einzelne loeschen und die
+   Aufzeichnung abschalten laesst, und die Tasten der Wiedergabe.
 
-Drei Teile werden bewusst aus dem laufenden Zustand gelesen statt
+Vier Teile werden bewusst aus dem laufenden Zustand gelesen statt
 ausgeschrieben, damit die Anleitung nicht luegen kann: die
 Tastenbelegung (`menu_help_keys` setzt die konfigurierbare Taste vor die
 fest verdrahteten Sekundaertasten, laesst `NONE` weg und vermeidet
 Dubletten wie `KEY_HARD=SPACE` neben der Leertaste), die Wunder-Namen
-samt Kosten und die Ziele der beiden Zeitmodi (`ULTRA_TARGET_ROWS`,
-`SPRINT_TIME_MS`). Jeder Bildschirm bleibt in den 46 Zeichen Breite und
+samt Kosten, die Ziele der beiden Zeitmodi (`ULTRA_TARGET_ROWS`,
+`SPRINT_TIME_MS`) und auf der Demo-Seite die Zahl der aufbewahrten
+Aufnahmen (`DEMO_MAX`) samt den Wiedergabetasten. Jeder Bildschirm
+bleibt in den 46 Zeichen Breite und
 den `MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst - die
-Modus-Seite nutzt sie mit 18 Zeilen genau aus.
+Modus-Seite nutzt sie mit 18 Zeilen genau aus, die Demo-Seite mit 17.
 
 ### 3.6 Spielmodi (Ultra seit 0.34.0, Sprint seit 0.39.0)
 
@@ -411,6 +422,97 @@ gespiegelt - alles andere waere im selben Menue schwer zu erklaeren:
   festgesetzt wird; der noch fallende Stein wird nicht mehr gelockt,
   seine Reihen zaehlen also nicht mehr.
 
+### 3.7 Demos: Aufzeichnung und Wiedergabe (seit 0.42.0)
+
+Jede gespielte Runde wird mitgeschnitten und laesst sich ueber den
+Hauptmenuepunkt **"Demos"** noch einmal ansehen (`lib/demo.sh`,
+`menu_demos` in `lib/menu.sh`). Der Menuepunkt steht zwischen
+"Statistik" und "Einstellungen" - beides sind Rueckblicke auf bereits
+gespielte Runden.
+
+**Aufgezeichnet werden die Zuege, nicht der Bildschirm.** Eine Demo ist
+die Liste dessen, was der Runde widerfahren ist: die Tastenaktionen des
+Spielers (Bewegen, Drehen, Soft-/Hard-Drop, Hold), die
+Gravitationsschritte, das Ablaufen des Lock Delays und die Steinfolge,
+mit der die Vorschau-Queue gefuellt wurde. Die Wiedergabe fuettert diese
+Liste in **dieselben Spielfunktionen**, die auch eine echte Runde
+benutzt (`try_move`, `try_rotate`, `step_down`, `hard_drop`,
+`hold_piece`, `lock_and_next`), sie spielt die Runde also wirklich noch
+einmal, statt ein Bild davon abzuspielen. Drei Gruende gegen eine
+Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
+
+- **Groesse.** Gemessen an echten Runden kostet eine Demo rund
+  **2 kB je Spielminute** (etwa 4 Ereignisse je Sekunde a 9 Byte, dazu
+  ein Byte je Stein und ein knapp 300 Byte grosser Kopf); eine
+  Zehn-Minuten-Runde liegt bei ~20 kB. Ein Frame-Mitschnitt kostet je
+  Bildschirmaenderung den halben Bildschirm. Damit ist auch die in der
+  Roadmap offen gelassene Frage nach einer Obergrenze entschieden: eine
+  reine **Stueckzahl** (`DEMO_MAX`, 10 wie die Bestenlisten) reicht, ein
+  Gesamtgroessen-Budget waere Aufwand ohne Gegenwert.
+- **Unabhaengigkeit vom Terminal.** Die Datei enthaelt kein einziges
+  ANSI-Byte. Terminalgroesse, Farbmodus, Farbschema und - ausdruecklich
+  auch - der **Render-Modus** (`--render-mode partial|full`, siehe 4.3)
+  sind damit reine Eigenschaften der *abspielenden* Sitzung: eine im
+  Partial-Modus aufgenommene Runde laeuft im Full-Modus korrekt und
+  umgekehrt, und eine in `guideline` aufgenommene Runde laesst sich in
+  `colorblind` ansehen. Ein Frame-Mitschnitt haette all das festgeschrieben
+  und zwingend im Full-Modus aufgenommen werden muessen, weil ein
+  Zeilen-Diff nur vor dem Bildschirm Sinn ergibt, den er vorgefunden hat.
+- **Robustheit.** Die Steinfolge steht als Buchstabenkette in der Datei,
+  **nicht als RNG-Seed** - obwohl die Roadmap "Eingabe-Mitschnitt plus
+  Seed" skizziert hatte. `RANDOM` wird einmal je Sitzung gesetzt, nicht
+  je Runde (eine zweite Runde setzt den Strom fort), und der Generator
+  hinter `RANDOM` hat sich zwischen Bash-Versionen geaendert: ein Seed
+  wuerde auf einer anderen Bash eine andere Runde abspielen. Ein Byte je
+  Stein macht die Frage gegenstandslos.
+
+**Bedienung der Wiedergabe** (die dritte in der Roadmap offen gelassene
+Frage - Pause und Vorspulen: beides, plus Zeitlupe):
+
+- Pausetaste (`p`) oder Leertaste haelt an und laeuft weiter; angezeigt
+  wird das ueber denselben "PAUSED"-Kasten wie im Spiel.
+- Pfeil links/rechts stellt das Tempo in fuenf Stufen von **0.25x bis
+  4x** (`DEMO_SPEEDS`). Die aktuelle Stufe steht im HUD in der linken
+  Spalte (Zeile 18, Label "Demo") - die einzige Angabe, die dem Bild
+  sonst fehlen wuerde.
+- Quit-Taste (`x`) oder `ESC` kehrt zur Liste zurueck, `r` spielt eine
+  durchgelaufene Demo noch einmal von vorn.
+- Am Ende erscheint der Kasten ueber dem Spielfeld ("DEMO ENDE" mit
+  Rows, Zeit und der Art des Rundenendes) - ein sechster Ausgang des
+  `render_status_box` (siehe 3.6), der bewusst **vor** allen anderen
+  greift: auch eine Runde, die im Game Over endete, zeigt beim Abspielen
+  den Demo-Kasten, weil dessen Tasten die der Wiedergabe sein muessen.
+
+**Weitere Entscheidungen:**
+
+- **Eine Wiedergabe wird nie gewertet.** `record_round` (`rowhammer.sh`)
+  bricht bei laufender Wiedergabe sofort ab: kein Highscore-Eintrag,
+  kein Weltwunder-Fortschritt, keine Statistik und keine neue
+  Aufzeichnung. Der Guard sitzt in `record_round` selbst und nicht an
+  den Aufrufstellen, weil eine Wiedergabe diese Funktion durch genau die
+  Spielfunktionen erreicht, die sie nachspielt (`lock_and_next` beim
+  Ultra-Ziel, `spawn_piece` bei blockiertem Spawn).
+- **Eine Wiedergabe ist waehrend einer pausierten Runde gesperrt.** Sie
+  laeuft durch denselben Rundenzustand (Brett, Zaehler, Queue), in dem
+  eine ueber das Pausenmenue ins Hauptmenue gelegte Runde parkt; ein
+  Abspielen wuerde sie stillschweigend verwerfen. `menu_demos` weist
+  deshalb mit einer Meldung darauf hin, statt den Zustand zu sichern und
+  wiederherzustellen - das waere ein Dutzend Variablen und Arrays, die
+  bei jeder kuenftigen Zustandserweiterung mitgepflegt werden muessten.
+- **Aufgezeichnet wird auch eine abgebrochene Runde** (wie sie auch fuer
+  Weltwunder und Statistik zaehlt, siehe 3.3); die Art des Endes steht
+  im Kopf der Datei (`end=over|goal|quit`). Nur eine Runde ganz ohne
+  Ereignis wird verworfen - sie waere nur Rauschen in der Liste.
+- **Die Blink-Animation skaliert mit** (`flash_rows`): sie laeuft auf
+  echter Zeit, waehrend die Wiedergabe auf der Demo-Uhr laeuft. Bliebe
+  sie ungeskaliert, wuerde bei 4x nach jedem Reihenabbau ein Stueck
+  Demo-Zeit verschluckt und die naechsten Ereignisse kaemen im Schwall.
+- **Die Aufzeichnung aendert das Spiel nicht.** `demo_record_event`
+  rechnet den Zeitstempel so aus, wie `play_clock_tick` es taete,
+  schreibt ihn aber nicht in die Spieluhr zurueck - `PLAY_MS` treibt den
+  Sprint-Modus und das HUD, und eine laufende Aufnahme darf daran nichts
+  aendern.
+
 ## 4. Technisches Konzept
 
 ### 4.1 Rahmenbedingungen
@@ -466,6 +568,7 @@ rowhammer/
     menu.sh            # Startmenue (Einzel-/Mehrspieler, Einstellungen)
     config.sh          # Laden/Speichern der Nutzer-Konfiguration
     debug.sh           # Debug-Modus: Session-Trace in Log-Dateien
+    demo.sh            # Demo-Aufzeichnung und -Wiedergabe (Format, Ablage)
     highscore.sh       # Persistente Highscore-Liste (Top 10)
     wonders.sh         # Weltwunder-Logik, Baustufen, Fortschritt
     save.sh            # Laden/Speichern des Spielstands
@@ -496,15 +599,15 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.40.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.42.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
-(`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
-`stats.sh` sowie
+(`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
+`stats.sh` und `demo.sh` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
-Highscores / Weltwunder / Statistik / Einstellungen / Anleitung /
-Beenden;
+Highscores / Weltwunder / Statistik / Demos / Einstellungen /
+Anleitung / Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue). Das
 Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
@@ -536,8 +639,10 @@ wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
 Einstellungsmenue waehlbar und in der Config gespeichert),
 `--render-mode partial|full` (`ROWHAMMER_RENDER_MODE`, Standard
 `partial`, seit 0.41.0, siehe 4.3),
-`--reset config|stats|highscore|save|all` (`ROWHAMMER_RESET`, seit
-0.35.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
+`--demo-record on|off` (`ROWHAMMER_DEMO_RECORD`, Standard `on`, seit
+0.42.0; auch im Einstellungsmenue und in der Config, siehe 3.7/4.10),
+`--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
+0.35.0, das Ziel `demo` seit 0.42.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
 beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
 Resets; frei mit anderen Optionen kombinierbar),
 `--debug` (`ROWHAMMER_DEBUG`),
@@ -695,8 +800,11 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
   Highscore-Liste `highscore`, die Ultra-Bestenliste `highscore-ultra`
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
-  (seit 0.39.0), der Spielstand `save` und die
-  Statistik `stats`.
+  (seit 0.39.0), der Spielstand `save`, die
+  Statistik `stats` und - seit 0.42.0 - das Unterverzeichnis `demos`
+  mit den aufgezeichneten Runden (Format und Ablage siehe 4.10; als
+  einziger Eintrag ein Verzeichnis statt einer Datei, weil es beliebig
+  viele Aufnahmen bis `DEMO_MAX` fasst).
 - Bewusste Abweichung von den Script-Konventionen (Abschnitt 11,
   organisationsbasierte Suche unter `/etc` und `${HOME}/.config`):
   seit 0.7.0 gibt es genau eine Config-Datei im Datenverzeichnis
@@ -707,7 +815,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${HOME}/rowhammer`).
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
-  (Spielername, Farbschema seit 0.21.0, Tastenbelegung) schreibt
+  (Spielername, Farbschema seit 0.21.0, Tastenbelegung,
+  Demo-Aufzeichnung seit 0.42.0) schreibt
   `${DATA_DIR}/rowhammer.conf`;
   Werte werden validiert und single-quoted geschrieben, da die Datei
   gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
@@ -952,7 +1061,11 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
     mit Instanz-IDs, Reihenabbau mit Credit-Aufschluesselung je Reihe,
     Hold, Pause, Bag-Refills, Menuewahl, Config-Speicherungen, fatale
     Fehler sowie ein Board-Snapshot (Typ- und Quadrat-Gitter plus
-    cut/squared-Instanzlisten) nach jedem Lock.
+    cut/squared-Instanzlisten) nach jedem Lock. Seit 0.42.0 auch Beginn,
+    Ablage und Wiedergabe von Demos (siehe 3.7/4.10) - eine abgespielte
+    Demo erzeugt dabei dieselben Spielereignisse wie die Runde, die sie
+    aufgezeichnet hat, was sie zum Vergleichen zweier Laeufe brauchbar
+    macht.
 - Ohne `--debug` sind alle Logging-Helfer No-Ops (ein Guard am
   Funktionsanfang); der Spiel-Loop bleibt frei von Zusatzkosten.
 - Die Logs koennen in langen Sessions mehrere MB gross werden; es gibt
@@ -1035,7 +1148,8 @@ ins Menue zu starten. Ziele:
 | `stats` | `stats` |
 | `highscore` | `highscore`, `highscore-ultra` **und** `highscore-sprint` |
 | `save` | `save` (Weltwunder-Fortschritt) |
-| `all` | alle sechs Dateien |
+| `demo` | das Verzeichnis `demos` (alle Aufzeichnungen) |
+| `all` | alle sechs Dateien und das Verzeichnis `demos` |
 
 **Reset heisst verschieben, nicht loeschen (seit 0.36.0,
 Nutzerentscheidung).** Jede betroffene Datei wandert nach
@@ -1064,6 +1178,13 @@ Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
   Daten; eine davon stehen zu
   lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
   einen Reset zu fein.
+- **`demo` ist das einzige Ziel, das ein Verzeichnis bewegt** (seit
+  0.42.0). Verschoben wird `demos` als Ganzes - dieselbe `mv`-Schleife
+  wie fuer die Dateien, die den Unterschied nicht kennen muss -, sodass
+  die Aufnahmen eines Resets zusammen in einem `.bak`-Verzeichnis
+  liegen und sich in einem Zug zurueckholen lassen. Ein eigenes Ziel
+  hat es, weil es die mit Abstand groessten Daten sind und am ehesten
+  allein geleert wird.
 
 Ablauf und Einordnung:
 
@@ -1074,7 +1195,7 @@ Ablauf und Einordnung:
 - **Zeitpunkt:** direkt nach dem Sourcen der Module (die Dateinamen
   kommen aus den Modulen, die sie besitzen: `CONFIG_NAME`,
   `STATS_FILE_NAME`, `HS_FILE_NAME`/`HSU_FILE_NAME`/`HSS_FILE_NAME`,
-  `SAVE_FILE_NAME`)
+  `SAVE_FILE_NAME`, `DEMO_DIR_NAME`)
   und **vor** der TTY-Pruefung. Die TTY-Pruefung ist dafuer aus dem
   Prerequisites-Block nach unten gewandert: ein Reset loescht nur
   Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
@@ -1195,6 +1316,85 @@ Entscheidungen zu den Workflows:
 - **Der Release-Workflow prueft selbst nach**, statt sich auf den
   CI-Lauf des Branches zu verlassen: ein Tag darf auf jedem beliebigen
   Commit sitzen.
+
+### 4.10 Demo-Format und Ablage (seit 0.42.0)
+
+Das Konzept und die Entscheidungen dahinter stehen in 3.7; hier das
+Dateiformat und der Weg einer Aufnahme.
+
+**Dateiformat** (`lib/demo.sh`). Eine Aufnahme ist eine Textdatei aus
+`key=value`-Zeilen, die - wie Savegame und Statistik (4.5) - **geparst
+und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
+(`DEMO_*_RE`). Erst der Kopf, dann die Steinfolge, dann die Ereignisse:
+
+```
+version=1            Formatversion (jede andere wird abgelehnt)
+game=0.42.0          Spielversion, die aufgenommen hat (nur Info)
+mode=marathon        marathon|ultra|sprint - die Regeln der Runde
+name=Player          Spielername
+date=2026-08-03 21:40
+time=123456          Spielzeit der Runde in Millisekunden
+lines=42 rows=98 level=4 gold=1 silver=2 rowhammers=1 pieces=57
+goal=0               ob das Modus-Ziel erreicht wurde
+end=over             over|goal|quit - wie die Runde endete
+pcs=IOTSZJLIOT...    die Steinfolge (Zeilen zu hoechstens 80 Buchstaben)
+e=120l               ein Ereignis: Zeitdelta in ms + Aktionsbuchstabe
+```
+
+Das Ereignis-Alphabet ist bewusst ein Buchstabe je Sache, die einer
+Runde zustossen kann: `l`/`r` links/rechts, `c`/`a` Drehen im/gegen den
+Uhrzeigersinn, `s` Soft-Drop, `h` Hard-Drop (setzt selbst fest), `o`
+Hold, `g` ein Gravitationsschritt, `k` das Ablaufen des Lock Delays.
+Soft-Drop und Gravitation tun dasselbe und bleiben trotzdem zwei
+Buchstaben, damit die Aufnahme noch sagt, welches von beidem es war. Ein
+blockierter Spawn braucht kein Ereignis - die Wiedergabe laeuft von
+selbst hinein. Auch **blockierte** Bewegungen werden aufgezeichnet: die
+Wiedergabe fuehrt sie gegen dasselbe Brett aus, wo sie ebenso scheitern.
+
+**Zeit.** Jedes Ereignis traegt die **Spielzeit** (`PLAY_MS`, Pausen
+also ausgenommen) als Delta zum vorherigen. Beim Laden werden die Deltas
+zu absoluten Zeitstempeln aufsummiert; die Wiedergabe fuehrt eine eigene
+Uhr (`DEMO_CLOCK_MS`), die je Schleifendurchlauf um die vergangene
+Echtzeit mal Tempofaktor waechst, und wendet jedes Ereignis an, sobald
+sie dessen Stempel passiert hat. Absolut statt "je Ereignis schlafen":
+so kann sich ueber eine lange Demo kein Fehler aufsummieren, ein
+langsamer Durchlauf holt auf, und ein Tempowechsel wirkt sofort. Nach
+dem letzten Ereignis laeuft die Uhr bis `time` weiter - der Schwanz nach
+der letzten Aktion gehoert zur Runde. Das HUD bekommt die Demo-Uhr als
+`PLAY_MS`, damit der "Time"-Zaehler (und der Sprint-Countdown) so laeuft
+wie in der aufgenommenen Runde.
+
+**Steinfolge.** `queue_fill` (`lib/pieces.sh`) ist die einzige Stelle,
+an der Steine in eine Runde kommen, und damit die Stelle, an der die
+Demo-Schicht haengt: waehrend einer Aufnahme wird jeder gezogene Stein
+notiert, waehrend einer Wiedergabe kommen die Steine aus der Aufnahme
+statt aus dem Beutel. Damit stimmen Vorschau und Spawn-Reihenfolge
+gleichermassen. Laeuft die Folge einer von Hand bearbeiteten Datei aus,
+faellt die Wiedergabe auf den normalen Beutel zurueck (mit Vermerk im
+Debug-Log), statt abzubrechen.
+
+**Ablage.** Waehrend der Runde wird ausschliesslich auf eine **RAM-Disk**
+geschrieben (`XDG_RUNTIME_DIR`, sonst `/dev/shm`, als letzter Ausweg
+`TMPDIR`/`/tmp` mit Vermerk im Debug-Log), und zwar gepuffert: erst je
+`DEMO_FLUSH_MAX` (64) Ereignisse - rund alle 15 Sekunden Spielzeit -
+haengt ein `printf` sie an die Datei. So kostet eine laufende Runde
+weder Frame-Zeit noch Schreibzyklen auf einer SSD, und ein abgestuerzter
+Prozess verliert hoechstens diese Sekunden. Erst beim echten Rundenende
+(`record_round`, siehe 3.3) baut `demo_record_finish` Kopf, Steinfolge
+und Ereignisse zusammen und legt die fertige Datei **atomar**
+(Tempdatei + `mv`) unter `${DATA_DIR}/demos/<YYYYMMDD-HHMMSS>-<modus>.demo`
+ab; danach werden die aeltesten Aufnahmen ueber `DEMO_MAX` hinaus
+geloescht. Der Dateiname beginnt mit dem Datum, sodass das Glob
+chronologisch sortiert ist und weder Liste noch Pruning `stat` braucht.
+Die RAM-Disk-Datei einer nie beendeten Runde raeumt der EXIT-`trap` weg.
+
+**Einstellung.** `DEMO_RECORD` (`on`/`off`) ist - anders als der
+Render- und der Farbmodus - ein **Config-Wert** (Praezedenz Standard <
+Config < Env < CLI): ob mitgeschnitten wird, ist Geschmack und keine
+Eigenschaft des Terminals. Setzbar per `--demo-record on|off`,
+`ROWHAMMER_DEMO_RECORD` und im Einstellungsmenue, das den Wert sofort
+speichert. Ein Umschalten wirkt ab der naechsten Runde; eine bereits
+laufende Aufnahme wird noch zu Ende gefuehrt.
 
 ## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
 
@@ -1977,9 +2177,10 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.41.0
-  (umschaltbarer Render-Modus); die Uebersichtstabelle in HISTORY.md
-  listet jede Version mit ihrem Thema. Offen sind die vier Punkte unten
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.42.0
+  (Demo-Aufzeichnung und Demo-Player); die Uebersichtstabelle in
+  HISTORY.md listet jede Version mit ihrem Thema. Offen sind die drei
+  Punkte unten
 
 ### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
 
@@ -1998,30 +2199,6 @@ Erledigt und nach HISTORY.md verschoben:
 
 ### Phase 4 - Politur (offene Punkte; die erledigten stehen in HISTORY.md)
 
-- [ ] Demo-Aufzeichnung und Demo-Player: eigene Runden als Datei
-      mitschneiden (vermutlich Eingabe-Mitschnitt plus Seed statt voller
-      Board-Snapshots, analog dem Prinzip des Debug-Modus in 4.6, aber
-      fuer die reine Wiedergabe statt zur Fehlersuche) und ueber einen
-      Menuepunkt wieder abspielen koennen. Notizen fuer die Umsetzung:
-      - **Groessenabschaetzung:** vor der Formatwahl den Speicherbedarf
-        je Minute Spielzeit abschaetzen (Tick-Rate x Eingabeereignisse
-        bzw. x Feldgroesse bei Snapshots), damit klar ist, ob ein
-        Eingabe-Mitschnitt oder volle Snapshots infrage kommen und wie
-        viele Aufzeichnungen sich das Datenverzeichnis leisten kann.
-      - **Aufzeichnung unbedingt auf RAM-Disk:** waehrend der laufenden
-        Runde wird ausschliesslich in ein tmpfs geschrieben (z. B.
-        `${XDG_RUNTIME_DIR}` bzw. `/dev/shm`), nie direkt ins
-        persistente Datenverzeichnis - haeufige kleine Schreibzugriffe
-        waehrend des Spiels duerfen weder die Framerate noch (bei SSDs)
-        die Hardware belasten. Erst nach echtem Rundenende (siehe 3.3)
-        wird die fertige Aufzeichnung ins Datenverzeichnis uebernommen,
-        analog dem `--debug-dir`-Verzeichnis pro Lauf in 4.6.
-      - **Demo-Verwaltung:** eigener Menuepunkt mit Liste der
-        vorhandenen Aufzeichnungen (Datum, Laenge, Ergebnis), Auswahl
-        zum Anschauen und einzelnes Loeschen.
-      Noch offen: Aufzeichnungsformat im Detail, Obergrenze fuer Anzahl
-      bzw. Gesamtgroesse im Datenverzeichnis, Abspielgeschwindigkeit
-      (Pause/Vorspulen?).
 - [ ] Mehrsprachige Oberflaeche (Multi-Language Support): saemtliche
       benutzersichtbaren Texte (Hauptmenue, Untermenues, Anleitung,
       HUD-Labels, Highscore-/Statistik-Spaltenkoepfe, `-h`/`--help`,

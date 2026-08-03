@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.41.0
+Version:        0.42.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,15 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.42.0-1
+- Demo recording and playback: every round is recorded as its moves,
+  gravity steps and piece stream (not as screen output) and can be
+  watched again from the new "Demos" menu entry, paused and played
+  between 0.25x and 4x speed. Recording goes to a RAM disk while the
+  round runs; the ten newest recordings are kept in <data-dir>/demos.
+- New option --demo-record on|off (ROWHAMMER_DEMO_RECORD) and new reset
+  target --reset demo.
+
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.41.0-1
 - Switchable render mode --render-mode partial|full
   (ROWHAMMER_RENDER_MODE, default partial): the incremental line diff of

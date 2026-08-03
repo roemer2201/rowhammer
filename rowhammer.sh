@@ -75,13 +75,23 @@
 #   played, plus the results of
 #   the last three rounds with their play date), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
-#   The "Anleitung" main menu entry explains the game on six screens,
+#   Every round is also recorded as a demo (lib/demo.sh) and can be
+#   watched again from the "Demos" main menu entry, which lists the
+#   recordings and plays or deletes the one picked. Recorded are the
+#   moves, the gravity steps and the piece stream, not the screen, so a
+#   replay runs the round through the real game logic again - it is
+#   small, independent of the terminal and the render mode, and can be
+#   paused and played between a quarter and four times its speed. A
+#   replay is never banked into highscores, wonder progress or
+#   statistics.
+#   The "Anleitung" main menu entry explains the game on seven screens,
 #   paged with the left/right arrow keys (wrapping at both ends):
 #   the rules, the current key bindings, hold and preview, the
-#   gold/silver squares with their row bonus, the wonder construction
-#   and the three game modes (menu_help in lib/menu.sh).
+#   gold/silver squares with their row bonus, the wonder construction,
+#   the three game modes and the demos (menu_help in lib/menu.sh).
 #   --reset resets persistent data on purpose: the config file, the
-#   statistics, the highscore lists, the wonder savegame or all of them
+#   statistics, the highscore lists, the wonder savegame, the demo
+#   recordings or all of them
 #   at once. Nothing is deleted - each file is moved to
 #   <file>-YYYYMMDDhhmmss.bak beside it, so a reset can be undone. It
 #   runs before the game starts, asks for confirmation on a terminal
@@ -127,11 +137,11 @@
 #   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
 #                [--color-mode auto|basic|extended]
 #                [--color-theme guideline|classic|mono|colorblind]
-#                [--render-mode partial|full]
-#                [--reset config|stats|highscore|save|all] [--force]
+#                [--render-mode partial|full] [--demo-record on|off]
+#                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.41.0  (2026-08-03)
+# Version: 0.42.0  (2026-08-03)
 
 set -euo pipefail
 
@@ -146,7 +156,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.41.0"
+ROWHAMMER_VERSION="0.42.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -211,8 +221,11 @@ RESET_OPT="${ROWHAMMER_RESET:-}"
 # savegame, i.e. the wonder progress: it is the plain reading of the
 # word, and "save" exists as its own target for the case where only the
 # wonder progress is meant while config, stats and highscores stay
-# (CLAUDE.md 4.5 left that choice open; this is the decision).
-RESET_TARGETS=(config stats highscore save all)
+# (CLAUDE.md 4.5 left that choice open; this is the decision). "demo"
+# (the recorded rounds) follows the same rule: it is in "all" and has a
+# target of its own, because it is by far the bulkiest of these and the
+# one most likely to be cleared on its own.
+RESET_TARGETS=(config stats highscore save demo all)
 # Answer confirmation questions with "yes" instead of asking. Today that
 # is the --reset question; the switch is written as a general one (it may
 # be combined with any other option and is simply without effect where
@@ -221,6 +234,14 @@ RESET_TARGETS=(config stats highscore save all)
 # a stored "never ask me again" would defeat the safety net.
 FORCE_OPT="${ROWHAMMER_FORCE:-0}"
 PLAYER_NAME="Player"
+# Demo recording on/off ("on"/"off"). Unlike the render or color mode
+# this is a taste, not a property of the terminal, so it is a config file
+# setting like the player name and the color theme: it starts from this
+# default, is overridden by config_load and then by the env/CLI blocks
+# after sourcing, and the settings menu writes it back. Recording a round
+# never changes how it plays (see lib/demo.sh), it only costs a few
+# kilobytes on a RAM disk while the round runs.
+DEMO_RECORD="on"
 # Color theme: maps piece and gold/silver colors to a named scheme
 # (COLOR_THEMES in lib/pieces.sh). Like the key bindings it is a
 # config-driven setting, so it starts from this default and is then
@@ -247,6 +268,7 @@ KEY_HOLD="c"
 # command line keeps the highest precedence.
 CLI_PLAYER_NAME=""
 CLI_COLOR_THEME=""
+CLI_DEMO_RECORD=""
 
 # Print usage information.
 usage() {
@@ -289,6 +311,11 @@ Options:
                 "guideline" (default), "classic", "mono" or "colorblind".
                 Also selectable in the settings menu and persisted there.
                 Env: ROWHAMMER_COLOR_THEME  Default: guideline
+  --demo-record on|off
+                Record every round as a demo that can be watched again
+                from the "Demos" menu entry (see below). Also switchable
+                in the settings menu and persisted there.
+                Env: ROWHAMMER_DEMO_RECORD  Default: on
   --render-mode MODE
                 How the play screen is pushed to the terminal:
                 "partial" rewrites only the lines that changed since the
@@ -308,6 +335,7 @@ Options:
                   highscore  all highscore lists (highscore,
                              highscore-ultra and highscore-sprint)
                   save       the savegame save (the wonder progress)
+                  demo       the demo recordings (the demos directory)
                   all        all of the above
                 Nothing is deleted: every affected file is moved to
                 <file>-YYYYMMDDhhmmss.bak next to it, so a reset can be
@@ -394,6 +422,23 @@ stored in <data-dir>/save. It builds seven world wonders in a fixed
 sequence; the current wonder and its build percentage are shown in the
 HUD, the construction site (ASCII art revealed bottom-up) after every
 round and via the "Weltwunder" main menu entry.
+
+Demos: every round is recorded and can be watched again from the "Demos"
+main menu entry, which lists the recordings with date, mode, play time
+and rows and offers to play or to delete the one picked. What is recorded
+are the moves, the gravity steps and the piece stream of the round - not
+the screen - so a replay runs the round through the real game logic
+again: it costs about 2 kB per minute of play, is independent of the
+terminal size, the colors and the render mode of either session, and
+lasts as long as the round did. While a demo plays, the pause key
+(or space) halts it, the left/right arrows step the speed between 0.25x
+and 4x, and the quit key returns to the list; "r" replays it from the
+start once it has finished. Recordings live in <data-dir>/demos, the ten
+newest are kept, and the round being recorded is written to a RAM disk
+(XDG_RUNTIME_DIR resp. /dev/shm) so playing costs no disk writes.
+Recording can be switched off with --demo-record off or in the settings
+menu; a replay never enters the highscore lists, the wonder progress or
+the statistics.
 
 Statistics: every finished round also adds its cleared rows, bonus rows
 (the gold/silver/Tetris part of the row credit) and the gold and silver
@@ -531,6 +576,18 @@ while [ "$#" -gt 0 ]; do
             ;;
         --color-theme=*)
             CLI_COLOR_THEME="${1#*=}"
+            shift
+            ;;
+        --demo-record)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            CLI_DEMO_RECORD="${2}"
+            shift 2
+            ;;
+        --demo-record=*)
+            CLI_DEMO_RECORD="${1#*=}"
             shift
             ;;
         --reset)
@@ -684,7 +741,11 @@ TERM_TOO_SMALL=0
 TERM_RESIZED=0
 
 # --- Library modules ------------------------------------------------------
-for _lib in debug config pieces board squares highscore save stats wonders input render menu; do
+# demo comes before pieces: queue_fill (lib/pieces.sh) reads its state to
+# take the piece stream from a recording during playback, and the
+# renderer reads it as well, so the flags have to exist before either
+# module runs.
+for _lib in debug config demo pieces board squares highscore save stats wonders input render menu; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -730,9 +791,16 @@ reset_run() {
         highscore) names=("${HS_FILE_NAME}" "${HSU_FILE_NAME}"
                           "${HSS_FILE_NAME}") ;;
         save)      names=("${SAVE_FILE_NAME}") ;;
+        # The only target that is a directory rather than a file. It is
+        # moved aside as a whole, which the loop below does without
+        # knowing the difference (its -e test and its mv work on both) -
+        # so all recordings of a reset stay together in one .bak
+        # directory and can be moved back in one go.
+        demo)      names=("${DEMO_DIR_NAME}") ;;
         all)       names=("${CONFIG_NAME}" "${STATS_FILE_NAME}"
                           "${HS_FILE_NAME}" "${HSU_FILE_NAME}"
-                          "${HSS_FILE_NAME}" "${SAVE_FILE_NAME}") ;;
+                          "${HSS_FILE_NAME}" "${SAVE_FILE_NAME}"
+                          "${DEMO_DIR_NAME}") ;;
         # Unreachable: the value is validated against RESET_TARGETS
         # right after the argument parsing. Kept so a new target added
         # there without a case here fails loudly instead of silently
@@ -851,6 +919,7 @@ config_load
 # Environment variables override the config file.
 PLAYER_NAME="${ROWHAMMER_PLAYER_NAME:-${PLAYER_NAME}}"
 COLOR_THEME="${ROWHAMMER_COLOR_THEME:-${COLOR_THEME}}"
+DEMO_RECORD="${ROWHAMMER_DEMO_RECORD:-${DEMO_RECORD}}"
 KEY_LEFT="${ROWHAMMER_KEY_LEFT:-${KEY_LEFT}}"
 KEY_RIGHT="${ROWHAMMER_KEY_RIGHT:-${KEY_RIGHT}}"
 KEY_ROT_CW="${ROWHAMMER_KEY_ROT_CW:-${KEY_ROT_CW}}"
@@ -867,6 +936,9 @@ if [ -n "${CLI_PLAYER_NAME}" ]; then
 fi
 if [ -n "${CLI_COLOR_THEME}" ]; then
     COLOR_THEME="${CLI_COLOR_THEME}"
+fi
+if [ -n "${CLI_DEMO_RECORD}" ]; then
+    DEMO_RECORD="${CLI_DEMO_RECORD}"
 fi
 
 # Validate the resolved settings; the config file and env vars are user
@@ -886,6 +958,14 @@ done
 if [ "${_theme_ok}" -eq 0 ]; then
     die "Invalid color theme: '${COLOR_THEME}' (allowed: ${COLOR_THEMES[*]})"
 fi
+# Spelled-out words rather than 0/1: this one is written into the config
+# file by the settings menu, where "DEMO_RECORD='on'" says what it means
+# without a lookup. Validated like every other config value, because the
+# file, the environment and the command line are all user input.
+case "${DEMO_RECORD}" in
+    on|off) : ;;
+    *) die "Invalid demo recording setting: '${DEMO_RECORD}' (allowed: on, off)" ;;
+esac
 # CHANGE 2026-07-30: NONE joined the allowed values as "this action has
 # no letter key" (see the defaults above). It is exempt from the
 # duplicate check on purpose - several actions may be unbound at once -
@@ -1152,6 +1232,15 @@ update_speed() {
 # Wonder progress and statistics do not care about the mode - those rows
 # were really cleared, and per the concept even an aborted round counts.
 record_round() {
+    # A replayed round is not a round: it books nothing into the
+    # highscore lists, the wonder counter or the statistics, and it is
+    # not recorded as a demo either. The guard sits here rather than at
+    # the call sites because a replay reaches this function through the
+    # very game functions it replays (lock_and_next on the Ultra goal,
+    # spawn_piece on a blocked spawn).
+    if [ "${DEMO_PLAYING}" -eq 1 ]; then
+        return 0
+    fi
     if [ "${ROUND_RECORDED}" -eq 1 ]; then
         return 0
     fi
@@ -1210,6 +1299,18 @@ record_round() {
     stats_add_round "${CLEARED_TOTAL}" \
         "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}" \
         "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "$(( PLAY_MS / 1000 ))"
+    # Close the demo recording of this round and move it from the RAM
+    # disk into the data directory (lib/demo.sh). Here, with the rest of
+    # the books, so a round is stored exactly once and exactly when it
+    # really ended - a round suspended into the main menu keeps recording
+    # and is stored when it is finished for good.
+    local demo_end="quit"
+    if [ "${GOAL_REACHED}" -eq 1 ]; then
+        demo_end="goal"
+    elif [ "${GAME_OVER}" -eq 1 ]; then
+        demo_end="over"
+    fi
+    demo_record_finish "${demo_end}"
     return 0
 }
 
@@ -1266,19 +1367,32 @@ flash_rows() {
     if [ "${FLASH_CYCLES}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
         return 0
     fi
-    local y i
+    local y i ms="${FLASH_MS}"
     FLASH_ROWS=()
     for y in "${FULL_ROWS[@]}"; do
         FLASH_ROWS["${y}"]=1
     done
-    debug_event "row flash: rows=${FULL_ROWS[*]} cycles=${FLASH_CYCLES} ms=${FLASH_MS}"
+    # During a demo playback the animation is scaled with the playback
+    # speed. It runs on real time while the rest of the replay runs on
+    # the demo clock, so an unscaled flash would eat demo time at double
+    # speed and the replay would jump over the events right after a clear
+    # (at half speed it would drag). One millisecond is the floor, so a
+    # very fast replay still blinks instead of dividing down to a
+    # zero-length read.
+    if [ "${DEMO_PLAYING}" -eq 1 ]; then
+        ms=$(( FLASH_MS * 100 / DEMO_SPEED ))
+        if [ "${ms}" -lt 1 ]; then
+            ms=1
+        fi
+    fi
+    debug_event "row flash: rows=${FULL_ROWS[*]} cycles=${FLASH_CYCLES} ms=${ms}"
     for (( i = 0; i < FLASH_CYCLES; i++ )); do
         FLASH_STATE=1
         draw_frame
-        key_drain "${FLASH_MS}"
+        key_drain "${ms}"
         FLASH_STATE=0
         draw_frame
-        key_drain "${FLASH_MS}"
+        key_drain "${ms}"
     done
     FLASH_ROWS=()
     FLASH_STATE=0
@@ -1547,25 +1661,35 @@ handle_key() {
     if [ "${PAUSED}" -eq 1 ]; then
         return 0
     fi
+    # Each of these actions is handed to the demo recorder before it is
+    # carried out (demo_record_event is a no-op when nothing is being
+    # recorded). Before, not after, so the event carries the play time the
+    # key was pressed at rather than the time the action - a hard drop
+    # with its row flash, say - happened to finish; and blocked attempts
+    # are recorded too, because the replay runs them against the same
+    # board and they are blocked there as well.
     case "${KEY}" in
-        LEFT|"${KEY_LEFT}")   try_move -1 0 || : ;;
-        RIGHT|"${KEY_RIGHT}") try_move 1 0 || : ;;
-        "${KEY_ROT_CW}")      try_rotate 1 || : ;;
-        "${KEY_ROT_CCW}")     try_rotate -1 || : ;;
+        LEFT|"${KEY_LEFT}")   demo_record_event l; try_move -1 0 || : ;;
+        RIGHT|"${KEY_RIGHT}") demo_record_event r; try_move 1 0 || : ;;
+        "${KEY_ROT_CW}")      demo_record_event c; try_rotate 1 || : ;;
+        "${KEY_ROT_CCW}")     demo_record_event a; try_rotate -1 || : ;;
         DOWN|"${KEY_SOFT}")
             # Soft drop earns no points (cleared rows are the only
             # score source); it just pulls the piece down early.
+            demo_record_event s
             step_down
             now_ms
             LAST_FALL="${NOW_MS}"
             ;;
         UP|SPACE|"${KEY_HARD}")
+            demo_record_event h
             hard_drop
             ;;
         # CHANGE 2026-07-30 (user decision): w replaced 2 as the fixed
         # secondary hold key. It sits below the rotation keys a/d on the
         # left hand and is free since the hard drop gave up its letter.
         w|"${KEY_HOLD}")
+            demo_record_event o
             hold_piece
             ;;
     esac
@@ -1600,6 +1724,12 @@ game_reset() {
     ROUND_RECORDED=0
     LOCK_PENDING=0
     PLAY_MS=0
+    # Start the recording before the first piece is drawn: spawn_piece
+    # below fills the queue, and those pieces belong to the recording
+    # (see demo_record_piece in queue_fill, lib/pieces.sh). Replaying a
+    # demo runs through here as well - demo_record_start then knows not
+    # to record a replay.
+    demo_record_start "${GAME_MODE}"
     update_speed
     spawn_piece
     play_clock_resume
@@ -1674,10 +1804,16 @@ game_run() {
                 # Gravity is idle here - the piece cannot fall anyway.
                 if (( NOW_MS - TOUCHDOWN_MS >= LOCK_DELAY_MS )); then
                     debug_event "lock delay expired at ${CUR_X},${CUR_Y}"
+                    # The two things the clock does to a round on its own
+                    # are recorded like the player's keys, so a replay
+                    # needs no timers of its own: it simply applies the
+                    # events on the timeline they were recorded at.
+                    demo_record_event k
                     lock_and_next
                 fi
             elif (( NOW_MS - LAST_FALL >= FALL_MS )); then
                 LAST_FALL="${NOW_MS}"
+                demo_record_event g
                 step_down
             fi
         fi
@@ -1704,7 +1840,10 @@ main() {
     # Restore the terminal on any exit path, including Ctrl-C; the debug
     # logs close afterwards, so the "logs written to" note lands on the
     # normal screen buffer.
-    trap 'term_restore; debug_close' EXIT
+    # demo_record_discard removes the RAM disk file of a round that never
+    # finished (Ctrl-C, a killed session); a finished round has already
+    # moved its recording into the data directory and left nothing here.
+    trap 'term_restore; demo_record_discard; debug_close' EXIT
     trap 'exit 130' INT TERM
     # Debug logging starts before the alternate screen, so init errors
     # (unwritable log directory etc.) stay readable.
@@ -1737,7 +1876,8 @@ main() {
             entries+=("Fortsetzen")
         fi
         entries+=("Einzelspieler" "Mehrspieler" "Highscores" \
-            "Weltwunder" "Statistik" "Einstellungen" "Anleitung" "Beenden")
+            "Weltwunder" "Statistik" "Demos" "Einstellungen" "Anleitung" \
+            "Beenden")
         menu_run "R O W H A M M E R" "${entries[@]}"
         choice="${MENU_CHOICE}"
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -1779,9 +1919,15 @@ main() {
                 stats_screen
                 ;;
             5)
-                menu_settings
+                # Recorded rounds: watch one again or delete it. It sits
+                # behind the statistics because it is the same kind of
+                # entry - a look back at rounds already played.
+                menu_demos
                 ;;
             6)
+                menu_settings
+                ;;
+            7)
                 # Short manual (user request): rules, controls, hold,
                 # gold/silver squares and the wonder construction. It
                 # sits right before "Beenden" so the entry a player
