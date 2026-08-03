@@ -183,6 +183,13 @@ Config-Pfad wanderte in 0.7.0 ins Datenverzeichnis und mit diesem in
       scheiterten dort also vollstaendig lautlos, Fehlermeldungen
       inklusive. Seit 0.40.0 schaltet ein gesetztes `CI` die
       Konsolenausgabe zusaetzlich frei (beide Skripte auf 1.1.0).
+      Der erste CI-Lauf brachte noch einen zweiten Fund: der Debian-Bau
+      braucht `build-essential`. rowhammer uebersetzt nichts, aber
+      `dpkg-checkbuilddeps` fordert das Paket als *implizite*
+      Bau-Abhaengigkeit jedes Debian-Pakets ein, und das Runner-Image
+      bringt es nicht mit - beides Gruende, aus denen es lokal nie
+      auffiel. Es steht seither in beiden Workflows und in der
+      Abhaengigkeitsliste von `build-deb.sh --help` und der README.
 
 Die offenen Punkte dieses Zwischenschritts (Shell-Kompatibilitaet, opkg,
 Lizenz) stehen weiterhin in der Roadmap.

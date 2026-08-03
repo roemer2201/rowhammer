@@ -343,7 +343,9 @@ Das Repository enthaelt eine vollstaendige Debian-Paketierung (`debian/`,
 sudo apt install ./dist/rowhammer_*.deb
 ```
 
-Benoetigt werden `dpkg-dev` und `debhelper`. Das Paket installiert das
+Benoetigt werden `dpkg-dev`, `debhelper` und `build-essential` -
+letzteres uebersetzt hier nichts, gilt `dpkg-checkbuilddeps` aber als
+implizite Bau-Abhaengigkeit jedes Debian-Pakets. Das Paket installiert das
 Spiel nach `/usr/share/rowhammer/` und legt den Starter
 `/usr/games/rowhammer` an. Alternativ geht auch der klassische Weg mit
 `dpkg-buildpackage -us -uc -b` oder eine Installation ohne Paket per

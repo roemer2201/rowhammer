@@ -96,10 +96,13 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      # build-essential is an implied build dependency of every Debian
+      # package (dpkg-checkbuilddeps demands it even for an arch:all
+      # package that compiles nothing) and is not in the runner image.
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev debhelper rpm make tar
+          sudo apt-get install -y build-essential dpkg-dev debhelper rpm make tar
 
       - name: Build the Debian package
         run: ./build-deb.sh --verbose

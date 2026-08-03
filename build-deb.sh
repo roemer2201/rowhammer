@@ -20,7 +20,7 @@
 # Usage:
 #   build-deb.sh [-o|--output-dir DIR] [-v|--verbose] [-s|--silent] [-h|--help]
 #
-# Version: 1.1.0  (2026-08-03)
+# Version: 1.1.1  (2026-08-03)
 
 set -euo pipefail
 
@@ -61,7 +61,10 @@ Status messages go to the system log and, when STDOUT is a terminal, to
 the console. A set CI environment variable enables the console output as
 well, so the build is visible in a CI log.
 
-Build dependencies: dpkg-dev (dpkg-buildpackage) and debhelper.
+Build dependencies: dpkg-dev (dpkg-buildpackage), debhelper and
+build-essential. The last one compiles nothing here, but
+dpkg-checkbuilddeps treats it as an implied build dependency of every
+Debian package and refuses to build without it.
 
 Example:
   ./build-deb.sh --output-dir /tmp/rowhammer-packages --verbose
