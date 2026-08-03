@@ -69,7 +69,8 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.39.0 | Sprint-Modus samt eigener Bestenliste, Anleitungsseite "Spielmodi" | 3.5, 3.6, 4.5 |
 | 0.40.0 | Release-Struktur auf GitHub und CI-Paketbau | 4.7, 4.9 |
 | 0.41.0 | Umschaltbarer Render-Modus (`partial`/`full`) | 4.3 |
-| 0.42.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.7, 4.10 |
+| 0.42.0 | Time-Attack-Modus samt Bestenliste, Statistik je Modus | 3.5, 3.6, 4.5 |
+| 0.43.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.7, 4.10 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -551,7 +552,8 @@ CLAUDE.md 3.3, 3.4)._
       oder ein justiertes `WONDER_COSTS` die Anleitung nicht veralten
       laesst.
       _Spaeter ueberholt: seit 0.39.0 sind es sechs Bildschirme - die
-      Spielmodi kamen als eigene Seite dazu._
+      Spielmodi kamen als eigene Seite dazu -, seit 0.42.0 sieben mit
+      der Seite ueber die Bestenlisten._
 - [x] Anleitung mit den Pfeiltasten blaetterbar machen (Version 0.33.0,
       Nutzerwunsch, siehe 3.5): zuvor fuehrte jede beliebige Taste zur
       naechsten der fuenf Seiten, ohne Weg zurueck (eine feste Folge von
@@ -562,7 +564,7 @@ CLAUDE.md 3.3, 3.4)._
       `case`-Switch je Seitenindex, damit jede Seite direkt angesprungen
       werden kann statt nur der Reihe nach.
       _Spaeter ueberholt: seit 0.39.0 blaettert die Schleife durch sechs
-      statt fuenf Seiten._
+      statt fuenf Seiten, seit 0.42.0 durch sieben._
 - [x] **Ultra-Modus** einbauen (Version 0.34.0, Nutzerwunsch): im Menue
       "Einzelspieler" steht neben "Normales Spiel" jetzt "Ultra" -
       `ULTRA_TARGET_ROWS` (150) Rows so schnell wie moeglich abbauen,
@@ -682,7 +684,10 @@ CLAUDE.md 3.3, 3.4)._
       nur die endlose Runde gab, und kannte die Spielmodi nicht. Die
       sechste Seite (`menu_help_body` in `lib/menu.sh`, siehe 3.5)
       erklaert Marathon, Ultra und Sprint mit ihrem jeweiligen Ende und
-      Ergebnis und weist auf die eigene Bestenliste je Modus hin. Sie
+      Ergebnis und weist auf die eigene Bestenliste je Modus hin.
+      _Spaeter ueberholt: seit 0.42.0 nennt die Seite auch Time Attack,
+      und der Hinweis auf die Bestenlisten steht auf einer eigenen
+      siebten Seite._ Sie
       kam bewusst erst jetzt: mit Sprint liessen sich alle drei Modi in
       einem Zug erklaeren, statt die Seite zweimal umzubauen. Ziel und
       Zeitlimit liest die Seite aus `ULTRA_TARGET_ROWS` bzw.
@@ -726,8 +731,96 @@ CLAUDE.md 3.3, 3.4)._
       (`# render:` in `events.log`, siehe 4.6) - ohne ihn ist nicht zu
       entscheiden, ob ein Eintrag im Frame-Log einen ganzen Frame oder
       nur dessen geaenderte Zeilen enthaelt.
+- [x] **Time-Attack-Modus** (Version 0.42.0, Nutzerwunsch): der vierte
+      Spielmodus und der erste, dessen Uhr vom Spiel selbst gefuettert
+      wird - die Runde startet mit `TIME_ATTACK_START_MS` (60000 ms =
+      1 Minute) rueckwaerts laufender Restzeit, und jede gewertete Row
+      schreibt `TIME_ATTACK_ROW_MS` (1000 ms) gut; sie endet bei 00:00
+      oder vorher im Game Over, das Ergebnis sind die Rows
+      (`GAME_MODE=timeattack`, `time_attack_budget` und
+      `time_attack_time_up` in `rowhammer.sh`, siehe 3.6). Das
+      Zeitguthaben ist bewusst kein eigener Zaehler, sondern wird aus
+      `ROW_CREDIT` abgeleitet: die Reihenwertung ist ohnehin die eine
+      Zahl, um die sich der Modus dreht, und ein zweiter, bei jedem
+      Abbau fortgeschriebener Zaehler koennte von ihr nur abweichen.
+      Die Zielpruefung sitzt an derselben Stelle im Game-Loop wie die
+      von Sprint (hinter `play_clock_tick`, vor der Gravitation), aus
+      demselben Grund: auf abgelaufener Zeit soll kein Stein mehr
+      fallen oder festgesetzt werden.
+      **Die Nutzerfrage "was ist hier der Highscore?" ist mit den Rows
+      beantwortet.** Die zweite denkbare Wertung, die ueberlebte Zeit,
+      ist keine Alternative, sondern dieselbe Rangfolge: ein an der Uhr
+      endender Lauf spielt exakt Startzeit + Rows x Gutschrift, seine
+      Zeit ist also eine Funktion seiner Rows. Den Ausschlag gaben die
+      Rows, weil sie im ganzen Spiel die Punktwaehrung sind (siehe 3.2)
+      und auch fuer den vorzeitig gescheiterten Lauf aussagekraeftig
+      bleiben, wo die Gleichung nicht mehr gilt; die Zeit steht in der
+      Liste daneben, weil genau sie einen solchen Lauf ausweist.
+      Bewusste Abweichung von Ultra und Sprint: **jeder** Lauf kommt in
+      die Bestenliste. Die beiden anderen Zeitmodi kennen einen
+      Zustand "abgebrochen", der sich mit einem vollen Lauf nicht
+      vergleichen laesst; Time Attack kennt ihn nicht - die Rows sind
+      so oder so dieselbe Leistung, wer vorzeitig oben rausbaut hat
+      schlicht weniger davon, und damit liegt der Modus beim Marathon,
+      dessen Runden ebenfalls im Game Over enden und trotzdem gewertet
+      werden.
+      Speicherung in einer eigenen vierten Liste
+      `${DATA_DIR}/highscore-timeattack` (`HSA_*` in
+      `lib/highscore.sh`, siehe 4.5): Zeilenformat und Rangordnung wie
+      die Marathon-Liste, aber eine eigene Datei, weil ein Lauf auf
+      einer selbst erspielten Minute nicht die Leistung einer endlosen
+      Runde ist. `highscore_timeattack_screen` zeigt sie im Layout der
+      drei anderen Listen, mit der Spielzeit-Spalte der Marathon-Liste
+      statt der Lines-Spalte des Sprint-Bildschirms - hier ist die Zeit
+      nicht bei jedem Eintrag dieselbe, sondern das Erkennungsmerkmal
+      des vorzeitig beendeten Laufs. Der Menuepunkt "Highscores"
+      (`menu_highscores`) und `--reset highscore` (siehe 4.8) decken
+      die vierte Liste mit ab.
+      Der Rundenende-Kasten (`render_status_box`) bekam zwei weitere
+      Ausgaenge - "TIME UP" und das Game Over, beide mit Rows und
+      Time-Attack-Rang -, womit er sieben traegt; anders als bei Ultra
+      und Sprint traegt auch der Game-Over-Ausgang einen Rang, weil
+      beide Laeufe gewertet werden. Der HUD nutzt die beiden Zeilen von
+      Ultra und Sprint (Zeile 15/16 der linken Spalte) fuer die
+      mitwachsende Gesamtzeit ("Goal") und die Restzeit ("Left"); der
+      Wert wird in `render_pane_left` neu berechnet statt aus dem
+      Game-Loop uebernommen, weil ein Abbau nach dessen Aktualisierung
+      passiert und ausgerechnet der Frame, in dem der Spieler die
+      Gutschrift sehen will, sonst den alten Stand zeigte. Die
+      Anleitung erklaert den Modus auf der Seite "Spielmodi" (jetzt
+      Seite 6 von 7); deren Schlussabsatz ueber die Bestenlisten ist
+      dabei auf eine eigene siebte Seite gewandert, weil der vierte
+      Modus die Seite bis auf die letzte Zeile fuellte (siehe 3.5).
+- [x] **Statistik je Modus** (Version 0.42.0, zusammen mit dem
+      Time-Attack-Modus; der letzte offene Teil des Modus-Themas):
+      `lib/stats.sh` zaehlt die verbuchten Runden je Modus
+      (`rounds_marathon`, `rounds_ultra`, `rounds_sprint`,
+      `rounds_timeattack`) und fuer die drei Zeitmodi zusaetzlich, wie
+      viele davon im regulaeren Ende des Modus ausgingen statt im Game
+      Over (`rounds_*_goal`: Ziel erreicht / volle Zeit gespielt / Uhr
+      abgelaufen). `record_round` reicht dafuer `GAME_MODE` und
+      `GOAL_REACHED` an `stats_add_round` durch - die beiden einzigen
+      Rundenangaben, die sich aus den vorhandenen Zaehlern nicht
+      rekonstruieren lassen; die Erfolgsquote der Zeitmodi steht
+      nirgends sonst, weil ein gescheiterter Lauf in seiner
+      Bestenliste fehlt.
+      Der Punkt kam bewusst erst jetzt: die Roadmap hielt fest, dass
+      Zaehler ohne Anzeige tote Daten waeren und die Statistik-
+      Bildschirme schon zweiseitig sind. Mit Time Attack war ein
+      vierter Modus da, dessen Erfolgsquote ohne diese Zaehler gar
+      nicht sichtbar waere - und die noetige **dritte Seite**
+      ("Statistik (3/3)") ist der Anlass, sie fuer alle Modi
+      einzufuehren. Ein Umbau der ersten Seite war keine Alternative:
+      sie ist mit zehn Zeilen Zaehlern voll, und die sieben neuen
+      Zaehler samt Ueberschriften passen nicht in die 18 Zeilen, die
+      `MENU_BODY_MAX` laesst.
+      Gezaehlt wird hinter derselben Null-Pruefung wie alles andere
+      (eine Runde ohne einen einzigen abgelegten Stein ist keine
+      gespielte Runde), und ein unbekannter Modusname wird nirgends
+      gezaehlt statt Marathon zugeschlagen - lieber eine Luecke als
+      eine falsche Zuordnung.
 
-- [x] **Demo-Aufzeichnung und Demo-Player** (Version 0.42.0): eigene
+- [x] **Demo-Aufzeichnung und Demo-Player** (Version 0.43.0): eigene
       Runden werden mitgeschnitten und lassen sich ueber den neuen
       Hauptmenuepunkt "Demos" noch einmal ansehen (`lib/demo.sh`,
       `menu_demos` in `lib/menu.sh`; aktueller Stand siehe 3.7 und

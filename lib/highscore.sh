@@ -63,9 +63,19 @@
 #   that used their full time are stored, mirroring the Ultra rule - a
 #   Sprint attempt that topped out after a minute has fewer rows for a
 #   reason that has nothing to do with how well it was played.
+#   Since 0.13.0 the Time Attack mode (a countdown the run extends by a
+#   second per row of credit, see rowhammer.sh) has the fourth list, in
+#   ${DATA_DIR}/highscore-timeattack, built from the HSA_* globals and
+#   functions at the end of this file. It ranks by rows like the
+#   Marathon and the Sprint list - the rows and the time survived are
+#   the same ordering there, so the game's scoring currency wins the tie
+#   - but keeps its own file, because a run on a self-earned minute is
+#   not the achievement an endless round is. Unlike the other two timed
+#   lists it stores every run, finished or topped out: this mode has no
+#   incomparable "did not finish" state (see highscore_timeattack_add).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.12.0  (2026-08-03)
+# Version: 0.13.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -774,5 +784,238 @@ highscore_sprint_screen() {
     done
     debug_event "highscore sprint screen shown (${#HSS_ENTRIES[@]} entries)"
     menu_pages "Highscores - Sprint" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    return 0
+}
+
+# --- Time Attack mode list ------------------------------------------------
+# The Time Attack mode (added 0.13.0, user request) starts with
+# TIME_ATTACK_START_MS on a clock running backwards and pays
+# TIME_ATTACK_ROW_MS back per row of credit, so a run lasts exactly as
+# long as it keeps feeding itself (see rowhammer.sh). Its results live in
+# their own file for the reason the other two timed modes have theirs: a
+# run on a self-earned minute and an endless round that ends only on a
+# top-out are not the same achievement.
+#
+# What the score is was worth a moment's thought, because two candidates
+# offer themselves - the rows scored and the time survived. They are the
+# same ordering: a run that ends on the clock has played exactly
+# TIME_ATTACK_START_MS plus TIME_ATTACK_ROW_MS per row, so its time is a
+# function of its rows and could only ever rank them in the same
+# sequence. Rows win as the stored score because they are the game's
+# scoring currency everywhere else (see the note in rowhammer.sh), and
+# because they stay meaningful for the run that topped out early, where
+# the equation no longer holds. The time is kept and shown next to them:
+# for a run cut short by the stack it is the one number that says so.
+HSA_MAX=10
+HSA_FILE_NAME="highscore-timeattack"
+
+# In-memory list, one
+# "rows|lines|level|name|date|gold|silver|time|rowhammers|pieces" string
+# per element, sorted by rows descending. HSA_LAST_RANK is the rank the
+# most recently added run reached (1-based, 0 = not on the list).
+#
+# The Marathon list's field layout again, for the reason the Sprint list
+# reuses it: the same number in the same unit ranks it, so a third layout
+# would only be a third thing to keep in step.
+HSA_ENTRIES=()
+HSA_LAST_RANK=0
+
+# Field count of a stored Time Attack line. A single accepted count, like
+# the Ultra and the Sprint list and unlike the Marathon one
+# (HS_FIELD_COUNTS): this format is new and has never shipped in a
+# shorter shape, so the project's no-backward-compatibility rule applies
+# unchanged.
+HSA_FIELDS=10
+
+# highscore_timeattack_parse_line LINE
+# Validate one stored Time Attack line and, on success, append it to
+# HSA_ENTRIES. Field patterns and layout are the Marathon list's; a line
+# that fails anywhere is dropped silently, so a damaged file costs single
+# entries instead of the game.
+highscore_timeattack_parse_line() {
+    local line="${1}"
+    local -a f=()
+    local i
+
+    IFS='|' read -r -a f <<< "${line}"
+    [ "${#f[@]}" -eq "${HSA_FIELDS}" ] || return 0
+
+    # rows, lines, level.
+    for ((i = 0; i < 3; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+    [[ "${f[3]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
+    [[ "${f[4]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
+    # gold, silver, time, rowhammers, pieces.
+    for ((i = 5; i < HSA_FIELDS; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+
+    HSA_ENTRIES+=("${line}")
+    return 0
+}
+
+# highscore_timeattack_load
+# Read the Time Attack list into HSA_ENTRIES. Missing file = empty list,
+# malformed lines are skipped (highscore_timeattack_parse_line).
+highscore_timeattack_load() {
+    HSA_ENTRIES=()
+    local f="${DATA_DIR}/${HSA_FILE_NAME}" line
+    if [ ! -r "${f}" ]; then
+        return 0
+    fi
+    while IFS= read -r line; do
+        highscore_timeattack_parse_line "${line}"
+        if [ "${#HSA_ENTRIES[@]}" -ge "${HSA_MAX}" ]; then
+            break
+        fi
+    done < "${f}"
+    debug_event "highscore timeattack loaded: ${#HSA_ENTRIES[@]} entries from ${f}"
+    return 0
+}
+
+# highscore_timeattack_save
+# Write HSA_ENTRIES atomically (temp file + mv), like highscore_save.
+highscore_timeattack_save() {
+    local f="${DATA_DIR}/${HSA_FILE_NAME}" tmp
+    mkdir -p -- "${DATA_DIR}"
+    tmp="$(mktemp -- "${DATA_DIR}/.${HSA_FILE_NAME}.XXXXXX")"
+    # Expanding an empty array under set -u errors on bash < 4.4, so the
+    # empty list writes an empty file explicitly.
+    if [ "${#HSA_ENTRIES[@]}" -gt 0 ]; then
+        printf '%s\n' "${HSA_ENTRIES[@]}" > "${tmp}"
+    else
+        : > "${tmp}"
+    fi
+    mv -f -- "${tmp}" "${f}"
+    debug_event "highscore timeattack saved: ${f} (${#HSA_ENTRIES[@]} entries)"
+    return 0
+}
+
+# highscore_timeattack_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS PIECES
+# Insert one finished Time Attack run into the sorted list and persist
+# it. Arguments and order are the Marathon list's (highscore_add), TIME
+# the play time in whole seconds - here the time the run survived, which
+# is what it bought itself. Equal row credits rank below existing ones,
+# so the older entry keeps its place. Runs without a single row are
+# ignored, and nothing is written when the run does not make the list;
+# HSA_LAST_RANK reports the outcome either way.
+#
+# Unlike the Ultra and the Sprint list this one takes every run its
+# caller hands it, finished or topped out (see record_round in
+# rowhammer.sh): this mode has no incomparable "did not finish" state -
+# the rows are the same achievement either way, and a run that ended
+# early simply has fewer of them.
+highscore_timeattack_add() {
+    local rows="${1}" lines="${2}" level="${3}" name="${4}"
+    local gold="${5}" silver="${6}" time="${7}" hammers="${8}"
+    local pieces="${9}"
+    local entry e placed=0 rank=0
+    local -a merged=()
+    HSA_LAST_RANK=0
+    if [ "${rows}" -le 0 ]; then
+        return 0
+    fi
+    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}"
+    if [ "${#HSA_ENTRIES[@]}" -gt 0 ]; then
+        for e in "${HSA_ENTRIES[@]}"; do
+            if [ "${placed}" -eq 0 ] && [ "${rows}" -gt "${e%%|*}" ]; then
+                merged+=("${entry}")
+                rank="${#merged[@]}"
+                placed=1
+            fi
+            merged+=("${e}")
+        done
+    fi
+    # Not better than any existing entry: append only while there is room.
+    if [ "${placed}" -eq 0 ]; then
+        if [ "${#merged[@]}" -ge "${HSA_MAX}" ]; then
+            debug_event "highscore timeattack: '${name}' rows=${rows} below the top ${HSA_MAX}"
+            return 0
+        fi
+        merged+=("${entry}")
+        rank="${#merged[@]}"
+    fi
+    HSA_ENTRIES=("${merged[@]:0:HSA_MAX}")
+    HSA_LAST_RANK="${rank}"
+    debug_event "highscore timeattack: '${name}' rows=${rows} time=${time}s enters at rank ${rank}"
+    highscore_timeattack_save
+    return 0
+}
+
+# highscore_timeattack_screen
+# Show the Time Attack list the way the other three screens show theirs:
+# paged via menu_pages (HS_PAGE_ENTRIES/HS_PAGE_LINES again), two lines
+# per entry, same column widths and the same coloring rules. Rows rank
+# this list and therefore carry the accent color, as on the Marathon and
+# the Sprint screen.
+# The columns are the Marathon ones down to the play time, which is the
+# column that earns its place here: it is the time the run survived, and
+# because a finished run survives exactly the start time plus a second
+# per row, an entry whose time falls short of that is one the stack
+# ended early - the single number that tells the two apart.
+highscore_timeattack_screen() {
+    local -a body=()
+    local i line plain rank rank_sgr hsa_rows hsa_name hsa_date hsa_gold
+    local hsa_silver hsa_time hsa_hammers hsa_pieces
+    if [ "${#HSA_ENTRIES[@]}" -eq 0 ]; then
+        fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
+        body+=("Noch keine Eintraege.")
+        body+=("")
+        body+=("Spiele eine Time-Attack-Runde: sie startet")
+        body+=("mit ${FMT_DURATION} Minuten Restzeit, und jede Row")
+        body+=("bringt eine Sekunde dazu. Gewertet wird")
+        body+=("jeder Lauf - auch ein vorzeitiges Game Over.")
+        debug_event "highscore timeattack screen shown (0 entries)"
+        menu_message "Highscores - Time Attack" "${body[@]}"
+        return 0
+    fi
+    printf -v line '%2s %-12s %6s %5s %10s' \
+        "Nr" "Name" "Rows" "Zeit" "Datum"
+    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    for i in "${!HSA_ENTRIES[@]}"; do
+        IFS='|' read -r hsa_rows _ _ hsa_name hsa_date hsa_gold \
+            hsa_silver hsa_time hsa_hammers hsa_pieces <<< "${HSA_ENTRIES[i]}"
+        fmt_duration "${hsa_time}"
+        rank=$(( i + 1 ))
+        printf -v plain '%2d %-12.12s %6d %5s %10s' \
+            "${rank}" "${hsa_name}" "${hsa_rows}" "${FMT_DURATION}" \
+            "${hsa_date}"
+        # Same guard as the other three screens: color only while the
+        # line stays within the 46-char budget, so a hand-edited file
+        # with implausible numbers costs the colors, never a cut escape
+        # sequence.
+        if [ "${#plain}" -le 46 ]; then
+            rank_sgr="${TXT_ACCENT_SGR}"
+            case "${rank}" in
+                1) rank_sgr="${TXT_GOLD_SGR}" ;;
+                2) rank_sgr="${TXT_SILVER_SGR}" ;;
+            esac
+            printf -v line '%s%2d%s %-12.12s %s%6d%s %5s %10s' \
+                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hsa_name}" \
+                "${TXT_ACCENT_SGR}" "${hsa_rows}" "${TXT_RESET_SGR}" \
+                "${FMT_DURATION}" "${hsa_date}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
+        fmt_ppm "${hsa_pieces}" "${hsa_time}"
+        printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+            "${hsa_gold}" "${hsa_silver}" "${hsa_hammers}" "${hsa_pieces}" \
+            "${FMT_PPM}"
+        if [ "${#plain}" -le 46 ]; then
+            printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+                "${TXT_GOLD_SGR}" "${hsa_gold}" "${TXT_RESET_SGR}" \
+                "${TXT_SILVER_SGR}" "${hsa_silver}" "${TXT_RESET_SGR}" \
+                "${TXT_WARN_SGR}" "${hsa_hammers}" "${TXT_RESET_SGR}" \
+                "${hsa_pieces}" "${FMT_PPM}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
+        body+=("")
+    done
+    debug_event "highscore timeattack screen shown (${#HSA_ENTRIES[@]} entries)"
+    menu_pages "Highscores - Time Attack" 1 "${HS_PAGE_LINES}" "${body[@]}"
     return 0
 }

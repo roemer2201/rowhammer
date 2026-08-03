@@ -23,10 +23,10 @@
 #   suspended. menu_pages (since 0.10.0) shows a table that outgrew one
 #   screen as a sequence of info screens with a repeated table head, which
 #   is what the two-line highscore entries need. menu_help (since
-#   0.12.0, user request) is the "Anleitung" main menu entry: seven info
+#   0.12.0, user request) is the "Anleitung" main menu entry: eight info
 #   screens explaining the game, the controls, hold and preview, the
-#   gold/silver squares, the wonder construction, the game modes and
-#   (since 0.17.0) the demos,
+#   gold/silver squares, the wonder construction, the game modes, how
+#   their highscore lists are kept and (since 0.18.0) the demos,
 #   with the key bindings, the wonder costs, the mode goals and the
 #   playback keys read from
 #   the live state instead of spelled out. Since 0.13.0 (user request)
@@ -40,15 +40,19 @@
 #   Since 0.14.0 (user request) menu_singleplayer offers the game modes:
 #   the endless "Marathon" (renamed from "Normales Spiel" in 0.14.1, user
 #   decision), "Ultra", the race for ULTRA_TARGET_ROWS rows against the
-#   clock, and - since 0.16.0, user request - "Sprint", as many rows as
-#   possible within SPRINT_TIME_MS. The entry picked is handed to
+#   clock, since 0.16.0 (user request) "Sprint", as many rows as
+#   possible within SPRINT_TIME_MS, and since 0.17.0 (user request)
+#   "Time Attack", a countdown starting at TIME_ATTACK_START_MS that
+#   every row of credit extends by TIME_ATTACK_ROW_MS. The entry picked
+#   is handed to
 #   game_run as its mode name.
 #   Since 0.15.0 (user request) menu_highscores picks the mode of the
 #   list to show as well: the modes rank by different numbers and
 #   live in separate files (lib/highscore.sh), so the "Highscores" entry
-#   asks which one before drawing it. The Anleitung explains all three
-#   on a "Spielmodi" page of its own (menu_help_body, since 0.16.0).
-#   Since 0.17.0 menu_demos is the "Demos" main menu entry: the recorded
+#   asks which one before drawing it. The Anleitung explains all four
+#   on a "Spielmodi" page of its own (menu_help_body, since 0.16.0),
+#   with their highscore rules on the page after it (since 0.17.0).
+#   Since 0.18.0 menu_demos is the "Demos" main menu entry: the recorded
 #   rounds (lib/demo.sh) newest first, each of them to watch again or to
 #   delete. It refuses to start a replay while a round is suspended in
 #   the main menu, because a replay runs through the same game state.
@@ -59,7 +63,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.17.0  (2026-08-03)
+# Version: 0.18.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -217,9 +221,9 @@ menu_pages() {
 }
 
 # Number of screens menu_help walks through; used both to number the
-# titles ("Anleitung (2/6)") and to wrap the left/right paging
+# titles ("Anleitung (2/7)") and to wrap the left/right paging
 # (menu_help below), so the pages stay self-describing.
-MENU_HELP_PAGES=7
+MENU_HELP_PAGES=8
 
 # menu_help_keys FIXED VAR
 # Build the key list for one action as the help screen shows it:
@@ -410,6 +414,13 @@ menu_help_body() {
             # the live constants for the same reason the wonder page
             # reads WONDER_COSTS - a retuned goal must not leave the
             # manual lying.
+            # CHANGE 2026-08-03 (0.17.0, with the Time Attack mode): the
+            # fourth mode filled this page to the last of its
+            # MENU_BODY_MAX lines, so the note about the highscore lists
+            # moved to a page of its own (page 6 below). It is the part
+            # that is about the modes' scoring rather than about how
+            # they are played, and with four modes it had grown past a
+            # closing paragraph anyway.
             fmt_duration $(( SPRINT_TIME_MS / 1000 ))
             HELP_BODY=("Spielmodi (Menuepunkt \"Einzelspieler\"):" \
                   "" \
@@ -427,15 +438,44 @@ menu_help_body() {
             HELP_BODY+=("${line}")
             HELP_BODY+=("  wie moeglich. Ergebnis sind die Rows;" \
                    "  die Runde endet mit Ablauf der Zeit." \
-                   "" \
-                   "Jeder Modus hat eine eigene Bestenliste" \
-                   "(Menuepunkt \"Highscores\"). Bei Ultra und" \
-                   "Sprint zaehlt nur ein Lauf, der das Ziel" \
-                   "bzw. die volle Zeit erreicht hat - ein" \
-                   "Game Over davor wird nicht gewertet.")
+                   "")
+            fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
+            printf -v line 'Time Attack - %s Minuten Restzeit, die' \
+                "${FMT_DURATION}"
+            HELP_BODY+=("${line}")
+            printf -v line '  rueckwaerts laeuft; jede Row bringt %s Sek.' \
+                "$(( TIME_ATTACK_ROW_MS / 1000 ))"
+            HELP_BODY+=("${line}")
+            HELP_BODY+=("  dazu. Ergebnis sind die Rows; die Runde" \
+                   "  endet bei 00:00 - oder frueher im Game Over.")
             ;;
         6)
-            # Added 0.17.0 with the demo feature. The count and the
+            # Split off page 5 in 0.17.0 (see there): how the modes are
+            # scored, in one place. The rule differs by mode, and the
+            # Time Attack exception in particular needs its reason
+            # spelled out - otherwise it reads like an oversight next to
+            # the other two timed modes.
+            HELP_BODY=("Bestenlisten (Menuepunkt \"Highscores\"):" \
+                  "" \
+                  "Jeder Modus hat eine eigene Liste. Marathon," \
+                  "Sprint und Time Attack ranken nach Rows," \
+                  "Ultra nach der kuerzesten Zeit." \
+                  "" \
+                  "Bei Ultra und Sprint zaehlt nur ein Lauf, der" \
+                  "sein Ziel bzw. die volle Zeit erreicht hat -" \
+                  "ein Game Over davor wird nicht gewertet." \
+                  "" \
+                  "Bei Time Attack zaehlt dagegen jeder Lauf: die" \
+                  "Rows sind so oder so dieselbe Leistung, und" \
+                  "wer vorzeitig oben rausbaut, hat schlicht" \
+                  "weniger davon." \
+                  "" \
+                  "Reihen und Zaehler einer abgebrochenen Runde" \
+                  "fliessen immer in Weltwunder und Statistik" \
+                  "ein.")
+            ;;
+        7)
+            # Added 0.18.0 with the demo feature. The count and the
             # playback keys are read from the live state (DEMO_MAX,
             # KEY_PAUSE, KEY_QUIT) for the same reason as the pages
             # before: a retuned constant or a rebound key must not leave
@@ -470,14 +510,16 @@ menu_help_body() {
 
 # menu_help
 # The "Anleitung" main menu entry (added 0.12.0, user request): a short
-# tour through the game on six info screens - what the game is about,
+# tour through the game on eight info screens - what the game is about,
 # the controls, hold and preview, the gold/silver squares, the wonder
-# construction and the game modes (menu_help_body builds each page's
-# content). Three things are read from the live state
+# construction, the game modes, how their highscore lists are kept and
+# the demos (menu_help_body builds each page's
+# content). Four things are read from the live state
 # instead of being spelled out: the control page prints the current
 # bindings (menu_help_keys), the wonder page lists the names and costs
-# from lib/wonders.sh, and the modes page names the Ultra row target and
-# the Sprint time limit - a rebind, a retuned
+# from lib/wonders.sh, the modes page names the Ultra row target and
+# the Sprint and Time Attack times, and the demo page the number of
+# recordings kept plus the playback keys - a rebind, a retuned
 # WONDER_COSTS or a retuned goal must never leave the manual lying.
 # Text is German like
 # the rest of the menus and ASCII only (script conventions); every line
@@ -611,8 +653,10 @@ menu_pause() {
 
 # menu_singleplayer: the game modes. "Marathon" is the endless
 # round, "Ultra" the race for ULTRA_TARGET_ROWS rows against the clock
-# (0.14.0, user request) and "Sprint" its mirror image - as many rows as
-# possible within SPRINT_TIME_MS (0.16.0, user request). The chosen entry
+# (0.14.0, user request), "Sprint" its mirror image - as many rows as
+# possible within SPRINT_TIME_MS (0.16.0, user request) - and
+# "Time Attack" the countdown a run extends by TIME_ATTACK_ROW_MS per
+# row of credit (0.17.0, user request). The chosen entry
 # is passed to game_run as the mode name, so adding one is a matter of
 # an entry plus its case branch. After a
 # game session the wonder construction site is shown with the freshly
@@ -625,20 +669,23 @@ menu_pause() {
 # one, so the selection is normalized before the dispatch).
 menu_singleplayer() {
     local -a entries
-    local choice
+    local choice sprint_label
     while :; do
         entries=()
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             entries+=("Fortsetzen")
         fi
-        # The two timed modes name their target in the entry, so the
-        # difference between them is readable without the manual. Both
-        # read the live constants (fmt_duration for the Sprint limit),
-        # which keeps the menu honest if either is retuned.
+        # The three timed modes name their target in the entry, so the
+        # difference between them is readable without the manual. All
+        # read the live constants (fmt_duration for the two time
+        # limits), which keeps the menu honest if any is retuned.
         fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+        sprint_label="${FMT_DURATION}"
+        fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
         entries+=("Marathon" \
                   "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
-                  "Sprint (${FMT_DURATION} Minuten auf Rows)" \
+                  "Sprint (${sprint_label} Minuten auf Rows)" \
+                  "Time Attack (${FMT_DURATION} + $(( TIME_ATTACK_ROW_MS / 1000 ))s je Row)" \
                   "Zurueck")
         menu_run "Einzelspieler" "${entries[@]}"
         choice="${MENU_CHOICE}"
@@ -658,6 +705,7 @@ menu_singleplayer() {
             0) game_run marathon ;;
             1) game_run ultra ;;
             2) game_run sprint ;;
+            3) game_run timeattack ;;
             *) return 0 ;;
         esac
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -670,8 +718,10 @@ menu_singleplayer() {
 # menu_highscores: the "Highscores" main menu entry. Since 0.15.0 (user
 # request) there is a list per game mode to choose from - the endless
 # Marathon rounds ranked by rows, the Ultra runs ranked by the shortest
-# time and, since 0.16.0, the Sprint runs ranked by the rows scored in
-# three minutes (lib/highscore.sh keeps them in separate files with
+# time, since 0.16.0 the Sprint runs ranked by the rows scored in
+# three minutes and, since 0.17.0, the Time Attack runs ranked by the
+# rows scored on a clock they had to keep feeding
+# (lib/highscore.sh keeps them in separate files with
 # separate orders, because they are not comparable). Hence a picker in
 # front of them rather than one screen: merging them would mean several
 # orderings in one table, and appending one list to another would bury
@@ -681,17 +731,22 @@ menu_singleplayer() {
 # Loops instead of returning after one list, so comparing them costs
 # no walk back through the main menu; ESC or "Zurueck" leaves.
 menu_highscores() {
+    local sprint_label
     while :; do
         fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+        sprint_label="${FMT_DURATION}"
+        fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
         menu_run "Highscores" \
             "Marathon" \
             "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
-            "Sprint (${FMT_DURATION} Minuten auf Rows)" \
+            "Sprint (${sprint_label} Minuten auf Rows)" \
+            "Time Attack (${FMT_DURATION} + $(( TIME_ATTACK_ROW_MS / 1000 ))s je Row)" \
             "Zurueck"
         case "${MENU_CHOICE}" in
             0) highscore_screen ;;
             1) highscore_ultra_screen ;;
             2) highscore_sprint_screen ;;
+            3) highscore_timeattack_screen ;;
             *) return 0 ;;
         esac
     done

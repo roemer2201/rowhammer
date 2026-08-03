@@ -256,13 +256,15 @@ Die fuer uns relevanten Merkmale des Originals:
     mehr verdraengen, solange sein Label in sechs Zeichen passt.
     Zwei davon (Zeile 15 und 16) nutzt seit 0.34.0 der Ultra-Modus fuer
     "Goal" und "Left"; seit 0.39.0 nutzt der Sprint-Modus dieselben
-    beiden Zeilen fuer sein Zeitlimit und die Restzeit (die Modi laufen
-    nie gleichzeitig). Eine weitere (Zeile 18) nutzt seit 0.42.0 die
-    Demo-Wiedergabe fuer das Abspieltempo (Label "Demo", siehe 3.7);
+    beiden Zeilen fuer sein Zeitlimit und die Restzeit, seit 0.42.0 der
+    Time-Attack-Modus fuer seine mitwachsende Restzeit (die drei Modi
+    laufen nie gleichzeitig). Eine weitere (Zeile 18) nutzt seit 0.43.0
+    die Demo-Wiedergabe fuer das Abspieltempo (Label "Demo", siehe 3.7);
     sie liegt zwei Zeilen unter den Ziel-Zaehlern, damit eine
-    wiedergegebene Ultra- oder Sprint-Runde ihre beiden weiter zeigt.
-    Alle drei nur, solange die jeweilige Runde bzw. Wiedergabe laeuft;
-    im Marathon bleiben alle acht Zeilen frei (siehe 3.6).
+    wiedergegebene Runde eines Zeitmodus ihre beiden weiter zeigt.
+    Alles nur, solange eine Runde des
+    jeweiligen Modus bzw. eine Wiedergabe laeuft; im Marathon bleiben
+    alle acht Zeilen frei (siehe 3.6).
 - Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
   aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
   Pausenmenue) sowie der Game-Over-Bildschirm zaehlen nicht; die Zeit
@@ -280,7 +282,7 @@ Die fuer uns relevanten Merkmale des Originals:
 ### 3.5 Anleitung (seit 0.32.0)
 
 Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
-"Beenden" und erklaert das Spiel auf sechs Info-Bildschirmen
+"Beenden" und erklaert das Spiel auf sieben Info-Bildschirmen
 (`menu_help` in `lib/menu.sh`, ueber `render_menu_frame` zentriert wie
 der Spielblock). **Seit Version 0.33.0 (Nutzerwunsch)** blaettert man mit
 den **Pfeiltasten links/rechts** durch die Seiten (umlaufend: von der
@@ -301,33 +303,42 @@ in fester Reihenfolge einmal durchzureichen:
 4. Gold-/Silber-Quadrate und die Reihenwertung (Werte aus
    `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`, siehe 3.2).
 5. Weltwunderbau mit der Kostentabelle aus `lib/wonders.sh`.
-6. Spielmodi (seit 0.39.0): Marathon, Ultra und Sprint mit ihrem
-   jeweiligen Ende und Ergebnis, dazu der Hinweis auf die eigene
-   Bestenliste je Modus und darauf, dass bei Ultra und Sprint nur ein
-   Lauf gewertet wird, der sein Ziel bzw. die volle Zeit erreicht hat.
+6. Spielmodi (seit 0.39.0, um Time Attack erweitert in 0.42.0):
+   Marathon, Ultra, Sprint und Time Attack mit ihrem
+   jeweiligen Ende und Ergebnis.
    Die Seite kam bewusst erst mit dem Sprint-Modus dazu: die
    urspruenglichen fuenf Seiten stammen aus der Zeit, als es nur die
    endlose Runde gab, und mit Sprint liessen sich alle drei Modi in
    einem Zug erklaeren, statt die Seite zweimal umzubauen.
-7. Demos (seit 0.42.0): dass jede Runde mitgeschnitten wird, dass die
+7. Bestenlisten (seit 0.42.0): eine eigene Liste je Modus, welche Zahl
+   sie jeweils rangiert, und welche Laeufe ueberhaupt gewertet werden -
+   bei Ultra und Sprint nur einer, der sein Ziel bzw. die volle Zeit
+   erreicht hat, bei Time Attack dagegen jeder, samt Begruendung (siehe
+   3.6). Die Seite ist der abgespaltene Schluss der Modus-Seite: der
+   vierte Modus fuellte diese bis auf die letzte ihrer `MENU_BODY_MAX`
+   Zeilen, und der Absatz handelt ohnehin von der Wertung statt vom
+   Spielablauf.
+8. Demos (seit 0.43.0): dass jede Runde mitgeschnitten wird, dass die
    Zuege und nicht der Bildschirm aufgezeichnet werden (und die
    Wiedergabe die Runde deshalb wirklich noch einmal spielt), wie viele
    Aufnahmen aufbewahrt werden, wo sich einzelne loeschen und die
    Aufzeichnung abschalten laesst, und die Tasten der Wiedergabe.
 
-Vier Teile werden bewusst aus dem laufenden Zustand gelesen statt
+Fuenf Teile werden bewusst aus dem laufenden Zustand gelesen statt
 ausgeschrieben, damit die Anleitung nicht luegen kann: die
 Tastenbelegung (`menu_help_keys` setzt die konfigurierbare Taste vor die
 fest verdrahteten Sekundaertasten, laesst `NONE` weg und vermeidet
 Dubletten wie `KEY_HARD=SPACE` neben der Leertaste), die Wunder-Namen
-samt Kosten, die Ziele der beiden Zeitmodi (`ULTRA_TARGET_ROWS`,
-`SPRINT_TIME_MS`) und auf der Demo-Seite die Zahl der aufbewahrten
-Aufnahmen (`DEMO_MAX`) samt den Wiedergabetasten. Jeder Bildschirm
-bleibt in den 46 Zeichen Breite und
+samt Kosten, die Ziele der drei Zeitmodi (`ULTRA_TARGET_ROWS`,
+`SPRINT_TIME_MS`, `TIME_ATTACK_START_MS`/`TIME_ATTACK_ROW_MS`) und auf
+der Demo-Seite die Zahl der aufbewahrten Aufnahmen (`DEMO_MAX`) samt
+den Wiedergabetasten. Jeder
+Bildschirm bleibt in den 46 Zeichen Breite und
 den `MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst - die
-Modus-Seite nutzt sie mit 18 Zeilen genau aus, die Demo-Seite mit 17.
+Bestenlisten-Seite nutzt sie mit 18 Zeilen genau aus, die Demo-Seite
+mit 17.
 
-### 3.6 Spielmodi (Ultra seit 0.34.0, Sprint seit 0.39.0)
+### 3.6 Spielmodi (Ultra seit 0.34.0, Sprint seit 0.39.0, Time Attack seit 0.42.0)
 
 Das Einzelspieler-Menue waehlt den Modus der Runde; der gewaehlte Name
 geht als Argument an `game_run` und liegt waehrend der Runde in
@@ -350,6 +361,19 @@ im Modus zurueck, in dem sie gestartet wurde).
   Gemessen wird dieselbe Spielzeit wie im HUD (`PLAY_MS`, siehe 3.4),
   Pausen und Pausenmenue zaehlen also nicht mit, und eine ins
   Hauptmenue gelegte Runde nimmt ihre Restzeit beim Fortsetzen mit.
+- **Time Attack** (`timeattack`, Nutzerwunsch, seit 0.42.0): die Uhr als
+  Einsatz. Die Runde startet mit `TIME_ATTACK_START_MS` (60000 ms =
+  1 Minute) Restzeit, die rueckwaerts laeuft; jede gewertete **Row**
+  schreibt `TIME_ATTACK_ROW_MS` (1000 ms = 1 Sekunde) gut. Der Lauf
+  dauert damit genau so lange, wie er sich selbst am Leben haelt, und
+  endet, wenn die Uhr auf 0 steht - oder vorher durch Game Over. Das
+  Ergebnis sind die Rows. Gemessen wird wieder `PLAY_MS` (siehe 3.4),
+  also ohne Pausen. Das Zeitguthaben wird **nicht** in einem eigenen
+  Zaehler mitgefuehrt, sondern bei Bedarf aus `ROW_CREDIT` abgeleitet
+  (`time_attack_budget` in `rowhammer.sh` setzt `TIME_ATTACK_BUDGET_MS`
+  = Startzeit + Rows x Gutschrift): die Reihenwertung ist ohnehin die
+  eine Zahl, um die sich der ganze Modus dreht, und ein zweiter, bei
+  jedem Abbau fortgeschriebener Zaehler koennte von ihr nur abweichen.
 
 Entscheidungen zu Ultra (die drei in der Roadmap offen gelassenen
 Punkte, im Sinne der dortigen Empfehlung entschieden):
@@ -422,7 +446,59 @@ gespiegelt - alles andere waere im selben Menue schwer zu erklaeren:
   festgesetzt wird; der noch fallende Stein wird nicht mehr gelockt,
   seine Reihen zaehlen also nicht mehr.
 
-### 3.7 Demos: Aufzeichnung und Wiedergabe (seit 0.42.0)
+Entscheidungen zu Time Attack (0.42.0). Der Modus liegt zwischen den
+beiden anderen - eine Uhr wie bei Sprint, aber eine, die von der
+Reihenwertung gespeist wird -, deshalb folgt er ihren Entscheidungen,
+wo sie passen, und weicht an genau einer Stelle begruendet ab:
+
+- **Gewertet werden Rows, nicht Lines** - dieselbe Begruendung wie bei
+  Ultra und Sprint, hier zusaetzlich zwingend: die Rows sind zugleich
+  die Waehrung, mit der Spielzeit gekauft wird. Ein Rowhammer durch
+  zwei Gold-Quadrate (85 Rows) verlaengert die Runde damit um 85
+  Sekunden.
+- **Der Highscore sind die Rows** (Nutzerfrage). Die zweite denkbare
+  Wertung - die ueberlebte Zeit - ist keine Alternative, sondern
+  dieselbe Rangfolge: ein Lauf, der an der Uhr endet, hat exakt
+  `TIME_ATTACK_START_MS` + Rows x `TIME_ATTACK_ROW_MS` gespielt, seine
+  Zeit ist also eine Funktion seiner Rows und sortiert die Liste
+  zwangslaeufig gleich. Den Ausschlag gibt, dass die Rows im ganzen
+  Spiel die Punktwaehrung sind (siehe 3.2) und auch fuer den vorzeitig
+  gescheiterten Lauf noch aussagekraeftig bleiben, wo die Gleichung
+  nicht mehr gilt. Die Zeit steht in der Liste trotzdem daneben - sie
+  ist genau die Spalte, an der ein solcher Lauf zu erkennen ist.
+- **Jeder Lauf kommt in die Time-Attack-Bestenliste** - die bewusste
+  Abweichung von Ultra und Sprint. Dort gibt es einen Zustand
+  "abgebrochen", der sich mit einem vollen Lauf nicht vergleichen
+  laesst (keine Zeit bzw. weniger Zeit zum Punkten). Time Attack kennt
+  diesen Zustand nicht: die Runde ist zu Ende, wenn sie zu Ende ist,
+  die Rows sind in beiden Faellen dieselbe Leistung, und wer vorzeitig
+  oben rausbaut, hat schlicht weniger davon - dieselbe Lage wie im
+  Marathon, wo eine Runde ebenfalls im Game Over endet und trotzdem
+  gewertet wird.
+- **HUD:** dieselben zwei Zeilen wie Ultra und Sprint
+  (`render_pane_left`, Zeile 15/16, siehe 3.4). "Goal" ist hier keine
+  Konstante, sondern die bisher erspielte Gesamtzeit
+  (`TIME_ATTACK_BUDGET_MS`, MM:SS) - so ist zu sehen, was ein Abbau in
+  Zeit wert war -, "Left" die Restzeit, aufgerundet wie bei Sprint. Der
+  Wert wird in `render_pane_left` neu berechnet statt aus dem Game-Loop
+  uebernommen: ein Abbau passiert nach dessen Aktualisierung, und
+  ausgerechnet der Frame, in dem der Spieler die Gutschrift sehen will,
+  zeigte sonst noch den alten Stand.
+- **Rundenende-Kasten** (`render_status_box`): zwei weitere Ausgaenge,
+  wieder mit denselben acht Innenzeilen - "TIME UP" bzw. "GAME OVER",
+  beide mit den erreichten Rows und dem Time-Attack-Rang. Anders als
+  bei Ultra und Sprint traegt **auch der Game-Over-Ausgang einen Rang**,
+  denn beide Laeufe werden gewertet; die Ueberschrift ist das, was sie
+  unterscheidet. Damit traegt der Kasten sieben Ausgaenge.
+- **Zeitmessung:** die Zielpruefung sitzt an derselben Stelle im
+  Game-Loop wie die von Sprint, direkt hinter `play_clock_tick` und vor
+  der Gravitation (`time_attack_time_up` in `rowhammer.sh`), aus
+  demselben Grund: auf abgelaufener Zeit soll kein Stein mehr fallen
+  oder festgesetzt werden.
+- **`r` im Rundenende-Bild startet im selben Modus neu**, wie bei den
+  anderen Modi (`game_reset` ohne Argument).
+
+### 3.7 Demos: Aufzeichnung und Wiedergabe (seit 0.43.0)
 
 Jede gespielte Runde wird mitgeschnitten und laesst sich ueber den
 Hauptmenuepunkt **"Demos"** noch einmal ansehen (`lib/demo.sh`,
@@ -478,7 +554,7 @@ Frage - Pause und Vorspulen: beides, plus Zeitlupe):
 - Quit-Taste (`x`) oder `ESC` kehrt zur Liste zurueck, `r` spielt eine
   durchgelaufene Demo noch einmal von vorn.
 - Am Ende erscheint der Kasten ueber dem Spielfeld ("DEMO ENDE" mit
-  Rows, Zeit und der Art des Rundenendes) - ein sechster Ausgang des
+  Rows, Zeit und der Art des Rundenendes) - ein weiterer Ausgang des
   `render_status_box` (siehe 3.6), der bewusst **vor** allen anderen
   greift: auch eine Runde, die im Game Over endete, zeigt beim Abspielen
   den Demo-Kasten, weil dessen Tasten die der Wiedergabe sein muessen.
@@ -509,8 +585,8 @@ Frage - Pause und Vorspulen: beides, plus Zeitlupe):
   Demo-Zeit verschluckt und die naechsten Ereignisse kaemen im Schwall.
 - **Die Aufzeichnung aendert das Spiel nicht.** `demo_record_event`
   rechnet den Zeitstempel so aus, wie `play_clock_tick` es taete,
-  schreibt ihn aber nicht in die Spieluhr zurueck - `PLAY_MS` treibt den
-  Sprint-Modus und das HUD, und eine laufende Aufnahme darf daran nichts
+  schreibt ihn aber nicht in die Spieluhr zurueck - `PLAY_MS` treibt die
+  Zeitmodi und das HUD, und eine laufende Aufnahme darf daran nichts
   aendern.
 
 ## 4. Technisches Konzept
@@ -599,7 +675,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.42.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.43.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
@@ -611,11 +687,12 @@ Anleitung / Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue). Das
 Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
-("Marathon", "Ultra" oder - seit 0.39.0 - "Sprint", siehe 3.6; der
+("Marathon", "Ultra", seit 0.39.0 "Sprint" und seit 0.42.0
+"Time Attack", siehe 3.6; der
 endlose Modus hiess bis
 0.34.1 "Normales Spiel"), und seit 0.38.0 waehlt der Menuepunkt
 "Highscores" ebenso den Modus der anzuzeigenden Bestenliste
-(`menu_highscores`, seit 0.39.0 mit drei Listen, siehe 4.5); die
+(`menu_highscores`, seit 0.42.0 mit vier Listen, siehe 4.5); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -640,9 +717,9 @@ Einstellungsmenue waehlbar und in der Config gespeichert),
 `--render-mode partial|full` (`ROWHAMMER_RENDER_MODE`, Standard
 `partial`, seit 0.41.0, siehe 4.3),
 `--demo-record on|off` (`ROWHAMMER_DEMO_RECORD`, Standard `on`, seit
-0.42.0; auch im Einstellungsmenue und in der Config, siehe 3.7/4.10),
+0.43.0; auch im Einstellungsmenue und in der Config, siehe 3.7/4.10),
 `--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
-0.35.0, das Ziel `demo` seit 0.42.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
+0.35.0, das Ziel `demo` seit 0.43.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
 beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
 Resets; frei mit anderen Optionen kombinierbar),
 `--debug` (`ROWHAMMER_DEBUG`),
@@ -800,8 +877,9 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
   Highscore-Liste `highscore`, die Ultra-Bestenliste `highscore-ultra`
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
-  (seit 0.39.0), der Spielstand `save`, die
-  Statistik `stats` und - seit 0.42.0 - das Unterverzeichnis `demos`
+  (seit 0.39.0), die Time-Attack-Bestenliste `highscore-timeattack`
+  (seit 0.42.0), der Spielstand `save`, die
+  Statistik `stats` und - seit 0.43.0 - das Unterverzeichnis `demos`
   mit den aufgezeichneten Runden (Format und Ablage siehe 4.10; als
   einziger Eintrag ein Verzeichnis statt einer Datei, weil es beliebig
   viele Aufnahmen bis `DEMO_MAX` fasst).
@@ -816,7 +894,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
   (Spielername, Farbschema seit 0.21.0, Tastenbelegung,
-  Demo-Aufzeichnung seit 0.42.0) schreibt
+  Demo-Aufzeichnung seit 0.43.0) schreibt
   `${DATA_DIR}/rowhammer.conf`;
   Werte werden validiert und single-quoted geschrieben, da die Datei
   gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
@@ -927,15 +1005,38 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   interessante Zahl, weil beide zusammen zeigen, wie viel des Ergebnisses
   aus den Quadraten kam. Gespeichert bleibt die Spielzeit trotzdem - die
   PPM-Spalte der zweiten Zeile rechnet mit ihr.
+  **Time-Attack-Bestenliste (seit 0.42.0, Nutzerwunsch, siehe 3.6):**
+  die Ergebnisse des Time-Attack-Modus liegen in einer vierten Datei
+  `${DATA_DIR}/highscore-timeattack`, Zeilenformat und Rangordnung
+  wieder wie die Marathon-Liste (absteigend nach Rows, gleiche Rows
+  hinter dem aelteren Eintrag), ebenfalls Top 10 (`HSA_*` in
+  `lib/highscore.sh`), ebenfalls genau zehn Felder ohne die Kulanz der
+  Marathon-Liste. Dass die Rows und nicht die ueberlebte Zeit die
+  Wertung sind, ist in 3.6 begruendet (beide ergeben dieselbe
+  Rangfolge). Eine eigene Datei ist noetig, weil ein Lauf auf einer
+  selbst erspielten Minute nicht die Leistung einer endlosen Runde ist.
+  Der Unterschied zu den beiden anderen Zeitmodi: **jeder** Lauf wird
+  gespeichert, auch der vorzeitig im Game Over gescheiterte
+  (Entscheidung in 3.6) - dieser Modus hat keinen Zustand
+  "unvollstaendig", der sich nicht vergleichen liesse.
+  **Anzeige:** `highscore_timeattack_screen` zeigt die Liste im Layout
+  der drei anderen (seitenweise ueber `menu_pages`, dieselben
+  `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`, zwei Zeilen je Eintrag, Rows in der
+  Akzentfarbe). Die Spalten sind die der Marathon-Liste samt
+  Spielzeit - und die verdient ihren Platz hier: ein Lauf an der Uhr
+  spielt genau Startzeit + eine Sekunde je Row, eine kuerzere Zeit
+  weist den Eintrag also als vorzeitig beendet aus.
   **Modus-Auswahl:** weil es damit mehrere Listen mit verschiedenen
   Rangordnungen
   gibt, fragt der Hauptmenuepunkt "Highscores" seit 0.38.0 zuerst nach
   dem Modus (`menu_highscores` in `lib/menu.sh`: Marathon / Ultra /
-  Sprint / Zurueck, der Sprint-Eintrag seit 0.39.0) und zeigt danach die
+  Sprint / Time Attack / Zurueck, der Sprint-Eintrag seit 0.39.0, der
+  Time-Attack-Eintrag seit 0.42.0) und zeigt danach die
   gewaehlte Liste; die Auswahl bleibt
   stehen, bis "Zurueck" oder `ESC` kommt, sodass ein Vergleich der
   Listen nicht durchs Hauptmenue muss. Die Bildschirmtitel nennen ihren
-  Modus ("Highscores - Marathon", "- Ultra" bzw. "- Sprint"), sonst
+  Modus ("Highscores - Marathon", "- Ultra", "- Sprint" bzw.
+  "- Time Attack"), sonst
   waere
   nicht zu sehen, welche gerade auf dem Schirm steht. Eine
   gemeinsame Liste waere keine Alternative: sie muesste mehrere
@@ -1005,13 +1106,37 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   verbucht (gemeinsam mit Highscore und Savegame in
   `record_round`); seit 0.27.0 auch eine Runde ganz ohne Reihenabbau,
   weil sie Teile und Spielzeit beisteuert (frueher fiel sie durch die
-  Null-Pruefung). Anzeige ueber den Hauptmenuepunkt
-  "Statistik", seit 0.27.0 auf **zwei Bildschirmen**: erst die
+  Null-Pruefung).
+  **Runden je Spielmodus (seit 0.42.0, mit dem Time-Attack-Modus):**
+  `rounds_marathon`, `rounds_ultra`, `rounds_sprint` und
+  `rounds_timeattack` zaehlen die verbuchten Runden je Modus, dazu
+  `rounds_ultra_goal`, `rounds_sprint_goal` und
+  `rounds_timeattack_goal` die davon, die im regulaeren Ende des Modus
+  ausgingen statt im Game Over (Ziel erreicht / volle Zeit gespielt /
+  Uhr abgelaufen). `record_round` reicht dafuer `GAME_MODE` und
+  `GOAL_REACHED` an `stats_add_round` durch - die einzigen beiden
+  Rundenangaben, die sich aus den uebrigen Zaehlern nicht
+  rekonstruieren lassen, und die Erfolgsquote der Zeitmodi steht
+  nirgends sonst (ein gescheiterter Lauf fehlt in seiner Bestenliste).
+  Gezaehlt wird hinter derselben Null-Pruefung wie alles andere: eine
+  Runde ohne einen einzigen abgelegten Stein ist keine gespielte Runde,
+  und sie hier zu zaehlen, waehrend sie in jedem anderen Zaehler fehlt,
+  wuerde die beiden nur widerspruechlich machen. Ein unbekannter
+  Modusname (nur aus einem kuenftigen Modus ohne `case`-Zweig
+  erreichbar) wird nirgends gezaehlt statt Marathon zugeschlagen -
+  lieber eine Luecke als eine falsche Zuordnung.
+  Anzeige ueber den Hauptmenuepunkt
+  "Statistik", seit 0.27.0 auf **zwei** und seit 0.42.0 auf **drei
+  Bildschirmen**: erst die
   Gesamtzaehler (inklusive der gewichteten Gesamtsumme Lines + Bonus,
   des Rowhammer-Zaehlers, der abgelegten Teile, der Gesamtspielzeit als
   H:MM:SS und der daraus berechneten Steine/Minute), dann die letzten
   drei Spiele mit je zwei Zeilen (Datum, Rows, Reihen, Bonus / Gold,
-  Silb, RH, PCS, PPM). Beides zusammen passt nicht mehr in die 18
+  Silb, RH, PCS, PPM), zuletzt die Runden je Modus (die Erfolgszahl der
+  Zeitmodi jeweils eingerueckt unter der Rundenzahl, weil sie ein
+  Anteil davon ist, dazu die Gesamtzahl). Der dritte Bildschirm ist ein
+  eigener, weil der erste mit zehn Zeilen Zaehlern voll ist. Die ersten
+  beiden zusammen passen nicht mehr in die 18
   Zeilen, die ein 22-Zeilen-Terminal einem Info-Bildschirm laesst
   (`MENU_BODY_MAX` in `lib/menu.sh`; bis 0.27.0 waren es 17 - die
   zentrierten Bildschirme aus 0.28.0 brauchen keine Zeile mehr fuers
@@ -1061,7 +1186,7 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
     mit Instanz-IDs, Reihenabbau mit Credit-Aufschluesselung je Reihe,
     Hold, Pause, Bag-Refills, Menuewahl, Config-Speicherungen, fatale
     Fehler sowie ein Board-Snapshot (Typ- und Quadrat-Gitter plus
-    cut/squared-Instanzlisten) nach jedem Lock. Seit 0.42.0 auch Beginn,
+    cut/squared-Instanzlisten) nach jedem Lock. Seit 0.43.0 auch Beginn,
     Ablage und Wiedergabe von Demos (siehe 3.7/4.10) - eine abgespielte
     Demo erzeugt dabei dieselben Spielereignisse wie die Runde, die sie
     aufgezeichnet hat, was sie zum Vergleichen zweier Laeufe brauchbar
@@ -1146,10 +1271,10 @@ ins Menue zu starten. Ziele:
 | --- | --- |
 | `config` | `rowhammer.conf` |
 | `stats` | `stats` |
-| `highscore` | `highscore`, `highscore-ultra` **und** `highscore-sprint` |
+| `highscore` | `highscore`, `highscore-ultra`, `highscore-sprint` **und** `highscore-timeattack` |
 | `save` | `save` (Weltwunder-Fortschritt) |
 | `demo` | das Verzeichnis `demos` (alle Aufzeichnungen) |
-| `all` | alle sechs Dateien und das Verzeichnis `demos` |
+| `all` | alle sieben Dateien und das Verzeichnis `demos` |
 
 **Reset heisst verschieben, nicht loeschen (seit 0.36.0,
 Nutzerentscheidung).** Jede betroffene Datei wandert nach
@@ -1173,13 +1298,14 @@ Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
   Weltwunder-Fortschritt zuruecksetzen will, hat dafuer das eigene Ziel
   `save` (der in der Roadmap angedachte Wert), das die uebrigen Dateien
   unangetastet laesst.
-- **`highscore` trifft alle Bestenlisten.** Endlos-, Ultra- und
-  Sprint-Liste (seit 0.34.0 bzw. 0.39.0, siehe 4.5) sind dieselbe Art
+- **`highscore` trifft alle Bestenlisten.** Endlos-, Ultra-, Sprint-
+  und Time-Attack-Liste (seit 0.34.0, 0.39.0 bzw. 0.42.0, siehe 4.5)
+  sind dieselbe Art
   Daten; eine davon stehen zu
   lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
   einen Reset zu fein.
 - **`demo` ist das einzige Ziel, das ein Verzeichnis bewegt** (seit
-  0.42.0). Verschoben wird `demos` als Ganzes - dieselbe `mv`-Schleife
+  0.43.0). Verschoben wird `demos` als Ganzes - dieselbe `mv`-Schleife
   wie fuer die Dateien, die den Unterschied nicht kennen muss -, sodass
   die Aufnahmen eines Resets zusammen in einem `.bak`-Verzeichnis
   liegen und sich in einem Zug zurueckholen lassen. Ein eigenes Ziel
@@ -1194,7 +1320,8 @@ Ablauf und Einordnung:
   Datei bei jedem Start selbst loeschen lassen.
 - **Zeitpunkt:** direkt nach dem Sourcen der Module (die Dateinamen
   kommen aus den Modulen, die sie besitzen: `CONFIG_NAME`,
-  `STATS_FILE_NAME`, `HS_FILE_NAME`/`HSU_FILE_NAME`/`HSS_FILE_NAME`,
+  `STATS_FILE_NAME`,
+  `HS_FILE_NAME`/`HSU_FILE_NAME`/`HSS_FILE_NAME`/`HSA_FILE_NAME`,
   `SAVE_FILE_NAME`, `DEMO_DIR_NAME`)
   und **vor** der TTY-Pruefung. Die TTY-Pruefung ist dafuer aus dem
   Prerequisites-Block nach unten gewandert: ein Reset loescht nur
@@ -1317,7 +1444,7 @@ Entscheidungen zu den Workflows:
   CI-Lauf des Branches zu verlassen: ein Tag darf auf jedem beliebigen
   Commit sitzen.
 
-### 4.10 Demo-Format und Ablage (seit 0.42.0)
+### 4.10 Demo-Format und Ablage (seit 0.43.0)
 
 Das Konzept und die Entscheidungen dahinter stehen in 3.7; hier das
 Dateiformat und der Weg einer Aufnahme.
@@ -1329,8 +1456,8 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 
 ```
 version=1            Formatversion (jede andere wird abgelehnt)
-game=0.42.0          Spielversion, die aufgenommen hat (nur Info)
-mode=marathon        marathon|ultra|sprint - die Regeln der Runde
+game=0.43.0          Spielversion, die aufgenommen hat (nur Info)
+mode=marathon        marathon|ultra|sprint|timeattack - die Regeln
 name=Player          Spielername
 date=2026-08-03 21:40
 time=123456          Spielzeit der Runde in Millisekunden
@@ -2177,10 +2304,10 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.42.0
-  (Demo-Aufzeichnung und Demo-Player); die Uebersichtstabelle in
-  HISTORY.md listet jede Version mit ihrem Thema. Offen sind die drei
-  Punkte unten
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.43.0
+  (Demo-Aufzeichnung und Demo-Player); die
+  Uebersichtstabelle in HISTORY.md
+  listet jede Version mit ihrem Thema. Offen sind die zwei Punkte unten
 
 ### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
 
@@ -2222,19 +2349,6 @@ Erledigt und nach HISTORY.md verschoben:
       serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
       keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
       umsetzbar.
-- [ ] **Statistik je Modus** (letzter offener Teil des Modus-Themas;
-      Sprint selbst ist mit 0.39.0 umgesetzt, siehe HISTORY.md und 3.6):
-      gespielte Runden je Modus, bei Ultra zusaetzlich wie oft das Ziel
-      erreicht wurde, bei Sprint wie oft die volle Zeit gespielt wurde.
-      Bewusst noch nicht eingebaut - Zaehler ohne Anzeige waeren tote
-      Daten, und die Statistik-Bildschirme sind schon zweiseitig (siehe
-      4.5); eine dritte Seite oder ein Umbau der vorhandenen ist also
-      Teil des Punktes, nicht nur das Zaehlen.
-      Erledigt und nach HISTORY.md verschoben sind die drei uebrigen
-      Teile: die Anzeige der Ultra-Bestenliste (0.38.0), der
-      Sprint-Modus samt eigener Bestenliste (0.39.0) und die sechste
-      Anleitungsseite "Spielmodi" (0.39.0, siehe 3.5).
-
 ### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 
 Die Schritte sind so sortiert, dass jeder fuer sich lauffaehig und
@@ -2432,15 +2546,22 @@ Multi-Server zuletzt.
 - Spielmodi: die drei Fragen zum Ultra-Modus sind mit 0.34.0
   entschieden (Rows statt Lines, gescheiterte Versuche ohne
   Listeneintrag, HUD-Zaehler "Goal"/"Left" in der linken Spalte, siehe
-  3.6), und Sprint hat sie mit 0.39.0 gespiegelt uebernommen. Offen
+  3.6), Sprint hat sie mit 0.39.0 gespiegelt uebernommen und Time
+  Attack folgt ihnen seit 0.42.0 mit einer begruendeten Ausnahme (jeder
+  Lauf wird gewertet, siehe 3.6). Offen
   bleibt nur die Justierung: ob 150 Rows die richtige
-  Distanz und 3 Minuten die richtige Dauer sind, entscheidet Playtesting
-  (`ULTRA_TARGET_ROWS`, `SPRINT_TIME_MS`) - mit den
+  Distanz, 3 Minuten die richtige Dauer und 1 Minute Startzeit bei
+  1 Sekunde je Row die richtige Time-Attack-Waehrung sind, entscheidet
+  Playtesting
+  (`ULTRA_TARGET_ROWS`, `SPRINT_TIME_MS`, `TIME_ATTACK_START_MS`/
+  `TIME_ATTACK_ROW_MS`) - mit den
   Quadrat-Boni ist die Ultra-Strecke deutlich kuerzer als 150 physische
-  Reihen, das ist so gewollt. Die Anzeige der Ultra-Liste ist mit
+  Reihen, das ist so gewollt, und aus demselben Grund verlaengert ein
+  Rowhammer durch zwei Gold-Quadrate eine Time-Attack-Runde gleich um
+  85 Sekunden. Die Anzeige der Ultra-Liste ist mit
   0.38.0 nachgezogen (Modus-Auswahl unter "Highscores", siehe 4.5), die
-  Sprint-Liste mit 0.39.0; die Statistik je Modus steht noch aus (siehe
-  Roadmap Phase 4).
+  Sprint-Liste mit 0.39.0, die Time-Attack-Liste samt Statistik je
+  Modus mit 0.42.0.
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

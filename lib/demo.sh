@@ -104,7 +104,7 @@ DEMO_SPEED_DEFAULT=2
 # (rowhammer.sh, HS_FIELD_NAME_RE in lib/highscore.sh).
 DEMO_NUM_RE='^[0-9]{1,9}$'
 DEMO_NAME_RE='^[A-Za-z0-9_ -]{1,16}$'
-DEMO_MODE_RE='^(marathon|ultra|sprint)$'
+DEMO_MODE_RE='^(marathon|ultra|sprint|timeattack)$'
 DEMO_DATE_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$'
 DEMO_PCS_RE='^[IOTSZJL]{1,80}$'
 # One event: the play-time delta in milliseconds since the previous event
@@ -646,6 +646,7 @@ demo_play() {
         HS_LAST_RANK=0
         HSU_LAST_RANK=0
         HSS_LAST_RANK=0
+        HSA_LAST_RANK=0
         # Sets up board, bag, counters and the first piece exactly like a
         # live round - only the pieces come from the recorded stream,
         # because DEMO_PLAYING is set (see queue_fill).
@@ -784,10 +785,14 @@ demo_scan() {
             DEMO_LIST_LABEL+=("${label:0:42}")
             continue
         fi
+        # Eight columns for the mode, which is what the label format
+        # below leaves it; "TimeAtk" is the Time Attack mode shortened to
+        # fit, the way the list has to shorten it anyway.
         case "${DEMO_HDR_MODE}" in
-            ultra)  mode_label="Ultra" ;;
-            sprint) mode_label="Sprint" ;;
-            *)      mode_label="Marathon" ;;
+            ultra)      mode_label="Ultra" ;;
+            sprint)     mode_label="Sprint" ;;
+            timeattack) mode_label="TimeAtk" ;;
+            *)          mode_label="Marathon" ;;
         esac
         fmt_duration $(( DEMO_HDR_TIME / 1000 ))
         printf -v label '%s %-8s %s %5d Rows' \

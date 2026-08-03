@@ -69,7 +69,8 @@ Einstellungen und einer kurzen Anleitung;
 die besten
 10 Runden werden dauerhaft gespeichert. Dazu kommen die Politur-Schritte
 aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
-(Marathon/Ultra/Sprint), Anleitung, Lock Delay, der gezielte Reset
+(Marathon/Ultra/Sprint/Time Attack), Anleitung, Lock Delay, der
+gezielte Reset
 gespeicherter Daten und die Demo-Aufzeichnung mit Wiedergabe. Das vollstaendige Konzept
 und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
 abgeschlossenen Entwicklungsschritte je Version in
@@ -96,23 +97,37 @@ Das Startmenue bietet:
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
 - **Einzelspieler** - die Spielmodi: **Marathon** (endlos, Ende
   durch Game Over), **Ultra** - 150 Rows so schnell wie moeglich
-  abbauen - und **Sprint** - in 3 Minuten so viele Rows wie moeglich.
+  abbauen -, **Sprint** - in 3 Minuten so viele Rows wie moeglich - und
+  **Time Attack** - 1 Minute Restzeit, die rueckwaerts laeuft, und je
+  abgebauter Row eine Sekunde dazu.
   Die Ultra-Runde endet in dem Moment, in dem das Ziel
   erreicht ist; das Ergebnis ist die Spielzeit. Die Sprint-Runde endet,
-  wenn die Zeit abgelaufen ist; das Ergebnis sind die Rows. In beiden
+  wenn die Zeit abgelaufen ist; das Ergebnis sind die Rows. Die
+  Time-Attack-Runde dauert genau so lange, wie sie sich selbst am Leben
+  haelt, und endet bei 00:00 - oder vorher im Game Over; das Ergebnis
+  sind ebenfalls die Rows. In allen drei
   Modi zeigt der HUD Ziel ("Goal") und Rest ("Left") - bei Ultra die
-  noch fehlenden Rows, bei Sprint die verbleibende Zeit. Gewertete Rows
+  noch fehlenden Rows, bei Sprint die verbleibende Zeit, bei Time
+  Attack die bisher erspielte Gesamtzeit und den Rest davon. Gewertete
+  Rows
   zaehlen, nicht physische Reihen - Gold- und Silberquadrate sind also
-  in beiden Modi die Abkuerzung. Erfolgreiche Laeufe landen in einer
-  eigenen Bestenliste je Modus
+  ueberall die Abkuerzung, bei Time Attack zugleich die Waehrung, mit
+  der Spielzeit gekauft wird. Jeder Modus hat seine
+  eigene Bestenliste
   (`~/.config/rowhammer/highscore-ultra`, schnellster Lauf
-  zuerst, bzw. `~/.config/rowhammer/highscore-sprint`, meiste Rows
-  zuerst), die die 10 besten endlosen Runden unberuehrt laesst; ein
-  Versuch, der vorher im Game Over endet, wird nicht eingetragen, seine
-  Reihen zaehlen aber weiter fuer Weltwunder und Statistik
+  zuerst, `~/.config/rowhammer/highscore-sprint` bzw.
+  `~/.config/rowhammer/highscore-timeattack`, meiste Rows
+  zuerst), die die 10 besten endlosen Runden unberuehrt laesst. Bei
+  Ultra und Sprint wird ein Versuch, der vorher im Game Over endet,
+  nicht eingetragen (seine
+  Reihen zaehlen aber weiter fuer Weltwunder und Statistik); bei Time
+  Attack zaehlt dagegen jeder Lauf - die Rows sind so oder so dieselbe
+  Leistung, und wer vorzeitig oben rausbaut, hat schlicht weniger
+  davon
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
-- **Highscores** - fragt zuerst den Modus ab (**Marathon**, **Ultra**
-  oder **Sprint**) und zeigt danach dessen Bestenliste; die Auswahl
+- **Highscores** - fragt zuerst den Modus ab (**Marathon**, **Ultra**,
+  **Sprint** oder **Time Attack**) und zeigt danach dessen
+  Bestenliste; die Auswahl
   bleibt
   stehen, bis "Zurueck" kommt, sodass sich die Listen vergleichen
   lassen. Je Liste die besten 10 Runden, je Eintrag zwei Zeilen und
@@ -121,22 +136,28 @@ Das Startmenue bietet:
   abgelegte Teile ("PCS") und Teile je Minute ("PPM") in der zweiten.
   Die Ultra-Liste ist nach der kuerzesten Zeit sortiert und zeigt sie
   auf die Millisekunde genau (MM:SS.mmm) - dort ist die Zeit der Score,
-  in der Marathon- und der Sprint-Liste sind es die Rows. Die
+  in den anderen drei Listen sind es die Rows. Die
   Sprint-Liste zeigt an der Stelle der Spielzeit die physischen Reihen
   ("Lines"): jeder Lauf dauert dieselben 3 Minuten, eine Zeitspalte
-  stuende dort zehnmal gleich. Ein Rundenende zeigt den
+  stuende dort zehnmal gleich. Die Time-Attack-Liste behaelt die
+  Zeitspalte dagegen - sie zeigt, wie lange sich ein Lauf am Leben
+  gehalten hat. Ein Rundenende zeigt den
   erreichten Rang ausserdem direkt an
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
-- **Statistik** - auf zwei Bildschirmen: Gesamtzaehler ueber alle
+- **Statistik** - auf drei Bildschirmen: Gesamtzaehler ueber alle
   Runden (abgebaute Reihen, Bonusreihen, gebaute Gold- und
   Silberbloecke, die "Rowhammer" - vier Reihen auf einmal -, die
   abgelegten Teile, die Gesamtspielzeit und die daraus berechneten
-  Steine/Minute), danach die Ergebnisse der letzten drei Spiele
+  Steine/Minute), danach die Ergebnisse der letzten drei Spiele und
+  zuletzt die gespielten Runden je Modus - bei Ultra, Sprint und Time
+  Attack jeweils mit der Zahl der Laeufe, die ihr Ziel bzw. die volle
+  Zeit erreicht haben
 - **Demos** - die aufgezeichneten Runden, neueste zuerst, mit Datum,
   Modus, Spielzeit und Rows. Die ausgewaehlte Aufnahme laesst sich
   **abspielen** oder **loeschen**. Aufbewahrt werden die 10 neuesten
-  Runden, aeltere fallen automatisch weg
+  Runden; Aufnahmen, die noch einen Highscore-Eintrag belegen, bleiben
+  darueber hinaus erhalten (erkennbar am Hash im Dateinamen)
 - **Einstellungen** - Tastenbelegung aendern, Farbschema waehlen
   (`guideline`, `classic`, `mono` oder `colorblind`, jeweils mit einer
   Farbvorschau in der Liste), Spielernamen setzen und die
@@ -147,10 +168,11 @@ Das Startmenue bietet:
   den Pfeiltasten links/rechts durchblaetterbar (umlaufend):
   Spielprinzip, Steuerung (mit der gerade eingestellten
   Tastenbelegung), Vorschau und Hold, Gold-/Silber-Quadrate mit ihrer
-  Reihenwertung, der Weltwunderbau, die drei Spielmodi und die Demos
+  Reihenwertung, der Weltwunderbau, die vier Spielmodi, die
+  Bestenlisten und die Demos
 
-Alle Spieldaten (Konfiguration, Highscores inklusive der Ultra- und
-der Sprint-Liste,
+Alle Spieldaten (Konfiguration, Highscores inklusive der Ultra-, der
+Sprint- und der Time-Attack-Liste,
 Weltwunder-Spielstand,
 Statistik, Demo-Aufzeichnungen im Unterverzeichnis `demos`)
 liegen im Datenverzeichnis
@@ -178,7 +200,8 @@ Optionen:
 zurueck und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
 `config` (die Konfigurationsdatei `rowhammer.conf`), `stats` (die
 Statistik), `highscore` (alle Bestenlisten - `highscore`,
-`highscore-ultra` und `highscore-sprint`), `save` (der
+`highscore-ultra`, `highscore-sprint` und `highscore-timeattack`),
+`save` (der
 Weltwunder-Fortschritt), `demo` (das Verzeichnis `demos` mit den
 Aufzeichnungen) oder `all`
 (alles zusammen).
@@ -293,9 +316,10 @@ Umgesetzt:
   (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
   Weltwunder, Statistik, Demos, Einstellungen und Anleitung
-- **Anleitung im Spiel:** sieben Bildschirme zu Spielprinzip, Steuerung,
+- **Anleitung im Spiel:** acht Bildschirme zu Spielprinzip,
+  Steuerung,
   Vorschau/Hold, Gold- und Silberbloecken, Weltwunderbau, den
-  Spielmodi und den Demos; die
+  Spielmodi, den Bestenlisten und den Demos; die
   Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
 - **Demo-Aufzeichnung und -Wiedergabe:** jede Runde wird mitgeschnitten
   und laesst sich ueber den Menuepunkt "Demos" noch einmal ansehen.
@@ -310,13 +334,16 @@ Umgesetzt:
   4x Tempo abspielen; gewertet wird sie nie (kein Highscore, kein
   Weltwunder-Fortschritt, keine Statistik)
 - **Spielmodi:** endloses **Marathon**, **Ultra** (150 Rows auf
-  Zeit, eigene Bestenliste nach kuerzester Zeit) und **Sprint**
-  (3 Minuten auf Rows, eigene Bestenliste nach den meisten Rows;
-  siehe oben)
+  Zeit, eigene Bestenliste nach kuerzester Zeit), **Sprint**
+  (3 Minuten auf Rows, eigene Bestenliste nach den meisten Rows) und
+  **Time Attack** (1 Minute Restzeit plus 1 Sekunde je Row, eigene
+  Bestenliste nach den meisten Rows; siehe oben)
 - Persistente Highscore-Listen: die besten 10 Runden in
   `~/.config/rowhammer/highscore`, die 10 schnellsten Ultra-Laeufe
-  in `~/.config/rowhammer/highscore-ultra` und die 10 besten
-  Sprint-Laeufe in `~/.config/rowhammer/highscore-sprint`, im Menue
+  in `~/.config/rowhammer/highscore-ultra`, die 10 besten
+  Sprint-Laeufe in `~/.config/rowhammer/highscore-sprint` und die 10
+  besten Time-Attack-Laeufe in
+  `~/.config/rowhammer/highscore-timeattack`, im Menue
   ueber eine
   Modus-Auswahl erreichbar, Ranganzeige im Rundenende-Bild
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
@@ -325,7 +352,8 @@ Umgesetzt:
   "Rowhammer" (vier Reihen auf einmal - der Namensgeber des Spiels)
   sowie abgelegte Teile und Spielzeit (daraus die Ablegerate in
   Teilen je Minute); dazu die Ergebnisse
-  der letzten drei Spiele, einsehbar im
+  der letzten drei Spiele und die gespielten Runden je Modus (bei den
+  drei Zeitmodi mit der Zahl der erfolgreichen Laeufe), einsehbar im
   Hauptmenue
 - **Weltwunder-Modus:** der "Rows"-Zaehler baut ueber alle Runden
   hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,

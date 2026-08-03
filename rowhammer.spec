@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.42.0
+Version:        0.43.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,14 +79,28 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
-* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.42.0-1
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.43.0-1
 - Demo recording and playback: every round is recorded as its moves,
   gravity steps and piece stream (not as screen output) and can be
   watched again from the new "Demos" menu entry, paused and played
   between 0.25x and 4x speed. Recording goes to a RAM disk while the
-  round runs; the ten newest recordings are kept in <data-dir>/demos.
+  round runs; the ten newest recordings are kept in <data-dir>/demos,
+  and recordings backing a highscore entry are kept beyond that.
+- Highscore entries carry a hash of the round, which the matching
+  recording takes into its file name.
 - New option --demo-record on|off (ROWHAMMER_DEMO_RECORD) and new reset
   target --reset demo.
+
+* Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.42.0-1
+- New game mode "Time Attack": the round starts with one minute of play
+  time counting down and every row of credit scored adds a second back,
+  so the run lasts as long as it is kept fed; the rows are its score.
+- Own highscore list highscore-timeattack, ranked by rows. Unlike Ultra
+  and Sprint every run is recorded, finished or topped out - the rows
+  are the same achievement either way.
+- The statistics now count the rounds played per game mode and, for the
+  three timed modes, how many of them reached their goal; shown on a
+  third statistics screen.
 
 * Mon Aug 03 2026 roemer2201 <r.oliver@web.de> - 0.41.0-1
 - Switchable render mode --render-mode partial|full
