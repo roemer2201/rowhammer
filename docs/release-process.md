@@ -100,6 +100,10 @@ Laeuft auf `main`, auf `claude/**`-Branches und bei Pull Requests gegen
   `/usr/share`, ein falscher Pfad faellt also erst nach der Installation
   auf. Danach wird das Paket wieder entfernt und geprueft, dass nichts
   liegen bleibt.
+  Zu den Bau-Abhaengigkeiten gehoert neben `dpkg-dev` und `debhelper`
+  auch `build-essential`: rowhammer uebersetzt nichts, aber
+  `dpkg-checkbuilddeps` fordert das Paket als implizite Abhaengigkeit
+  jedes Debian-Pakets ein, und das Runner-Image bringt es nicht mit.
 - **package-rpm** - baut das RPM auf dem Ubuntu-Runner (`build-rpm.sh`
   gibt dafuer `--nodeps` mit, siehe die Begruendung im Skript).
 - **verify-rpm** - installiert das gebaute RPM in einem

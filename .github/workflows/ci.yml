@@ -131,8 +131,12 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
+      # build-essential is an *implied* build dependency of every Debian
+      # package - dpkg-checkbuilddeps demands it even though rowhammer is
+      # arch:all and compiles nothing - and the runner image does not
+      # ship it, so it has to be installed explicitly.
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y dpkg-dev debhelper
+        run: sudo apt-get update && sudo apt-get install -y build-essential dpkg-dev debhelper
 
       - name: Build the package
         run: ./build-deb.sh --verbose
