@@ -10,14 +10,19 @@
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
 #   restart. Completed rows blink briefly before they are removed, so
-#   the player sees which rows scored. The singleplayer menu offers three
+#   the player sees which rows scored. The singleplayer menu offers four
 #   game modes: the endless "Marathon", "Ultra", a race to
 #   clear ULTRA_TARGET_ROWS rows of credit as fast as possible - it ends
 #   the moment the target is reached and the play time is the result -
-#   and "Sprint", its mirror image: as much row credit as possible within
-#   SPRINT_TIME_MS, ending when the time is up. Of the two timed modes
-#   only successful runs are recorded, each in a highscore list of its
-#   own (lib/highscore.sh). The play screen is one fixed
+#   "Sprint", its mirror image: as much row credit as possible within
+#   SPRINT_TIME_MS, ending when the time is up - and "Time Attack",
+#   which starts with TIME_ATTACK_START_MS on a clock running backwards
+#   and pays TIME_ATTACK_ROW_MS back per row of credit, so the run lasts
+#   as long as it is kept fed and the rows are the result. Each mode
+#   keeps a highscore list of its own (lib/highscore.sh); of the two
+#   fixed-goal modes only successful runs are recorded, while every Time
+#   Attack run is, its rows being the same achievement whether the clock
+#   or the stack ended it. The play screen is one fixed
 #   48x22 block centered in the terminal: the hold piece with the round
 #   counters below it on the left, the board in the middle and the three
 #   upcoming pieces top right; pause and game
@@ -65,7 +70,8 @@
 #   rowhammers, pieces placed and their rate in pieces per minute, play
 #   time and date) and
 #   whose rank appears on the game over screen; the row credit decides
-#   the ranking of the Marathon and the Sprint list, the play time that
+#   the ranking of the Marathon, the Sprint and the Time Attack list,
+#   the play time that
 #   of the Ultra one, so the "Highscores" menu entry asks for the mode
 #   before drawing
 #   the list. The HUD also shows the running round's play time (paused
@@ -73,13 +79,15 @@
 #   Every round also feeds persistent statistics (cleared rows, bonus
 #   rows, gold/silver squares built, rowhammers, pieces placed and time
 #   played, plus the results of
-#   the last three rounds with their play date), shown via the "Statistik" main
+#   the last three rounds with their play date and the rounds played per
+#   game mode), shown via the "Statistik" main
 #   menu entry; the highscore list shows each entry's date as well.
-#   The "Anleitung" main menu entry explains the game on six screens,
+#   The "Anleitung" main menu entry explains the game on seven screens,
 #   paged with the left/right arrow keys (wrapping at both ends):
 #   the rules, the current key bindings, hold and preview, the
-#   gold/silver squares with their row bonus, the wonder construction
-#   and the three game modes (menu_help in lib/menu.sh).
+#   gold/silver squares with their row bonus, the wonder construction,
+#   the four game modes and how their highscore lists are kept
+#   (menu_help in lib/menu.sh).
 #   --reset resets persistent data on purpose: the config file, the
 #   statistics, the highscore lists, the wonder savegame or all of them
 #   at once. Nothing is deleted - each file is moved to
@@ -131,7 +139,7 @@
 #                [--reset config|stats|highscore|save|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.41.0  (2026-08-03)
+# Version: 0.42.0  (2026-08-03)
 
 set -euo pipefail
 
@@ -146,7 +154,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.41.0"
+ROWHAMMER_VERSION="0.42.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -254,7 +262,8 @@ usage() {
 Usage: rowhammer.sh [OPTIONS]
 
 Terminal Tetris of the rowhammer project. Starts with a menu:
-singleplayer (endless "Marathon", the timed "Ultra" or "Sprint" mode),
+singleplayer (endless "Marathon", the timed "Ultra", "Sprint" or
+"Time Attack" mode),
 multiplayer (placeholder), highscores, wonders, statistics and settings.
 
 Options:
@@ -306,7 +315,8 @@ Options:
                   config     the config file rowhammer.conf
                   stats      the statistics file stats
                   highscore  all highscore lists (highscore,
-                             highscore-ultra and highscore-sprint)
+                             highscore-ultra, highscore-sprint and
+                             highscore-timeattack)
                   save       the savegame save (the wonder progress)
                   all        all of the above
                 Nothing is deleted: every affected file is moved to
@@ -378,16 +388,22 @@ that ends on a top-out. "Ultra" is a race - clear 150 rows of credit as
 fast as possible; the run ends the moment that target is reached and its
 play time is the result. "Sprint" is the mirror image - score as many
 rows of credit as possible within 3 minutes of play time; the run ends
-when the time is up. The HUD shows the goal and what is still left of
-it (rows resp. time) while a run of either mode is going.
-Both keep their results in a list of their own - Ultra ranked by time
-(<data-dir>/highscore-ultra, fastest first), Sprint by rows
-(<data-dir>/highscore-sprint) - so they never displace the endless
-list's top ten, and only a run that got there is recorded: an attempt
-that topped out early has neither a comparable time nor the full three
-minutes to score in. Its rows still count toward the wonders and the
-statistics, like any other round. The "Highscores" main menu entry asks
-which of the three lists to show.
+when the time is up. "Time Attack" turns the clock into the stake: the
+round starts with 1 minute of play time counting down and every row of
+credit scored adds 1 second back, so the run lasts exactly as long as it
+is kept fed and ends when the clock hits zero (or on a top-out before
+that); the rows are the result. The HUD shows the goal and what is still
+left of it (rows resp. time) while a run of any of the three is going.
+Each keeps its results in a list of its own - Ultra ranked by time
+(<data-dir>/highscore-ultra, fastest first), Sprint and Time Attack by
+rows (<data-dir>/highscore-sprint, <data-dir>/highscore-timeattack) - so
+they never displace the endless list's top ten. For Ultra and Sprint
+only a run that got there is recorded: an attempt that topped out early
+has neither a comparable time nor the full three minutes to score in.
+Its rows still count toward the wonders and the statistics, like any
+other round. Every Time Attack run is recorded, by contrast: its rows
+are the same achievement whether the clock or the stack ended it. The
+"Highscores" main menu entry asks which of the four lists to show.
 
 Wonders: the row credit of every round is added to a persistent counter
 stored in <data-dir>/save. It builds seven world wonders in a fixed
@@ -398,15 +414,18 @@ round and via the "Weltwunder" main menu entry.
 Statistics: every finished round also adds its cleared rows, bonus rows
 (the gold/silver/Tetris part of the row credit) and the gold and silver
 squares built to persistent all-time counters in <data-dir>/stats; the
-results of the last three rounds (rows, bonus rows, squares) are
-kept there as well. Both are
+results of the last three rounds (rows, bonus rows, squares) and the
+number of rounds played per game mode - including how often Ultra
+reached its target, Sprint played its full time and Time Attack ran its
+clock down - are kept there as well. All three are
 shown via the "Statistik" main menu entry.
 
 Settings (player name, key bindings) are stored in the config file
 <data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
 best 10 rounds are kept in <data-dir>/highscore (Ultra: the best 10 runs
-in <data-dir>/highscore-ultra, Sprint: <data-dir>/highscore-sprint); all
-three lists are shown under the
+in <data-dir>/highscore-ultra, Sprint: <data-dir>/highscore-sprint,
+Time Attack: <data-dir>/highscore-timeattack); all
+four lists are shown under the
 "Highscores" main menu entry, which asks for the mode first, and a
 finished round reports its rank on the game over
 screen. Key bindings can also be overridden
@@ -728,11 +747,12 @@ reset_run() {
         config)    names=("${CONFIG_NAME}") ;;
         stats)     names=("${STATS_FILE_NAME}") ;;
         highscore) names=("${HS_FILE_NAME}" "${HSU_FILE_NAME}"
-                          "${HSS_FILE_NAME}") ;;
+                          "${HSS_FILE_NAME}" "${HSA_FILE_NAME}") ;;
         save)      names=("${SAVE_FILE_NAME}") ;;
         all)       names=("${CONFIG_NAME}" "${STATS_FILE_NAME}"
                           "${HS_FILE_NAME}" "${HSU_FILE_NAME}"
-                          "${HSS_FILE_NAME}" "${SAVE_FILE_NAME}") ;;
+                          "${HSS_FILE_NAME}" "${HSA_FILE_NAME}"
+                          "${SAVE_FILE_NAME}") ;;
         # Unreachable: the value is validated against RESET_TARGETS
         # right after the argument parsing. Kept so a new target added
         # there without a case here fails loudly instead of silently
@@ -978,6 +998,8 @@ ROUND_RECORDED=0
 # suspend/resume, so a resumed round always comes back in the mode it was
 # started in. The mode decides which highscore list the round is recorded
 # in and whether the HUD shows the goal counters (render_pane_left).
+# "timeattack" (2026-08-03, user request) is the fourth: a countdown that
+# the player extends by playing - see TIME_ATTACK_START_MS below.
 GAME_MODE="marathon"
 # Row credit an Ultra run has to reach. Weighted rows ("Rows", see the
 # scoring note below), not physical lines: in this game "cleared rows"
@@ -1001,12 +1023,34 @@ ULTRA_TARGET_ROWS=150
 # minutes out (its heredoc is unexpanded and is printed before this line
 # ever runs), so keep that wording in sync when tuning this.
 SPRINT_TIME_MS=180000
+# Time Attack (user request): the round starts with TIME_ATTACK_START_MS
+# of play time running backwards, and every row of credit scored buys
+# TIME_ATTACK_ROW_MS more. The run therefore lasts exactly as long as it
+# is kept fed - it ends when the clock hits zero (or, like any round,
+# when the stack tops out). Weighted rows again, for the reason Ultra
+# and Sprint use them: the gold/silver squares are what the game is
+# built around, and here they are literally the way to buy time.
+# Adjustable game-feel constants like ULTRA_TARGET_ROWS and
+# SPRINT_TIME_MS; the menu entries, the HUD and the manual read them,
+# but the usage text above spells the minute and the second out (its
+# heredoc is unexpanded and is printed before this line ever runs), so
+# keep that wording in sync when tuning these.
+TIME_ATTACK_START_MS=60000
+TIME_ATTACK_ROW_MS=1000
+# The Time Attack budget as of the last time it was computed: the start
+# time plus what the rows scored so far have bought (time_attack_budget).
+# A global instead of a computed-on-the-spot expression because both the
+# game loop and the HUD need the same number every tick.
+TIME_ATTACK_BUDGET_MS="${TIME_ATTACK_START_MS}"
 # Set when a round ended by reaching its mode's goal instead of by
 # topping out: for Ultra that is the row target, for Sprint surviving
-# the full time. Both end the round (GAME_OVER=1 drives the end-of-round
+# the full time, for Time Attack running the clock down to zero (the
+# regular end of such a run - it is the one ending that is not a
+# top-out). Both end the round (GAME_OVER=1 drives the end-of-round
 # handling), this flag only tells the two apart - for the box over the
-# board (render_status_box) and for record_round, which enters a run in
-# the Ultra or Sprint list only when it really got there.
+# board (render_status_box) and for record_round, which enters an Ultra
+# or Sprint run in its list only when it really got there (a Time Attack
+# run is recorded either way, see there).
 GOAL_REACHED=0
 
 # CHANGE 2026-07-20: the separate score (line points scaling with the
@@ -1124,6 +1168,18 @@ play_clock_resume() {
     fi
 }
 
+# time_attack_budget: refresh TIME_ATTACK_BUDGET_MS, the play time the
+# running Time Attack round has bought itself so far - the start time
+# plus TIME_ATTACK_ROW_MS per row of credit. Derived from ROW_CREDIT
+# instead of accumulated in a counter of its own: the row credit is
+# already the one number the whole mode turns on, and a second counter
+# fed at every clear could only ever drift away from it.
+time_attack_budget() {
+    TIME_ATTACK_BUDGET_MS=$(( TIME_ATTACK_START_MS \
+        + ROW_CREDIT * TIME_ATTACK_ROW_MS ))
+    return 0
+}
+
 # update_speed: derive level and gravity interval from the physical lines
 # cleared this round (one level per 10 lines, speed from LEVEL_SPEEDS).
 update_speed() {
@@ -1142,13 +1198,15 @@ update_speed() {
 # into the persistent wonder counter (savegame) and its counters into
 # the all-time statistics (lib/stats.sh). Runs right when the
 # game over triggers, so the game over box can show the achieved
-# rank (HS_LAST_RANK / HSU_LAST_RANK / HSS_LAST_RANK), and again as a
+# rank (HS_LAST_RANK / HSU_LAST_RANK / HSS_LAST_RANK / HSA_LAST_RANK),
+# and again as a
 # catch-all when the player quits a running round to the menu.
-# The three lists are separate and a round enters exactly one of them (see
+# The four lists are separate and a round enters exactly one of them (see
 # lib/highscore.sh): an Ultra run is ranked by time and would otherwise
 # push endless rounds out of a top ten it cannot be compared against, and
-# a Sprint run - three minutes, then the books close - ranks by rows like
-# the endless list but against a completely different yardstick.
+# a Sprint or Time Attack run - a fixed three minutes resp. only as much
+# time as it earns itself - ranks by rows like the endless list but
+# against a completely different yardstick.
 # Wonder progress and statistics do not care about the mode - those rows
 # were really cleared, and per the concept even an aborted round counts.
 record_round() {
@@ -1189,6 +1247,21 @@ record_round() {
             HSS_LAST_RANK=0
             debug_event "sprint run not recorded: topped out early (time=${PLAY_MS}ms/${SPRINT_TIME_MS}ms rows=${ROW_CREDIT})"
         fi
+    elif [ "${GAME_MODE}" = "timeattack" ]; then
+        # Deliberately NOT mirrored from Ultra and Sprint: every Time
+        # Attack run is recorded, the ones that ran the clock out and the
+        # ones that topped out alike. Those two modes each have a "did
+        # not finish" state that is incomparable with a finished run - no
+        # time for Ultra, less than the full three minutes to score in
+        # for Sprint. Time Attack has no such state: the run is over when
+        # it is over, the rows are the same achievement either way, and a
+        # player who builds themselves to death simply scored fewer of
+        # them. That makes this mode the Marathon case, where the round
+        # ends in a top-out and is recorded all the same.
+        highscore_timeattack_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" \
+            "${LEVEL}" "${PLAYER_NAME}" "${GOLD_COUNT}" \
+            "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
+            "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
     else
         highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
             "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
@@ -1206,10 +1279,14 @@ record_round() {
     # squares built, its four-row clears, the pieces it placed and its
     # play time in whole seconds; the round also enters the
     # recent-rounds list. Pieces and play time are the pair the
-    # statistics screen derives its PCS/min figures from.
+    # statistics screen derives its PCS/min figures from. The mode and
+    # the goal flag feed the per-mode round counters (2026-08-03): they
+    # are the only round data the counters above cannot reconstruct, and
+    # this is the one place that knows both.
     stats_add_round "${CLEARED_TOTAL}" \
         "$(( ROW_CREDIT - CLEARED_TOTAL ))" "${GOLD_COUNT}" "${SILVER_COUNT}" \
-        "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "$(( PLAY_MS / 1000 ))"
+        "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "$(( PLAY_MS / 1000 ))" \
+        "${GAME_MODE}" "${GOAL_REACHED}"
     return 0
 }
 
@@ -1226,6 +1303,24 @@ sprint_time_up() {
     GOAL_REACHED=1
     GAME_OVER=1
     debug_event "sprint time up: time=${PLAY_MS}ms/${SPRINT_TIME_MS}ms rows=${ROW_CREDIT} lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
+    record_round
+    DIRTY=1
+    return 0
+}
+
+# time_attack_time_up: end a Time Attack run whose countdown has reached
+# zero. Called from the same spot in the game loop as sprint_time_up and
+# for the same reason - the clock is this mode's limit too, it is just a
+# moving one (TIME_ATTACK_BUDGET_MS grows with every row of credit), and
+# the piece still falling is not locked, so rows it might have completed
+# would have been completed on time that had already run out.
+# GOAL_REACHED marks the regular ending here rather than a success: it
+# tells the result box which of the two endings this was (the run is
+# recorded either way, see record_round).
+time_attack_time_up() {
+    GOAL_REACHED=1
+    GAME_OVER=1
+    debug_event "time attack clock empty: time=${PLAY_MS}ms/${TIME_ATTACK_BUDGET_MS}ms rows=${ROW_CREDIT} lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
     record_round
     DIRTY=1
     return 0
@@ -1573,7 +1668,8 @@ handle_key() {
 }
 
 # game_reset [MODE]
-# Start a fresh round in MODE ("marathon", "ultra" or "sprint"); without
+# Start a fresh round in MODE ("marathon", "ultra", "sprint" or
+# "timeattack"); without
 # an argument the current GAME_MODE is kept, which is what the game over
 # screen's restart key does - a failed Ultra run restarts as an Ultra
 # run, a finished Sprint as a Sprint.
@@ -1600,6 +1696,9 @@ game_reset() {
     ROUND_RECORDED=0
     LOCK_PENDING=0
     PLAY_MS=0
+    # Back to the plain start time: the credit that bought the last
+    # round's extra time is gone with ROW_CREDIT above.
+    time_attack_budget
     update_speed
     spawn_piece
     play_clock_resume
@@ -1607,7 +1706,7 @@ game_reset() {
 }
 
 # --- Game loop ------------------------------------------------------------
-# game_run [marathon|ultra|sprint|resume]
+# game_run [marathon|ultra|sprint|timeattack|resume]
 # One game session; returns to the caller (the menu) when the player
 # leaves via the pause menu or the game over screen. The argument is
 # either the game mode of the new round (see GAME_MODE) or "resume",
@@ -1663,12 +1762,23 @@ game_run() {
             # below). play_clock_resume set PLAY_LAST to "now" at every
             # resume, so an idle phase never lands in PLAY_MS.
             play_clock_tick
+            # Time Attack: refresh the budget the rows scored so far have
+            # bought, so the check below and the HUD read the same number
+            # (the clock counts down against a target that moves).
+            if [ "${GAME_MODE}" = "timeattack" ]; then
+                time_attack_budget
+            fi
             # Sprint mode: the play time just accounted may have used up
             # the run's three minutes. Checked before gravity so no piece
-            # falls or locks on time that is already over.
+            # falls or locks on time that is already over - which holds
+            # for the Time Attack countdown in the branch below just as
+            # much.
             if [ "${GAME_MODE}" = "sprint" ] && \
                (( PLAY_MS >= SPRINT_TIME_MS )); then
                 sprint_time_up
+            elif [ "${GAME_MODE}" = "timeattack" ] && \
+                 (( PLAY_MS >= TIME_ATTACK_BUDGET_MS )); then
+                time_attack_time_up
             elif [ "${LOCK_PENDING}" -eq 1 ]; then
                 # Resting piece: lock once the grace window has elapsed.
                 # Gravity is idle here - the piece cannot fall anyway.
@@ -1710,13 +1820,15 @@ main() {
     # (unwritable log directory etc.) stay readable.
     debug_init
     # Load the persistent highscore lists once; rounds update them in
-    # memory and rewrite their file when they enter one. Ultra and Sprint
-    # keep separate files with their own rankings (fastest run first
-    # resp. most rows in a fixed time), so runs of different modes never
+    # memory and rewrite their file when they enter one. Ultra, Sprint
+    # and Time Attack keep separate files with their own rankings
+    # (fastest run first resp. most rows in a fixed time resp. most rows
+    # on a clock the run feeds itself), so runs of different modes never
     # compete for the same slots.
     highscore_load
     highscore_ultra_load
     highscore_sprint_load
+    highscore_timeattack_load
     # Load the wonder savegame and derive the wonder state once, so the
     # "Weltwunder" screen and record_round start from a valid state.
     save_load
