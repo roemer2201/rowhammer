@@ -845,9 +845,24 @@ CLAUDE.md 3.3, 3.4)._
       - **Der Eintrag steht direkt unter "Fortsetzen"**, weil er der
         andere Weg ist weiterzuspielen; die beiden Eintraege, die die
         Runde verlassen, bleiben unten, wo sie im bisherigen
-        Dreier-Menue standen. Keine Sicherheitsabfrage - "Runde
-        beenden" verwirft die Runde ebenso ohne Rueckfrage, und eine
-        Abfrage nur hier waere inkonsequent.
+        Dreier-Menue standen.
+      - **Sicherheitsabfrage nur fuer diesen Eintrag** (Nutzerwunsch;
+        der erste Anlauf hatte auf sie verzichtet, weil "Runde beenden"
+        die Runde ebenso ohne Rueckfrage verwirft). Die Asymmetrie hat
+        einen Grund: "Neustarten" ist der einzige Ausgang, der die
+        Runde wegwirft, ohne das Spiel zu verlassen - der Bildschirm
+        zeigt danach eine leere Wanne und den naechsten Stein, ein
+        Fehlgriff waere also verschwunden, bevor er auffaellt. Die
+        beiden Eintraege darunter landen dagegen auf einem Bildschirm
+        (Weltwunder-Baustelle bzw. Hauptmenue), an dem zu sehen ist,
+        dass die Runde vorbei ist. Die Abfrage nutzt `menu_confirm`
+        (vorausgewaehltes "Nein", `ESC` lehnt ab) und zeigt den Stand
+        der Runde - Lines, Rows und Level sind das, woran eine Runde
+        haengt, und genau die deckt der Kasten gerade zu. Ein "Nein"
+        fuehrt zurueck ins Pausenmenue statt in die Runde, weil ein
+        Spieler, der nicht neu starten wollte, meist trotzdem etwas
+        aus diesem Menue wollte; `menu_pause` ist dafuer von einem
+        einmaligen `menu_run` zu einer Schleife geworden.
       Der Wunder-Bildschirm erscheint beim Neustart bewusst nicht: er
       gehoert ans Ende einer Spielsitzung (`menu_singleplayer` zeigt
       ihn, wenn `game_run` zurueckkehrt), nicht zwischen zwei Runden.

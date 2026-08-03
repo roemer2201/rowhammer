@@ -84,6 +84,8 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
   it gives up the running round and starts a fresh one in the same mode.
 - Such a given-up round is recorded before the fresh one replaces it, so
   its rows keep counting toward wonder progress and statistics.
+- The restart is confirmed first, showing the round's lines, rows and
+  level; declining returns to the pause menu.
 - The controls block of --help listed the key bindings from before
   0.31.0; it now matches the actual defaults (arrows move, d/a rotate,
   space or arrow up hard-drops, c or w holds).

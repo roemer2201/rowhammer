@@ -38,7 +38,8 @@
 #   suspend the round into the main menu (it stays resumable via the
 #   "Fortsetzen" entry offered in the main menu and in the singleplayer
 #   menu) or end it; a round is recorded only when it really ends -
-#   which a given-up round does, so a restart banks it first.
+#   which a given-up round does, so a restart banks it first. The
+#   restart is the one entry that asks back before it acts.
 #   The New Tetris square mechanics are in: 4x4 squares built
 #   from four complete pieces turn gold (mono) or silver (multi) and make
 #   cleared rows worth bonus row credit (the "Rows" counter). Since
@@ -1644,7 +1645,9 @@ handle_key() {
             # "Neustarten" (2026-08-03, user request): the running round
             # is given up for a fresh one in the same mode (game_reset
             # without an argument keeps GAME_MODE, like the game over
-            # screen's restart key). Its books are closed first -
+            # screen's restart key). menu_pause has confirmed the
+            # discard at this point - the flag is only set on a "yes".
+            # Its books are closed first -
             # an abandoned round counts toward the wonder and the
             # statistics like any other aborted one (see CLAUDE.md 3.3),
             # and game_reset is about to wipe the counters record_round

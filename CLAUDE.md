@@ -61,10 +61,21 @@ Die fuer uns relevanten Merkmale des Originals:
     Hauptmenue (Runde pausiert, wieder aufnehmbar
     ueber den Eintrag "Fortsetzen", der dann im Hauptmenue und im
     Einzelspieler-Menue an erster Stelle steht) oder Runde beenden.
-    **"Neustarten"** gibt die laufende Runde auf und startet sofort
-    eine frische im selben Modus (`GAME_RESTART` in `rowhammer.sh`,
+    **"Neustarten"** gibt die laufende Runde auf und startet eine
+    frische im selben Modus (`GAME_RESTART` in `rowhammer.sh`,
     gesetzt von `menu_pause`, ausgefuehrt in `handle_key`): erst
-    `record_round`, dann `game_reset` ohne Argument. Die Reihenfolge
+    `record_round`, dann `game_reset` ohne Argument. Davor steht eine
+    **Sicherheitsabfrage** (`menu_confirm`, Nutzerwunsch): "Wirklich
+    neu starten?" mit dem Stand der Runde (Lines, Rows, Level) und dem
+    Hinweis, dass sie gewertet wird; "Nein" ist wie ueberall
+    vorausgewaehlt, `ESC` lehnt ebenfalls ab. Abgelehnt fuehrt sie
+    **zurueck ins Pausenmenue**, nicht in die Runde - wer nicht neu
+    starten wollte, wollte meist trotzdem etwas aus diesem Menue;
+    `menu_pause` ist dafuer eine Schleife. Nur dieser Eintrag fragt
+    zurueck: er verwirft die Runde, ohne das Spiel zu verlassen, ein
+    Fehlgriff waere also weg, bevor der Spieler ihn bemerkt, waehrend
+    "Ins Hauptmenue" und "Runde beenden" auf einem Bildschirm landen,
+    der den Ausgang zeigt. Die Reihenfolge
     ist zwingend - eine aufgegebene Runde zaehlt wie jede abgebrochene
     (siehe 3.3), und `game_reset` loescht genau die Zaehler, die
     `record_round` liest. Es ist dieselbe Reihenfolge, mit der
