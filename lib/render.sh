@@ -13,11 +13,13 @@
 #   instead. In the Ultra game mode (since 0.19.0) two more counters
 #   follow below: the run's row target and the rows still missing; the
 #   Sprint mode (since 0.20.0) puts its time limit and the time left in
-#   the same two slots. Pause
+#   the same two slots, and the Time Attack mode (since 0.22.0) the play
+#   time its rows have bought so far and what is left of it. Pause
 #   and game over are drawn as a box over the board, the latter with the
 #   achieved highscore rank - or, for a finished Ultra run, with its time
 #   and Ultra rank, resp. for a finished Sprint run with its rows and
-#   Sprint rank.
+#   Sprint rank and for an ended Time Attack run with its rows and Time
+#   Attack rank.
 #   Since 0.12.0 frames are no longer pushed out as a whole: draw_frame
 #   builds the block into FRAME_LINES and render_flush emits only the lines
 #   that actually changed since the previous frame, each with its own
@@ -61,7 +63,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.21.0  (2026-08-03)
+# Version: 0.22.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -652,6 +654,28 @@ render_pane_left() {
         # last second of play.
         fmt_duration $(( (left + 999) / 1000 ))
         pane_stat 16 "Left" "${FMT_DURATION}"
+    elif [ "${GAME_MODE}" = "timeattack" ]; then
+        # Time Attack (2026-08-03) reads like Sprint, with one
+        # difference that is the whole mode: its "Goal" is not a
+        # constant. It is the play time the run has bought itself so far
+        # (start time plus a second per row of credit, see
+        # time_attack_budget), so the line grows as the round goes and
+        # the player can see what a clear was worth in time. "Left" is
+        # the countdown against it, rounded up like Sprint's for the
+        # same reason. The budget is recomputed here rather than read as
+        # the game loop left it: a clear happens after the loop refreshed
+        # it, so the frame drawn in that same tick would otherwise show
+        # the previous budget for one frame - on the very tick the
+        # player is looking to see what the clear bought.
+        time_attack_budget
+        fmt_duration $(( TIME_ATTACK_BUDGET_MS / 1000 ))
+        pane_stat 15 "Goal" "${FMT_DURATION}"
+        left=$(( TIME_ATTACK_BUDGET_MS - PLAY_MS ))
+        if [ "${left}" -lt 0 ]; then
+            left=0
+        fi
+        fmt_duration $(( (left + 999) / 1000 ))
+        pane_stat 16 "Left" "${FMT_DURATION}"
     fi
     return 0
 }
@@ -736,6 +760,23 @@ render_status_box() {
                     line="${FMT_DURATION}"
                     fmt_duration $(( SPRINT_TIME_MS / 1000 ))
                     body+=("  Time ${line}/${FMT_DURATION}")
+                fi
+                ;;
+            timeattack)
+                # Both endings of a Time Attack run are recorded (see
+                # record_round), so both carry a rank; the headline is
+                # what tells them apart - the clock ran out, or the
+                # stack did. The result is the rows in either case.
+                if [ "${GOAL_REACHED}" -eq 1 ]; then
+                    body+=("    TIME UP")
+                else
+                    body+=("    GAME OVER")
+                fi
+                body+=("   Rows ${ROW_CREDIT}")
+                if [ "${HSA_LAST_RANK}" -gt 0 ]; then
+                    body+=("  Time Attack #${HSA_LAST_RANK}")
+                else
+                    body+=("")
                 fi
                 ;;
             *)

@@ -1,3 +1,37 @@
+rowhammer (0.42.0) unstable; urgency=medium
+
+  * New game mode "Time Attack" (user request): the round starts with one
+    minute of play time running backwards and every row of credit scored
+    adds a second back, so the run lasts exactly as long as it is kept
+    fed. It ends when the clock hits zero - or earlier on a top-out - and
+    the rows are the result. The HUD shows the play time bought so far
+    ("Goal") and what is left of it ("Left") in the two lines Ultra and
+    Sprint use for their goals.
+  * The score of a Time Attack run is its rows, not the time it survived.
+    The two are the same ordering - a run ending on the clock plays
+    exactly the start time plus a second per row - and the rows are the
+    game's scoring currency everywhere else, besides staying meaningful
+    for a run the stack ended early, where that equation no longer holds.
+    The list shows the play time next to them, because that is the column
+    such a run is recognized by.
+  * Own highscore list (highscore-timeattack, ranked by rows, top ten),
+    covered by the "Highscores" mode picker and by --reset highscore.
+    Unlike Ultra and Sprint it records every run, finished or topped out:
+    this mode has no incomparable "did not finish" state - the rows are
+    the same achievement either way, and a run that ended early simply
+    has fewer of them, exactly like a Marathon round.
+  * The statistics count the rounds played per game mode now, and for the
+    three timed modes how many of them ended in that mode's regular
+    ending rather than in a top-out (target reached, full time played,
+    clock run down). They are shown on a third statistics screen; the
+    first one is full and the counters do not fit beside it.
+  * The manual grew a seventh screen: the fourth mode filled the
+    "Spielmodi" page to its last line, so its closing paragraph about the
+    highscore lists moved to a page of its own - the part that is about
+    scoring rather than about how the modes are played.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 03 Aug 2026 21:30:00 +0200
+
 rowhammer (0.41.0) unstable; urgency=medium
 
   * The play screen can be pushed to the terminal in two ways now:
