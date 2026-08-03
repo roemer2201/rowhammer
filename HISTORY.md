@@ -66,6 +66,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.36.1 | Reset-Dialog auf Deutsch | 4.8 |
 | 0.37.0 | RPM-Paketierung | 4.7 |
 | 0.38.0 | Ultra-Bestenliste anzeigen, Modus-Auswahl unter "Highscores" | 4.5 |
+| 0.39.0 | Sprint-Modus samt eigener Bestenliste, Anleitungsseite "Spielmodi" | 3.5, 3.6, 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -95,7 +96,8 @@ gilt erst seit 0.28.1 fuer die ganze Sitzung._
 _Spaeter ueberholt: das Hauptmenue ist seither um Highscores (0.7.0),
 Weltwunder (0.8.0), Statistik (0.10.0), Fortsetzen (0.12.0) und
 Anleitung (0.32.0) gewachsen; das Einzelspieler-Menue waehlt seit 0.34.0
-den Spielmodus, "Normales Spiel" heisst seit 0.34.1 "Marathon". Die
+den Spielmodus (seit 0.39.0 drei), "Normales Spiel" heisst seit 0.34.1
+"Marathon". Die
 Einstellungen kennen seit 0.21.0 zusaetzlich das Farbschema. Der
 Config-Pfad wanderte in 0.7.0 ins Datenverzeichnis und mit diesem in
 0.13.0 nach `${HOME}/.config/rowhammer` (siehe CLAUDE.md 4.2, 4.5)._
@@ -482,6 +484,8 @@ CLAUDE.md 3.3, 3.4)._
       Wunder-Kosten stammen aus dem laufenden Zustand, damit ein Rebind
       oder ein justiertes `WONDER_COSTS` die Anleitung nicht veralten
       laesst.
+      _Spaeter ueberholt: seit 0.39.0 sind es sechs Bildschirme - die
+      Spielmodi kamen als eigene Seite dazu._
 - [x] Anleitung mit den Pfeiltasten blaetterbar machen (Version 0.33.0,
       Nutzerwunsch, siehe 3.5): zuvor fuehrte jede beliebige Taste zur
       naechsten der fuenf Seiten, ohne Weg zurueck (eine feste Folge von
@@ -491,6 +495,8 @@ CLAUDE.md 3.3, 3.4)._
       Anleitung. Der Seiteninhalt kommt aus `menu_help_body`, einem
       `case`-Switch je Seitenindex, damit jede Seite direkt angesprungen
       werden kann statt nur der Reihe nach.
+      _Spaeter ueberholt: seit 0.39.0 blaettert die Schleife durch sechs
+      statt fuenf Seiten._
 - [x] **Ultra-Modus** einbauen (Version 0.34.0, Nutzerwunsch): im Menue
       "Einzelspieler" steht neben "Normales Spiel" jetzt "Ultra" -
       `ULTRA_TARGET_ROWS` (150) Rows so schnell wie moeglich abbauen,
@@ -508,7 +514,9 @@ CLAUDE.md 3.3, 3.4)._
       begrenzter Lauf die Top 10 der endlosen Liste nicht verdraengt
       (`HSU_*` in `lib/highscore.sh`, siehe 4.5).
       _Spaeter ueberholt: "Normales Spiel" heisst seit 0.34.1
-      "Marathon"; die Ultra-Bestenliste ist seit 0.38.0 auch anzeigbar._
+      "Marathon"; die Ultra-Bestenliste ist seit 0.38.0 auch anzeigbar.
+      Seit 0.39.0 steht mit "Sprint" ein dritter Modus daneben, der die
+      HUD-Zeilen 15/16 mitbenutzt._
 - [x] **Endlosen Modus in "Marathon" umbenannt** (Version 0.34.1,
       Nutzerentscheidung): der bisherige Menuepunkt "Normales Spiel"
       heisst jetzt "Marathon" (`lib/menu.sh`), der interne Modusname
@@ -542,7 +550,7 @@ CLAUDE.md 3.3, 3.4)._
       Fragen sind in 4.8 entschieden - `all` nimmt das Savegame mit
       (das eigene Ziel `save` deckt den Fall "nur der
       Weltwunder-Fortschritt" ab), `highscore` trifft beide
-      Bestenlisten. Umsetzung: `reset_run` in `rowhammer.sh`, direkt
+      Bestenlisten (seit 0.39.0 alle drei - die Sprint-Liste kam dazu). Umsetzung: `reset_run` in `rowhammer.sh`, direkt
       nach dem Sourcen der Module (fuer deren Dateinamen-Konstanten) und
       vor der dorthin verschobenen TTY-Pruefung. In 0.36.1
       (Nutzerentscheidung) wurde der Dialog auf Deutsch umgestellt:
@@ -568,3 +576,49 @@ CLAUDE.md 3.3, 3.4)._
       `menu_pages` je Modus": eine durchgeblaetterte Doppelliste haette
       die zweite Rangordnung hinter den Seiten der ersten versteckt
       (siehe 4.5).
+- [x] **Sprint-Modus** (Version 0.39.0, Nutzerwunsch): der dritte
+      Spielmodus und das Spiegelbild von Ultra - in `SPRINT_TIME_MS`
+      (180000 ms = 3 Minuten) Spielzeit moeglichst viele Rows abbauen,
+      die Runde endet mit Ablauf der Zeit und die Rows sind das Ergebnis
+      (`GAME_MODE=sprint`, `sprint_time_up` in `rowhammer.sh`, siehe
+      3.6). Weil der Modus die Umkehrung von Ultra ist, sind dessen
+      Entscheidungen eins zu eins gespiegelt: gewertet werden **Rows**
+      (nicht Lines), ein vorzeitig im Game Over gescheiterter Versuch
+      kommt **nicht** in die Bestenliste (seine Reihen zaehlen wie bei
+      jeder abgebrochenen Runde in Weltwunder und Statistik), und der
+      HUD zeigt Ziel und Rest in denselben zwei Zeilen der linken Spalte
+      wie Ultra ("Goal" = das Zeitlimit, "Left" = die auf die naechste
+      ganze Sekunde aufgerundete Restzeit; die Modi laufen nie
+      gleichzeitig). Die Zielpruefung sitzt im Game-Loop direkt hinter
+      `play_clock_tick` und **vor** der Gravitation des Ticks: die Uhr
+      ist hier das Ziel, so wie die Reihenwertung es bei Ultra ist, und
+      auf abgelaufener Zeit soll kein Stein mehr fallen oder festgesetzt
+      werden. Der Rundenende-Kasten (`render_status_box`) bekam zwei
+      weitere Ausgaenge - "SPRINT END" mit Rows und Sprint-Rang sowie
+      das Game Over des gescheiterten Versuchs mit der gespielten Zeit
+      ("Time 01:23/03:00") -, alle fuenf mit denselben acht Innenzeilen,
+      damit die Rahmen stehen bleiben.
+      Speicherung in einer eigenen Liste `${DATA_DIR}/highscore-sprint`
+      (`HSS_*` in `lib/highscore.sh`, siehe 4.5): Zeilenformat und
+      Rangordnung wie die Marathon-Liste (dieselbe Zahl in derselben
+      Einheit - ein zweites Layout waere nur ein zweites zu pflegendes),
+      aber eine eigene Datei, weil ein auf drei Minuten begrenzter Lauf
+      und eine erst beim Game Over endende Runde nicht dasselbe messen.
+      `highscore_sprint_screen` zeigt sie im Layout der beiden anderen
+      Listen; einzige Abweichung ist die Spalte an der Stelle der
+      Spielzeit, die hier die physischen Reihen ("Lines") traegt - jeder
+      Eintrag hat dieselben drei Minuten gespielt, eine Zeitspalte
+      stuende zehnmal gleich da. Der Menuepunkt "Highscores"
+      (`menu_highscores`) und `--reset highscore` (siehe 4.8) decken die
+      dritte Liste mit ab.
+- [x] **Anleitungsseite "Spielmodi"** (Version 0.39.0, zusammen mit dem
+      Sprint-Modus): die Anleitung (0.32.0) stammte aus der Zeit, als es
+      nur die endlose Runde gab, und kannte die Spielmodi nicht. Die
+      sechste Seite (`menu_help_body` in `lib/menu.sh`, siehe 3.5)
+      erklaert Marathon, Ultra und Sprint mit ihrem jeweiligen Ende und
+      Ergebnis und weist auf die eigene Bestenliste je Modus hin. Sie
+      kam bewusst erst jetzt: mit Sprint liessen sich alle drei Modi in
+      einem Zug erklaeren, statt die Seite zweimal umzubauen. Ziel und
+      Zeitlimit liest die Seite aus `ULTRA_TARGET_ROWS` bzw.
+      `SPRINT_TIME_MS`, aus demselben Grund, aus dem die Wunder-Seite
+      ihre Kosten aus `lib/wonders.sh` liest.

@@ -255,8 +255,10 @@ Die fuer uns relevanten Merkmale des Originals:
     0.27.0 belegt). Ein weiterer Zaehler muss also nichts
     mehr verdraengen, solange sein Label in sechs Zeichen passt.
     Zwei davon (Zeile 15 und 16) nutzt seit 0.34.0 der Ultra-Modus fuer
-    "Goal" und "Left" - aber nur, solange eine Ultra-Runde laeuft; im
-    normalen Spiel bleiben alle acht Zeilen frei (siehe 3.6).
+    "Goal" und "Left"; seit 0.39.0 nutzt der Sprint-Modus dieselben
+    beiden Zeilen fuer sein Zeitlimit und die Restzeit (die Modi laufen
+    nie gleichzeitig). Beides nur, solange eine Runde des jeweiligen
+    Modus laeuft; im Marathon bleiben alle acht Zeilen frei (siehe 3.6).
 - Spielzeit-Counter (seit 0.17.0): Die Anzeige "Time" zaehlt nur die
   aktive Spielzeit der laufenden Runde. Pausen (Taste `p` und das
   Pausenmenue) sowie der Game-Over-Bildschirm zaehlen nicht; die Zeit
@@ -274,7 +276,7 @@ Die fuer uns relevanten Merkmale des Originals:
 ### 3.5 Anleitung (seit 0.32.0)
 
 Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
-"Beenden" und erklaert das Spiel auf fuenf Info-Bildschirmen
+"Beenden" und erklaert das Spiel auf sechs Info-Bildschirmen
 (`menu_help` in `lib/menu.sh`, ueber `render_menu_frame` zentriert wie
 der Spielblock). **Seit Version 0.33.0 (Nutzerwunsch)** blaettert man mit
 den **Pfeiltasten links/rechts** durch die Seiten (umlaufend: von der
@@ -295,22 +297,26 @@ in fester Reihenfolge einmal durchzureichen:
 4. Gold-/Silber-Quadrate und die Reihenwertung (Werte aus
    `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`, siehe 3.2).
 5. Weltwunderbau mit der Kostentabelle aus `lib/wonders.sh`.
+6. Spielmodi (seit 0.39.0): Marathon, Ultra und Sprint mit ihrem
+   jeweiligen Ende und Ergebnis, dazu der Hinweis auf die eigene
+   Bestenliste je Modus und darauf, dass bei Ultra und Sprint nur ein
+   Lauf gewertet wird, der sein Ziel bzw. die volle Zeit erreicht hat.
+   Die Seite kam bewusst erst mit dem Sprint-Modus dazu: die
+   urspruenglichen fuenf Seiten stammen aus der Zeit, als es nur die
+   endlose Runde gab, und mit Sprint liessen sich alle drei Modi in
+   einem Zug erklaeren, statt die Seite zweimal umzubauen.
 
-Zwei Teile werden bewusst aus dem laufenden Zustand gelesen statt
+Drei Teile werden bewusst aus dem laufenden Zustand gelesen statt
 ausgeschrieben, damit die Anleitung nicht luegen kann: die
 Tastenbelegung (`menu_help_keys` setzt die konfigurierbare Taste vor die
 fest verdrahteten Sekundaertasten, laesst `NONE` weg und vermeidet
-Dubletten wie `KEY_HARD=SPACE` neben der Leertaste) und die Wunder-Namen
-samt Kosten. Jeder Bildschirm bleibt in den 46 Zeichen Breite und den
-`MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst.
+Dubletten wie `KEY_HARD=SPACE` neben der Leertaste), die Wunder-Namen
+samt Kosten und die Ziele der beiden Zeitmodi (`ULTRA_TARGET_ROWS`,
+`SPRINT_TIME_MS`). Jeder Bildschirm bleibt in den 46 Zeichen Breite und
+den `MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst - die
+Modus-Seite nutzt sie mit 18 Zeilen genau aus.
 
-Noch offen: die Anleitung kennt die Spielmodi aus 3.6 noch nicht (die
-fuenf Seiten stammen aus der Zeit, als es nur die endlose Runde gab).
-Eine sechste Seite "Spielmodi" gehoert nachgezogen, sobald auch Sprint
-steht - dann lassen sich beide Modi auf einer Seite erklaeren, statt die
-Seite zweimal umzubauen.
-
-### 3.6 Spielmodi (Ultra seit 0.34.0)
+### 3.6 Spielmodi (Ultra seit 0.34.0, Sprint seit 0.39.0)
 
 Das Einzelspieler-Menue waehlt den Modus der Runde; der gewaehlte Name
 geht als Argument an `game_run` und liegt waehrend der Runde in
@@ -326,8 +332,13 @@ im Modus zurueck, in dem sie gestartet wurde).
   `ULTRA_TARGET_ROWS` (150) **Rows** so schnell wie moeglich abbauen.
   Die Runde endet in dem Moment, in dem die Wertung das Ziel erreicht
   oder ueberschreitet; das Ergebnis ist die Spielzeit.
-- **Sprint** (geplant, siehe Roadmap): in 3 Minuten moeglichst viele
-  Reihen. Noch nicht umgesetzt.
+- **Sprint** (`sprint`, Nutzerwunsch, seit 0.39.0): das Spiegelbild von
+  Ultra - in `SPRINT_TIME_MS` (180000 ms = 3 Minuten) Spielzeit
+  moeglichst viele **Rows** abbauen. Die Runde endet in dem Moment, in
+  dem die Spielzeit das Limit erreicht; das Ergebnis sind die Rows.
+  Gemessen wird dieselbe Spielzeit wie im HUD (`PLAY_MS`, siehe 3.4),
+  Pausen und Pausenmenue zaehlen also nicht mit, und eine ins
+  Hauptmenue gelegte Runde nimmt ihre Restzeit beim Fortsetzen mit.
 
 Entscheidungen zu Ultra (die drei in der Roadmap offen gelassenen
 Punkte, im Sinne der dortigen Empfehlung entschieden):
@@ -363,6 +374,42 @@ Punkte, im Sinne der dortigen Empfehlung entschieden):
   Millisekunden gehoeren zum Lauf.
 - **`r` im Rundenende-Bild startet im selben Modus neu** (`game_reset`
   ohne Argument behaelt `GAME_MODE`).
+
+Entscheidungen zu Sprint (0.39.0). Der Modus ist die Umkehrung von
+Ultra, deshalb sind die Ultra-Entscheidungen oben eins zu eins
+gespiegelt - alles andere waere im selben Menue schwer zu erklaeren:
+
+- **Gewertet werden Rows, nicht Lines** - dieselbe Begruendung wie bei
+  Ultra (siehe oben): "abgebaute Reihen" heisst im ganzen Spiel die
+  gewichtete Wertung, und die Quadrate sollen auch hier der schnelle
+  Weg zu einem guten Ergebnis sein.
+- **Nur vollstaendige Laeufe kommen in die Sprint-Bestenliste.** Ein
+  Versuch, der nach einer Minute im Game Over endet, hat weniger Rows
+  aus einem Grund, der mit der Spielstaerke nichts zu tun hat; er neben
+  vollen Laeufen einzusortieren hiesse, zwei verschiedene Dinge zu
+  vergleichen. Reihen und Zaehler zaehlen wie bei jeder abgebrochenen
+  Runde in Weltwunder-Fortschritt und Statistik (siehe 3.3).
+- **HUD:** dieselben zwei Zeilen der linken Spalte wie bei Ultra
+  (`render_pane_left`, Zeile 15/16, siehe 3.4): "Goal" ist hier das
+  Zeitlimit (MM:SS) und "Left" die verbleibende Spielzeit, auf die
+  naechste ganze Sekunde aufgerundet - die Runde ist vorbei, wenn dort
+  00:00 steht, und Abrunden wuerde diese Anzeige die ganze letzte
+  Sekunde lang zeigen. Die Modi laufen nie gleichzeitig, deshalb teilen
+  sie sich die Zeilen, statt zwei weitere zu belegen.
+- **Rundenende-Kasten** (`render_status_box`): zwei weitere Ausgaenge
+  mit denselben acht Innenzeilen - "SPRINT END" mit den erreichten Rows
+  und dem Sprint-Rang, und fuer einen vorzeitig gescheiterten Versuch
+  das klassische Game Over mit der gespielten Zeit ("Time 01:23/03:00",
+  bewusst ohne Rang). Damit traegt der Kasten fuenf Ausgaenge; die
+  Fallunterscheidung ist deshalb ein `case` ueber `GAME_MODE` mit der
+  `GOAL_REACHED`-Pruefung darin.
+- **Zeitmessung:** die Zielpruefung sitzt im Game-Loop direkt hinter
+  `play_clock_tick` (`sprint_time_up` in `rowhammer.sh`) - die Uhr ist
+  hier das Ziel, so wie die Reihenwertung es bei Ultra ist, und dort
+  wird sie fortgeschrieben. Sie laeuft **vor** der Gravitation des
+  Ticks, damit auf abgelaufener Zeit kein Stein mehr faellt oder
+  festgesetzt wird; der noch fallende Stein wird nicht mehr gelockt,
+  seine Reihen zaehlen also nicht mehr.
 
 ## 4. Technisches Konzept
 
@@ -439,7 +486,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.38.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.39.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
@@ -451,10 +498,11 @@ Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue). Das
 Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
-("Marathon" oder "Ultra", siehe 3.6; der endlose Modus hiess bis
+("Marathon", "Ultra" oder - seit 0.39.0 - "Sprint", siehe 3.6; der
+endlose Modus hiess bis
 0.34.1 "Normales Spiel"), und seit 0.38.0 waehlt der Menuepunkt
 "Highscores" ebenso den Modus der anzuzeigenden Bestenliste
-(`menu_highscores`, siehe 4.5); die
+(`menu_highscores`, seit 0.39.0 mit drei Listen, siehe 4.5); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -610,7 +658,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   aenderbar per `--data-dir DIR` bzw.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
   Highscore-Liste `highscore`, die Ultra-Bestenliste `highscore-ultra`
-  (seit 0.34.0, siehe 3.6), der Spielstand `save` und die
+  (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
+  (seit 0.39.0), der Spielstand `save` und die
   Statistik `stats`.
 - Bewusste Abweichung von den Script-Konventionen (Abschnitt 11,
   organisationsbasierte Suche unter `/etc` und `${HOME}/.config`):
@@ -704,15 +753,48 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `ULTRA_TARGET_ROWS`, und um wie viel er ueberschossen hat, ist eine
   Information. Der erreichte Rang steht wie bisher zusaetzlich im
   Rundenende-Kasten.
-  **Modus-Auswahl:** weil es damit zwei Listen mit zwei Rangordnungen
+  **Sprint-Bestenliste (seit 0.39.0, Nutzerwunsch, siehe 3.6):** die
+  Ergebnisse des Sprint-Modus liegen in einer dritten Datei
+  `${DATA_DIR}/highscore-sprint`, Zeilenformat und Rangordnung wie die
+  Marathon-Liste
+  (`rows|lines|level|name|date|gold|silver|time|rowhammers|pieces`,
+  absteigend nach Rows, gleiche Rows rangieren hinter dem aelteren
+  Eintrag), ebenfalls Top 10 (`HSS_*` in `lib/highscore.sh`). Das
+  gleiche Format ist Absicht: gewertet wird dieselbe Zahl in derselben
+  Einheit, ein zweites Layout waere nur ein zweites, das mitgepflegt
+  werden muesste. Eine eigene Datei ist es trotzdem, denn ein auf drei
+  Minuten begrenzter Lauf und eine Runde, die erst beim Game Over endet,
+  sind nicht dasselbe - die Rows der endlosen Liste wuerden die kurzen
+  Laeufe schlicht verdraengen. Gespeichert werden nur Laeufe, die ihre
+  volle Zeit gespielt haben (Entscheidung in 3.6). Wie bei der
+  Ultra-Liste gilt die Arbeitsregel "keine Abwaertskompatibilitaet":
+  genau zehn Felder, jede andere Zeile faellt bei der Validierung heraus
+  - die Kulanz der Marathon-Liste (`HS_FIELD_COUNTS`) gibt es hier
+  nicht, weil das Format neu ist.
+  **Anzeige:** `highscore_sprint_screen` zeigt die Liste im Layout der
+  beiden anderen (seitenweise ueber `menu_pages`, dieselben
+  `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`, zwei Zeilen je Eintrag, gleiche
+  Spaltenbreiten und Faerbung, Rows in der Akzentfarbe wie auf dem
+  Marathon-Bildschirm). Eine Spalte weicht ab: wo die Marathon-Liste die
+  Spielzeit zeigt, stehen hier die physischen Reihen ("Lines"). Jeder
+  Eintrag hat dieselben drei Minuten gespielt, eine Zeitspalte stuende
+  also zehnmal gleich da; die Lines sind neben den gewichteten Rows die
+  interessante Zahl, weil beide zusammen zeigen, wie viel des Ergebnisses
+  aus den Quadraten kam. Gespeichert bleibt die Spielzeit trotzdem - die
+  PPM-Spalte der zweiten Zeile rechnet mit ihr.
+  **Modus-Auswahl:** weil es damit mehrere Listen mit verschiedenen
+  Rangordnungen
   gibt, fragt der Hauptmenuepunkt "Highscores" seit 0.38.0 zuerst nach
   dem Modus (`menu_highscores` in `lib/menu.sh`: Marathon / Ultra /
-  Zurueck) und zeigt danach die gewaehlte Liste; die Auswahl bleibt
-  stehen, bis "Zurueck" oder `ESC` kommt, sodass ein Vergleich beider
+  Sprint / Zurueck, der Sprint-Eintrag seit 0.39.0) und zeigt danach die
+  gewaehlte Liste; die Auswahl bleibt
+  stehen, bis "Zurueck" oder `ESC` kommt, sodass ein Vergleich der
   Listen nicht durchs Hauptmenue muss. Die Bildschirmtitel nennen ihren
-  Modus ("Highscores - Marathon" bzw. "Highscores - Ultra"), sonst waere
-  nicht zu sehen, welche der beiden gerade auf dem Schirm steht. Eine
-  gemeinsame Liste waere keine Alternative: sie muesste zwei Ordnungen
+  Modus ("Highscores - Marathon", "- Ultra" bzw. "- Sprint"), sonst
+  waere
+  nicht zu sehen, welche gerade auf dem Schirm steht. Eine
+  gemeinsame Liste waere keine Alternative: sie muesste mehrere
+  Ordnungen
   in eine Tabelle mischen (siehe 3.6).
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
@@ -901,9 +983,9 @@ ins Menue zu starten. Ziele:
 | --- | --- |
 | `config` | `rowhammer.conf` |
 | `stats` | `stats` |
-| `highscore` | `highscore` **und** `highscore-ultra` |
+| `highscore` | `highscore`, `highscore-ultra` **und** `highscore-sprint` |
 | `save` | `save` (Weltwunder-Fortschritt) |
-| `all` | alle fuenf Dateien |
+| `all` | alle sechs Dateien |
 
 **Reset heisst verschieben, nicht loeschen (seit 0.36.0,
 Nutzerentscheidung).** Jede betroffene Datei wandert nach
@@ -927,8 +1009,9 @@ Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
   Weltwunder-Fortschritt zuruecksetzen will, hat dafuer das eigene Ziel
   `save` (der in der Roadmap angedachte Wert), das die uebrigen Dateien
   unangetastet laesst.
-- **`highscore` trifft beide Bestenlisten.** Endlos- und Ultra-Liste
-  (seit 0.34.0, siehe 4.5) sind dieselbe Art Daten; eine davon stehen zu
+- **`highscore` trifft alle Bestenlisten.** Endlos-, Ultra- und
+  Sprint-Liste (seit 0.34.0 bzw. 0.39.0, siehe 4.5) sind dieselbe Art
+  Daten; eine davon stehen zu
   lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
   einen Reset zu fein.
 
@@ -940,7 +1023,8 @@ Ablauf und Einordnung:
   Datei bei jedem Start selbst loeschen lassen.
 - **Zeitpunkt:** direkt nach dem Sourcen der Module (die Dateinamen
   kommen aus den Modulen, die sie besitzen: `CONFIG_NAME`,
-  `STATS_FILE_NAME`, `HS_FILE_NAME`/`HSU_FILE_NAME`, `SAVE_FILE_NAME`)
+  `STATS_FILE_NAME`, `HS_FILE_NAME`/`HSU_FILE_NAME`/`HSS_FILE_NAME`,
+  `SAVE_FILE_NAME`)
   und **vor** der TTY-Pruefung. Die TTY-Pruefung ist dafuer aus dem
   Prerequisites-Block nach unten gewandert: ein Reset loescht nur
   Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
@@ -1755,8 +1839,8 @@ Erledigt und nach HISTORY.md verschoben:
 - **Zwischenschritt - Paketierung**: `Makefile`, Debian-Paketierung und
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.38.0
-  (Anzeige der Ultra-Bestenliste); die Uebersichtstabelle in HISTORY.md
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.39.0
+  (Sprint-Modus); die Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen sind die fuenf Punkte unten
 
 ### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0 und rpm 0.37.0 erledigt, siehe HISTORY.md)
@@ -1835,21 +1919,18 @@ Erledigt und nach HISTORY.md verschoben:
       serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
       keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
       umsetzbar.
-- [ ] **Sprint-Modus** und die Anzeige-Seiten der Modi (Rest des
-      Modus-Themas, Nutzerentscheidung: die Anzeige folgt getrennt von
-      der Speicherung). Offen sind:
-      - **Sprint** (Ziel: in 3 Minuten moeglichst viele Reihen) als
-        dritter Eintrag im Einzelspieler-Menue - dieselbe Mechanik wie
-        Ultra mit vertauschten Rollen (feste Zeit, offene Rows), also
-        wieder eine eigene Liste (Rangordnung: meiste Rows) und ein
-        eigener HUD-Zaehler (verbleibende Zeit).
-      - ~~**Anzeige der Ultra-Bestenliste**~~: erledigt in 0.38.0
-        (Nutzerwunsch), siehe HISTORY.md und 4.5.
-      - **Statistik je Modus**: gespielte Runden je Modus, bei Ultra
-        zusaetzlich wie oft das Ziel erreicht wurde. Bewusst noch nicht
-        eingebaut - Zaehler ohne Anzeige waeren tote Daten, und die
-        Statistik-Bildschirme sind schon zweiseitig (siehe 4.5).
-      - **Anleitung**: eine sechste Seite "Spielmodi" (siehe 3.5).
+- [ ] **Statistik je Modus** (letzter offener Teil des Modus-Themas;
+      Sprint selbst ist mit 0.39.0 umgesetzt, siehe HISTORY.md und 3.6):
+      gespielte Runden je Modus, bei Ultra zusaetzlich wie oft das Ziel
+      erreicht wurde, bei Sprint wie oft die volle Zeit gespielt wurde.
+      Bewusst noch nicht eingebaut - Zaehler ohne Anzeige waeren tote
+      Daten, und die Statistik-Bildschirme sind schon zweiseitig (siehe
+      4.5); eine dritte Seite oder ein Umbau der vorhandenen ist also
+      Teil des Punktes, nicht nur das Zaehlen.
+      Erledigt und nach HISTORY.md verschoben sind die drei uebrigen
+      Teile: die Anzeige der Ultra-Bestenliste (0.38.0), der
+      Sprint-Modus samt eigener Bestenliste (0.39.0) und die sechste
+      Anleitungsseite "Spielmodi" (0.39.0, siehe 3.5).
 
 ### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 
@@ -2048,13 +2129,15 @@ Multi-Server zuletzt.
 - Spielmodi: die drei Fragen zum Ultra-Modus sind mit 0.34.0
   entschieden (Rows statt Lines, gescheiterte Versuche ohne
   Listeneintrag, HUD-Zaehler "Goal"/"Left" in der linken Spalte, siehe
-  3.6). Offen bleibt nur die Justierung: ob 150 Rows die richtige
-  Distanz sind, entscheidet Playtesting (`ULTRA_TARGET_ROWS`) - mit den
-  Quadrat-Boni ist die Strecke deutlich kuerzer als 150 physische
+  3.6), und Sprint hat sie mit 0.39.0 gespiegelt uebernommen. Offen
+  bleibt nur die Justierung: ob 150 Rows die richtige
+  Distanz und 3 Minuten die richtige Dauer sind, entscheidet Playtesting
+  (`ULTRA_TARGET_ROWS`, `SPRINT_TIME_MS`) - mit den
+  Quadrat-Boni ist die Ultra-Strecke deutlich kuerzer als 150 physische
   Reihen, das ist so gewollt. Die Anzeige der Ultra-Liste ist mit
-  0.38.0 nachgezogen (Modus-Auswahl unter "Highscores", siehe 4.5);
-  Sprint und die Statistik je Modus stehen noch aus (siehe Roadmap
-  Phase 4).
+  0.38.0 nachgezogen (Modus-Auswahl unter "Highscores", siehe 4.5), die
+  Sprint-Liste mit 0.39.0; die Statistik je Modus steht noch aus (siehe
+  Roadmap Phase 4).
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

@@ -11,10 +11,13 @@
 #   the three upcoming pieces in the top right pane. The wonder progress
 #   is not part of the HUD; it is shown on the "Weltwunder" screen
 #   instead. In the Ultra game mode (since 0.19.0) two more counters
-#   follow below: the run's row target and the rows still missing. Pause
+#   follow below: the run's row target and the rows still missing; the
+#   Sprint mode (since 0.20.0) puts its time limit and the time left in
+#   the same two slots. Pause
 #   and game over are drawn as a box over the board, the latter with the
 #   achieved highscore rank - or, for a finished Ultra run, with its time
-#   and Ultra rank.
+#   and Ultra rank, resp. for a finished Sprint run with its rows and
+#   Sprint rank.
 #   Since 0.12.0 frames are no longer pushed out as a whole: draw_frame
 #   builds the block into FRAME_LINES and render_flush emits only the lines
 #   that actually changed since the previous frame, each with its own
@@ -54,7 +57,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.19.0  (2026-07-31)
+# Version: 0.20.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -604,6 +607,11 @@ render_pane_left() {
     # stay free for whatever comes next (see CLAUDE.md 3.4). "Left" is
     # the interesting half and therefore the lower, more visible line;
     # both labels fit the pane's six label columns.
+    # Sprint mode (2026-08-03) uses the same two lines for the same two
+    # questions, only about its time limit instead of a row target: the
+    # goal is the three minutes, "Left" the time still to play. The
+    # modes never run at once, so sharing the slots costs nothing and
+    # keeps both goal counters in the place a player learns once.
     if [ "${GAME_MODE}" = "ultra" ]; then
         pane_stat 15 "Goal" "${ULTRA_TARGET_ROWS}"
         left=$(( ULTRA_TARGET_ROWS - ROW_CREDIT ))
@@ -613,6 +621,20 @@ render_pane_left() {
             left=0
         fi
         pane_stat 16 "Left" "${left}"
+    elif [ "${GAME_MODE}" = "sprint" ]; then
+        fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+        pane_stat 15 "Goal" "${FMT_DURATION}"
+        left=$(( SPRINT_TIME_MS - PLAY_MS ))
+        if [ "${left}" -lt 0 ]; then
+            # The loop notices the timeout a tick late at the most, so
+            # the finished run would otherwise show a negative rest.
+            left=0
+        fi
+        # Rounded up to the next whole second: the run is over when the
+        # display hits 00:00, and truncating would show that for the
+        # last second of play.
+        fmt_duration $(( (left + 999) / 1000 ))
+        pane_stat 16 "Left" "${FMT_DURATION}"
     fi
     return 0
 }
@@ -650,38 +672,68 @@ render_status_box() {
     if [ "${GAME_OVER}" -eq 1 ]; then
         local -a body=()
         body+=("")
-        # Three endings share this box, and all three fill the same eight
-        # body lines so the borders stay put: a finished Ultra run (the
-        # time is the result and takes the headline's neighbouring line),
-        # a failed Ultra run (no rank - an attempt short of the goal is
-        # not recorded, so it shows how far it got instead) and the
-        # classic game over of an endless round.
-        if [ "${GOAL_REACHED}" -eq 1 ]; then
-            body+=("    ULTRA CLEAR")
-            fmt_duration_ms "${PLAY_MS}"
-            body+=("   Time ${FMT_DURATION_MS}")
-            # The run was recorded when the goal triggered (record_round),
-            # so HSU_LAST_RANK is this run's rank in the Ultra list.
-            if [ "${HSU_LAST_RANK}" -gt 0 ]; then
-                body+=("  Ultra #${HSU_LAST_RANK}")
-            else
+        # Five endings share this box, and all of them fill the same
+        # eight body lines so the borders stay put: the two timed modes
+        # each have a finished and a failed variant (the result takes the
+        # headline's neighbouring line; a failed run gets no rank - it is
+        # not recorded, so it shows how far it got instead), and the
+        # endless round has its classic game over.
+        case "${GAME_MODE}" in
+            ultra)
+                if [ "${GOAL_REACHED}" -eq 1 ]; then
+                    body+=("    ULTRA CLEAR")
+                    fmt_duration_ms "${PLAY_MS}"
+                    body+=("   Time ${FMT_DURATION_MS}")
+                    # The run was recorded when the goal triggered
+                    # (record_round), so HSU_LAST_RANK is its rank in the
+                    # Ultra list.
+                    if [ "${HSU_LAST_RANK}" -gt 0 ]; then
+                        body+=("  Ultra #${HSU_LAST_RANK}")
+                    else
+                        body+=("")
+                    fi
+                else
+                    body+=("    GAME OVER")
+                    body+=("")
+                    body+=("  Rows ${ROW_CREDIT}/${ULTRA_TARGET_ROWS}")
+                fi
+                ;;
+            sprint)
+                if [ "${GOAL_REACHED}" -eq 1 ]; then
+                    # Time is up: here the row credit is the result, the
+                    # mirror image of the Ultra box above.
+                    body+=("    SPRINT END")
+                    body+=("   Rows ${ROW_CREDIT}")
+                    if [ "${HSS_LAST_RANK}" -gt 0 ]; then
+                        body+=("  Sprint #${HSS_LAST_RANK}")
+                    else
+                        body+=("")
+                    fi
+                else
+                    # Topped out before the time was up: the rows are on
+                    # screen anyway, so the line that matters is how much
+                    # of the three minutes the run got to use.
+                    body+=("    GAME OVER")
+                    body+=("")
+                    fmt_duration $(( PLAY_MS / 1000 ))
+                    line="${FMT_DURATION}"
+                    fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+                    body+=("  Time ${line}/${FMT_DURATION}")
+                fi
+                ;;
+            *)
+                body+=("    GAME OVER")
                 body+=("")
-            fi
-        elif [ "${GAME_MODE}" = "ultra" ]; then
-            body+=("    GAME OVER")
-            body+=("")
-            body+=("  Rows ${ROW_CREDIT}/${ULTRA_TARGET_ROWS}")
-        else
-            body+=("    GAME OVER")
-            body+=("")
-            # The finished round was recorded when the game over triggered
-            # (record_round), so HS_LAST_RANK is this round's rank.
-            if [ "${HS_LAST_RANK}" -gt 0 ]; then
-                body+=("  Highscore #${HS_LAST_RANK}")
-            else
-                body+=("")
-            fi
-        fi
+                # The finished round was recorded when the game over
+                # triggered (record_round), so HS_LAST_RANK is this
+                # round's rank.
+                if [ "${HS_LAST_RANK}" -gt 0 ]; then
+                    body+=("  Highscore #${HS_LAST_RANK}")
+                else
+                    body+=("")
+                fi
+                ;;
+        esac
         body+=("")
         body+=("  r = restart")
         body+=("  ${KEY_QUIT} = menu")

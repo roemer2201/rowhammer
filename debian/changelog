@@ -1,3 +1,30 @@
+rowhammer (0.39.0) unstable; urgency=medium
+
+  * New game mode "Sprint" (user request): score as much row credit as
+    possible within SPRINT_TIME_MS (3 minutes) of play time. The mirror
+    image of Ultra - the time is fixed and the rows are the result -
+    so it mirrors Ultra's decisions as well: weighted rows count (not
+    physical lines), the HUD shows the goal and what is left of it in
+    the same two left-pane slots ("Goal" = the limit, "Left" = the
+    remaining time), and only a run that played its full time is
+    recorded. The check sits in the game loop right behind
+    play_clock_tick and before the tick's gravity, so no piece falls or
+    locks on time that is already over.
+  * Sprint runs are kept in a list of their own,
+    <data-dir>/highscore-sprint (HSS_* in lib/highscore.sh): same line
+    format and ranking as the Marathon list - the same number in the
+    same unit - but a separate file, because a three minute run and a
+    round that ends only on a top-out do not measure the same thing.
+    highscore_sprint_screen shows it in the layout of the other two
+    lists; where the Marathon screen has the play time, this one shows
+    the physical lines cleared, since every entry ran the same three
+    minutes. "Highscores" and --reset highscore cover the third list.
+  * The Anleitung got a sixth page explaining the three game modes; it
+    reads the Ultra target and the Sprint time limit from the live
+    constants, like the wonder page reads its costs.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 03 Aug 2026 12:00:00 +0200
+
 rowhammer (0.38.0) unstable; urgency=medium
 
   * Show the Ultra highscore list (user request). 0.34.0 deliberately
