@@ -4,8 +4,10 @@
 #
 # Description:
 #   Persistent highscore list for rowhammer. The best HS_MAX (10) rounds
-#   are kept in ${DATA_DIR}/highscore (default
-#   ~/.config/rowhammer/highscore),
+#   of the Marathon mode are kept in ${DATA_DIR}/highscore-marathon
+#   (default ~/.config/rowhammer/highscore-marathon; the file was called
+#   plain "highscore" up to 0.50.0 and is renamed once by
+#   highscore_migrate_legacy, see there),
 #   one entry per line in the field format
 #   "rows|lines|level|name|date|gold|silver|time|rowhammers|pieces", sorted by rows (the
 #   weighted row credit) descending. Since the scoring rebuild (0.4.0,
@@ -86,9 +88,13 @@
 #   it, which is what lets the name prompt at the end of a round show
 #   that place while it still asks for the name (prompt_round_name,
 #   lib/menu.sh).
+#   Since 0.18.0 (user decision) the Marathon file carries its mode in
+#   its name like the other four: "highscore" became
+#   "highscore-marathon", and highscore_migrate_legacy renames an
+#   existing file once at startup so no top ten is lost over it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.17.0  (2026-08-04)
+# Version: 0.18.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -97,8 +103,16 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 fi
 
 # Maximum number of entries kept, and the file name below DATA_DIR.
+# CHANGE 2026-08-04 (user decision): the Marathon list moved from
+# "highscore" to "highscore-marathon". It was the only list without a
+# mode suffix - a leftover from the time when it was the only list there
+# was - and the four modes that came after it all name their mode, so
+# the plain name was the odd one out. HS_LEGACY_FILE_NAME is the old
+# name, kept for the one-time rename in highscore_migrate_legacy below
+# and nowhere else.
 HS_MAX=10
-HS_FILE_NAME="highscore"
+HS_FILE_NAME="highscore-marathon"
+HS_LEGACY_FILE_NAME="highscore"
 
 # In-memory list: one
 # "rows|lines|level|name|date|gold|silver|time|rowhammers|pieces" string
@@ -168,6 +182,44 @@ highscore_parse_line() {
     fi
 
     HS_ENTRIES+=("${f[0]}|${f[1]}|${f[2]}|${f[3]}|${f[4]}|${f[5]:-0}|${f[6]:-0}|${f[7]:-0}|${f[8]:-0}|${f[9]:-0}|${f[10]:--}")
+    return 0
+}
+
+# highscore_migrate_legacy
+# Rename a leftover "highscore" file to the current
+# "highscore-marathon" (see HS_FILE_NAME above for the why). This is a
+# deliberate exception to the project's no-backward-compatibility rule
+# (CLAUDE.md, section 6) and was asked for explicitly: nothing about the
+# file's content changes, only its name, so dropping a top ten over it
+# would be a loss for no reason at all.
+# Called from rowhammer.sh before the reset block, so --reset highscore
+# already sees the file under its current name - which is what keeps the
+# old name known to this one function instead of to every list of file
+# names in the game.
+# A target file that is already there means the rename happened before
+# and the old name is something that was put back by hand: it is never
+# overwritten, the leftover stays where it is and says so on STDERR. A
+# failing mv is fatal instead - the data directory is unwritable then,
+# the game could not save a list into it either, and carrying on would
+# quietly start with an empty Marathon list.
+highscore_migrate_legacy() {
+    local old="${DATA_DIR}/${HS_LEGACY_FILE_NAME}"
+    local new="${DATA_DIR}/${HS_FILE_NAME}"
+
+    if [ ! -e "${old}" ]; then
+        return 0
+    fi
+    if [ -e "${new}" ]; then
+        printf 'Keeping %s: %s exists already\n' "${old}" "${new}" >&2
+        return 0
+    fi
+    if ! mv -- "${old}" "${new}"; then
+        die "Failed to rename ${old} to ${new}"
+    fi
+    # A user-facing note, so a renamed file is never a surprise. It is
+    # printed before the alternate screen goes up, which is also where it
+    # is readable again after the session ends.
+    printf "${I18N[highscore_renamed]}\n" "${old}" "${new}"
     return 0
 }
 

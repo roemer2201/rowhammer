@@ -434,6 +434,11 @@ During a replay:"
     [help_demo_speed]="Speed"
     [help_demo_back]="Back"
 
+    # --- One-time rename of the Marathon highscore file (0.51.0) ----------
+    # Printed before the terminal is touched, like the reset dialog.
+    # Arguments: old path, new path.
+    [highscore_renamed]="Highscore list renamed: %s -> %s"
+
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" affects these files in %s:"
     [reset_absent]="(not present)"
@@ -518,7 +523,7 @@ Options:
                 without starting the game. TARGET is one of:
                   config     the config file rowhammer.conf
                   stats      the statistics file stats
-                  highscore  all highscore lists (highscore,
+                  highscore  all highscore lists (highscore-marathon,
                              highscore-ultra, highscore-sprint,
                              highscore-timeattack and highscore-flood)
                   save       the savegame save (the wonder progress)
@@ -657,8 +662,9 @@ which of the two to show.
 Settings (player name, language, color theme, key bindings, demo
 recording) are stored in the config file
 <data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
-best 10 rounds are kept in <data-dir>/highscore (Ultra: the best 10 runs
-in <data-dir>/highscore-ultra, Sprint: <data-dir>/highscore-sprint,
+best 10 rounds are kept in <data-dir>/highscore-marathon (Ultra: the
+best 10 runs in <data-dir>/highscore-ultra, Sprint:
+<data-dir>/highscore-sprint,
 Time Attack: <data-dir>/highscore-timeattack, Flood:
 <data-dir>/highscore-flood); all
 five lists are shown under the
