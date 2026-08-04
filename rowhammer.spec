@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.46.1
+Version:        0.48.1
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,11 +79,36 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
-* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.46.1-1
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.48.1-1
 - Demo recording survives a full RAM disk or data directory without
   disturbing the round: every write of the demo module is checked, the
   recording is dropped with a note in the debug log, and no error
   message can be painted onto the playfield any more.
+
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.48.0-1
+- Multi-language user interface: every player-visible text (menus,
+  manual, HUD labels, result box, highscore and statistics tables,
+  wonder screen, demo list, reset dialog and --help) comes from a
+  translation table instead of the code.
+- Ships German and English; a language is one file below lib/lang/.
+- New option --lang de|en|auto (ROWHAMMER_LANG), also in the settings
+  menu and stored in the config file; "auto" follows the locale and
+  falls back to German. Switching applies without a restart.
+- Several German screen texts that overflowed a 48-column terminal were
+  rewrapped.
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.47.0-1
+- Statistics per game mode: every all-time counter (cleared rows, bonus
+  rows, gold and silver squares, rowhammers, pieces placed, play time)
+  is now also counted for Marathon, Ultra, Sprint and Time Attack
+  separately, next to the rounds played per mode and the runs that
+  reached their goal.
+- The all-time counters stay as they were and are not summed from the
+  per-mode ones, so they remain the complete picture.
+- The "Statistik" menu entry asks which set to show, the way
+  "Highscores" asks which list; the per-mode screen adds the rows per
+  round and the goal rate.
+- The per-mode data is stored as "mode_<mode>_<field>=N" lines in
+  <data-dir>/stats, replacing the "rounds_<mode>[_goal]" keys of 0.42.0.
 
 * Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.46.0-1
 - Demo recording and playback: every round is recorded as its moves,

@@ -73,6 +73,8 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.43.0 | "Neustarten" im Pausenmenue | 3.1, 3.3 |
 | 0.45.0 | Namensabfrage am Rundenende (vormarkierte Vorgabe) | 3.7, 4.3, 4.5 |
 | 0.46.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.8, 4.10 |
+| 0.47.0 | Vollstaendige Statistik je Spielmodus | 4.5 |
+| 0.48.0 | Mehrsprachige Oberflaeche (Deutsch/Englisch) | 4.11 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -827,6 +829,9 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       gespielte Runde), und ein unbekannter Modusname wird nirgends
       gezaehlt statt Marathon zugeschlagen - lieber eine Luecke als
       eine falsche Zuordnung.
+      _Spaeter ueberholt: 0.47.0 fuehrt **jeden** Zaehler je Modus und
+      loest die `rounds_*`-Schluessel durch das Schema
+      `mode_<modus>_<feld>` ab (siehe dort und 4.5)._
 - [x] **"Neustarten" im Pausenmenue** (Version 0.43.0, Nutzerwunsch):
       Das Pausenmenue (`Esc`/`x`) hatte drei Eintraege, von denen zwei
       die Runde verlassen; wer eine verkorkste Runde einfach noch
@@ -1039,3 +1044,136 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       allein und brauchte deshalb einen Stub fuer die neue
       Demo-Anbindung in `queue_fill` (analog dem bereits vorhandenen
       Stub fuer `debug_event`).
+
+- [x] **Vollstaendige Statistik je Spielmodus** (Version 0.47.0,
+      Nutzerwunsch; aktueller Stand siehe 4.5): 0.42.0 hatte je Modus
+      nur die **Runden** gezaehlt. Seither fuehrt `lib/stats.sh` jeden
+      Zaehler ein zweites Mal je Modus - abgebaute Reihen, Bonusreihen,
+      Gold- und Silberbloecke, Rowhammer, abgelegte Teile und Spielzeit,
+      neben den Runden und den Laeufen, die ihr Modus-Ziel erreicht
+      haben. Die Entscheidungen dahinter:
+      - **Die Gesamtstatistik bleibt, was sie war** (ausdrueckliche
+        Nutzervorgabe) - und zwar als eigene Zaehler, nicht als Summe
+        der Modus-Zaehler. Der Unterschied wird an genau einer Stelle
+        sichtbar: eine Runde in einem unbekannten Modus (nur aus einem
+        kuenftigen Modus ohne Eintrag in `STATS_MODES` erreichbar) geht
+        in die Gesamtzahlen ein und sonst nirgends. Die Gesamtsicht
+        bleibt damit vollstaendig, waehrend die Modus-Bildschirme wie
+        seit 0.42.0 lieber eine Luecke zeigen als eine falsche
+        Zuordnung.
+      - **Ein Menuepunkt mit Auswahl statt weiterer Bildschirme in der
+        Folge.** "Statistik" fragt jetzt wie "Highscores" zuerst nach
+        der Sicht (`menu_stats` in `lib/menu.sh`, Eintraege wortgleich
+        mit dem Einzelspieler- und dem Highscore-Menue): Gesamt oder
+        einer der vier Modi. Vier weitere Bildschirme an die drei
+        vorhandenen anzuhaengen haette bedeutet, sich durch sieben
+        Bildschirme zu druecken, um den letzten zu sehen.
+      - **Ein Bildschirm je Modus, gelesen wie der Gesamtbildschirm**
+        (gleiche Reihenfolge, gleiche Beschriftungen, gleiche
+        Faerbung), plus die beiden Zahlen, die Modi erst vergleichbar
+        machen: **Rows je Runde** und - bei den Zeitmodi - die
+        **Erfolgsquote**. Beide sind abgeleitet und nicht gespeichert,
+        wie die gewichtete Gesamtsumme und die PCS/min es schon waren;
+        ohne eine einzige Runde stehen sie auf "-". Mit 16 Zeilen im
+        laengsten Fall bleibt der Bildschirm in `MENU_BODY_MAX`.
+      - **Die Modus-Uebersicht ("Statistik 3/3") bleibt** und ist jetzt
+        zugleich der Ueberblick vor der Auswahl - der eine Bildschirm,
+        der die vier Modi nebeneinander stellt.
+      - **Ein flacher Schluessel je Modus und Feld**
+        (`mode_<modus>_<feld>=N`) loest die `rounds_<modus>[_goal]`-
+        Schluessel von 0.42.0 ab, deren zwei Zahlen nun Felder desselben
+        Schemas sind: eine Namensregel statt zweier. Im Code liegen die
+        Werte in einem assoziativen Array (`STATS_MODE`) statt in 36
+        Globals; die feste Feldliste hat dabei die Rolle uebernommen,
+        die vorher die Variablennamen hatten - einzige Quelle dessen,
+        was in der Datei stehen darf. Eine bestehende Statistik-Datei
+        verliert damit ihre Runden je Modus (Arbeitsregel "keine
+        Abwaertskompatibilitaet") und behaelt alles andere; ein
+        fehlender Schluessel faellt einzeln auf 0 zurueck.
+
+
+- [x] **Mehrsprachige Oberflaeche** (Version 0.48.0, Roadmap-Punkt aus
+      Phase 4; aktueller Stand siehe 4.11): Bis dahin standen die
+      Menuetexte deutsch und die HUD-Beschriftungen samt `--help`
+      englisch im Code - eine feste Mischung, die die offene Frage
+      "UI-Sprache" (Abschnitt 8) nur konservierte. Seither kommt jeder
+      spielersichtbare Text aus einer Tabelle, und die Sprache ist eine
+      Laufzeit-Entscheidung. Die Entscheidungen dahinter:
+      - **Ein assoziatives Array statt einer Lookup-Funktion.** Die
+        Texte liegen in `I18N` und werden als `${I18N[key]}` gelesen.
+        Eine Funktion `t KEY` haette pro HUD-Beschriftung einen
+        Funktionsaufruf je Frame gekostet; das Array kostet eine
+        Expansion. Formatstrings (`%s`, `%d`) stehen mit in der Tabelle
+        und werden von ihrem Aufrufer mit `printf -v` gefuellt - so
+        bleibt die Wortstellung Sache der Uebersetzung und nicht des
+        Codes.
+      - **Eine Datei je Sprache** (`lib/lang/<code>.sh`), geladen wird
+        nur die aktive. Eine Sprache dazuzunehmen ist damit eine Datei
+        plus ein Eintrag in `I18N_LANGS` (`lib/i18n.sh`); kein anderer
+        Code kennt einen Sprachcode. Die Datei weist das ganze Array zu
+        (statt einzelne Schluessel zu setzen), womit ein Wechsel zur
+        Laufzeit keinen Text der vorherigen Sprache stehen lassen kann.
+      - **Mehrzeilige Bloecke statt nummerierter Zeilenschluessel.** Die
+        acht Anleitungsseiten waeren als `help1_1`, `help1_2` ... nicht
+        mehr lesbar gewesen; sie stehen als ein Block je Absatz in der
+        Sprachdatei und werden mit `i18n_lines` zerlegt. Die Seiten, die
+        Text und generierte Zeilen mischen (Tastenbelegung,
+        Wunder-Kosten, Modus-Ziele), setzen die Bloecke davor und
+        dahinter.
+      - **`--help` ist eine Funktion, kein Tabelleneintrag.** Der Text
+        ist lang, enthaelt Anfuehrungszeichen und Prozentzeichen und
+        wird genau einmal ausgegeben; ein `i18n_usage_text` mit
+        gequotetem Heredoc je Sprachdatei ist dafuer das richtige
+        Werkzeug. Damit `--help` uebersetzt sein kann, setzt `-h/--help`
+        beim Parsen nur noch ein Flag: Config-Datei, Umgebung und der
+        Rest der Kommandozeile muessen erst gelesen sein, bevor
+        feststeht, in welcher Sprache zu antworten ist. Aus demselben
+        Grund wandert `config_load` vor den Reset-Block - die
+        Sprachwahl steht in der Config, und der Reset-Dialog ist
+        ebenfalls uebersetzt.
+      - **Eine falsche Option wirft nicht mehr den ganzen Hilfetext
+        aus.** Sie stand vorher als `usage >&2` unter der Fehlermeldung;
+        an dieser Stelle gibt es die uebersetzte Fassung noch nicht, und
+        der Hinweis auf `--help` ist ohnehin das, was der Leser braucht.
+      - **Standard `auto`, Rueckfall Deutsch.** Ein Spiel, das zwei
+        Sprachen mitbringt und die Locale ignoriert, unterstuetzt keine
+        von beiden richtig; also entscheiden `LC_ALL`, `LC_MESSAGES`
+        bzw. `LANG` (nur ihr Sprachteil, `de_DE.UTF-8` -> `de`). Nennen
+        sie keine bekannte Sprache, bleibt es bei Deutsch - der Sprache,
+        in der die Menues geschrieben wurden, sodass eine Sitzung ohne
+        brauchbare Locale genau so aussieht wie bisher.
+      - **Die Sprache ist ein Config-Wert** (Praezedenz Standard <
+        Config < `ROWHAMMER_LANG` < `--lang`), anders als Farb- und
+        Render-Modus: welche Sprache jemand liest, ist eine Eigenschaft
+        der Person und keine des Terminals. Gespeichert wird die
+        **Auswahl**, also auch `auto` - wer "folge der Locale" gewaehlt
+        hat, will das weiter, nicht die Sprache von damals.
+      - **Umschalten wirkt sofort.** `menu_language` laedt die Tabelle
+        neu und setzt `RENDER_FULL=1`: die HUD-Beschriftungen stehen im
+        Frame-Cache des Diff-Renderers, und genau sie haben sich
+        geaendert.
+      - **Fehlermeldungen nach STDERR bleiben englisch** (Konvention aus
+        Abschnitt 6). Sie treten teils auf, bevor die Sprache ueberhaupt
+        aufgeloest ist - und wenn die Sprachwahl selbst das Defekte ist,
+        waere eine uebersetzte Meldung der falsche Ort, das zu zeigen.
+        Uebersetzt ist alles, was auf einem Bildschirm des Spiels steht,
+        einschliesslich des Reset-Dialogs (0.36.1) und `--help`.
+      - **Die Tabellen ohne Anzeige-Namen.** `KEY_LABELS` (menu.sh),
+        `COLOR_THEME_LABEL` (pieces.sh), `STATS_MODE_LABEL` und
+        `STATS_MODE_GOAL_LABEL` (stats.sh) sowie `WONDER_NAMES_DE`/
+        `WONDER_NAMES_HUD` (wonders.sh) sind entfallen. Sie wurden beim
+        Sourcen der Module gefuellt, also bevor die Sprache feststeht;
+        ihre Eintraege liegen jetzt unter einem aus dem Bezeichner
+        gebauten Schluessel in der Tabelle (`keylabel_KEY_HOLD`,
+        `theme_mono`, `mode_ultra`, `wonder_stonehenge`). Das erspart
+        zugleich die zweite Tabelle, die in derselben Reihenfolge
+        gepflegt werden musste; der Debug-Log nennt ein Wunder jetzt bei
+        seinem Dateinamen, der in jeder Sprache derselbe ist.
+      Nebenbefund: Beim Vermessen der Texte gegen die 46 Spalten, die
+      ein 48-Spalten-Terminal einem Menue laesst, fielen sechs deutsche
+      Texte auf, die schon vorher zu lang waren und dort abgeschnitten
+      wurden - der Mehrspieler-Platzhalter, die drei Meldungen des
+      Rebind-Dialogs, die Abbrechen-Fusszeile einer Sicherheitsabfrage
+      und je eine Zeile der ersten und dritten Anleitungsseite. Sie sind
+      umbrochen; die Breitengrenzen stehen jetzt im Kopf der
+      Sprachdateien.

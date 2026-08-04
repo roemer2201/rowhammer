@@ -1,0 +1,652 @@
+#!/usr/bin/env bash
+#
+# lib/lang/en.sh
+#
+# Description:
+#   English texts for rowhammer (see lib/i18n.sh). Sourced by i18n_init
+#   when the resolved language is "en"; it assigns the whole I18N array,
+#   so switching the language at runtime cannot leave a stale entry of
+#   the previous one behind.
+#   Translated from lib/lang/de.sh, which is the reference: the keys,
+#   their order and the comments explaining a format string or a width
+#   constraint live there. Every line of a screen text has to stay
+#   within the 46 characters the 48-column minimum terminal leaves next
+#   to the two-column menu indent, the result box lines within its 18
+#   columns and the HUD labels within six.
+#   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
+#
+# Version: 1.0.0  (2026-08-04)
+
+# Guard: this file is a library and must be sourced, not executed.
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    printf 'lib/lang/en.sh is a library; source it from rowhammer.sh\n' >&2
+    exit 2
+fi
+
+I18N=(
+    # --- Menu chrome ------------------------------------------------------
+    [menu_any_key]="Press any key..."
+    [menu_nav]="Arrows/w/s: select   Enter: OK   ESC: back"
+    [menu_nav_cancel]="Arrows/w/s: select   Enter: OK   ESC: cancel"
+    [menu_more_up]="      ^ %d more"
+    [menu_more_down]="      v %d more"
+    [menu_page]="%s (page %d/%d)"
+    [menu_back]="Back"
+
+    # --- Main menu --------------------------------------------------------
+    [main_resume]="Resume"
+    [main_single]="Singleplayer"
+    [main_multi]="Multiplayer"
+    [main_highscores]="Highscores"
+    [main_wonders]="Wonders"
+    [main_stats]="Statistics"
+    [main_demos]="Demos"
+    [main_settings]="Settings"
+    [main_help]="Manual"
+    [main_quit]="Quit"
+    [mp_body]="The multiplayer mode is not available yet.
+It follows in a later phase (see the roadmap)."
+
+    [round_state]="%d lines, %d rows, level %d."
+    [quit_title]="Really quit?"
+    [quit_yes]="Yes, quit"
+    [confirm_no]="No, go back"
+    [quit_head]="A suspended round is still waiting:"
+    [quit_tail]="Quitting records it, after which it cannot
+be resumed any more."
+
+    # --- Game modes -------------------------------------------------------
+    [mode_marathon]="Marathon"
+    [mode_ultra]="Ultra"
+    [mode_sprint]="Sprint"
+    [mode_timeattack]="Time Attack"
+    [mode_timeattack_short]="TimeAtk"
+    [entry_ultra]="Ultra (%s rows against the clock)"
+    [entry_sprint]="Sprint (%s minutes for rows)"
+    [entry_timeattack]="Time Attack (%s + %ss per row)"
+
+    # --- Singleplayer and pause menu --------------------------------------
+    [sp_title]="Singleplayer"
+    [pause_title]="Pause"
+    [pause_restart]="Restart"
+    [pause_to_menu]="To the main menu (round suspended)"
+    [pause_end]="End the round"
+    [restart_title]="Really restart?"
+    [restart_yes]="Yes, restart"
+    [restart_head]="The running round is given up:"
+    [restart_tail]="It is recorded (wonders and statistics) and
+a fresh one starts in the same mode."
+    [end_title]="Really end the round?"
+    [end_yes]="Yes, end it"
+    [end_head]="The running round is ended:"
+    [end_tail]="It is recorded and cannot be resumed
+afterwards."
+
+    # --- Settings ---------------------------------------------------------
+    [set_title]="Settings"
+    [set_keys]="Configure keys"
+    [set_theme]="Color theme (now: %s)"
+    [set_name]="Change player name (now: %s)"
+    [set_demo]="Demo recording (now: %s)"
+    [set_lang]="Language (now: %s)"
+    [on]="on"
+    [off]="off"
+    [theme_title]="Pick a color theme"
+    [theme_guideline]="Guideline"
+    [theme_classic]="Classic"
+    [theme_mono]="Monochrome"
+    [theme_colorblind]="Colorblind"
+    [lang_title]="Pick a language"
+    [lang_auto]="Automatic"
+
+    # --- Key bindings -----------------------------------------------------
+    [keylabel_KEY_LEFT]="Left"
+    [keylabel_KEY_RIGHT]="Right"
+    [keylabel_KEY_ROT_CW]="Rotate right"
+    [keylabel_KEY_ROT_CCW]="Rotate left"
+    [keylabel_KEY_SOFT]="Soft drop"
+    [keylabel_KEY_HARD]="Hard drop"
+    [keylabel_KEY_PAUSE]="Pause"
+    [keylabel_KEY_QUIT]="Back to the menu"
+    [keylabel_KEY_HOLD]="Hold"
+    [rebind_ask]="Press the new key for \"%s\""
+    [rebind_current]="(now: %s, ESC = cancel)"
+    [rebind_reserved_menu]="This key is reserved for menu navigation."
+    [rebind_reserved_r]="The key 'r' is reserved for the restart on
+the game over screen."
+    [rebind_invalid]="Invalid key. Allowed are a-z, 0-9 and space."
+    [rebind_taken]="The key [%s] is already taken."
+
+    [key_space]="space"
+    [key_arrow_left]="arrow left"
+    [key_arrow_right]="arrow right"
+    [key_arrow_down]="arrow down"
+    [key_space_up]="space, arrow up"
+    [key_arrows_lr]="arrow left/right"
+
+    # --- Text input -------------------------------------------------------
+    [input_hint_type]="Typing replaces the marked text."
+    [input_hint_keys]="Enter: OK   ESC: leave unchanged"
+    [name_title]="Player name"
+    [name_current]="Current name: %s"
+    [name_rules]="Allowed are at most %d characters from
+A-Z a-z 0-9 space _ -"
+    [round_title]="Round finished"
+    [round_mode]="Mode: %s"
+    [round_rows]="Rows: %d   Lines: %d"
+    [round_level]="Level: %d   Time: %s"
+    [round_ask_name]="Name for the highscore list:"
+
+    # --- Demos ------------------------------------------------------------
+    [demos_title]="Demos"
+    [demos_title_kept]="Demos (%d)   * = holds a highscore"
+    [demos_title_count]="Demos (%d/%d)"
+    [demos_none]="No recordings yet."
+    [demos_none_on]="Every round played is recorded
+automatically and shows up here as soon as
+it has ended. The %d newest rounds
+are kept."
+    [demos_none_off]="Demo recording is switched off at the
+moment. You can switch it back on in the
+settings."
+    [demo_title]="Demo"
+    [demo_play]="Play"
+    [demo_delete]="Delete"
+    [demo_broken]="(broken)"
+    [demo_busy]="A suspended round is still waiting.
+
+A replay uses the same board as the running
+round and would throw it away. Resume it or
+end it through the pause menu, then this
+will work."
+    [demo_del_title]="Delete the demo?"
+    [demo_del_yes]="Yes, delete it"
+    [demo_del_no]="No, keep it"
+    [demo_del_hint]="It still holds a highscore entry."
+    [demo_del_body]="The recording is really deleted and
+cannot be brought back."
+    [demo_del_failed]="The recording could not be deleted:"
+    [demo_invalid]="This recording is damaged or comes from
+another version and cannot be played.
+
+You can delete it in the demo menu."
+
+    # --- HUD --------------------------------------------------------------
+    [hud_hold]="Hold"
+    [hud_next]="Next"
+    [hud_lines]="Lines"
+    [hud_rows]="Rows"
+    [hud_level]="Level"
+    [hud_gold]="Gold"
+    [hud_silver]="Silver"
+    [hud_hammer]="Hammer"
+    [hud_time]="Time"
+    [hud_pieces]="Pieces"
+    [hud_goal]="Goal"
+    [hud_left]="Left"
+    [hud_demo]="Demo"
+
+    # --- Result box over the board ----------------------------------------
+    [box_paused]="      PAUSED      "
+    [box_game_over]="    GAME OVER"
+    [box_ultra_clear]="    ULTRA CLEAR"
+    [box_sprint_end]="    SPRINT END"
+    [box_time_up]="    TIME UP"
+    [box_demo_end]="    DEMO END"
+    [box_rows]="   Rows %d"
+    [box_time]="   Time %s"
+    [box_rows_goal]="  Rows %d/%d"
+    [box_time_goal]="  Time %s/%s"
+    [box_rank]="  %s #%d"
+    [box_rank_marathon]="  Highscore #%d"
+    [box_end_over]="  Game Over"
+    [box_end_goal]="  Goal reached"
+    [box_end_quit]="  Given up"
+    [box_restart]="  r = restart"
+    [box_menu]="  %s = menu"
+    [box_demo_again]="  r = again"
+    [box_demo_back]="  %s = back"
+
+    # --- Too-small terminal overlay ---------------------------------------
+    [resize_head]="resize:"
+    [resize_need]="need %sx%s"
+    [resize_now]="now %sx%s"
+
+    # --- World wonders ----------------------------------------------------
+    [wonder_all_done]="All world wonders have been built!"
+    [wonder_building]="Wonder %d/%d: %s"
+    [wonder_finished]="%s is finished."
+    [wonder_stage]="Stage %d/%d - %d/%d rows (%d%%)"
+    [wonder_total]="Rows in total: %d"
+    [wonder_mayan_temple]="Mayan Temple (Chichen Itza)"
+    [wonder_stonehenge]="Stonehenge"
+    [wonder_sphinx]="Great Sphinx of Giza"
+    [wonder_pantheon]="Pantheon (Rome)"
+    [wonder_great_wall]="Great Wall of China"
+    [wonder_taj_mahal]="Taj Mahal"
+    [wonder_st_basils]="St Basil's Cathedral (Moscow)"
+
+    # --- Highscore lists --------------------------------------------------
+    [hs_title]="Highscores"
+    [hs_col_no]="No"
+    [hs_col_name]="Name"
+    [hs_col_rows]="Rows"
+    [hs_col_time]="Time"
+    [hs_col_lines]="Lines"
+    [hs_col_date]="Date"
+    [hs_lbl_gold]="Gold"
+    [hs_lbl_silver]="Silv"
+    [hs_empty]="No entries yet."
+    [hs_empty_marathon]="Play a round to get onto the list."
+    [hs_empty_ultra]="Reach the goal of %s rows in an Ultra
+round to get onto the list. An attempt that
+tops out before that is not recorded."
+    [hs_empty_sprint]="Play a Sprint round over the full
+%s minutes to get onto the list. An
+attempt that tops out before that is not
+recorded."
+    [hs_empty_timeattack]="Play a Time Attack round: it starts with
+%s minutes on the clock and every row
+buys one second. Every run is recorded -
+a top-out before the time is up as well."
+
+    # --- Statistics -------------------------------------------------------
+    [stats_title]="Statistics"
+    [stats_all]="All-time (every mode)"
+    [stats_lines]="Rows cleared:"
+    [stats_bonus]="Bonus rows:"
+    [stats_total]="Rows in total (weighted):"
+    [stats_gold]="Gold squares:"
+    [stats_silver]="Silver squares:"
+    [stats_hammer]="Rowhammers (4 rows):"
+    [stats_pieces]="Pieces placed:"
+    [stats_playtime]="Play time in total:"
+    [stats_ppm]="Pieces/minute (PCS/min):"
+    [stats_recent_head]="Recent rounds (newest first):"
+    [stats_recent_none]="No rounds yet."
+    [stats_recent_rows]="Rows"
+    [stats_recent_lines]="Lines"
+    [stats_recent_bonus]="Bonus"
+    [stats_modes_head]="Rounds per game mode:"
+    [stats_rounds]="Rounds:"
+    [stats_rounds_total]="Rounds in total:"
+    [stats_rows_per_round]="Rows per round:"
+    [stats_goal_rate]="Success rate:"
+    [stats_goal_ultra]="of those goal reached:"
+    [stats_goal_sprint]="of those full time:"
+    [stats_goal_timeattack]="of those clock run down:"
+
+    # --- Manual -----------------------------------------------------------
+    [help_title]="Manual"
+    [help_nav]="Arrow le/ri: page   Enter/ESC: back"
+    [help_p0]="rowhammer is a Tetris game for the terminal,
+modeled after \"The New Tetris\" (N64).
+
+Pieces have to be stacked so that rows fill
+up completely: a full row is cleared and
+scored as \"Rows\" - which is at the same
+time the round's score.
+
+The pieces come out of a 7-bag: each of the
+seven types exactly once, then the bag is
+shuffled anew.
+
+Every cleared row raises the level and the
+pieces fall faster. Once a new piece has no
+room left, the round is over."
+    [help_p1_head]="Controls during a round (the letter keys
+can be changed in the settings):
+"
+    [help_key_left]="Move left"
+    [help_key_right]="Move right"
+    [help_key_rot_cw]="Rotate right"
+    [help_key_rot_ccw]="Rotate left"
+    [help_key_soft]="Soft drop"
+    [help_key_hard]="Hard drop"
+    [help_key_hold]="Hold / swap"
+    [help_key_pause]="Pause"
+    [help_key_quit]="Pause menu"
+    [help_p1_tail]="
+Soft drop makes the piece fall faster,
+hard drop locks it right away.
+Restart: [r] on game over or in the pause
+menu. In the menus: arrows or w/s select,
+Enter confirms, ESC goes back."
+    [help_p2]="Preview and hold
+
+Top right (\"Next\") are the three upcoming
+pieces - enough lead time to plan the
+stack.
+
+Top left is the hold slot. With
+%s the current piece moves there;
+if one is already in it, the two swap
+places and the held piece re-enters in its
+spawn position.
+
+Only one swap per piece is allowed - the
+next swap is possible after the next piece
+has locked. That way an I piece can be kept
+for the big clear, or an awkward piece
+parked for a moment."
+    [help_p3_head]="Four complete, uncut pieces that fill a
+4x4 square exactly become a bonus block:
+"
+    [help_sq_gold]="Gold"
+    [help_sq_gold_text]="all four pieces of the same type"
+    [help_sq_silver]="Silver"
+    [help_sq_silver_text]="four mixed types"
+    [help_p3_mid]="
+A piece a cleared row has already cut
+through does not count any more.
+
+Clearing a row is worth (in rows):"
+    [help_row_base]="base value per row"
+    [help_row_silver]="per silver square in the row"
+    [help_row_gold]="per gold square in the row"
+    [help_row_hammer]="rowhammer (4 rows at once)"
+    [help_p3_tail]="
+A rowhammer straight through two complete
+gold squares is worth 4+1+80 = 85 rows."
+    [help_p4_head]="All cleared rows add up across the rounds
+(those of an abandoned round as well) and
+build seven world wonders one after the
+other.
+
+Weighted rows per world wonder:"
+    [help_p4_tail]="
+The \"Wonders\" menu entry shows the current
+construction site: the building grows line
+by line from the bottom and stands finished
+at 100 percent - as it does after a round."
+    [help_p5_head]="Game modes (\"Singleplayer\" menu entry):
+
+Marathon - the endless round. It ends when
+  a new piece has no room left.
+"
+    [help_p5_ultra]="Ultra - %s rows as fast as possible.
+  The result is the play time; the round
+  ends the moment the goal is reached.
+"
+    [help_p5_sprint]="Sprint - as many rows as possible within
+  %s minutes. The result is the rows; the
+  round ends when the time is up.
+"
+    [help_p5_timeattack]="Time Attack - %s minutes on a clock that
+  runs backwards; every row buys %s sec.
+  The result is the rows; the round ends
+  at 00:00 - or earlier on a game over."
+    [help_p6]="Highscore lists (\"Highscores\" entry):
+
+Every mode has a list of its own. Marathon,
+Sprint and Time Attack rank by rows, Ultra
+by the shortest time.
+
+For Ultra and Sprint only a run that
+reached its goal resp. played its full time
+counts - a game over before that is not
+recorded.
+
+Every Time Attack run counts, by contrast:
+its rows are the same achievement either
+way, and topping out early simply means
+fewer of them.
+
+The rows and counters of an abandoned round
+always feed the wonders and the statistics."
+    [help_p7_head]="Demos (\"Demos\" menu entry):
+
+Every round played is recorded and can be
+watched again later. What is recorded are
+the moves, not the screen - a replay really
+plays the round once more.
+"
+    [help_p7_kept]="The %d newest rounds are kept;"
+    [help_p7_mid]="recordings marked * still hold a highscore
+and are kept beyond that. Single ones can
+be deleted in the demo menu, the recording
+switched off in the settings.
+
+During a replay:"
+    [help_demo_pause]="Pause / resume"
+    [help_demo_speed]="Speed"
+    [help_demo_back]="Back"
+
+    # --- Reset dialog (runs before the terminal is touched) ---------------
+    [reset_affects]="Reset \"%s\" affects these files in %s:"
+    [reset_absent]="(not present)"
+    [reset_note]="Nothing is deleted; the files are moved to <file>-YYYYMMDDhhmmss.bak."
+    [reset_confirm]="Are you sure you want to reset %s? [N/y] "
+    [reset_aborted]="Reset cancelled, nothing was moved."
+    [reset_wait]="A backup of this very second exists, waiting for the next one..."
+    [reset_moved]="Moved: %s -> %s"
+    [reset_done]="Reset successful"
+    [reset_summary]="Reset \"%s\": %d file(s) backed up, %d not present."
+)
+
+# i18n_usage_text
+# The --help output in this language; see lib/lang/de.sh for why this is
+# a function with a quoted heredoc rather than an I18N entry.
+i18n_usage_text() {
+    cat <<'EOF'
+Usage: rowhammer.sh [OPTIONS]
+
+Terminal Tetris of the rowhammer project. Starts with a menu:
+singleplayer (endless "Marathon", the timed "Ultra", "Sprint" or
+"Time Attack" mode),
+multiplayer (placeholder), highscores, wonders, statistics and settings.
+
+Options:
+  --seed N      Seed the piece randomizer for a reproducible sequence.
+                Env: ROWHAMMER_SEED         Default: (random)
+  --name NAME   Player name recorded with highscore entries (max. 16
+                characters from A-Z a-z 0-9 space _ -).
+                Env: ROWHAMMER_PLAYER_NAME  Default: Player
+  --lang CODE   Language of the user interface: "de" (German), "en"
+                (English) or "auto". "auto" takes the language from the
+                locale variables (LC_ALL, LC_MESSAGES, LANG) and falls
+                back to German when none of them names a supported
+                language. Also selectable in the settings menu and
+                persisted there.
+                Env: ROWHAMMER_LANG         Default: auto
+  --data-dir DIR
+                Directory for all persistent game data: the config file
+                rowhammer.conf, the highscore list, the savegame and
+                the statistics file.
+                Env: ROWHAMMER_DATA_DIR     Default: ~/.config/rowhammer
+  --no-color    Disable ANSI colors. Each piece type is then drawn with
+                its own two-letter glyph (II OO TT SS ZZ JJ LL) so blocks
+                stay tellable apart after locking; gold squares show as
+                "##", silver as "%%". Overrides --color-mode. The
+                de-facto standard NO_COLOR variable
+                (https://no-color.org/) is also honored: if it is set and
+                non-empty, colors default to off; set ROWHAMMER_NO_COLOR=0
+                to force them back on.
+                Env: ROWHAMMER_NO_COLOR     Default: 0
+  --color-mode MODE
+                Color palette: "auto" detects 256-color support (tput
+                colors, TERM, COLORTERM) and picks extended or basic;
+                "basic" forces the 8/16-color ANSI palette; "extended"
+                forces the xterm 256-color palette (guideline piece
+                colors incl. a real orange L, richer gold/silver).
+                Env: ROWHAMMER_COLOR_MODE   Default: auto
+  --color-theme NAME
+                Color scheme mapping piece and gold/silver colors:
+                "guideline" (default), "classic", "mono" or "colorblind".
+                Also selectable in the settings menu and persisted there.
+                Env: ROWHAMMER_COLOR_THEME  Default: guideline
+  --demo-record on|off
+                Record every round as a demo that can be watched again
+                from the "Demos" menu entry (see below). Also switchable
+                in the settings menu and persisted there.
+                Env: ROWHAMMER_DEMO_RECORD  Default: on
+  --render-mode MODE
+                How the play screen is pushed to the terminal:
+                "partial" rewrites only the lines that changed since the
+                previous frame (the default - about half the time and a
+                fourteenth of the output of a full frame); "full"
+                rewrites the whole 48x22 block on every frame, the way
+                the renderer worked before 0.22.0. Use "full" on a
+                terminal or multiplexer that draws the incremental
+                update incorrectly, or to read whole frames out of the
+                debug frame log.
+                Env: ROWHAMMER_RENDER_MODE  Default: partial
+  --reset TARGET
+                Reset persistent data in the data directory and exit
+                without starting the game. TARGET is one of:
+                  config     the config file rowhammer.conf
+                  stats      the statistics file stats
+                  highscore  all highscore lists (highscore,
+                             highscore-ultra, highscore-sprint and
+                             highscore-timeattack)
+                  save       the savegame save (the wonder progress)
+                  demo       the demo recordings (the demos directory)
+                  all        all of the above
+                Nothing is deleted: every affected file is moved to
+                <file>-YYYYMMDDhhmmss.bak next to it, so a reset can be
+                undone by moving the backup back. Running the same reset
+                twice within one second waits for the next second rather
+                than overwriting the backup just written.
+                On a terminal the affected files are listed and
+                confirmed first ([N/y], the default answer is no);
+                without a tty (scripting, CI) the reset runs right away,
+                since a waiting prompt would hang the script. Files that
+                do not exist are not an error.
+                Env: ROWHAMMER_RESET        Default: (no reset)
+  --force       Answer confirmation questions with "yes" instead of
+                asking. Combines with any other option; currently the
+                only question asked outside the menus is the --reset
+                one, so "--reset all --force" resets without a prompt.
+                Env: ROWHAMMER_FORCE        Default: 0
+  --debug       Enable the debug/trace mode: the session is recorded
+                into log files (see below). Logs can grow to several
+                megabytes in long sessions.
+                Env: ROWHAMMER_DEBUG        Default: 0
+  --debug-dir DIR
+                Directory for the debug logs of this run.
+                Env: ROWHAMMER_DEBUG_DIR
+                Default: ~/.local/state/rowhammer/debug/<timestamp>.<pid>
+  -h, --help    Show this help and exit.
+
+Debug mode writes three correlated log files (shared millisecond
+timestamps and a screen update counter) meant to make bug reports
+reproducible:
+  events.log    session header (version, terminal, seed, key bindings,
+                config files) and every game action: spawns, moves and
+                rotations (including blocked ones), falls, locks, square
+                formation, line clears with credit details, hold, pause,
+                menu choices, config saves and a board snapshot after
+                every lock.
+  input.log     every key press, raw bytes and mapped symbol.
+  frames.log    every screen update byte for byte (1:1, ANSI included).
+The log directory is printed when the game exits.
+
+Controls (defaults). The letter key of every action is rebindable in the
+settings menu; the arrow keys, space and w listed beside them are wired
+in on top of the bindings and always work:
+  arrow left / right          move piece (no letter key by default)
+  d                           rotate clockwise
+  a                           rotate counter-clockwise
+  s or arrow down             soft drop
+  space or arrow up           hard drop (no letter key by default)
+  c or w                      hold / swap piece (once per piece)
+  p                           pause / resume
+  x or ESC                    open the pause menu: resume, restart the
+                              round in the same mode, go to the main
+                              menu with the round suspended (resumable
+                              via the "Resume" entry in the main and
+                              singleplayer menus), or end the round
+  r                           restart (on the game over screen)
+
+Square mechanics (The New Tetris): fill a 4x4 area with exactly four
+complete, uncut pieces to form a square - gold if all four are the same
+type, silver if mixed. Every cleared row is worth 1 row of credit, plus
+10 per gold square and 5 per silver square it runs through (additive);
+clearing 4 rows at once (a Tetris) adds 1 extra. The credit is shown as
+"Rows" in the HUD and is the game's only score: cleared rows are the
+sole source of points - drops, square formation and spins earn nothing.
+Famous maximum for a single move: a Tetris through two complete gold
+squares = 4 + 1 + 8 x 10 = 85.
+
+Game modes (singleplayer menu): "Marathon" is the endless round
+that ends on a top-out. "Ultra" is a race - clear 150 rows of credit as
+fast as possible; the run ends the moment that target is reached and its
+play time is the result. "Sprint" is the mirror image - score as many
+rows of credit as possible within 3 minutes of play time; the run ends
+when the time is up. "Time Attack" turns the clock into the stake: the
+round starts with 1 minute of play time counting down and every row of
+credit scored adds 1 second back, so the run lasts exactly as long as it
+is kept fed and ends when the clock hits zero (or on a top-out before
+that); the rows are the result. The HUD shows the goal and what is still
+left of it (rows resp. time) while a run of any of the three is going.
+Each keeps its results in a list of its own - Ultra ranked by time
+(<data-dir>/highscore-ultra, fastest first), Sprint and Time Attack by
+rows (<data-dir>/highscore-sprint, <data-dir>/highscore-timeattack) - so
+they never displace the endless list's top ten. For Ultra and Sprint
+only a run that got there is recorded: an attempt that topped out early
+has neither a comparable time nor the full three minutes to score in.
+Its rows still count toward the wonders and the statistics, like any
+other round. Every Time Attack run is recorded, by contrast: its rows
+are the same achievement whether the clock or the stack ended it. The
+"Highscores" main menu entry asks which of the four lists to show.
+
+Wonders: the row credit of every round is added to a persistent counter
+stored in <data-dir>/save. It builds seven world wonders in a fixed
+sequence; the current construction site (ASCII art revealed bottom-up)
+is shown after every round and via the "Wonders" main menu entry.
+
+Demos: every round is recorded and can be watched again from the "Demos"
+main menu entry, which lists the recordings with date, mode, play time
+and rows and offers to play or to delete the one picked. What is recorded
+are the moves, the gravity steps and the piece stream of the round - not
+the screen - so a replay runs the round through the real game logic
+again: it costs about 2 kB per minute of play, is independent of the
+terminal size, the colors and the render mode of either session, and
+lasts as long as the round did. While a demo plays, the pause key
+(or space) halts it, the left/right arrows step the speed between 0.25x
+and 4x, and the quit key returns to the list; "r" replays it from the
+start once it has finished. Recordings live in <data-dir>/demos, the ten
+newest are kept, and the round being recorded is written to a RAM disk
+(XDG_RUNTIME_DIR resp. /dev/shm) so playing costs no disk writes.
+Recording can be switched off with --demo-record off or in the settings
+menu; a replay never enters the highscore lists, the wonder progress or
+the statistics.
+
+Statistics: every finished round also adds its cleared rows, bonus rows
+(the gold/silver/Tetris part of the row credit) and the gold and silver
+squares built to persistent all-time counters in <data-dir>/stats; the
+results of the last three rounds (rows, bonus rows, squares) and the
+number of rounds played per game mode - including how often Ultra
+reached its target, Sprint played its full time and Time Attack ran its
+clock down - are kept there as well. Every counter is also kept per
+game mode, so the same figures can be read for Marathon, Ultra, Sprint
+or Time Attack alone; the all-time counters stay what they always were
+and are not summed from those. The "Statistics" main menu entry asks
+which of the two to show.
+
+Settings (player name, language, color theme, key bindings, demo
+recording) are stored in the config file
+<data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
+best 10 rounds are kept in <data-dir>/highscore (Ultra: the best 10 runs
+in <data-dir>/highscore-ultra, Sprint: <data-dir>/highscore-sprint,
+Time Attack: <data-dir>/highscore-timeattack); all
+four lists are shown under the
+"Highscores" main menu entry, which asks for the mode first, and a
+finished round reports its rank on the game over
+screen. Key bindings can also be overridden
+via environment variables ROWHAMMER_KEY_LEFT, ROWHAMMER_KEY_RIGHT,
+ROWHAMMER_KEY_ROT_CW, ROWHAMMER_KEY_ROT_CCW, ROWHAMMER_KEY_SOFT,
+ROWHAMMER_KEY_HARD, ROWHAMMER_KEY_PAUSE, ROWHAMMER_KEY_QUIT,
+ROWHAMMER_KEY_HOLD (single characters a-z or 0-9, or the words SPACE and
+NONE; NONE leaves an action without a letter key). Defaults: a/d rotate
+counter-clockwise/clockwise, s soft drop, c hold, p pause, x menu. Moving
+left/right (arrow keys), the hard drop (space, arrow up) and holding (w)
+always work through their fixed secondary keys as well.
+
+Precedence for every option: command-line argument > environment variable
+> config file > built-in default.
+
+Example:
+  rowhammer.sh --seed 42 --name Alice --lang de --no-color
+EOF
+}

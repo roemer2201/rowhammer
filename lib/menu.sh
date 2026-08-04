@@ -6,10 +6,12 @@
 #   Menu system for rowhammer: a generic list-selection widget plus the
 #   application menus (main menu, singleplayer with its game modes,
 #   multiplayer placeholder,
-#   settings with key bindings, color theme, player name and demo
-#   recording, and the demo list). Menu labels are German
-#   on purpose (requested UI language); code and comments stay English
-#   per the script conventions. All screen output goes through
+#   settings with key bindings, interface language, color theme, player
+#   name and demo recording, and the demo list). Since 0.22.0 no label
+#   is written into this file any more: every text comes from the
+#   translation table (lib/i18n.sh), which is also what menu_language
+#   switches at runtime. Code and comments stay English per the script
+#   conventions. All screen output goes through
 #   screen_write (lib/render.sh) and selections, rebinds and name
 #   changes are logged as debug events, so debug sessions capture the
 #   menus 1:1 as well. Leaving a game session shows the wonder
@@ -71,6 +73,10 @@
 #   That list is also the first menu that can outgrow the screen, so
 #   menu_run scrolls its window with the selection since 0.20.0
 #   (MENU_LIST_MAX).
+#   Since 0.21.0 (user request) menu_stats does the same for the
+#   "Statistik" entry: the all-time counters as before, or one game
+#   mode's own counters (lib/stats.sh keeps both, the totals are not
+#   summed from the modes).
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -78,7 +84,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.20.0  (2026-08-04)
+# Version: 0.22.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -86,10 +92,13 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     exit 2
 fi
 
-# German display labels for the key binding variables in KEY_ACTIONS
-# (same order; both live side by side so rebinding stays table-driven).
-KEY_LABELS=("Links" "Rechts" "Drehen rechts" "Drehen links"
-            "Soft-Drop" "Hard-Drop" "Pause" "Zurueck ins Menue" "Hold")
+# The display label of a key binding comes from the translation table
+# (lib/i18n.sh), keyed by the binding variable itself: "keylabel_KEY_HOLD"
+# for KEY_HOLD. That keeps the settings list table-driven off the single
+# KEY_ACTIONS list in lib/config.sh, the way the fixed KEY_LABELS array
+# next to it did before 0.22.0 - only without a second array that has to
+# be kept in the same order, and without a German label baked into the
+# code.
 
 MENU_CHOICE=-1
 
@@ -127,7 +136,7 @@ menu_run() {
     shift
     local -a entries=("$@")
     local -a lines
-    local n="${#entries[@]}" sel=0 dirty=1 i first last
+    local n="${#entries[@]}" sel=0 dirty=1 i first last marker
     while :; do
         if [ "${dirty}" -eq 1 ]; then
             lines=("  ${title}" "")
@@ -147,7 +156,8 @@ menu_run() {
                 fi
                 last=$(( first + MENU_LIST_WINDOW - 1 ))
                 if [ "${first}" -gt 0 ]; then
-                    lines+=("      ^ ${first} weitere")
+                    printf -v marker "${I18N[menu_more_up]}" "${first}"
+                    lines+=("${marker}")
                 else
                     lines+=("")
                 fi
@@ -161,12 +171,14 @@ menu_run() {
             done
             if [ "${n}" -gt "${MENU_LIST_MAX}" ]; then
                 if [ "${last}" -lt $(( n - 1 )) ]; then
-                    lines+=("      v $(( n - 1 - last )) weitere")
+                    printf -v marker "${I18N[menu_more_down]}" \
+                        "$(( n - 1 - last ))"
+                    lines+=("${marker}")
                 else
                     lines+=("")
                 fi
             fi
-            lines+=("" "  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck")
+            lines+=("" "  ${I18N[menu_nav]}")
             render_menu_frame "${lines[@]}"
             screen_write "${RENDER_MENU_FRAME}"
             dirty=0
@@ -206,7 +218,7 @@ menu_message() {
     for line in "$@"; do
         lines+=("  ${line}")
     done
-    lines+=("" "  Beliebige Taste druecken...")
+    lines+=("" "  ${I18N[menu_any_key]}")
     render_menu_frame "${lines[@]}"
     screen_write "${RENDER_MENU_FRAME}"
     KEY=""
@@ -247,7 +259,7 @@ menu_pages() {
     shift 3
     local -a lines=("$@")
     local -a body=()
-    local total rest pages p from i
+    local total rest pages p from i paged
     total="${#lines[@]}"
     rest=$(( total - head ))
     if [ "${rest}" -lt 0 ]; then
@@ -268,7 +280,9 @@ menu_pages() {
             body+=("${lines[i]}")
         done
         if [ "${pages}" -gt 1 ]; then
-            menu_message "${title} (Seite $(( p + 1 ))/${pages})" "${body[@]}"
+            printf -v paged "${I18N[menu_page]}" "${title}" \
+                "$(( p + 1 ))" "${pages}"
+            menu_message "${paged}" "${body[@]}"
         else
             menu_message "${title}" "${body[@]}"
         fi
@@ -299,7 +313,7 @@ menu_help_keys() {
     key="${!var}"
     case "${key}" in
         NONE)  key="" ;;
-        SPACE) key="Leertaste" ;;
+        SPACE) key="${I18N[key_space]}" ;;
         *)     key="[${key}]" ;;
     esac
     if [ -z "${key}" ]; then
@@ -333,137 +347,104 @@ menu_help_body() {
     HELP_BODY=()
     case "${page}" in
         0)
-            HELP_BODY=("rowhammer ist ein Tetris-Spiel fuers Terminal," \
-                  "Vorbild ist \"The New Tetris\" (N64)." \
-                  "" \
-                  "Bausteine muessen so gestapelt werden, dass sich" \
-                  "Reihen komplett fuellen: volle Reihen werden" \
-                  "abgebaut und als \"Rows\" gewertet - das ist" \
-                  "zugleich der Punktestand der Runde." \
-                  "" \
-                  "Die Steine kommen aus einem 7er-Beutel: Jede" \
-                  "der sieben Sorten genau einmal, dann wird" \
-                  "neu gemischt." \
-                  "" \
-                  "Mit jeder abgebauten Reihe steigt das Level," \
-                  "und die Steine fallen schneller. Ist kein" \
-                  "Platz mehr fuer einen neuen Stein, ist die" \
-                  "Runde vorbei.")
+            i18n_lines help_p0
+            HELP_BODY=("${I18N_LINES[@]}")
             ;;
         1)
-            HELP_BODY=("Steuerung im Spiel (die Buchstabentasten" \
-                  "sind unter Einstellungen aenderbar):" \
-                  "")
-            menu_help_keys "Pfeil links" KEY_LEFT
-            printf -v line '%-17s %s' "Nach links" "${MENU_HELP_KEYS}"
+            i18n_lines help_p1_head
+            HELP_BODY=("${I18N_LINES[@]}")
+            # One line per action: its name, then the keys that trigger
+            # it - the configurable one first, the ones wired in behind
+            # it (menu_help_keys). Both halves come from the language
+            # table; the loop is what keeps the two in the same order.
+            menu_help_keys "${I18N[key_arrow_left]}" KEY_LEFT
+            printf -v line '%-17s %s' "${I18N[help_key_left]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
-            menu_help_keys "Pfeil rechts" KEY_RIGHT
-            printf -v line '%-17s %s' "Nach rechts" "${MENU_HELP_KEYS}"
+            menu_help_keys "${I18N[key_arrow_right]}" KEY_RIGHT
+            printf -v line '%-17s %s' "${I18N[help_key_right]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
             menu_help_keys "" KEY_ROT_CW
-            printf -v line '%-17s %s' "Drehen rechts" "${MENU_HELP_KEYS}"
+            printf -v line '%-17s %s' "${I18N[help_key_rot_cw]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
             menu_help_keys "" KEY_ROT_CCW
-            printf -v line '%-17s %s' "Drehen links" "${MENU_HELP_KEYS}"
+            printf -v line '%-17s %s' "${I18N[help_key_rot_ccw]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
-            menu_help_keys "Pfeil runter" KEY_SOFT
-            printf -v line '%-17s %s' "Soft-Drop" "${MENU_HELP_KEYS}"
+            menu_help_keys "${I18N[key_arrow_down]}" KEY_SOFT
+            printf -v line '%-17s %s' "${I18N[help_key_soft]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
             # Space and arrow up always drop hard, w always holds - the
             # game wires both in regardless of the bindings (handle_key).
-            menu_help_keys "Leertaste, Pfeil hoch" KEY_HARD
-            printf -v line '%-17s %s' "Hard-Drop" "${MENU_HELP_KEYS}"
+            menu_help_keys "${I18N[key_space_up]}" KEY_HARD
+            printf -v line '%-17s %s' "${I18N[help_key_hard]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
             menu_help_keys "[w]" KEY_HOLD
-            printf -v line '%-17s %s' "Hold / Tauschen" "${MENU_HELP_KEYS}"
+            printf -v line '%-17s %s' "${I18N[help_key_hold]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
             menu_help_keys "" KEY_PAUSE
-            printf -v line '%-17s %s' "Pause" "${MENU_HELP_KEYS}"
+            printf -v line '%-17s %s' "${I18N[help_key_pause]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
             menu_help_keys "ESC" KEY_QUIT
-            printf -v line '%-17s %s' "Pausenmenue" "${MENU_HELP_KEYS}"
+            printf -v line '%-17s %s' "${I18N[help_key_quit]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
-            HELP_BODY+=("" \
-                   "Soft-Drop laesst den Stein schneller fallen," \
-                   "Hard-Drop setzt ihn sofort fest." \
-                   "Neustart: [r] im Game Over oder Pausenmenue." \
-                   "In den Menues: Pfeile oder w/s waehlen," \
-                   "Enter bestaetigt, ESC geht zurueck.")
+            i18n_lines help_p1_tail
+            HELP_BODY+=("${I18N_LINES[@]}")
             ;;
         2)
+            # The hold key is named inside the running text, so the page
+            # is one format string with the key list as its argument.
             menu_help_keys "[w]" KEY_HOLD
-            HELP_BODY=("Vorschau und Hold" \
-                  "" \
-                  "Oben rechts (\"Next\") stehen die naechsten" \
-                  "drei Steine - genug Vorlauf, um den Stapel" \
-                  "zu planen." \
-                  "" \
-                  "Links oben liegt der Hold-Speicher. Mit" \
-                  "${MENU_HELP_KEYS} wandert der aktuelle Stein dorthin;" \
-                  "liegt dort schon einer, tauschen die beiden" \
-                  "die Plaetze und der geholdete Stein faellt" \
-                  "in seiner Startlage neu ein." \
-                  "" \
-                  "Pro Zug ist nur ein Tausch erlaubt - erst" \
-                  "nach dem naechsten Ablegen kann erneut getauscht" \
-                  "werden. So laesst sich ein I-Stein fuer den" \
-                  "grossen Abbau aufheben oder ein unpassendes" \
-                  "Teil kurz parken.")
+            printf -v line "${I18N[help_p2]}" "${MENU_HELP_KEYS}"
+            mapfile -t HELP_BODY <<< "${line}"
             ;;
         3)
-            HELP_BODY=("Vier vollstaendige, unversehrte Steine, die" \
-                  "zusammen ein 4x4-Quadrat exakt ausfuellen," \
-                  "werden zu einem Bonusblock:" \
-                  "")
-            printf -v line '  %sGold%s   - alle vier Steine gleicher Sorte' \
-                "${TXT_GOLD_SGR}" "${TXT_RESET_SGR}"
+            i18n_lines help_p3_head
+            HELP_BODY=("${I18N_LINES[@]}")
+            # The two square kinds share one format, so a translation
+            # cannot line them up differently from one another.
+            printf -v line '  %s%-6s%s - %s' \
+                "${TXT_GOLD_SGR}" "${I18N[help_sq_gold]}" "${TXT_RESET_SGR}" \
+                "${I18N[help_sq_gold_text]}"
             HELP_BODY+=("${line}")
-            printf -v line '  %sSilber%s - vier gemischte Sorten' \
-                "${TXT_SILVER_SGR}" "${TXT_RESET_SGR}"
+            printf -v line '  %s%-6s%s - %s' \
+                "${TXT_SILVER_SGR}" "${I18N[help_sq_silver]}" "${TXT_RESET_SGR}" \
+                "${I18N[help_sq_silver_text]}"
             HELP_BODY+=("${line}")
-            HELP_BODY+=("" \
-                   "Ein Stein, den ein Reihenabbau bereits" \
-                   "zerschnitten hat, zaehlt nicht mehr mit." \
-                   "" \
-                   "Beim Abbau einer Reihe zaehlt (in Rows):")
+            i18n_lines help_p3_mid
+            HELP_BODY+=("${I18N_LINES[@]}")
             # The bonus values are right aligned as whole strings ("+5",
             # not "+ 5"), so the plus sign stays glued to its number.
-            printf -v line '  %-31s %s%3s%s' "Grundwert je Reihe" \
+            printf -v line '  %-31s %s%3s%s' "${I18N[help_row_base]}" \
                 "${TXT_ACCENT_SGR}" "${ROWS_NORMAL}" "${TXT_RESET_SGR}"
             HELP_BODY+=("${line}")
-            printf -v line '  %-31s %s%3s%s' "je Silber-Quadrat in der Reihe" \
+            printf -v line '  %-31s %s%3s%s' "${I18N[help_row_silver]}" \
                 "${TXT_SILVER_SGR}" "+${ROWS_SILVER}" "${TXT_RESET_SGR}"
             HELP_BODY+=("${line}")
-            printf -v line '  %-31s %s%3s%s' "je Gold-Quadrat in der Reihe" \
+            printf -v line '  %-31s %s%3s%s' "${I18N[help_row_gold]}" \
                 "${TXT_GOLD_SGR}" "+${ROWS_GOLD}" "${TXT_RESET_SGR}"
             HELP_BODY+=("${line}")
-            printf -v line '  %-31s %s%3s%s' "Rowhammer (4 Reihen auf einmal)" \
+            printf -v line '  %-31s %s%3s%s' "${I18N[help_row_hammer]}" \
                 "${TXT_WARN_SGR}" "+${ROWS_TETRIS}" "${TXT_RESET_SGR}"
             HELP_BODY+=("${line}")
-            HELP_BODY+=("" \
-                   "Ein Rowhammer quer durch zwei komplette" \
-                   "Gold-Quadrate bringt so 4+1+80 = 85 Rows.")
+            i18n_lines help_p3_tail
+            HELP_BODY+=("${I18N_LINES[@]}")
             ;;
         4)
-            HELP_BODY=("Alle abgebauten Reihen zaehlen ueber die" \
-                  "Runden hinweg zusammen (auch die einer" \
-                  "abgebrochenen Runde) und bauen nacheinander" \
-                  "sieben Weltwunder auf." \
-                  "" \
-                  "Gewertete Reihen je Weltwunder:")
-            for (( i = 0; i < ${#WONDER_NAMES_DE[@]}; i++ )); do
+            i18n_lines help_p4_head
+            HELP_BODY=("${I18N_LINES[@]}")
+            for (( i = 0; i < ${#WONDER_FILES[@]}; i++ )); do
                 # Six digits since 0.44.0 (costs multiplied by 100, see
                 # lib/wonders.sh): with %5d the six-digit entries would
-                # push out of their field and break the column.
-                printf -v line '  %d. %-28s %6d' "$(( i + 1 ))" \
-                    "${WONDER_NAMES_DE[i]}" "${WONDER_COSTS[i]}"
+                # push out of their field and break the column. The name
+                # field grew from 28 to 29 columns with the translation
+                # layer (0.48.0): the longest English name needs 29, and
+                # the line still ends well inside the 46 a page has.
+                wonder_name "${i}"
+                printf -v line '  %d. %-29s %6d' "$(( i + 1 ))" \
+                    "${WONDER_NAME}" "${WONDER_COSTS[i]}"
                 HELP_BODY+=("${line}")
             done
-            HELP_BODY+=("" \
-                   "Der Menuepunkt \"Weltwunder\" zeigt die" \
-                   "aktuelle Baustelle: das Bauwerk waechst von" \
-                   "unten Zeile fuer Zeile und steht bei 100" \
-                   "Prozent fertig da - ebenso nach jeder Runde.")
+            i18n_lines help_p4_tail
+            HELP_BODY+=("${I18N_LINES[@]}")
             ;;
         5)
             # Added 0.16.0 with the Sprint mode: the manual predates the
@@ -480,33 +461,17 @@ menu_help_body() {
             # that is about the modes' scoring rather than about how
             # they are played, and with four modes it had grown past a
             # closing paragraph anyway.
+            i18n_lines help_p5_head
+            HELP_BODY=("${I18N_LINES[@]}")
+            printf -v line "${I18N[help_p5_ultra]}" "${ULTRA_TARGET_ROWS}"
+            mapfile -t -O "${#HELP_BODY[@]}" HELP_BODY <<< "${line}"
             fmt_duration $(( SPRINT_TIME_MS / 1000 ))
-            HELP_BODY=("Spielmodi (Menuepunkt \"Einzelspieler\"):" \
-                  "" \
-                  "Marathon - die endlose Runde. Sie endet," \
-                  "  wenn kein neuer Stein mehr Platz hat." \
-                  "")
-            printf -v line 'Ultra - %s Rows so schnell wie moeglich.' \
-                "${ULTRA_TARGET_ROWS}"
-            HELP_BODY+=("${line}")
-            HELP_BODY+=("  Ergebnis ist die Spielzeit; die Runde" \
-                   "  endet, sobald das Ziel erreicht ist." \
-                   "")
-            printf -v line 'Sprint - in %s Minuten so viele Rows' \
-                "${FMT_DURATION}"
-            HELP_BODY+=("${line}")
-            HELP_BODY+=("  wie moeglich. Ergebnis sind die Rows;" \
-                   "  die Runde endet mit Ablauf der Zeit." \
-                   "")
+            printf -v line "${I18N[help_p5_sprint]}" "${FMT_DURATION}"
+            mapfile -t -O "${#HELP_BODY[@]}" HELP_BODY <<< "${line}"
             fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
-            printf -v line 'Time Attack - %s Minuten Restzeit, die' \
-                "${FMT_DURATION}"
-            HELP_BODY+=("${line}")
-            printf -v line '  rueckwaerts laeuft; jede Row bringt %s Sek.' \
+            printf -v line "${I18N[help_p5_timeattack]}" "${FMT_DURATION}" \
                 "$(( TIME_ATTACK_ROW_MS / 1000 ))"
-            HELP_BODY+=("${line}")
-            HELP_BODY+=("  dazu. Ergebnis sind die Rows; die Runde" \
-                   "  endet bei 00:00 - oder frueher im Game Over.")
+            mapfile -t -O "${#HELP_BODY[@]}" HELP_BODY <<< "${line}"
             ;;
         6)
             # Split off page 5 in 0.17.0 (see there): how the modes are
@@ -514,24 +479,8 @@ menu_help_body() {
             # Time Attack exception in particular needs its reason
             # spelled out - otherwise it reads like an oversight next to
             # the other two timed modes.
-            HELP_BODY=("Bestenlisten (Menuepunkt \"Highscores\"):" \
-                  "" \
-                  "Jeder Modus hat eine eigene Liste. Marathon," \
-                  "Sprint und Time Attack ranken nach Rows," \
-                  "Ultra nach der kuerzesten Zeit." \
-                  "" \
-                  "Bei Ultra und Sprint zaehlt nur ein Lauf, der" \
-                  "sein Ziel bzw. die volle Zeit erreicht hat -" \
-                  "ein Game Over davor wird nicht gewertet." \
-                  "" \
-                  "Bei Time Attack zaehlt dagegen jeder Lauf: die" \
-                  "Rows sind so oder so dieselbe Leistung, und" \
-                  "wer vorzeitig oben rausbaut, hat schlicht" \
-                  "weniger davon." \
-                  "" \
-                  "Reihen und Zaehler einer abgebrochenen Runde" \
-                  "fliessen immer in Weltwunder und Statistik" \
-                  "ein.")
+            i18n_lines help_p6
+            HELP_BODY=("${I18N_LINES[@]}")
             ;;
         7)
             # Added 0.20.0 with the demo feature. The count and the
@@ -539,29 +488,20 @@ menu_help_body() {
             # KEY_PAUSE, KEY_QUIT) for the same reason as the pages
             # before: a retuned constant or a rebound key must not leave
             # the manual lying.
-            HELP_BODY=("Demos (Menuepunkt \"Demos\"):" \
-                  "" \
-                  "Jede gespielte Runde wird mitgeschnitten und" \
-                  "kann spaeter noch einmal angesehen werden." \
-                  "Aufgezeichnet werden die Zuege, nicht der" \
-                  "Bildschirm - die Wiedergabe spielt die Runde" \
-                  "wirklich noch einmal." \
-                  "")
-            printf -v line 'Aufbewahrt werden die %d neuesten Runden;' \
-                "${DEMO_MAX}"
+            i18n_lines help_p7_head
+            HELP_BODY=("${I18N_LINES[@]}")
+            printf -v line "${I18N[help_p7_kept]}" "${DEMO_MAX}"
             HELP_BODY+=("${line}")
-            HELP_BODY+=("Aufnahmen mit * halten noch einen Highscore" \
-                   "und bleiben darueber hinaus erhalten." \
-                   "Einzelne loeschen kannst du im Demo-Menue," \
-                   "die Aufzeichnung in den Einstellungen." \
-                   "" \
-                   "Waehrend der Wiedergabe:")
-            menu_help_keys "Leertaste" KEY_PAUSE
-            printf -v line '%-17s %s' "Pause / weiter" "${MENU_HELP_KEYS}"
+            i18n_lines help_p7_mid
+            HELP_BODY+=("${I18N_LINES[@]}")
+            menu_help_keys "${I18N[key_space]}" KEY_PAUSE
+            printf -v line '%-17s %s' "${I18N[help_demo_pause]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
-            HELP_BODY+=("Tempo             Pfeil links/rechts")
+            printf -v line '%-17s %s' "${I18N[help_demo_speed]}" \
+                "${I18N[key_arrows_lr]}"
+            HELP_BODY+=("${line}")
             menu_help_keys "ESC" KEY_QUIT
-            printf -v line '%-17s %s' "Zurueck" "${MENU_HELP_KEYS}"
+            printf -v line '%-17s %s' "${I18N[help_demo_back]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
             ;;
     esac
@@ -581,10 +521,10 @@ menu_help_body() {
 # the Sprint and Time Attack times, and the demo page the number of
 # recordings kept plus the playback keys - a rebind, a retuned
 # WONDER_COSTS or a retuned goal must never leave the manual lying.
-# Text is German like
-# the rest of the menus and ASCII only (script conventions); every line
-# stays within the 46 characters the 48-column minimum leaves next to
-# the two-column menu indent, and every page within MENU_BODY_MAX lines.
+# The text itself comes from the translation table
+# (lib/i18n.sh, one block per paragraph); every line has to stay within
+# the 46 characters the 48-column minimum leaves next to the two-column
+# menu indent, and every page within MENU_BODY_MAX lines.
 # CHANGE 2026-07-31 (user request): paging switched from "any key
 # advances, no way back" (one menu_message call per page in sequence) to
 # left/right arrow browsing that wraps at both ends, like menu_run's
@@ -598,11 +538,11 @@ menu_help() {
     while :; do
         if [ "${dirty}" -eq 1 ]; then
             menu_help_body "${page}"
-            lines=("  Anleitung ($(( page + 1 ))/${MENU_HELP_PAGES})" "")
+            lines=("  ${I18N[help_title]} ($(( page + 1 ))/${MENU_HELP_PAGES})" "")
             for l in "${HELP_BODY[@]}"; do
                 lines+=("  ${l}")
             done
-            lines+=("" "  Pfeil li/re: Seite   Enter/ESC: zurueck")
+            lines+=("" "  ${I18N[help_nav]}")
             render_menu_frame "${lines[@]}"
             screen_write "${RENDER_MENU_FRAME}"
             dirty=0
@@ -654,7 +594,7 @@ menu_confirm() {
                 lines+=("   ${no_label} ")
                 lines+=($'  \e[7m '"${yes_label}"$' \e[0m')
             fi
-            lines+=("" "  Pfeile/w/s: waehlen   Enter: OK   ESC: abbrechen")
+            lines+=("" "  ${I18N[menu_nav_cancel]}")
             render_menu_frame "${lines[@]}"
             screen_write "${RENDER_MENU_FRAME}"
             dirty=0
@@ -705,25 +645,27 @@ menu_confirm() {
 # than to the round, because a player who did not mean to discard it
 # usually still meant to pick something here; hence the loop.
 menu_pause() {
+    local round_line
+    # The state of the round, shown in both questions below: it is what
+    # makes them answerable - a round worth keeping is recognized by its
+    # counters, not by the board the confirmation covers up.
+    printf -v round_line "${I18N[round_state]}" \
+        "${CLEARED_TOTAL}" "${ROW_CREDIT}" "${LEVEL}"
     while :; do
-        menu_run "Pause" \
-            "Fortsetzen" \
-            "Neustarten" \
-            "Ins Hauptmenue (Runde pausiert)" \
-            "Runde beenden"
+        menu_run "${I18N[pause_title]}" \
+            "${I18N[main_resume]}" \
+            "${I18N[pause_restart]}" \
+            "${I18N[pause_to_menu]}" \
+            "${I18N[pause_end]}"
         case "${MENU_CHOICE}" in
             1)
-                # The counters come from the round state in rowhammer.sh;
-                # showing them is what makes the question answerable - a
-                # round worth keeping is recognized by them, not by the
-                # board, which the confirmation covers up.
-                if menu_confirm "Wirklich neu starten?" \
-                    "Ja, neu starten" "Nein, zurueck" \
-                    "Die laufende Runde wird aufgegeben:" \
-                    "${CLEARED_TOTAL} Lines, ${ROW_CREDIT} Rows, Level ${LEVEL}." \
+                i18n_lines restart_tail
+                if menu_confirm "${I18N[restart_title]}" \
+                    "${I18N[restart_yes]}" "${I18N[confirm_no]}" \
+                    "${I18N[restart_head]}" \
+                    "${round_line}" \
                     "" \
-                    "Sie wird gewertet (Weltwunder und Statistik)" \
-                    "und danach im selben Modus neu gestartet."; then
+                    "${I18N_LINES[@]}"; then
                     GAME_RESTART=1
                     return 0
                 fi
@@ -739,13 +681,13 @@ menu_pause() {
                 # the round away, and "Runde beenden" sits right below
                 # the entry that only suspends it - one line off and the
                 # round is over instead of waiting in the main menu.
-                if menu_confirm "Runde wirklich beenden?" \
-                    "Ja, beenden" "Nein, zurueck" \
-                    "Die laufende Runde wird beendet:" \
-                    "${CLEARED_TOTAL} Lines, ${ROW_CREDIT} Rows, Level ${LEVEL}." \
+                i18n_lines end_tail
+                if menu_confirm "${I18N[end_title]}" \
+                    "${I18N[end_yes]}" "${I18N[confirm_no]}" \
+                    "${I18N[end_head]}" \
+                    "${round_line}" \
                     "" \
-                    "Sie wird gewertet und ist danach nicht mehr" \
-                    "fortsetzbar."; then
+                    "${I18N_LINES[@]}"; then
                     GAME_EXIT=1
                     return 0
                 fi
@@ -757,6 +699,29 @@ menu_pause() {
                 ;;
         esac
     done
+}
+
+# menu_mode_entries
+# Fill the global array MENU_MODE_ENTRIES with the four game modes as the
+# three pickers (singleplayer, highscores, statistics) offer them: the
+# three timed ones name their goal, read from the live constants, so a
+# retuned goal cannot leave a menu lying. One builder for all three, so
+# the same mode reads the same way wherever it is picked - which used to
+# be three copies of the same four strings.
+MENU_MODE_ENTRIES=()
+menu_mode_entries() {
+    local entry
+    MENU_MODE_ENTRIES=("${I18N[mode_marathon]}")
+    printf -v entry "${I18N[entry_ultra]}" "${ULTRA_TARGET_ROWS}"
+    MENU_MODE_ENTRIES+=("${entry}")
+    fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+    printf -v entry "${I18N[entry_sprint]}" "${FMT_DURATION}"
+    MENU_MODE_ENTRIES+=("${entry}")
+    fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
+    printf -v entry "${I18N[entry_timeattack]}" "${FMT_DURATION}" \
+        "$(( TIME_ATTACK_ROW_MS / 1000 ))"
+    MENU_MODE_ENTRIES+=("${entry}")
+    return 0
 }
 
 # menu_singleplayer: the game modes. "Marathon" is the endless
@@ -777,25 +742,15 @@ menu_pause() {
 # one, so the selection is normalized before the dispatch).
 menu_singleplayer() {
     local -a entries
-    local choice sprint_label
+    local choice
     while :; do
         entries=()
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-            entries+=("Fortsetzen")
+            entries+=("${I18N[main_resume]}")
         fi
-        # The three timed modes name their target in the entry, so the
-        # difference between them is readable without the manual. All
-        # read the live constants (fmt_duration for the two time
-        # limits), which keeps the menu honest if any is retuned.
-        fmt_duration $(( SPRINT_TIME_MS / 1000 ))
-        sprint_label="${FMT_DURATION}"
-        fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
-        entries+=("Marathon" \
-                  "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
-                  "Sprint (${sprint_label} Minuten auf Rows)" \
-                  "Time Attack (${FMT_DURATION} + $(( TIME_ATTACK_ROW_MS / 1000 ))s je Row)" \
-                  "Zurueck")
-        menu_run "Einzelspieler" "${entries[@]}"
+        menu_mode_entries
+        entries+=("${MENU_MODE_ENTRIES[@]}" "${I18N[menu_back]}")
+        menu_run "${I18N[sp_title]}" "${entries[@]}"
         choice="${MENU_CHOICE}"
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
             if [ "${choice}" -eq 0 ]; then
@@ -839,22 +794,45 @@ menu_singleplayer() {
 # Loops instead of returning after one list, so comparing them costs
 # no walk back through the main menu; ESC or "Zurueck" leaves.
 menu_highscores() {
-    local sprint_label
     while :; do
-        fmt_duration $(( SPRINT_TIME_MS / 1000 ))
-        sprint_label="${FMT_DURATION}"
-        fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
-        menu_run "Highscores" \
-            "Marathon" \
-            "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
-            "Sprint (${sprint_label} Minuten auf Rows)" \
-            "Time Attack (${FMT_DURATION} + $(( TIME_ATTACK_ROW_MS / 1000 ))s je Row)" \
-            "Zurueck"
+        menu_mode_entries
+        menu_run "${I18N[hs_title]}" "${MENU_MODE_ENTRIES[@]}" \
+            "${I18N[menu_back]}"
         case "${MENU_CHOICE}" in
             0) highscore_screen ;;
             1) highscore_ultra_screen ;;
             2) highscore_sprint_screen ;;
             3) highscore_timeattack_screen ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+# menu_stats: the "Statistik" main menu entry. Picks between the
+# all-time statistics - the counters over every round ever played, on
+# three screens - and one game mode's own counters (lib/stats.sh, per
+# mode since 0.21.0, user request). A picker in front of them for the
+# same reason menu_highscores has one: the modes are played for
+# different things, so their counters only mean something next to the
+# label of the mode they were scored in, and putting four more tables on
+# the sequence of screens the "Statistik" entry already walks through
+# would bury the all-time figures behind them.
+# The mode entries are worded exactly like the ones in menu_highscores
+# and in the singleplayer menu, so a mode reads the same way wherever it
+# is picked. Loops instead of returning after one screen, so comparing
+# the modes costs no walk back through the main menu; ESC or "Zurueck"
+# leaves.
+menu_stats() {
+    while :; do
+        menu_mode_entries
+        menu_run "${I18N[stats_title]}" "${I18N[stats_all]}" \
+            "${MENU_MODE_ENTRIES[@]}" "${I18N[menu_back]}"
+        case "${MENU_CHOICE}" in
+            0) stats_screen ;;
+            1) stats_mode_screen "marathon" ;;
+            2) stats_mode_screen "ultra" ;;
+            3) stats_mode_screen "sprint" ;;
+            4) stats_mode_screen "timeattack" ;;
             *) return 0 ;;
         esac
     done
@@ -870,39 +848,32 @@ menu_highscores() {
 # suspended round away. Refusing is the honest way around that - the
 # round is only ever a "Fortsetzen" away from being finished.
 menu_demos() {
-    local -a entries
+    local -a entries lines
     local n choice file title hint
     while :; do
         demo_scan
         n="${#DEMO_LIST_FILE[@]}"
         if [ "${n}" -eq 0 ]; then
             if [ "${DEMO_RECORD}" = "on" ]; then
-                menu_message "Demos" \
-                    "Noch keine Aufzeichnungen." \
-                    "" \
-                    "Jede gespielte Runde wird automatisch" \
-                    "mitgeschnitten und erscheint hier, sobald" \
-                    "sie beendet ist. Es werden die ${DEMO_MAX}" \
-                    "neuesten Runden aufbewahrt."
+                printf -v hint "${I18N[demos_none_on]}" "${DEMO_MAX}"
+                mapfile -t lines <<< "${hint}"
             else
-                menu_message "Demos" \
-                    "Noch keine Aufzeichnungen." \
-                    "" \
-                    "Die Demo-Aufzeichnung ist derzeit" \
-                    "ausgeschaltet. Du kannst sie in den" \
-                    "Einstellungen wieder einschalten."
+                i18n_lines demos_none_off
+                lines=("${I18N_LINES[@]}")
             fi
+            menu_message "${I18N[demos_title]}" \
+                "${I18N[demos_none]}" "" "${lines[@]}"
             return 0
         fi
-        entries=("${DEMO_LIST_LABEL[@]}" "Zurueck")
+        entries=("${DEMO_LIST_LABEL[@]}" "${I18N[menu_back]}")
         # The count is not "n of DEMO_MAX" any more: a recording that
         # backs a highscore entry is kept beyond that cap, so the list
         # can legitimately be longer. The legend explains the marker
         # those entries carry; it only appears when there is one.
         if [ "${DEMO_LIST_KEPT}" -gt 0 ]; then
-            title="Demos (${n})   * = haelt einen Highscore"
+            printf -v title "${I18N[demos_title_kept]}" "${n}"
         else
-            title="Demos (${n}/${DEMO_MAX})"
+            printf -v title "${I18N[demos_title_count]}" "${n}" "${DEMO_MAX}"
         fi
         menu_run "${title}" "${entries[@]}"
         choice="${MENU_CHOICE}"
@@ -910,20 +881,15 @@ menu_demos() {
             return 0
         fi
         file="${DEMO_LIST_FILE[choice]}"
-        menu_run "Demo" \
-            "Abspielen" \
-            "Loeschen" \
-            "Zurueck"
+        menu_run "${I18N[demo_title]}" \
+            "${I18N[demo_play]}" \
+            "${I18N[demo_delete]}" \
+            "${I18N[menu_back]}"
         case "${MENU_CHOICE}" in
             0)
                 if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-                    menu_message "Demo" \
-                        "Eine pausierte Runde wartet noch." \
-                        "" \
-                        "Eine Wiedergabe benutzt dasselbe Spielfeld" \
-                        "wie die laufende Runde und wuerde sie" \
-                        "verwerfen. Setze sie fort oder beende sie" \
-                        "ueber das Pausenmenue, dann klappt es."
+                    i18n_lines demo_busy
+                    menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
                     continue
                 fi
                 demo_play "${file}"
@@ -937,21 +903,21 @@ menu_demos() {
                 # pruning - but it says so first, because that recording
                 # is the one the pruning would have kept.
                 if [ "${DEMO_LIST_MARKED[choice]}" = "*" ]; then
-                    hint="Sie haelt noch einen Highscore-Eintrag."
+                    hint="${I18N[demo_del_hint]}"
                 else
                     hint=""
                 fi
-                if menu_confirm "Demo loeschen?" \
-                    "Ja, loeschen" "Nein, behalten" \
+                i18n_lines demo_del_body
+                if menu_confirm "${I18N[demo_del_title]}" \
+                    "${I18N[demo_del_yes]}" "${I18N[demo_del_no]}" \
                     "${DEMO_LIST_LABEL[choice]}" \
                     "${hint}" \
                     "" \
-                    "Die Aufzeichnung wird wirklich geloescht" \
-                    "und laesst sich nicht zurueckholen."; then
+                    "${I18N_LINES[@]}"; then
                     if ! demo_delete "${file}"; then
-                        menu_message "Demo" \
-                            "Die Aufzeichnung konnte nicht geloescht" \
-                            "werden:" \
+                        i18n_lines demo_del_failed
+                        menu_message "${I18N[demo_title]}" \
+                            "${I18N_LINES[@]}" \
                             "" \
                             "${file}"
                     fi
@@ -965,24 +931,36 @@ menu_demos() {
 # rounds are recorded as demos; every change is written to the user
 # config file immediately.
 menu_settings() {
-    local demo_label
+    local demo_label theme_entry name_entry demo_entry lang_entry
     while :; do
         if [ "${DEMO_RECORD}" = "on" ]; then
-            demo_label="an"
+            demo_label="${I18N[on]}"
         else
-            demo_label="aus"
+            demo_label="${I18N[off]}"
         fi
-        menu_run "Einstellungen" \
-            "Tasten konfigurieren" \
-            "Farbschema (aktuell: ${COLOR_THEME_LABEL[${COLOR_THEME}]})" \
-            "Spielername aendern (aktuell: ${PLAYER_NAME})" \
-            "Demo-Aufzeichnung (aktuell: ${demo_label})" \
-            "Zurueck"
+        printf -v theme_entry "${I18N[set_theme]}" \
+            "${I18N[theme_${COLOR_THEME}]}"
+        printf -v name_entry "${I18N[set_name]}" "${PLAYER_NAME}"
+        printf -v demo_entry "${I18N[set_demo]}" "${demo_label}"
+        # The language entry names the language it is currently set to,
+        # and for "auto" the one that setting resolves to right now
+        # (i18n_lang_label) - which is the only thing "automatic" does
+        # not say by itself.
+        i18n_lang_label "${LANGUAGE}"
+        printf -v lang_entry "${I18N[set_lang]}" "${I18N_LABEL}"
+        menu_run "${I18N[set_title]}" \
+            "${I18N[set_keys]}" \
+            "${lang_entry}" \
+            "${theme_entry}" \
+            "${name_entry}" \
+            "${demo_entry}" \
+            "${I18N[menu_back]}"
         case "${MENU_CHOICE}" in
             0) menu_keys ;;
-            1) menu_colors ;;
-            2) prompt_player_name ;;
-            3)
+            1) menu_language ;;
+            2) menu_colors ;;
+            3) prompt_player_name ;;
+            4)
                 # A plain toggle rather than a picker: there are two
                 # states and the entry above names the current one.
                 if [ "${DEMO_RECORD}" = "on" ]; then
@@ -996,6 +974,48 @@ menu_settings() {
             *) return 0 ;;
         esac
     done
+}
+
+# menu_language: pick the interface language (lib/i18n.sh). Lists
+# "automatic" first and then every language this game speaks, each in
+# its own name, with the active setting marked "*"; selecting applies it
+# at once (i18n_init reloads the table) and persists it, so the menu
+# behind this one is already drawn in the new language. ESC leaves the
+# setting untouched.
+# Added 0.48.0 with the translation layer. Deliberately menu_run rather
+# than a picker of its own like menu_colors: the entries are plain text,
+# so there is nothing here the generic list cannot draw - and menu_run
+# is where the scrolling and the resize handling already live.
+menu_language() {
+    local -a entries=() codes=()
+    local i code
+    codes=(auto "${I18N_LANGS[@]}")
+    for code in "${codes[@]}"; do
+        i18n_lang_label "${code}"
+        if [ "${code}" = "${LANGUAGE}" ]; then
+            entries+=("* ${I18N_LABEL}")
+        else
+            entries+=("  ${I18N_LABEL}")
+        fi
+    done
+    entries+=("${I18N[menu_back]}")
+    menu_run "${I18N[lang_title]}" "${entries[@]}"
+    i="${MENU_CHOICE}"
+    if [ "${i}" -lt 0 ] || [ "${i}" -ge "${#codes[@]}" ]; then
+        return 0
+    fi
+    if [ "${codes[i]}" = "${LANGUAGE}" ]; then
+        return 0
+    fi
+    LANGUAGE="${codes[i]}"
+    i18n_init
+    debug_event "language set: ${LANGUAGE} (using ${I18N_LANG})"
+    config_save
+    # The board keeps HUD labels of the old language in the frame cache
+    # (render_flush compares against it), and the labels are exactly what
+    # just changed - so the next game frame has to be written in full.
+    RENDER_FULL=1
+    return 0
 }
 
 # menu_colors: pick the color theme (lib/pieces.sh). Lists every theme
@@ -1020,7 +1040,7 @@ menu_colors() {
     done
     while :; do
         if [ "${dirty}" -eq 1 ]; then
-            lines=("  Farbschema waehlen" "")
+            lines=("  ${I18N[theme_title]}" "")
             for (( i = 0; i < n; i++ )); do
                 if [ "${COLOR_THEMES[i]}" = "${COLOR_THEME}" ]; then
                     mark="*"
@@ -1028,7 +1048,7 @@ menu_colors() {
                     mark=" "
                 fi
                 printf -v label '%s %-11s' "${mark}" \
-                    "${COLOR_THEME_LABEL[${COLOR_THEMES[i]}]}"
+                    "${I18N[theme_${COLOR_THEMES[i]}]}"
                 render_theme_swatch "${COLOR_THEMES[i]}"
                 if (( i == sel )); then
                     lines+=($'  \e[7m '"${label}"$' \e[0m  '"${RENDER_SWATCH}")
@@ -1036,7 +1056,7 @@ menu_colors() {
                     lines+=("   ${label}  ${RENDER_SWATCH}")
                 fi
             done
-            lines+=("" "  Pfeile/w/s: waehlen   Enter: OK   ESC: zurueck")
+            lines+=("" "  ${I18N[menu_nav]}")
             render_menu_frame "${lines[@]}"
             screen_write "${RENDER_MENU_FRAME}"
             dirty=0
@@ -1073,12 +1093,13 @@ menu_keys() {
         entries=()
         for i in "${!KEY_ACTIONS[@]}"; do
             ref="${KEY_ACTIONS[i]}"
-            entries+=("$(printf '%-18s [%s]' "${KEY_LABELS[i]}" "${!ref}")")
+            entries+=("$(printf '%-18s [%s]' "${I18N[keylabel_${ref}]}" "${!ref}")")
         done
-        entries+=("Zurueck")
-        menu_run "Tasten konfigurieren" "${entries[@]}"
+        entries+=("${I18N[menu_back]}")
+        menu_run "${I18N[set_keys]}" "${entries[@]}"
         if [ "${MENU_CHOICE}" -ge 0 ] && [ "${MENU_CHOICE}" -lt "${#KEY_ACTIONS[@]}" ]; then
-            prompt_rebind "${KEY_ACTIONS[MENU_CHOICE]}" "${KEY_LABELS[MENU_CHOICE]}"
+            ref="${KEY_ACTIONS[MENU_CHOICE]}"
+            prompt_rebind "${ref}" "${I18N[keylabel_${ref}]}"
         else
             return 0
         fi
@@ -1091,11 +1112,13 @@ menu_keys() {
 # stays reserved for the game over restart. Refuses keys that are already
 # bound to another action, then persists the new binding.
 prompt_rebind() {
-    local var="${1}" label="${2}" other
+    local var="${1}" label="${2}" other ask current
     local -a lines
-    lines=("  Tasten konfigurieren" ""
-           "  Neue Taste fuer \"${label}\" druecken"
-           "  (aktuell: ${!var}, ESC = abbrechen)")
+    printf -v ask "${I18N[rebind_ask]}" "${label}"
+    printf -v current "${I18N[rebind_current]}" "${!var}"
+    lines=("  ${I18N[set_keys]}" ""
+           "  ${ask}"
+           "  ${current}")
     render_menu_frame "${lines[@]}"
     screen_write "${RENDER_MENU_FRAME}"
     KEY=""
@@ -1114,26 +1137,26 @@ prompt_rebind() {
             return 0
             ;;
         ENTER|UP|DOWN|LEFT|RIGHT)
-            menu_message "Tasten konfigurieren" \
-                "Diese Taste ist fuer die Menuesteuerung reserviert."
+            i18n_lines rebind_reserved_menu
+            menu_message "${I18N[set_keys]}" "${I18N_LINES[@]}"
             return 0
             ;;
         r)
-            menu_message "Tasten konfigurieren" \
-                "Die Taste 'r' ist fuer den Neustart im Game-Over-Bild reserviert."
+            i18n_lines rebind_reserved_r
+            menu_message "${I18N[set_keys]}" "${I18N_LINES[@]}"
             return 0
             ;;
     esac
     local re='^([a-z0-9]|SPACE)$'
     if ! [[ "${KEY}" =~ ${re} ]]; then
-        menu_message "Tasten konfigurieren" \
-            "Ungueltige Taste. Erlaubt sind a-z, 0-9 und die Leertaste."
+        i18n_lines rebind_invalid
+        menu_message "${I18N[set_keys]}" "${I18N_LINES[@]}"
         return 0
     fi
     for other in "${KEY_ACTIONS[@]}"; do
         if [ "${other}" != "${var}" ] && [ "${!other}" = "${KEY}" ]; then
-            menu_message "Tasten konfigurieren" \
-                "Die Taste [${KEY}] ist bereits belegt."
+            printf -v ask "${I18N[rebind_taken]}" "${KEY}"
+            menu_message "${I18N[set_keys]}" "${ask}"
             return 0
         fi
     done
@@ -1196,8 +1219,8 @@ menu_text_input() {
                 shown="${value}"$'\e[7m \e[0m'
             fi
             lines+=("" "  > ${shown}" "")
-            lines+=("  Tippen ersetzt den markierten Text.")
-            lines+=("  Enter: OK   ESC: unveraendert")
+            lines+=("  ${I18N[input_hint_type]}")
+            lines+=("  ${I18N[input_hint_keys]}")
             render_menu_frame "${lines[@]}"
             screen_write "${RENDER_MENU_FRAME}"
             dirty=0
@@ -1270,10 +1293,12 @@ menu_text_input() {
 # input leaves everything alone, and so does leaving with ESC.
 prompt_player_name() {
     local -a body
-    body=("Aktueller Name: ${PLAYER_NAME}" ""
-          "Erlaubt sind max. ${MENU_INPUT_MAX} Zeichen aus"
-          "A-Z a-z 0-9 Leerzeichen _ -")
-    if ! menu_text_input "Spielername" "${PLAYER_NAME}" "${body[@]}"; then
+    local line
+    printf -v line "${I18N[name_current]}" "${PLAYER_NAME}"
+    body=("${line}" "")
+    printf -v line "${I18N[name_rules]}" "${MENU_INPUT_MAX}"
+    mapfile -t -O "${#body[@]}" body <<< "${line}"
+    if ! menu_text_input "${I18N[name_title]}" "${PLAYER_NAME}" "${body[@]}"; then
         return 0
     fi
     if [ -z "${MENU_INPUT}" ] || [ "${MENU_INPUT}" = "${PLAYER_NAME}" ]; then
@@ -1308,20 +1333,16 @@ ROUND_NAME=""
 # nameless anyway.
 prompt_round_name() {
     local -a body
-    local mode_label
-    case "${GAME_MODE}" in
-        ultra)      mode_label="Ultra" ;;
-        sprint)     mode_label="Sprint" ;;
-        timeattack) mode_label="Time Attack" ;;
-        *)          mode_label="Marathon" ;;
-    esac
+    local line
     fmt_duration "$(( PLAY_MS / 1000 ))"
-    body=("Modus: ${mode_label}"
-          "Rows: ${ROW_CREDIT}   Lines: ${CLEARED_TOTAL}"
-          "Level: ${LEVEL}   Zeit: ${FMT_DURATION}" ""
-          "Name fuer die Bestenliste:")
+    printf -v line "${I18N[round_mode]}" "${I18N[mode_${GAME_MODE}]}"
+    body=("${line}")
+    printf -v line "${I18N[round_rows]}" "${ROW_CREDIT}" "${CLEARED_TOTAL}"
+    body+=("${line}")
+    printf -v line "${I18N[round_level]}" "${LEVEL}" "${FMT_DURATION}"
+    body+=("${line}" "" "${I18N[round_ask_name]}")
     ROUND_NAME="${PLAYER_NAME}"
-    if menu_text_input "Runde beendet" "${PLAYER_NAME}" "${body[@]}"; then
+    if menu_text_input "${I18N[round_title]}" "${PLAYER_NAME}" "${body[@]}"; then
         # An empty line means the same as ESC here: nothing to file the
         # round under, so it keeps the name from the settings.
         if [ -n "${MENU_INPUT}" ]; then

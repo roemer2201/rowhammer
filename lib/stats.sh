@@ -35,10 +35,23 @@
 #   Sprint playing its full time, Time Attack running its clock down) -
 #   the share of successful attempts is not recoverable from anywhere
 #   else, since a failed run never enters its mode's highscore list.
-#   stats_screen renders the statistics for the "Statistik" main menu
-#   entry via menu_message (lib/menu.sh) on three screens: the all-time
-#   counters first, the recent rounds second (both together outgrew the
-#   22-row minimum terminal) and the per-mode round counters third. Since 0.8.0 the weighted total, the
+#   Since 0.10.0 (user request) every counter above exists a second time
+#   per game mode (STATS_MODE, keys "<mode>_<field>"): the all-time
+#   figures say what was achieved but not in which mode, and the modes
+#   are played for different things - comparing a Marathon round with a
+#   three-minute Sprint only works once each mode has its own totals.
+#   The all-time counters stay exactly as they were, they are not a sum
+#   derived from the per-mode ones: a round of an unknown mode (only
+#   reachable from a future mode) is counted in the totals and nowhere
+#   else, so the totals remain the complete picture.
+#   stats_screen renders the all-time statistics for the "Statistik"
+#   main menu entry via menu_message (lib/menu.sh) on three screens: the
+#   all-time counters first, the recent rounds second (both together
+#   outgrew the 22-row minimum terminal) and the per-mode round counters
+#   third, which doubles as the overview in front of the per-mode
+#   screens. stats_mode_screen shows one mode's own counters on a single
+#   screen; menu_stats (lib/menu.sh) picks between the two the way
+#   menu_highscores picks a list. Since 0.8.0 the weighted total, the
 #   gold/silver/rowhammer counters and the recent-round Rows/Gold/Silb/RH
 #   figures are colored with the TXT_* SGR globals (lib/render.sh,
 #   theme-aware, empty in --no-color/NO_COLOR mode); a recent-round line
@@ -46,7 +59,7 @@
 #   to the plain truncated text instead of risking a cut escape sequence.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-08-03)
+# Version: 0.11.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -66,8 +79,22 @@ fi
 # load (project rule: no backward compatibility, formats may just
 # break).
 STATS_FILE_NAME="stats"
-STATS_LINE_RE='^(lines|bonus_rows|gold_squares|silver_squares|rowhammers|pieces|play_time|rounds_marathon|rounds_ultra|rounds_ultra_goal|rounds_sprint|rounds_sprint_goal|rounds_timeattack|rounds_timeattack_goal)=([0-9]{1,15})$'
+STATS_LINE_RE='^(lines|bonus_rows|gold_squares|silver_squares|rowhammers|pieces|play_time)=([0-9]{1,15})$'
 STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){6}\|[0-9]{4}-[0-9]{2}-[0-9]{2})$'
+
+# Per-mode counter lines, "mode_<mode>_<field>=N" (0.10.0). One flat key
+# per mode and field rather than one line per mode with packed fields:
+# the file is a list of counters, and a counter that is missing (a mode
+# never played, a hand-edited file) then simply falls back to 0 instead
+# of invalidating everything the same line carries.
+# CHANGE 2026-08-04: this replaces the "rounds_<mode>[_goal]" keys of
+# 0.9.0, which counted rounds per mode but nothing else. Their two
+# figures are now the "rounds" and "goal" fields of the same scheme, so
+# there is one naming rule for per-mode data instead of two. Old files
+# lose their per-mode round counts (project rule: no backward
+# compatibility); the all-time counters and the recent rounds, which
+# were never per mode, are unaffected.
+STATS_MODE_RE='^mode_(marathon|ultra|sprint|timeattack)_(rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|pieces|play_time)=([0-9]{1,15})$'
 
 # How many recent rounds are kept and shown.
 STATS_RECENT_MAX=3
@@ -87,26 +114,52 @@ STATS_PIECES=0
 STATS_PLAY_TIME=0
 STATS_RECENT=()
 
-# Rounds played per game mode, and for the three timed modes how many of
-# them ended in that mode's regular ending rather than in a top-out:
-# Ultra reaching ULTRA_TARGET_ROWS, Sprint playing its full
-# SPRINT_TIME_MS, Time Attack running its clock down to zero (see
-# rowhammer.sh). Added 2026-08-03 with the Time Attack mode, the last
-# open part of the "statistics per mode" roadmap item: the counters
-# above say what was achieved but not in which mode, and for the timed
-# modes the interesting figure is the share of attempts that got there -
-# which no other stored number can reconstruct, because a failed run is
-# not in that mode's highscore list.
-# One counter per mode instead of one keyed array: the file format is
-# flat "key=value" lines, and a fixed set of keys keeps the validation
-# regex above the single source of truth for what may appear in it.
-STATS_ROUNDS_MARATHON=0
-STATS_ROUNDS_ULTRA=0
-STATS_ROUNDS_ULTRA_GOAL=0
-STATS_ROUNDS_SPRINT=0
-STATS_ROUNDS_SPRINT_GOAL=0
-STATS_ROUNDS_TIMEATTACK=0
-STATS_ROUNDS_TIMEATTACK_GOAL=0
+# The same counters once per game mode, plus the rounds played in it and
+# - for the three timed modes - how many of those ended in that mode's
+# regular ending rather than in a top-out: Ultra reaching
+# ULTRA_TARGET_ROWS, Sprint playing its full SPRINT_TIME_MS, Time Attack
+# running its clock down to zero (see rowhammer.sh). The share of
+# attempts that got there is the one figure no other stored number can
+# reconstruct, because a failed run never enters its mode's highscore
+# list.
+# Keys are "<mode>_<field>" of the two lists below, so the file format,
+# the reset, the write and both screens walk the same two loops; every
+# combination exists from startup on, which keeps reads free of set -u
+# guards. Marathon has no goal to reach, so its "goal" entry stays 0 and
+# is neither written nor shown.
+# CHANGE 2026-08-04 (user request): 0.9.0 had seven scalars here and
+# counted only rounds per mode. Extending that shape to every counter
+# would have meant 36 more globals, so the per-mode data moved into one
+# keyed array - the fixed field list below took over from the variable
+# names as the single source of truth for what may appear in the file.
+STATS_MODES=(marathon ultra sprint timeattack)
+STATS_MODE_FIELDS=(rounds goal lines bonus_rows gold_squares
+                   silver_squares rowhammers pieces play_time)
+declare -A STATS_MODE=()
+
+# CHANGE 2026-08-04: the two label tables that used to sit here (the
+# mode names and the wording of their goal counter) are gone into the
+# translation layer, keyed by mode: "mode_<mode>" for the name, which
+# the pickers in lib/menu.sh read as well, and "stats_goal_<mode>" for
+# the goal counter. Marathon has no goal to reach and therefore no
+# stats_goal_marathon key - the screens test for exactly that, so an
+# empty lookup still means "this mode has no goal line".
+
+# stats_mode_reset
+# Put every per-mode counter back to 0. Called by stats_load before
+# reading the file, so a counter the file does not carry (a mode never
+# played, a hand-edited file) reads as 0 rather than as the value of the
+# previous load.
+stats_mode_reset() {
+    local mode field
+    for mode in "${STATS_MODES[@]}"; do
+        for field in "${STATS_MODE_FIELDS[@]}"; do
+            STATS_MODE["${mode}_${field}"]=0
+        done
+    done
+    return 0
+}
+stats_mode_reset
 
 # stats_load
 # Read the statistics file into the STATS_* counters and the recent
@@ -124,13 +177,7 @@ stats_load() {
     STATS_PIECES=0
     STATS_PLAY_TIME=0
     STATS_RECENT=()
-    STATS_ROUNDS_MARATHON=0
-    STATS_ROUNDS_ULTRA=0
-    STATS_ROUNDS_ULTRA_GOAL=0
-    STATS_ROUNDS_SPRINT=0
-    STATS_ROUNDS_SPRINT_GOAL=0
-    STATS_ROUNDS_TIMEATTACK=0
-    STATS_ROUNDS_TIMEATTACK_GOAL=0
+    stats_mode_reset
     local f="${DATA_DIR}/${STATS_FILE_NAME}" line found=0
     if [ ! -e "${f}" ]; then
         debug_event "stats: no statistics file at ${f}, starting at 0"
@@ -152,21 +199,13 @@ stats_load() {
                 rowhammers)     STATS_ROWHAMMERS=$(( 10#${BASH_REMATCH[2]} )) ;;
                 pieces)         STATS_PIECES=$(( 10#${BASH_REMATCH[2]} )) ;;
                 play_time)      STATS_PLAY_TIME=$(( 10#${BASH_REMATCH[2]} )) ;;
-                rounds_marathon)
-                    STATS_ROUNDS_MARATHON=$(( 10#${BASH_REMATCH[2]} )) ;;
-                rounds_ultra)
-                    STATS_ROUNDS_ULTRA=$(( 10#${BASH_REMATCH[2]} )) ;;
-                rounds_ultra_goal)
-                    STATS_ROUNDS_ULTRA_GOAL=$(( 10#${BASH_REMATCH[2]} )) ;;
-                rounds_sprint)
-                    STATS_ROUNDS_SPRINT=$(( 10#${BASH_REMATCH[2]} )) ;;
-                rounds_sprint_goal)
-                    STATS_ROUNDS_SPRINT_GOAL=$(( 10#${BASH_REMATCH[2]} )) ;;
-                rounds_timeattack)
-                    STATS_ROUNDS_TIMEATTACK=$(( 10#${BASH_REMATCH[2]} )) ;;
-                rounds_timeattack_goal)
-                    STATS_ROUNDS_TIMEATTACK_GOAL=$(( 10#${BASH_REMATCH[2]} )) ;;
             esac
+        elif [[ "${line}" =~ ${STATS_MODE_RE} ]]; then
+            # The regex already limited mode and field to the known
+            # names, so the key cannot be anything stats_mode_reset did
+            # not create.
+            found=1
+            STATS_MODE["${BASH_REMATCH[1]}_${BASH_REMATCH[2]}"]=$(( 10#${BASH_REMATCH[3]} ))
         elif [[ "${line}" =~ ${STATS_RECENT_RE} ]]; then
             found=1
             if [ "${#STATS_RECENT[@]}" -lt "${STATS_RECENT_MAX}" ]; then
@@ -188,7 +227,7 @@ stats_load() {
 # directory, then mv over the real file, so a crash can never leave a
 # half-written statistics file behind.
 stats_write() {
-    local f="${DATA_DIR}/${STATS_FILE_NAME}" tmp
+    local f="${DATA_DIR}/${STATS_FILE_NAME}" tmp mode field
     mkdir -p -- "${DATA_DIR}"
     tmp="$(mktemp -- "${DATA_DIR}/.${STATS_FILE_NAME}.XXXXXX")"
     {
@@ -201,14 +240,19 @@ stats_write() {
         printf 'rowhammers=%d\n' "${STATS_ROWHAMMERS}"
         printf 'pieces=%d\n' "${STATS_PIECES}"
         printf 'play_time=%d\n' "${STATS_PLAY_TIME}"
-        printf 'rounds_marathon=%d\n' "${STATS_ROUNDS_MARATHON}"
-        printf 'rounds_ultra=%d\n' "${STATS_ROUNDS_ULTRA}"
-        printf 'rounds_ultra_goal=%d\n' "${STATS_ROUNDS_ULTRA_GOAL}"
-        printf 'rounds_sprint=%d\n' "${STATS_ROUNDS_SPRINT}"
-        printf 'rounds_sprint_goal=%d\n' "${STATS_ROUNDS_SPRINT_GOAL}"
-        printf 'rounds_timeattack=%d\n' "${STATS_ROUNDS_TIMEATTACK}"
-        printf 'rounds_timeattack_goal=%d\n' \
-            "${STATS_ROUNDS_TIMEATTACK_GOAL}"
+        # The same counters per mode, in the order of the two lists at
+        # the top of this file. Marathon's "goal" is skipped: the mode
+        # has no goal to reach, so the key would be a permanent 0 that
+        # only invites the question what it means.
+        for mode in "${STATS_MODES[@]}"; do
+            for field in "${STATS_MODE_FIELDS[@]}"; do
+                if [ "${field}" = "goal" ] && [ "${mode}" = "marathon" ]; then
+                    continue
+                fi
+                printf 'mode_%s_%s=%d\n' "${mode}" "${field}" \
+                    "${STATS_MODE[${mode}_${field}]}"
+            done
+        done
         # Newest round first;
         # lines|bonus|gold|silver|rowhammers|pieces|time|date.
         # The length guard keeps bash < 4.4 happy under set -u.
@@ -239,16 +283,17 @@ stats_write() {
 # all-time placement rate.
 # MODE is the round's game mode (GAME_MODE in rowhammer.sh) and GOAL 1
 # when it ended in that mode's regular ending rather than in a top-out
-# (GOAL_REACHED); together they feed the per-mode round counters
-# (2026-08-03). They are counted behind the same guard as everything
-# else: a round that placed no piece at all is not a round played, and
-# counting it here while it is missing from every other counter would
-# only make the two sets disagree.
+# (GOAL_REACHED); together they say which set of per-mode counters the
+# round belongs to (2026-08-03, extended from the round count to every
+# counter 2026-08-04). They are counted behind the same guard as
+# everything else: a round that placed no piece at all is not a round
+# played, and counting it here while it is missing from every other
+# counter would only make the two sets disagree.
 stats_add_round() {
     local lines="${1}" bonus="${2}" gold="${3}" silver="${4}"
     local rowhammers="${5}" pieces="${6}" time="${7}"
     local mode="${8}" goal="${9}"
-    local entry
+    local entry known=0 m
     if (( lines == 0 && bonus == 0 && gold == 0 && silver == 0 \
         && pieces == 0 )); then
         return 0
@@ -260,33 +305,36 @@ stats_add_round() {
     STATS_ROWHAMMERS=$(( STATS_ROWHAMMERS + rowhammers ))
     STATS_PIECES=$(( STATS_PIECES + pieces ))
     STATS_PLAY_TIME=$(( STATS_PLAY_TIME + time ))
-    # An unknown mode name (only reachable from a future mode whose
-    # branch is missing here) is counted nowhere rather than lumped in
-    # with Marathon, so the per-mode screen shows a gap instead of a
-    # wrong attribution.
-    case "${mode}" in
-        marathon)
-            STATS_ROUNDS_MARATHON=$(( STATS_ROUNDS_MARATHON + 1 ))
-            ;;
-        ultra)
-            STATS_ROUNDS_ULTRA=$(( STATS_ROUNDS_ULTRA + 1 ))
-            if [ "${goal}" -eq 1 ]; then
-                STATS_ROUNDS_ULTRA_GOAL=$(( STATS_ROUNDS_ULTRA_GOAL + 1 ))
-            fi
-            ;;
-        sprint)
-            STATS_ROUNDS_SPRINT=$(( STATS_ROUNDS_SPRINT + 1 ))
-            if [ "${goal}" -eq 1 ]; then
-                STATS_ROUNDS_SPRINT_GOAL=$(( STATS_ROUNDS_SPRINT_GOAL + 1 ))
-            fi
-            ;;
-        timeattack)
-            STATS_ROUNDS_TIMEATTACK=$(( STATS_ROUNDS_TIMEATTACK + 1 ))
-            if [ "${goal}" -eq 1 ]; then
-                STATS_ROUNDS_TIMEATTACK_GOAL=$(( STATS_ROUNDS_TIMEATTACK_GOAL + 1 ))
-            fi
-            ;;
-    esac
+    # The same round once more into its mode's counters. An unknown mode
+    # name (only reachable from a future mode that is missing from
+    # STATS_MODES) is counted nowhere here rather than lumped in with
+    # Marathon, so the per-mode screens show a gap instead of a wrong
+    # attribution - the all-time counters above have it either way,
+    # which is why they are kept as counters of their own instead of
+    # being summed from these.
+    for m in "${STATS_MODES[@]}"; do
+        if [ "${m}" = "${mode}" ]; then
+            known=1
+            break
+        fi
+    done
+    if [ "${known}" -eq 1 ]; then
+        STATS_MODE["${mode}_rounds"]=$(( STATS_MODE["${mode}_rounds"] + 1 ))
+        STATS_MODE["${mode}_lines"]=$(( STATS_MODE["${mode}_lines"] + lines ))
+        STATS_MODE["${mode}_bonus_rows"]=$(( STATS_MODE["${mode}_bonus_rows"] + bonus ))
+        STATS_MODE["${mode}_gold_squares"]=$(( STATS_MODE["${mode}_gold_squares"] + gold ))
+        STATS_MODE["${mode}_silver_squares"]=$(( STATS_MODE["${mode}_silver_squares"] + silver ))
+        STATS_MODE["${mode}_rowhammers"]=$(( STATS_MODE["${mode}_rowhammers"] + rowhammers ))
+        STATS_MODE["${mode}_pieces"]=$(( STATS_MODE["${mode}_pieces"] + pieces ))
+        STATS_MODE["${mode}_play_time"]=$(( STATS_MODE["${mode}_play_time"] + time ))
+        # Marathon never reaches a goal (it has none), and record_round
+        # leaves GOAL_REACHED at 0 there, so this needs no mode check.
+        if [ "${goal}" -eq 1 ]; then
+            STATS_MODE["${mode}_goal"]=$(( STATS_MODE["${mode}_goal"] + 1 ))
+        fi
+    else
+        debug_event "stats: unknown mode '${mode}', round counted in the all-time counters only"
+    fi
     entry="${lines}|${bonus}|${gold}|${silver}|${rowhammers}|${pieces}|${time}|$(date +%Y-%m-%d)"
     # Prepend the round; slicing an empty array errors under set -u on
     # bash < 4.4, hence the guard.
@@ -302,9 +350,11 @@ stats_add_round() {
 }
 
 # stats_screen
-# Show the all-time statistics as a menu-style info screen and wait for
-# any key. Labels are German like the menus (ASCII, no umlauts per the
-# conventions). The weighted total (lines + bonus rows) is shown as a
+# Show the all-time statistics - the counters over every round ever
+# played, in every mode - as a menu-style info screen and wait for a
+# key. One mode's own counters are stats_mode_screen's job; both are
+# reached through menu_stats (lib/menu.sh). The labels come from the
+# translation table (lib/i18n.sh). The weighted total (lines + bonus rows) is shown as a
 # summary line because it is the number that builds the wonders, and the
 # placement rate (pieces per minute over all rounds ever played) as the
 # summary of pieces and play time. The results of the last
@@ -321,41 +371,41 @@ stats_add_round() {
 stats_screen() {
     local -a body=()
     local line entry r_lines r_bonus r_gold r_silver r_hammers r_pieces
-    local r_time r_date secs plain
-    printf -v line '%-26s %10d' "Abgebaute Reihen:" "${STATS_LINES}"
+    local r_time r_date secs plain mode total
+    printf -v line '%-26s %10d' "${I18N[stats_lines]}" "${STATS_LINES}"
     body+=("${line}")
-    printf -v line '%-26s %10d' "Bonusreihen:" "${STATS_BONUS_ROWS}"
+    printf -v line '%-26s %10d' "${I18N[stats_bonus]}" "${STATS_BONUS_ROWS}"
     body+=("${line}")
-    printf -v line '%-26s %s%10d%s' "Reihen gesamt (gewertet):" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_total]}" \
         "${TXT_ACCENT_SGR}" "$(( STATS_LINES + STATS_BONUS_ROWS ))" \
         "${TXT_RESET_SGR}"
     body+=("${line}")
     body+=("")
-    printf -v line '%-26s %s%10d%s' "Goldbloecke:" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_gold]}" \
         "${TXT_GOLD_SGR}" "${STATS_GOLD}" "${TXT_RESET_SGR}"
     body+=("${line}")
-    printf -v line '%-26s %s%10d%s' "Silberbloecke:" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_silver]}" \
         "${TXT_SILVER_SGR}" "${STATS_SILVER}" "${TXT_RESET_SGR}"
     body+=("${line}")
     # The namesake move: four rows cleared in one go.
-    printf -v line '%-26s %s%10d%s' "Rowhammer (4 Reihen):" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_hammer]}" \
         "${TXT_WARN_SGR}" "${STATS_ROWHAMMERS}" "${TXT_RESET_SGR}"
     body+=("${line}")
     body+=("")
-    printf -v line '%-26s %10d' "Abgelegte Steine:" "${STATS_PIECES}"
+    printf -v line '%-26s %10d' "${I18N[stats_pieces]}" "${STATS_PIECES}"
     body+=("${line}")
     # Total play time as H:MM:SS - fmt_duration's MM:SS is meant for a
     # single round and would grow to four-digit minutes here.
     secs="${STATS_PLAY_TIME}"
-    printf -v line '%-26s %10s' "Spielzeit gesamt:" \
+    printf -v line '%-26s %10s' "${I18N[stats_playtime]}" \
         "$(printf '%d:%02d:%02d' "$(( secs / 3600 ))" \
             "$(( secs % 3600 / 60 ))" "$(( secs % 60 ))")"
     body+=("${line}")
     fmt_ppm "${STATS_PIECES}" "${STATS_PLAY_TIME}"
-    printf -v line '%-26s %10s' "Steine/Minute (PCS/min):" "${FMT_PPM}"
+    printf -v line '%-26s %10s' "${I18N[stats_ppm]}" "${FMT_PPM}"
     body+=("${line}")
     debug_event "stats screen shown (counters)"
-    menu_message "Statistik (1/3)" "${body[@]}"
+    menu_message "${I18N[stats_title]} (1/3)" "${body[@]}"
 
     # Second screen: the recent rounds. The first line per round carries
     # the date and the row counters, the second the squares, the
@@ -363,15 +413,15 @@ stats_screen() {
     # score (lines + bonus), derived instead of stored so the file can
     # never contradict itself.
     body=()
-    body+=("Letzte Spiele (neueste zuerst):")
+    body+=("${I18N[stats_recent_head]}")
     body+=("")
     if [ "${#STATS_RECENT[@]}" -eq 0 ]; then
-        body+=("Noch keine Spiele.")
+        body+=("${I18N[stats_recent_none]}")
     else
         for entry in "${STATS_RECENT[@]}"; do
             IFS='|' read -r r_lines r_bonus r_gold r_silver r_hammers \
                 r_pieces r_time r_date <<< "${entry}"
-            printf -v plain '%10s Rows %5d Reihen %4d Bonus %4d' \
+            printf -v plain "%10s ${I18N[stats_recent_rows]} %5d ${I18N[stats_recent_lines]} %4d ${I18N[stats_recent_bonus]} %4d" \
                 "${r_date}" "$(( r_lines + r_bonus ))" "${r_lines}" \
                 "${r_bonus}"
             # Same safety fallback as highscore_screen: the counters here
@@ -380,7 +430,7 @@ stats_screen() {
             # oversized line skips coloring rather than risking a cut
             # escape sequence.
             if [ "${#plain}" -le 46 ]; then
-                printf -v line '%10s %sRows %5d%s Reihen %4d Bonus %4d' \
+                printf -v line "%10s %s${I18N[stats_recent_rows]} %5d%s ${I18N[stats_recent_lines]} %4d ${I18N[stats_recent_bonus]} %4d" \
                     "${r_date}" "${TXT_ACCENT_SGR}" \
                     "$(( r_lines + r_bonus ))" "${TXT_RESET_SGR}" \
                     "${r_lines}" "${r_bonus}"
@@ -389,11 +439,11 @@ stats_screen() {
                 body+=("${plain:0:46}")
             fi
             fmt_ppm "${r_pieces}" "${r_time}"
-            printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+            printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
                 "${r_gold}" "${r_silver}" "${r_hammers}" "${r_pieces}" \
                 "${FMT_PPM}"
             if [ "${#plain}" -le 46 ]; then
-                printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+                printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
                     "${TXT_GOLD_SGR}" "${r_gold}" "${TXT_RESET_SGR}" \
                     "${TXT_SILVER_SGR}" "${r_silver}" "${TXT_RESET_SGR}" \
                     "${TXT_WARN_SGR}" "${r_hammers}" "${TXT_RESET_SGR}" \
@@ -406,7 +456,7 @@ stats_screen() {
         done
     fi
     debug_event "stats screen shown (${#STATS_RECENT[@]} recent rounds)"
-    menu_message "Statistik (2/3)" "${body[@]}"
+    menu_message "${I18N[stats_title]} (2/3)" "${body[@]}"
 
     # Third screen (2026-08-03): the rounds played per game mode. Its own
     # screen rather than a block on the first one - that one is full at
@@ -415,34 +465,116 @@ stats_screen() {
     # timed modes carry their success count indented below their round
     # count, because it is a share of that number and not a figure of its
     # own; Marathon has none, having no goal to reach.
+    # Since 0.10.0 this is also the overview in front of the per-mode
+    # screens (menu_stats in lib/menu.sh): it is the one place that puts
+    # the four modes side by side, which is exactly what a picker wants
+    # to show before it is used.
     body=()
-    body+=("Runden je Spielmodus:")
+    body+=("${I18N[stats_modes_head]}")
     body+=("")
-    printf -v line '%-26s %10d' "Marathon:" "${STATS_ROUNDS_MARATHON}"
+    total=0
+    for mode in "${STATS_MODES[@]}"; do
+        printf -v line '%-26s %10d' "${I18N[mode_${mode}]}:" \
+            "${STATS_MODE[${mode}_rounds]}"
+        body+=("${line}")
+        total=$(( total + STATS_MODE[${mode}_rounds] ))
+        # Marathon is the one mode without a goal, hence without the
+        # indented line below its round count.
+        if [ -n "${I18N[stats_goal_${mode}]:-}" ]; then
+            printf -v line '  %-24s %s%10d%s' \
+                "${I18N[stats_goal_${mode}]}" \
+                "${TXT_ACCENT_SGR}" "${STATS_MODE[${mode}_goal]}" \
+                "${TXT_RESET_SGR}"
+            body+=("${line}")
+        fi
+    done
+    body+=("")
+    printf -v line '%-26s %10d' "${I18N[stats_rounds_total]}" "${total}"
     body+=("${line}")
-    printf -v line '%-26s %10d' "Ultra:" "${STATS_ROUNDS_ULTRA}"
+    debug_event "stats screen shown (rounds per mode)"
+    menu_message "${I18N[stats_title]} (3/3)" "${body[@]}"
+    return 0
+}
+
+# stats_mode_screen MODE
+# Show one game mode's own counters on a single info screen, in the same
+# order and with the same labels as the all-time screen (stats_screen
+# above), so the two read as the same table for a smaller set of rounds.
+# Added 0.10.0 (user request): the all-time counters do not say in which
+# mode anything was achieved, and the modes are played for different
+# things - a Marathon round and a three-minute Sprint only compare once
+# each mode carries its own totals.
+# Two figures are derived rather than stored, for the same reason the
+# all-time screen derives its weighted total and its placement rate: the
+# rows per round, which is what makes two modes comparable at all, and
+# for the timed modes the share of attempts that reached the goal. Both
+# read "-" while the mode has no round to divide by.
+stats_mode_screen() {
+    local mode="${1}"
+    local -a body=()
+    local line secs rounds rows
+    rounds="${STATS_MODE[${mode}_rounds]}"
+    rows=$(( STATS_MODE[${mode}_lines] + STATS_MODE[${mode}_bonus_rows] ))
+    printf -v line '%-26s %10d' "${I18N[stats_rounds]}" "${rounds}"
     body+=("${line}")
-    printf -v line '  %-24s %s%10d%s' "davon Ziel erreicht:" \
-        "${TXT_ACCENT_SGR}" "${STATS_ROUNDS_ULTRA_GOAL}" "${TXT_RESET_SGR}"
+    if [ -n "${I18N[stats_goal_${mode}]:-}" ]; then
+        printf -v line '  %-24s %s%10d%s' \
+            "${I18N[stats_goal_${mode}]}" "${TXT_ACCENT_SGR}" \
+            "${STATS_MODE[${mode}_goal]}" "${TXT_RESET_SGR}"
+        body+=("${line}")
+        if [ "${rounds}" -gt 0 ]; then
+            printf -v line '  %-24s %9d%%' "${I18N[stats_goal_rate]}" \
+                "$(( STATS_MODE[${mode}_goal] * 100 / rounds ))"
+        else
+            printf -v line '  %-24s %10s' "${I18N[stats_goal_rate]}" "-"
+        fi
+        body+=("${line}")
+    fi
+    body+=("")
+    printf -v line '%-26s %10d' "${I18N[stats_lines]}" \
+        "${STATS_MODE[${mode}_lines]}"
     body+=("${line}")
-    printf -v line '%-26s %10d' "Sprint:" "${STATS_ROUNDS_SPRINT}"
+    printf -v line '%-26s %10d' "${I18N[stats_bonus]}" \
+        "${STATS_MODE[${mode}_bonus_rows]}"
     body+=("${line}")
-    printf -v line '  %-24s %s%10d%s' "davon volle Zeit:" \
-        "${TXT_ACCENT_SGR}" "${STATS_ROUNDS_SPRINT_GOAL}" "${TXT_RESET_SGR}"
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_total]}" \
+        "${TXT_ACCENT_SGR}" "${rows}" "${TXT_RESET_SGR}"
     body+=("${line}")
-    printf -v line '%-26s %10d' "Time Attack:" \
-        "${STATS_ROUNDS_TIMEATTACK}"
+    if [ "${rounds}" -gt 0 ]; then
+        printf -v line '%-26s %10d' "${I18N[stats_rows_per_round]}" \
+            "$(( rows / rounds ))"
+    else
+        printf -v line '%-26s %10s' "${I18N[stats_rows_per_round]}" "-"
+    fi
     body+=("${line}")
-    printf -v line '  %-24s %s%10d%s' "davon Zeit abgelaufen:" \
-        "${TXT_ACCENT_SGR}" "${STATS_ROUNDS_TIMEATTACK_GOAL}" \
+    body+=("")
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_gold]}" \
+        "${TXT_GOLD_SGR}" "${STATS_MODE[${mode}_gold_squares]}" \
+        "${TXT_RESET_SGR}"
+    body+=("${line}")
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_silver]}" \
+        "${TXT_SILVER_SGR}" "${STATS_MODE[${mode}_silver_squares]}" \
+        "${TXT_RESET_SGR}"
+    body+=("${line}")
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_hammer]}" \
+        "${TXT_WARN_SGR}" "${STATS_MODE[${mode}_rowhammers]}" \
         "${TXT_RESET_SGR}"
     body+=("${line}")
     body+=("")
-    printf -v line '%-26s %10d' "Runden gesamt:" \
-        "$(( STATS_ROUNDS_MARATHON + STATS_ROUNDS_ULTRA \
-            + STATS_ROUNDS_SPRINT + STATS_ROUNDS_TIMEATTACK ))"
+    printf -v line '%-26s %10d' "${I18N[stats_pieces]}" \
+        "${STATS_MODE[${mode}_pieces]}"
     body+=("${line}")
-    debug_event "stats screen shown (rounds per mode)"
-    menu_message "Statistik (3/3)" "${body[@]}"
+    # Play time as H:MM:SS like the all-time screen: this is a sum over
+    # rounds too, so fmt_duration's MM:SS would grow four-digit minutes.
+    secs="${STATS_MODE[${mode}_play_time]}"
+    printf -v line '%-26s %10s' "${I18N[stats_playtime]}" \
+        "$(printf '%d:%02d:%02d' "$(( secs / 3600 ))" \
+            "$(( secs % 3600 / 60 ))" "$(( secs % 60 ))")"
+    body+=("${line}")
+    fmt_ppm "${STATS_MODE[${mode}_pieces]}" "${secs}"
+    printf -v line '%-26s %10s' "${I18N[stats_ppm]}" "${FMT_PPM}"
+    body+=("${line}")
+    debug_event "stats screen shown (mode ${mode})"
+    menu_message "${I18N[stats_title]} - ${I18N[mode_${mode}]}" "${body[@]}"
     return 0
 }

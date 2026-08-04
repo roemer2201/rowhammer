@@ -802,6 +802,10 @@ rowhammer/
     config.sh          # Laden/Speichern der Nutzer-Konfiguration
     debug.sh           # Debug-Modus: Session-Trace in Log-Dateien
     demo.sh            # Demo-Aufzeichnung und -Wiedergabe (Format, Ablage)
+    i18n.sh            # Uebersetzungsschicht: Sprachwahl, Texttabelle
+    lang/
+      de.sh            # deutsche Texte (Referenzsprache)
+      en.sh            # englische Texte
     highscore.sh       # Persistente Highscore-Liste (Top 10)
     wonders.sh         # Weltwunder-Logik, Baustufen, Fortschritt
     save.sh            # Laden/Speichern des Spielstands
@@ -832,11 +836,11 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.46.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.48.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
-`stats.sh` und `demo.sh` sowie
+`stats.sh`, `demo.sh` und `i18n.sh` mit `lib/lang/` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
 startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
 Highscores / Weltwunder / Statistik / Demos / Einstellungen /
@@ -849,9 +853,13 @@ Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
 endlose Modus hiess bis
 0.34.1 "Normales Spiel"), und seit 0.38.0 waehlt der Menuepunkt
 "Highscores" ebenso den Modus der anzuzeigenden Bestenliste
-(`menu_highscores`, seit 0.42.0 mit vier Listen, siehe 4.5); die
+(`menu_highscores`, seit 0.42.0 mit vier Listen, siehe 4.5). Seit
+0.47.0 waehlt auch der Menuepunkt "Statistik" zuerst die Sicht
+(`menu_stats`: Gesamt oder einer der vier Modi, siehe 4.5); die
 Menue-Beschriftung
-ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
+ist seit 0.48.0 nicht mehr fest, sondern uebersetzt (siehe 4.11):
+Deutsch und Englisch stehen zur Wahl, Code, Kommentare und
+Diagnosemeldungen nach STDERR bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
 Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
 "Rows" ist die gewichtete Reihenwertung (1/5/10), die den
@@ -862,6 +870,9 @@ Bestenliste kommt, an ihrem Ende nach dem Namen fuer den Eintrag
 (vormarkierte Vorgabe aus den Einstellungen, siehe 3.7).
 CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
+`--lang de|en|auto` (`ROWHAMMER_LANG`, Standard `auto`, seit 0.48.0;
+auch im Einstellungsmenue waehlbar und in der Config gespeichert,
+siehe 4.11),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
 `--no-color` (`ROWHAMMER_NO_COLOR`; seit 0.28.0 wird zusaetzlich die
 De-facto-Standardvariable `NO_COLOR` [https://no-color.org/] beachtet:
@@ -1070,13 +1081,14 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${HOME}/rowhammer`).
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
-  (Spielername, Farbschema seit 0.21.0, Tastenbelegung,
-  Demo-Aufzeichnung seit 0.46.0) schreibt
+  (Spielername, Sprache seit 0.48.0, Farbschema seit 0.21.0,
+  Tastenbelegung, Demo-Aufzeichnung seit 0.46.0) schreibt
   `${DATA_DIR}/rowhammer.conf`;
   Werte werden validiert und single-quoted geschrieben, da die Datei
   gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
   und beim Laden gegen die bekannten Schemata validiert (unbekannt =
-  Abbruch mit Meldung). Der Spielername ist die **Vorgabe** der
+  Abbruch mit Meldung); die Sprache steht als `LANGUAGE='...'` daneben
+  und wird genauso geprueft (siehe 4.11). Der Spielername ist die **Vorgabe** der
   Namensabfrage am Rundenende (siehe 3.7); geaendert wird er nur hier im
   Einstellungsmenue, seit 0.45.0 mit demselben Zeileneditor
   (`menu_text_input`) und dem bisherigen Namen vormarkiert.
@@ -1299,27 +1311,51 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `record_round`); seit 0.27.0 auch eine Runde ganz ohne Reihenabbau,
   weil sie Teile und Spielzeit beisteuert (frueher fiel sie durch die
   Null-Pruefung).
-  **Runden je Spielmodus (seit 0.42.0, mit dem Time-Attack-Modus):**
-  `rounds_marathon`, `rounds_ultra`, `rounds_sprint` und
-  `rounds_timeattack` zaehlen die verbuchten Runden je Modus, dazu
-  `rounds_ultra_goal`, `rounds_sprint_goal` und
-  `rounds_timeattack_goal` die davon, die im regulaeren Ende des Modus
-  ausgingen statt im Game Over (Ziel erreicht / volle Zeit gespielt /
-  Uhr abgelaufen). `record_round` reicht dafuer `GAME_MODE` und
+  **Statistik je Spielmodus (Runden seit 0.42.0, alle Zaehler seit
+  0.47.0 auf Nutzerwunsch):** jeder Zaehler oben existiert ein zweites
+  Mal je Modus, als Zeile `mode_<modus>_<feld>=N` mit `<modus>` aus
+  `marathon|ultra|sprint|timeattack` und `<feld>` aus
+  `rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|`
+  `pieces|play_time` (`STATS_MODE_RE`, im Code das assoziative Array
+  `STATS_MODE` mit dem Schluessel `<modus>_<feld>`). `rounds` zaehlt die
+  verbuchten Runden des Modus, `goal` die davon, die im regulaeren Ende
+  des Modus ausgingen statt im Game Over (Ziel erreicht / volle Zeit
+  gespielt / Uhr abgelaufen) - Marathon hat kein Ziel und deshalb kein
+  `goal`-Feld in der Datei. `record_round` reicht dafuer `GAME_MODE` und
   `GOAL_REACHED` an `stats_add_round` durch - die einzigen beiden
   Rundenangaben, die sich aus den uebrigen Zaehlern nicht
   rekonstruieren lassen, und die Erfolgsquote der Zeitmodi steht
   nirgends sonst (ein gescheiterter Lauf fehlt in seiner Bestenliste).
+  Ein flacher Schluessel je Feld statt einer Zeile je Modus mit
+  gepackten Feldern: ein fehlender Zaehler faellt so einzeln auf 0
+  zurueck, statt alles zu entwerten, was dieselbe Zeile traegt. Die
+  Schluessel loesen die `rounds_<modus>[_goal]`-Schluessel aus 0.42.0 ab
+  (Arbeitsregel "keine Abwaertskompatibilitaet": eine bestehende Datei
+  verliert ihre Runden je Modus und behaelt alles andere).
   Gezaehlt wird hinter derselben Null-Pruefung wie alles andere: eine
   Runde ohne einen einzigen abgelegten Stein ist keine gespielte Runde,
   und sie hier zu zaehlen, waehrend sie in jedem anderen Zaehler fehlt,
   wuerde die beiden nur widerspruechlich machen. Ein unbekannter
-  Modusname (nur aus einem kuenftigen Modus ohne `case`-Zweig
-  erreichbar) wird nirgends gezaehlt statt Marathon zugeschlagen -
-  lieber eine Luecke als eine falsche Zuordnung.
+  Modusname (nur aus einem kuenftigen Modus ohne Eintrag in
+  `STATS_MODES` erreichbar) wird je Modus nirgends gezaehlt statt
+  Marathon zugeschlagen - lieber eine Luecke als eine falsche
+  Zuordnung.
+  **Die Gesamtzaehler bleiben eigene Zaehler** und werden nicht aus den
+  Modus-Zaehlern summiert (Nutzervorgabe: die Gesamtstatistik soll
+  erhalten bleiben). Sichtbar wird der Unterschied nur im eben genannten
+  Fall - die Runde eines unbekannten Modus steht in den Gesamtzahlen und
+  sonst nirgends -, und genau deshalb bleibt die Gesamtsicht die
+  vollstaendige.
   Anzeige ueber den Hauptmenuepunkt
-  "Statistik", seit 0.27.0 auf **zwei** und seit 0.42.0 auf **drei
-  Bildschirmen**: erst die
+  "Statistik", der seit 0.47.0 wie "Highscores" zuerst nach der Sicht
+  fragt (`menu_stats` in `lib/menu.sh`: Gesamt / Marathon / Ultra /
+  Sprint / Time Attack / Zurueck, wortgleich mit dem Einzelspieler- und
+  dem Highscore-Menue, und in einer Schleife, sodass ein Vergleich nicht
+  durchs Hauptmenue muss). Vier weitere Bildschirme an die vorhandenen
+  anzuhaengen war die Alternative und haette bedeutet, sich durch sieben
+  Bildschirme zu druecken, um den letzten zu sehen.
+  **Gesamt** (`stats_screen`) steht seit 0.27.0 auf **zwei** und seit
+  0.42.0 auf **drei Bildschirmen**: erst die
   Gesamtzaehler (inklusive der gewichteten Gesamtsumme Lines + Bonus,
   des Rowhammer-Zaehlers, der abgelegten Teile, der Gesamtspielzeit als
   H:MM:SS und der daraus berechneten Steine/Minute), dann die letzten
@@ -1334,7 +1370,21 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   zentrierten Bildschirme aus 0.28.0 brauchen keine Zeile mehr fuers
   Freiraeumen der obersten Bildschirmzeile) - deshalb der Schnitt statt
   gestrichener Spalten. Jede Zeile bleibt in den 46 Zeichen, die der
-  Zwei-Zeichen-Einzug vom 48-Spalten-Minimum uebriglaesst.
+  Zwei-Zeichen-Einzug vom 48-Spalten-Minimum uebriglaesst. Der dritte
+  Bildschirm ist seit 0.47.0 zugleich der Ueberblick vor der Auswahl -
+  der eine Bildschirm, der die vier Modi nebeneinander stellt.
+  **Ein Modus** (`stats_mode_screen`, seit 0.47.0) steht dagegen auf
+  **einem** Bildschirm: dieselben Zaehler in derselben Reihenfolge, mit
+  denselben Beschriftungen und derselben Faerbung wie der
+  Gesamtbildschirm (er soll sich lesen wie dieser, nur fuer eine
+  kleinere Menge Runden), dazu die Runden des Modus und - bei den
+  Zeitmodi - die Zahl der erfolgreichen Laeufe. Zwei Zahlen kommen
+  hinzu, beide **abgeleitet statt gespeichert** (wie schon die
+  gewichtete Gesamtsumme und die PCS/min): **Rows je Runde**, die Zahl,
+  die zwei Modi ueberhaupt vergleichbar macht, und bei den Zeitmodi die
+  **Erfolgsquote** in Prozent; ohne eine einzige Runde des Modus steht
+  in beiden ein "-" statt einer Division durch 0. Mit 16 Zeilen im
+  laengsten Fall (Zeitmodus) bleibt der Bildschirm in `MENU_BODY_MAX`.
   **Farbige Darstellung (seit 0.30.0):** wie die Highscore-Liste nutzt
   auch dieser Bildschirm die `TXT_*`-SGR-Farben aus `lib/render.sh`
   (siehe dort): die gewichtete Gesamtsumme in der Akzentfarbe, Gold-
@@ -1526,14 +1576,14 @@ Ablauf und Einordnung:
   Vorgabe - deshalb steht das `N` vorn und gross, und leere Antwort, EOF
   oder alles ausser `y`/`yes` bricht ab. Nach dem Verschieben meldet der
   Reset `Reset erfolgreich`, darunter die Bilanz (gesicherte und nicht
-  vorhandene Dateien). **Sprache (seit 0.36.1, Nutzerentscheidung):**
-  der Reset-Dialog ist als Nutzerdialog wie die Menues **deutsch in
-  ASCII** (also "zuruecksetzen"/"moechtest" in der
-  Umlaut-Umschreibung) - eine bewusste
-  Ausnahme von der Konventionsregel "Ausgaben in Englisch", die fuer
-  `--help` und die Fehlermeldungen nach STDERR unveraendert gilt. Das
-  ist derselbe Schnitt wie im Rest des Spiels (Menues deutsch, HUD und
-  `--help` englisch, siehe offener Punkt "UI-Sprache" in Abschnitt 8).
+  vorhandene Dateien). **Sprache (seit 0.36.1 deutsch, seit 0.48.0
+  uebersetzt):** der Reset-Dialog ist ein Nutzerdialog wie die Menues
+  und laeuft deshalb in der gewaehlten Sprache (Texte `reset_*` in der
+  Tabelle, siehe 4.11) - `--help` ebenso. Nur die Fehlermeldungen nach
+  STDERR bleiben englisch (Konvention, Abschnitt 6). Die annehmenden
+  Antworten sind in jeder Sprache `y`/`yes`: die Abfrage schreibt sie
+  als "[N/y]" aus, und ein Skript, das mit "y" antwortet, darf nicht
+  von der Sprache der Sitzung abhaengen.
   Ohne TTY entfaellt die Abfrage, weil ein wartendes `read` den Aufrufer
   haengen liesse. Die Abfrage ist bewusst ein einfaches `read` statt
   `menu_confirm`: letzteres braucht Alternate-Screen, Rohmodus und
@@ -1707,7 +1757,7 @@ geloescht. Der Dateiname beginnt mit dem Datum, sodass das Glob
 chronologisch sortiert ist und weder Liste noch Pruning `stat` braucht.
 Die RAM-Disk-Datei einer nie beendeten Runde raeumt der EXIT-`trap` weg.
 
-**Voller Datentraeger (seit 0.46.1).** Der freie Platz wird **bewusst
+**Voller Datentraeger (seit 0.48.1).** Der freie Platz wird **bewusst
 nicht vorab gemessen** (kein `df`, kein `stat -f`): eine solche Pruefung
 waere nur eine Momentaufnahme eines Verzeichnisses, das sich die Aufnahme
 mit jedem anderen Programm der Maschine teilt, waehrend der Schreibvorgang
@@ -1749,6 +1799,100 @@ Eigenschaft des Terminals. Setzbar per `--demo-record on|off`,
 `ROWHAMMER_DEMO_RECORD` und im Einstellungsmenue, das den Wert sofort
 speichert. Ein Umschalten wirkt ab der naechsten Runde; eine bereits
 laufende Aufnahme wird noch zu Ende gefuehrt.
+
+### 4.11 Mehrsprachige Oberflaeche (seit 0.48.0)
+
+Jeder Text, den ein Spieler zu sehen bekommt, kommt aus einer
+**Texttabelle** statt aus dem Code: Menues und Sicherheitsabfragen, die
+Anleitung, die HUD-Beschriftungen, der Kasten am Rundenende, die
+Highscore- und Statistik-Tabellen, der Weltwunder-Bildschirm, die
+Demo-Liste, der Reset-Dialog (4.8) und die `--help`-Ausgabe.
+Umgesetzt in `lib/i18n.sh` plus einer Datei je Sprache unter
+`lib/lang/`; mitgeliefert sind **Deutsch** (`de`, die Referenzsprache -
+in ihr waren die Menues geschrieben) und **Englisch** (`en`).
+
+- **Die Tabelle ist ein assoziatives Array** (`I18N`), gelesen als
+  `${I18N[key]}`. Bewusst keine Lookup-Funktion `t KEY`: die
+  HUD-Beschriftungen werden je Frame gelesen (`render_pane_left`), und
+  eine Array-Expansion kostet dort weniger als ein Funktionsaufruf je
+  Beschriftung.
+- **Formatstrings gehoeren in die Tabelle.** Ein Eintrag mit `%s`/`%d`
+  wird vom Aufrufer mit `printf -v` gefuellt, sodass die Wortstellung
+  Sache der Uebersetzung ist und nicht des Codes. Die Argumentreihenfolge
+  legt der Code fest; sie ist in den Sprachdateien dokumentiert.
+- **Mehrzeilige Bloecke** (`i18n_lines KEY` fuellt `I18N_LINES`): die
+  acht Anleitungsseiten und die laengeren Meldungen stehen als ein
+  Block je Absatz in der Sprachdatei, statt als nummerierte
+  Zeilenschluessel. Seiten, die Text mit generierten Zeilen mischen
+  (Tastenbelegung, Wunder-Kosten, Modus-Ziele), setzen die Bloecke
+  davor und dahinter.
+- **`--help` ist eine Funktion je Sprachdatei** (`i18n_usage_text`, ein
+  gequotetes Heredoc), kein Tabelleneintrag: der Text ist lang, enthaelt
+  Anfuehrungs- und Prozentzeichen und wird genau einmal ausgegeben.
+- **Eine Sprache dazuzunehmen ist eine Datei plus ein Eintrag** in
+  `I18N_LANGS` (`lib/i18n.sh`) und ihr Name in `I18N_LANG_LABEL`.
+  Sonst kennt kein Code einen Sprachcode. Geladen wird immer nur die
+  aktive Datei, und sie weist das **ganze** Array zu - ein Wechsel zur
+  Laufzeit kann damit keinen Text der vorherigen Sprache stehen lassen.
+- **Keine Anzeige-Namen mehr in den Modul-Tabellen.** `KEY_LABELS`,
+  `COLOR_THEME_LABEL`, `STATS_MODE_LABEL`/`STATS_MODE_GOAL_LABEL` und
+  `WONDER_NAMES_DE`/`WONDER_NAMES_HUD` sind entfallen: sie wurden beim
+  Sourcen der Module gefuellt, also bevor die Sprache feststeht. Ihre
+  Eintraege haben jetzt einen aus dem Bezeichner gebauten Schluessel
+  (`keylabel_KEY_HOLD`, `theme_mono`, `mode_ultra`, `stats_goal_sprint`,
+  `wonder_stonehenge` aus dem Art-Dateinamen). Der Debug-Log nennt ein
+  Wunder seither bei diesem Dateinamen - ein Log muss in jeder Sprache
+  gleich zu lesen sein.
+
+**Sprachwahl.** `LANGUAGE` ist ein **Config-Wert** (Praezedenz Standard
+< Config < `ROWHAMMER_LANG` < `--lang`), anders als Farb- und
+Render-Modus: welche Sprache jemand liest, ist eine Eigenschaft der
+Person und keine des Terminals. Erlaubt sind die Codes aus `I18N_LANGS`
+und `auto`.
+
+- **Standard ist `auto`**: die Sprache kommt aus `LC_ALL`, `LC_MESSAGES`
+  bzw. `LANG` (nur der Sprachteil, `de_DE.UTF-8` -> `de`). Ein Spiel,
+  das zwei Sprachen mitbringt und die Locale ignoriert, unterstuetzt
+  keine von beiden richtig.
+- **Rueckfall ist Deutsch** (`I18N_FALLBACK_LANG`), wenn die Locale
+  keine bekannte Sprache nennt (`C`, `POSIX`, nicht gesetzt, unbekannt):
+  eine Sitzung ohne brauchbare Locale sieht damit genauso aus wie vor
+  0.48.0.
+- **Gespeichert wird die Auswahl, `auto` eingeschlossen.** Wer "folge
+  der Locale" gewaehlt hat, will das weiter - nicht die Sprache, zu der
+  es beim Speichern gerade fuehrte. Der Menuepunkt nennt deshalb bei
+  `auto` in Klammern die Sprache, zu der es aktuell aufloest
+  (`i18n_lang_label`).
+- **Aufgeloest wird frueh**, direkt nach dem Sourcen der Module und vor
+  allem, was Text ausgibt: dafuer ist `config_load` vor den
+  Reset-Block gewandert (die Sprachwahl steht in der Config), und
+  `-h/--help` setzt beim Parsen nur noch ein Flag, statt sofort zu
+  drucken - in welcher Sprache zu antworten ist, steht erst fest, wenn
+  Config, Umgebung und der Rest der Kommandozeile gelesen sind. Aus
+  demselben Grund wirft eine **falsche Option** nicht mehr den ganzen
+  Hilfetext nach STDERR, sondern verweist auf `--help`.
+- **Umschalten wirkt sofort** (`menu_language` in `lib/menu.sh`): die
+  Tabelle wird neu geladen, gespeichert und `RENDER_FULL=1` gesetzt -
+  die HUD-Beschriftungen stehen im Frame-Cache des Diff-Renderers
+  (4.3), und genau sie haben sich geaendert.
+
+**Was nicht uebersetzt wird:** Diagnosemeldungen nach STDERR (`die`,
+Argumentfehler) bleiben englisch, wie es die Konventionen in Abschnitt 6
+verlangen. Sie treten teils auf, bevor die Sprache aufgeloest ist - und
+wenn die Sprachwahl selbst das Defekte ist, waere eine uebersetzte
+Meldung der falsche Ort, das zu zeigen. Ebenso englisch bleiben die
+Bezeichner, die zugleich Eingabewerte sind (Modus-, Farbschema- und
+Reset-Ziel-Namen auf der Kommandozeile und in der Config) sowie der
+Titel des Hauptmenues - das ist der Name des Spiels.
+
+**Breitengrenzen.** Eine Uebersetzung darf das feste Layout (3.4) nicht
+sprengen: Menue- und Info-Zeilen hoechstens 46 Zeichen, Zeilen des
+Rundenende-Kastens 18, HUD-Beschriftungen 6. Die Grenzen stehen im Kopf
+der Sprachdateien; beim Vermessen fielen sechs deutsche Texte auf, die
+schon vorher zu lang waren und auf einem 48-Spalten-Terminal
+abgeschnitten wurden (Mehrspieler-Platzhalter, die drei Meldungen des
+Rebind-Dialogs, die Abbrechen-Fusszeile einer Sicherheitsabfrage und je
+eine Zeile der ersten und dritten Anleitungsseite) - sie sind umbrochen.
 
 ## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
 
@@ -2471,6 +2615,11 @@ Fuer **jedes** Bash-Skript in diesem Repo gelten verbindlich die
 - Header-Kommentarblock mit Beschreibung, Programmablaufplan (bei laengeren
   Skripten), Nutzung und SemVer-Version mit Datum.
 - Kommentare, Strings und Ausgaben in **Englisch**, **nur ASCII**.
+  Ausnahme seit 0.48.0: die Texte, die ein Spieler zu sehen bekommt,
+  stehen nicht mehr als Strings im Code, sondern in den Sprachdateien
+  unter `lib/lang/` (siehe 4.11) - dort gilt die Sprache der Datei, die
+  ASCII-Regel unveraendert weiter (deutsche Umlaute als ae/oe/ue/ss).
+  Diagnosemeldungen nach STDERR bleiben ausnahmslos englisch.
 - `-h`/`--help` mit allen Parametern; jeder Parameter zusaetzlich per
   Umgebungsvariable setzbar (Praefix `ROWHAMMER_`, Praezedenz
   Standard < Config < Env < CLI).
@@ -2535,10 +2684,10 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.46.0
-  (Demo-Aufzeichnung und Demo-Player); die
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.48.0
+  (mehrsprachige Oberflaeche); die
   Uebersichtstabelle in HISTORY.md
-  listet jede Version mit ihrem Thema. Offen sind die zwei Punkte unten
+  listet jede Version mit ihrem Thema. Offen ist der Punkt unten
 
 ### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
 
@@ -2557,19 +2706,6 @@ Erledigt und nach HISTORY.md verschoben:
 
 ### Phase 4 - Politur (offene Punkte; die erledigten stehen in HISTORY.md)
 
-- [ ] Mehrsprachige Oberflaeche (Multi-Language Support): saemtliche
-      benutzersichtbaren Texte (Hauptmenue, Untermenues, Anleitung,
-      HUD-Labels, Highscore-/Statistik-Spaltenkoepfe, `-h`/`--help`,
-      Fehlermeldungen) hinter eine Uebersetzungsschicht ziehen, damit
-      eine Sprache auswaehlbar wird (`--lang CODE`/`ROWHAMMER_LANG`,
-      Einstellungsmenue, gespeichert in der Config). Greift die in
-      Abschnitt 8 offene UI-Sprachfrage auf (bislang Menues Deutsch,
-      HUD/--help Englisch als feste Konvention) und macht daraus eine
-      Laufzeit-Entscheidung statt einer festen Sprachmischung. Noch
-      offen: welche Sprachen ausser Deutsch/Englisch, Format der
-      Uebersetzungstabellen (reines Bash-Array je Sprache vermutlich am
-      einfachsten), Umgang mit variabler Textlaenge im starren
-      48-Spalten-Layout (siehe 3.4).
 - [ ] Weltwunder-Animation (siehe 5.18, Nutzerwunsch): der
       Wunder-Bildschirm deckt die ASCII-Art bislang nur statisch
       zeilenweise auf. Kurze, von Hand aus asciinema-Voraufnahmen
@@ -2799,9 +2935,12 @@ Multi-Server zuletzt.
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach
   expliziter Nutzerentscheidung wieder aufgreifen.
-- UI-Sprache: Menues sind Deutsch (ASCII), In-Game-HUD und --help
-  Englisch (Konvention). Entscheiden, ob das so bleibt oder das UI
-  einheitlich einsprachig werden soll.
+- UI-Sprache: erledigt mit 0.48.0. Die frueher feste Mischung (Menues
+  Deutsch, HUD und `--help` Englisch) ist einer Uebersetzungsschicht
+  gewichen: die Oberflaeche ist vollstaendig ein- und umschaltbar
+  zweisprachig (Deutsch/Englisch, siehe 4.11), Diagnosemeldungen nach
+  STDERR bleiben englisch. Offen bleibt nur, ob weitere Sprachen
+  dazukommen sollen - technisch ist das eine Datei unter `lib/lang/`.
 
 Offene Punkte zum Mehrspieler (Spezifikation siehe Abschnitt 5; alles
 Uebrige dort ist entschieden):

@@ -75,7 +75,7 @@
 #   incomparable "did not finish" state (see highscore_timeattack_add).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.14.0  (2026-08-03)
+# Version: 0.15.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -461,7 +461,8 @@ HS_PAGE_LINES=$(( HS_PAGE_ENTRIES * 3 ))
 # highscore_screen
 # Show the list as a menu-style info screen (paged via menu_pages) and
 # wait for any key per page. Labels
-# are German like the menus; the Rows column reuses the English HUD
+# come from the translation table like every other text; the Rows column
+# reuses the HUD
 # term. Shown per entry, on two lines: rank, name, rows, the round's
 # play time (MM:SS) and the date on the first, then the gold/silver
 # squares, the rowhammers ("RH", four rows at once), the pieces placed
@@ -487,17 +488,22 @@ HS_PAGE_LINES=$(( HS_PAGE_ENTRIES * 3 ))
 highscore_screen() {
     local -a body=()
     local i line plain rank rank_sgr hs_rows hs_name hs_date hs_gold
-    local hs_silver hs_time hs_hammers hs_pieces
+    local hs_silver hs_time hs_hammers hs_pieces title
+    # Title and mode name are composed rather than stored as one string,
+    # so a mode is named the same way here as in every picker.
+    title="${I18N[hs_title]} - ${I18N[mode_marathon]}"
     if [ "${#HS_ENTRIES[@]}" -eq 0 ]; then
-        body+=("Noch keine Eintraege.")
+        body+=("${I18N[hs_empty]}")
         body+=("")
-        body+=("Spiele eine Runde, um dich einzutragen.")
+        i18n_lines hs_empty_marathon
+        body+=("${I18N_LINES[@]}")
         debug_event "highscore screen shown (0 entries)"
-        menu_message "Highscores - Marathon" "${body[@]}"
+        menu_message "${title}" "${body[@]}"
         return 0
     fi
     printf -v line '%2s %-12s %6s %5s %10s' \
-        "Nr" "Name" "Rows" "Zeit" "Datum"
+        "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
+        "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
     body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HS_ENTRIES[@]}"; do
         # The trailing "_" takes the round hash: the last variable of a
@@ -529,11 +535,11 @@ highscore_screen() {
             body+=("${plain:0:46}")
         fi
         fmt_ppm "${hs_pieces}" "${hs_time}"
-        printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
             "${hs_gold}" "${hs_silver}" "${hs_hammers}" "${hs_pieces}" \
             "${FMT_PPM}"
         if [ "${#plain}" -le 46 ]; then
-            printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
                 "${TXT_GOLD_SGR}" "${hs_gold}" "${TXT_RESET_SGR}" \
                 "${TXT_SILVER_SGR}" "${hs_silver}" "${TXT_RESET_SGR}" \
                 "${TXT_WARN_SGR}" "${hs_hammers}" "${TXT_RESET_SGR}" \
@@ -545,7 +551,7 @@ highscore_screen() {
         body+=("")
     done
     debug_event "highscore screen shown (${#HS_ENTRIES[@]} entries)"
-    menu_pages "Highscores - Marathon" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
     return 0
 }
 
@@ -572,20 +578,20 @@ highscore_screen() {
 highscore_ultra_screen() {
     local -a body=()
     local i line plain rank rank_sgr hsu_time hsu_rows hsu_name hsu_date
-    local hsu_gold hsu_silver hsu_hammers hsu_pieces
+    local hsu_gold hsu_silver hsu_hammers hsu_pieces title
+    title="${I18N[hs_title]} - ${I18N[mode_ultra]}"
     if [ "${#HSU_ENTRIES[@]}" -eq 0 ]; then
-        body+=("Noch keine Eintraege.")
+        body+=("${I18N[hs_empty]}")
         body+=("")
-        body+=("Erreiche das Ziel von ${ULTRA_TARGET_ROWS} Rows in einer")
-        body+=("Ultra-Runde, um dich einzutragen. Ein Versuch,")
-        body+=("der vorher im Game Over endet, wird nicht")
-        body+=("gewertet.")
+        printf -v line "${I18N[hs_empty_ultra]}" "${ULTRA_TARGET_ROWS}"
+        mapfile -t -O "${#body[@]}" body <<< "${line}"
         debug_event "highscore ultra screen shown (0 entries)"
-        menu_message "Highscores - Ultra" "${body[@]}"
+        menu_message "${title}" "${body[@]}"
         return 0
     fi
     printf -v line '%2s %-12s %6s %9s %10s' \
-        "Nr" "Name" "Rows" "Zeit" "Datum"
+        "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
+        "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
     body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HSU_ENTRIES[@]}"; do
         IFS='|' read -r hsu_time hsu_rows _ _ hsu_name hsu_date hsu_gold \
@@ -614,11 +620,11 @@ highscore_ultra_screen() {
             body+=("${plain:0:46}")
         fi
         fmt_ppm "${hsu_pieces}" "$(( hsu_time / 1000 ))"
-        printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
             "${hsu_gold}" "${hsu_silver}" "${hsu_hammers}" "${hsu_pieces}" \
             "${FMT_PPM}"
         if [ "${#plain}" -le 46 ]; then
-            printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
                 "${TXT_GOLD_SGR}" "${hsu_gold}" "${TXT_RESET_SGR}" \
                 "${TXT_SILVER_SGR}" "${hsu_silver}" "${TXT_RESET_SGR}" \
                 "${TXT_WARN_SGR}" "${hsu_hammers}" "${TXT_RESET_SGR}" \
@@ -630,7 +636,7 @@ highscore_ultra_screen() {
         body+=("")
     done
     debug_event "highscore ultra screen shown (${#HSU_ENTRIES[@]} entries)"
-    menu_pages "Highscores - Ultra" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
     return 0
 }
 
@@ -811,21 +817,21 @@ highscore_sprint_add() {
 highscore_sprint_screen() {
     local -a body=()
     local i line plain rank rank_sgr hss_rows hss_lines hss_name hss_date
-    local hss_gold hss_silver hss_time hss_hammers hss_pieces
+    local hss_gold hss_silver hss_time hss_hammers hss_pieces title
+    title="${I18N[hs_title]} - ${I18N[mode_sprint]}"
     if [ "${#HSS_ENTRIES[@]}" -eq 0 ]; then
         fmt_duration $(( SPRINT_TIME_MS / 1000 ))
-        body+=("Noch keine Eintraege.")
+        body+=("${I18N[hs_empty]}")
         body+=("")
-        body+=("Spiele eine Sprint-Runde ueber die vollen")
-        body+=("${FMT_DURATION} Minuten, um dich einzutragen. Ein")
-        body+=("Versuch, der vorher im Game Over endet, wird")
-        body+=("nicht gewertet.")
+        printf -v line "${I18N[hs_empty_sprint]}" "${FMT_DURATION}"
+        mapfile -t -O "${#body[@]}" body <<< "${line}"
         debug_event "highscore sprint screen shown (0 entries)"
-        menu_message "Highscores - Sprint" "${body[@]}"
+        menu_message "${title}" "${body[@]}"
         return 0
     fi
     printf -v line '%2s %-12s %6s %5s %10s' \
-        "Nr" "Name" "Rows" "Lines" "Datum"
+        "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
+        "${I18N[hs_col_lines]}" "${I18N[hs_col_date]}"
     body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HSS_ENTRIES[@]}"; do
         IFS='|' read -r hss_rows hss_lines _ hss_name hss_date hss_gold \
@@ -853,11 +859,11 @@ highscore_sprint_screen() {
             body+=("${plain:0:46}")
         fi
         fmt_ppm "${hss_pieces}" "${hss_time}"
-        printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
             "${hss_gold}" "${hss_silver}" "${hss_hammers}" "${hss_pieces}" \
             "${FMT_PPM}"
         if [ "${#plain}" -le 46 ]; then
-            printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
                 "${TXT_GOLD_SGR}" "${hss_gold}" "${TXT_RESET_SGR}" \
                 "${TXT_SILVER_SGR}" "${hss_silver}" "${TXT_RESET_SGR}" \
                 "${TXT_WARN_SGR}" "${hss_hammers}" "${TXT_RESET_SGR}" \
@@ -869,7 +875,7 @@ highscore_sprint_screen() {
         body+=("")
     done
     debug_event "highscore sprint screen shown (${#HSS_ENTRIES[@]} entries)"
-    menu_pages "Highscores - Sprint" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
     return 0
 }
 
@@ -1056,21 +1062,21 @@ highscore_timeattack_add() {
 highscore_timeattack_screen() {
     local -a body=()
     local i line plain rank rank_sgr hsa_rows hsa_name hsa_date hsa_gold
-    local hsa_silver hsa_time hsa_hammers hsa_pieces
+    local hsa_silver hsa_time hsa_hammers hsa_pieces title
+    title="${I18N[hs_title]} - ${I18N[mode_timeattack]}"
     if [ "${#HSA_ENTRIES[@]}" -eq 0 ]; then
         fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
-        body+=("Noch keine Eintraege.")
+        body+=("${I18N[hs_empty]}")
         body+=("")
-        body+=("Spiele eine Time-Attack-Runde: sie startet")
-        body+=("mit ${FMT_DURATION} Minuten Restzeit, und jede Row")
-        body+=("bringt eine Sekunde dazu. Gewertet wird")
-        body+=("jeder Lauf - auch ein vorzeitiges Game Over.")
+        printf -v line "${I18N[hs_empty_timeattack]}" "${FMT_DURATION}"
+        mapfile -t -O "${#body[@]}" body <<< "${line}"
         debug_event "highscore timeattack screen shown (0 entries)"
-        menu_message "Highscores - Time Attack" "${body[@]}"
+        menu_message "${title}" "${body[@]}"
         return 0
     fi
     printf -v line '%2s %-12s %6s %5s %10s' \
-        "Nr" "Name" "Rows" "Zeit" "Datum"
+        "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
+        "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
     body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HSA_ENTRIES[@]}"; do
         IFS='|' read -r hsa_rows _ _ hsa_name hsa_date hsa_gold \
@@ -1099,11 +1105,11 @@ highscore_timeattack_screen() {
             body+=("${plain:0:46}")
         fi
         fmt_ppm "${hsa_pieces}" "${hsa_time}"
-        printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
             "${hsa_gold}" "${hsa_silver}" "${hsa_hammers}" "${hsa_pieces}" \
             "${FMT_PPM}"
         if [ "${#plain}" -le 46 ]; then
-            printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
                 "${TXT_GOLD_SGR}" "${hsa_gold}" "${TXT_RESET_SGR}" \
                 "${TXT_SILVER_SGR}" "${hsa_silver}" "${TXT_RESET_SGR}" \
                 "${TXT_WARN_SGR}" "${hsa_hammers}" "${TXT_RESET_SGR}" \
@@ -1115,6 +1121,6 @@ highscore_timeattack_screen() {
         body+=("")
     done
     debug_event "highscore timeattack screen shown (${#HSA_ENTRIES[@]} entries)"
-    menu_pages "Highscores - Time Attack" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
     return 0
 }

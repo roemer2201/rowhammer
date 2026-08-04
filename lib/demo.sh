@@ -67,7 +67,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.1.1  (2026-08-04)
+# Version: 0.2.1  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -760,12 +760,8 @@ demo_play() {
     local file="${1}"
     local idx count last_real delta restart scaled rem
     if ! demo_load "${file}"; then
-        menu_message "Demo" \
-            "Diese Aufzeichnung ist beschaedigt oder stammt" \
-            "aus einer anderen Version und kann nicht" \
-            "abgespielt werden." \
-            "" \
-            "Du kannst sie im Demo-Menue loeschen."
+        i18n_lines demo_invalid
+        menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
         debug_event "demo: refused to play invalid recording ${file}"
         return 1
     fi
@@ -932,20 +928,20 @@ demo_scan() {
             mark=" "
         fi
         if ! demo_header_read "${f}"; then
-            printf -v label '%s%-16s %s' "${mark}" "(defekt)" "${f##*/}"
+            printf -v label '%s%-16s %s' "${mark}" "${I18N[demo_broken]}" "${f##*/}"
             DEMO_LIST_FILE+=("${f}")
             DEMO_LIST_LABEL+=("${label:0:43}")
             DEMO_LIST_MARKED+=("${mark}")
             continue
         fi
         # Eight columns for the mode, which is what the label format
-        # below leaves it; "TimeAtk" is the Time Attack mode shortened to
-        # fit, the way the list has to shorten it anyway.
+        # below leaves it; Time Attack has a short name of its own in
+        # the translation table, because its full one does not fit.
         case "${DEMO_HDR_MODE}" in
-            ultra)      mode_label="Ultra" ;;
-            sprint)     mode_label="Sprint" ;;
-            timeattack) mode_label="TimeAtk" ;;
-            *)          mode_label="Marathon" ;;
+            ultra)      mode_label="${I18N[mode_ultra]}" ;;
+            sprint)     mode_label="${I18N[mode_sprint]}" ;;
+            timeattack) mode_label="${I18N[mode_timeattack_short]}" ;;
+            *)          mode_label="${I18N[mode_marathon]}" ;;
         esac
         fmt_duration $(( DEMO_HDR_TIME / 1000 ))
         # 1 + 16 + 1 + 8 + 1 + 5 + 1 + 5 + 5 = 43 characters, which the
