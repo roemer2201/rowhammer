@@ -1707,6 +1707,41 @@ geloescht. Der Dateiname beginnt mit dem Datum, sodass das Glob
 chronologisch sortiert ist und weder Liste noch Pruning `stat` braucht.
 Die RAM-Disk-Datei einer nie beendeten Runde raeumt der EXIT-`trap` weg.
 
+**Voller Datentraeger (seit 0.46.1).** Der freie Platz wird **bewusst
+nicht vorab gemessen** (kein `df`, kein `stat -f`): eine solche Pruefung
+waere nur eine Momentaufnahme eines Verzeichnisses, das sich die Aufnahme
+mit jedem anderen Programm der Maschine teilt, waehrend der Schreibvorgang
+selbst die verbindliche Antwort gibt - und mit rund 2 kB je Spielminute
+ist die Aufnahme ohnehin nie die Ursache eines vollen `/dev/shm`, sondern
+nur ihr Opfer. Stattdessen wird **jeder** Schreibvorgang des Moduls
+geprueft; scheitert einer, wird die Aufnahme verworfen (Vermerk im
+Debug-Log) und die **Runde laeuft unveraendert weiter** - eine misslungene
+Aufzeichnung ist nie ein Grund, jemandem das Spiel zu verderben. Drei
+Stellen daraus sind nicht offensichtlich:
+
+- **`demo_flush`** ist die Stelle, an der eine mitten in der Runde voll
+  laufende RAM-Disk auffaellt: Bashs `printf` meldet bei `ENOSPC` einen
+  Schreibfehler und liefert ungleich 0.
+- **`demo_record_finish` prueft beide Schreibvorgaenge** (Kopf samt
+  Steinfolge, dann die Ereignisdatei) ueber ein Flag statt ueber den
+  Exit-Status der Gruppe - der waere allein der des letzten Befehls.
+  Sonst legt ein Datenverzeichnis, das mitten im Kopf voll laeuft, eine
+  **abgeschnittene** Datei ab: `demo_load` weist sie zwar zurueck, aber
+  erst beim Ansehen, und bis dahin belegt sie einen der `DEMO_MAX`
+  Plaetze und verdraengt eine intakte Aufnahme. `set -e` hilft hier
+  nicht - Bash setzt es innerhalb einer `if`-Bedingung aus, und ein
+  `set -e` in einer dortigen Subshell stellt es nicht wieder scharf.
+- **STDERR geht ueberall nach `/dev/null`.** Das Spiel besitzt das
+  Terminal (Alternate-Screen, eigene Cursor-Positionierung); eine
+  Meldung von `printf`, `mktemp` oder `rm` wuerde mitten ins Spielfeld
+  geschrieben und im Standard-Render-Modus dort **stehen bleiben**, weil
+  unveraenderte Zeilen nicht neu geschrieben werden (siehe 4.3).
+  Diagnostiziert wird im Debug-Log, wo es in einem
+  Vollbild-Programm hingehoert. Aus demselben Grund sind auch die
+  Aufraeum-Pfade (`demo_record_discard`, `demo_prune`, `demo_delete`)
+  geprueft statt ungeprueft: das Spiel laeuft unter `set -e`, ein
+  fehlschlagendes `rm` haette die Runde beendet.
+
 **Einstellung.** `DEMO_RECORD` (`on`/`off`) ist - anders als der
 Render- und der Farbmodus - ein **Config-Wert** (Praezedenz Standard <
 Config < Env < CLI): ob mitgeschnitten wird, ist Geschmack und keine

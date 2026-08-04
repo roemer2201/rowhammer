@@ -1,3 +1,27 @@
+rowhammer (0.46.1) unstable; urgency=medium
+
+  * Demo recording no longer disturbs the round when the RAM disk it
+    writes to, or the data directory it is finally stored in, runs out of
+    space. Every write of the demo module is checked, and a failing one
+    drops the recording with a note in the debug log while the round
+    keeps running. The free space is deliberately not measured up front:
+    such a check is only a snapshot of a directory shared with every
+    other program on the machine, while the write itself is the
+    authoritative answer, and a round costs about 2 kB per minute anyway.
+  * The end of a round could put a truncated recording into the data
+    directory: only the final move was checked, not the write before it,
+    so a directory running out of space mid-header left a file that
+    occupied one of the ten slots and pushed out an intact recording.
+  * No message from the demo module can reach the terminal any more.
+    Errors from its writes went to STDERR and were painted into the
+    middle of the playfield, where the default render mode left them
+    standing until something forced a full redraw; they now go to the
+    debug log alone.
+  * A recording that cannot be deleted no longer ends the round: the
+    cleanup paths ran unchecked under "set -e".
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 12:30:00 +0200
+
 rowhammer (0.46.0) unstable; urgency=medium
 
   * Rounds are recorded as demos and can be watched again from the new
