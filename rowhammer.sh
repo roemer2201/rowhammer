@@ -179,7 +179,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.48.0  (2026-08-04)
+# Version: 0.49.0  (2026-08-04)
 
 set -euo pipefail
 
