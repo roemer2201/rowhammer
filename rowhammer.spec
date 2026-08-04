@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.50.0
+Version:        0.51.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,10 +79,17 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
-* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.50.0-1
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.51.0-1
 - The Marathon highscore file is now called "highscore-marathon", so
   every list names its mode. An existing "highscore" file is renamed
   once at startup, ahead of --reset, and keeps its entries.
+
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.50.0-1
+- The name prompt at the end of a round also shows the place the round
+  will take in the highscore list of its mode, or that it misses it.
+- The place is computed from the loaded list (highscore_rank_preview)
+  because the entry itself is only written once the prompt has returned
+  a name; it serves all five lists and applies the same insert rule.
 
 * Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.49.0-1
 - New game mode "Hochwasser": Marathon under rising water - every 20

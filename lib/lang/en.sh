@@ -141,6 +141,10 @@ A-Z a-z 0-9 space _ -"
     [round_mode]="Mode: %s"
     [round_rows]="Rows: %d   Lines: %d"
     [round_level]="Level: %d   Time: %s"
+    # Place in the list of the round's mode: 1 = rank, 2 = list length.
+    # round_rank_none names the length only (argument 1).
+    [round_rank]="Highscore list: rank %d of %d"
+    [round_rank_none]="Highscore list: no rank (top %d)"
     [round_ask_name]="Name for the highscore list:"
 
     # --- Demos ------------------------------------------------------------
@@ -430,7 +434,7 @@ During a replay:"
     [help_demo_speed]="Speed"
     [help_demo_back]="Back"
 
-    # --- One-time rename of the Marathon highscore file (0.50.0) ----------
+    # --- One-time rename of the Marathon highscore file (0.51.0) ----------
     # Printed before the terminal is touched, like the reset dialog.
     # Arguments: old path, new path.
     [highscore_renamed]="Highscore list renamed: %s -> %s"

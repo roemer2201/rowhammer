@@ -76,7 +76,8 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.47.0 | Vollstaendige Statistik je Spielmodus | 4.5 |
 | 0.48.0 | Mehrsprachige Oberflaeche (Deutsch/Englisch) | 4.11 |
 | 0.49.0 | Hochwasser-Modus samt eigener Bestenliste | 3.5, 3.6, 4.5, 4.10 |
-| 0.50.0 | Marathon-Bestenliste heisst `highscore-marathon` | 4.5, 4.8 |
+| 0.50.0 | Platz in der Bestenliste in der Namensabfrage | 3.7, 4.5 |
+| 0.51.0 | Marathon-Bestenliste heisst `highscore-marathon` | 4.5, 4.8 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -258,8 +259,8 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       und Hold-Sekundaertaste auf `w`._
 - [x] Highscore-Liste (Version 0.7.0: Top 10 im Datenverzeichnis,
       Anzeige im Hauptmenue, Rang im Game-Over-Bild; siehe 4.5)
-      _Spaeter ueberholt: die Datei hiess bis 0.49.0 `highscore` und
-      heisst seit 0.50.0 `highscore-marathon` (siehe dort)._
+      _Spaeter ueberholt: die Datei hiess bis 0.50.0 `highscore` und
+      heisst seit 0.51.0 `highscore-marathon` (siehe dort)._
 - [x] 256-Farben-Modus (Version 0.9.0: `--color-mode auto|basic|extended`,
       `auto` erkennt 256-Farben-Terminals selbst; erweiterte Palette mit
       Guideline-Farben inkl. echtem Orange fuer L sowie satterem
@@ -1243,7 +1244,42 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       und Sprint auf der einen, Time Attack und Hochwasser auf der
       anderen; die Anleitung hat damit neun Seiten.
 
-- [x] **Umbenennung der Marathon-Bestenliste** (Version 0.50.0,
+- [x] **Platz in der Bestenliste in der Namensabfrage** (Version 0.50.0,
+      Nutzerwunsch; aktueller Stand siehe 3.7): Die Namensabfrage am
+      Rundenende (0.45.0) nennt ueber der Eingabezeile jetzt auch den
+      Platz, den die Runde in der Bestenliste ihres Modus einnehmen wird
+      - "Bestenliste: Platz 3 von 10" bzw. "Bestenliste: kein Platz
+      (Top 10)", wenn sie die Liste verfehlt. Die Entscheidungen dahinter:
+      - **Der Platz wird vorhergesagt, nicht abgelesen.** Der
+        Listeneintrag entsteht erst, wenn die Abfrage einen Namen
+        zurueckgegeben hat (`record_round` in `rowhammer.sh`: der Name
+        geht in den Eintrag *und* in den Runden-Hash), also **nach** dem
+        Bildschirm, der den Platz zeigen soll. Die Abfrage dahinter zu
+        schieben waere der kuerzere Weg gewesen und haette genau diese
+        Reihenfolge umgedreht. Stattdessen leitet
+        `highscore_rank_preview` (`lib/highscore.sh`) den Platz aus der
+        geladenen Liste ab, ohne sie anzufassen.
+      - **Eine Funktion fuer alle fuenf Listen** statt fuenf Kopien der
+        Einfuegeregel: sie unterscheiden sich nur darin, welches Array
+        sie befragen und ob der kleinere Wert der bessere ist (Ultra
+        rangiert nach Zeit, alle anderen nach Rows). Der Platz ist
+        derselbe, den die `*_add`-Funktion vergeben wuerde - eins hinter
+        der Zahl der mindestens gleich guten Eintraege, und kein Platz,
+        wenn das ueber die Laenge der Liste hinausgeht. Zwischen Vorschau
+        und Eintrag aendert nichts die Liste, beide koennen also nicht
+        auseinanderlaufen; ein Zufallstest ueber 180 Runden hat das gegen
+        die drei Einfuegefunktionen geprueft.
+      - **Welche Zahl die Runde rangiert, weiss `round_rank_preview`**
+        (`rowhammer.sh`) - dieselbe Modus-Fallunterscheidung, die
+        gleich darueber schon `round_is_ranked` trifft. Ein kuenftiger
+        Modus wird damit an einer Stelle eingetragen, nicht an zweien.
+      - **Auch die verfehlte Liste steht dort.** Eine Runde wird nach
+        dem Namen gefragt, sobald sie ueberhaupt in eine Liste kommen
+        koennte (`round_is_ranked`) - ob sie die Top 10 dann wirklich
+        erreicht, ist eine andere Frage, und sie unbeantwortet zu lassen
+        waere die einzige Stelle, an der der Bildschirm schweigt.
+
+- [x] **Umbenennung der Marathon-Bestenliste** (Version 0.51.0,
       Nutzerwunsch; aktueller Stand siehe 4.5): die Datei der
       Marathon-Liste heisst `highscore-marathon` statt `highscore` und
       passt damit ins Schema der vier Modus-Listen, die mit 0.34.0
