@@ -55,9 +55,14 @@
 #   in one move, the namesake of the game - could take its slot; since
 #   0.26.0 all counters live in the left pane and the HUD has no status
 #   lines left to hold it.
-#   Player name, color theme and key bindings are
+#   Interface language, player name, color theme and key bindings are
 #   configurable in the settings menu and persisted to a user config
-#   file. Blocks render in the basic 8/16-color ANSI palette or, when
+#   file. Every text the player sees - menus, the manual, the HUD
+#   labels, the result box, the tables, the reset dialog and this
+#   --help output - comes from a translation table (lib/i18n.sh, one
+#   file per language below lib/lang/); --lang picks German or English,
+#   and its default "auto" takes the language from the locale.
+#   Blocks render in the basic 8/16-color ANSI palette or, when
 #   the terminal supports it (auto-detected, overridable via
 #   --color-mode), in an extended xterm 256-color palette; the color
 #   theme (--color-theme: guideline, classic, mono, colorblind) picks
@@ -127,20 +132,26 @@
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify the bash version (>= 4).
-#   3. Source the library modules (debug, config, pieces, board,
-#      squares, highscore, save, stats, wonders, input, render, menu).
-#   4. Carry out --reset if requested: move the selected persistent
+#   3. Source the library modules (debug, config, i18n, demo, pieces,
+#      board, squares, highscore, save, stats, wonders, input, render,
+#      menu).
+#   4. Read the config file and resolve the interface language
+#      (default < config < ROWHAMMER_LANG < --lang), then load its text
+#      table - everything printed from here on is translated, --help
+#      and the reset report included. Print the help and exit if
+#      -h/--help was given.
+#   5. Carry out --reset if requested: move the selected persistent
 #      files below the data directory aside to timestamped .bak copies
 #      and exit, without ever touching the terminal.
-#   5. Verify the remaining prerequisites (interactive terminal, minimum
+#   6. Verify the remaining prerequisites (interactive terminal, minimum
 #      size; the size is rechecked live via SIGWINCH while running).
-#   6. Resolve settings with precedence default < config file < env <
-#      CLI and validate them.
-#   7. Install the cleanup trap, start the debug logs (when --debug is
+#   7. Resolve the remaining settings with precedence default < config
+#      file < env < CLI and validate them.
+#   8. Install the cleanup trap, start the debug logs (when --debug is
 #      set), load the highscore lists, the savegame and the statistics
 #      and enter the alternate screen in raw input mode (echo and
 #      canonical mode off for the whole session).
-#   8. Run the main menu loop; "Einzelspieler" picks a game mode and
+#   9. Run the main menu loop; the singleplayer entry picks a game mode and
 #      starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
 #      clearing, rendering), finished rounds are recorded - under the
@@ -153,17 +164,18 @@
 #      game while such a round waits asks for confirmation first. A
 #      round restarted via the pause menu is recorded like any other
 #      abandoned one before the fresh round replaces it.
-#   9. Restore the terminal on exit and close the debug logs.
+#  10. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
-#   rowhammer.sh [--seed N] [--name NAME] [--data-dir DIR] [--no-color]
+#   rowhammer.sh [--seed N] [--name NAME] [--lang de|en|auto]
+#                [--data-dir DIR] [--no-color]
 #                [--color-mode auto|basic|extended]
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--render-mode partial|full] [--demo-record on|off]
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.47.0  (2026-08-04)
+# Version: 0.48.0  (2026-08-04)
 
 set -euo pipefail
 
@@ -178,7 +190,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.47.0"
+ROWHAMMER_VERSION="0.48.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -269,6 +281,17 @@ DEMO_RECORD="on"
 # config-driven setting, so it starts from this default and is then
 # overridden by config_load and the env/CLI blocks after sourcing.
 COLOR_THEME="guideline"
+# Interface language (lib/i18n.sh): a code from I18N_LANGS or "auto",
+# which takes the language from the POSIX locale variables. A
+# config-driven setting like the color theme and the demo recording -
+# which language somebody reads is a property of the person, not of the
+# terminal - so it starts from this default and is then overridden by
+# config_load and the env/CLI blocks below. "auto" as the default,
+# because a game that ships two languages and ignores the locale it is
+# started in supports neither of them properly; a locale that names no
+# language this game speaks falls back to German, the language its menus
+# were written in (I18N_FALLBACK_LANG).
+LANGUAGE="auto"
 # CHANGE 2026-07-30 (user decision): the rotation keys moved onto the
 # left hand's home row - a turns counter-clockwise, d clockwise - and the
 # hold slot took w (replacing the fixed secondary 2). That claimed the
@@ -291,223 +314,21 @@ KEY_HOLD="c"
 CLI_PLAYER_NAME=""
 CLI_COLOR_THEME=""
 CLI_DEMO_RECORD=""
+CLI_LANGUAGE=""
+# -h/--help only raises this flag; the text itself is printed further
+# down, once the modules are sourced and the language is resolved. The
+# help is one of the texts the translation layer covers (lib/i18n.sh),
+# and the language it has to be written in is only known after the
+# config file, the environment and the rest of the command line have
+# been read.
+HELP_OPT=0
 
-# Print usage information.
+# Print usage information in the resolved interface language. The text
+# itself lives in the language file (i18n_usage_text, lib/lang/*.sh):
+# it is long, it is printed exactly once, and a heredoc per language
+# keeps it readable as the block of prose it is.
 usage() {
-    cat <<'EOF'
-Usage: rowhammer.sh [OPTIONS]
-
-Terminal Tetris of the rowhammer project. Starts with a menu:
-singleplayer (endless "Marathon", the timed "Ultra", "Sprint" or
-"Time Attack" mode),
-multiplayer (placeholder), highscores, wonders, statistics and settings.
-
-Options:
-  --seed N      Seed the piece randomizer for a reproducible sequence.
-                Env: ROWHAMMER_SEED         Default: (random)
-  --name NAME   Player name recorded with highscore entries (max. 16
-                characters from A-Z a-z 0-9 space _ -).
-                Env: ROWHAMMER_PLAYER_NAME  Default: Player
-  --data-dir DIR
-                Directory for all persistent game data: the config file
-                rowhammer.conf, the highscore list, the savegame and
-                the statistics file.
-                Env: ROWHAMMER_DATA_DIR     Default: ~/.config/rowhammer
-  --no-color    Disable ANSI colors. Each piece type is then drawn with
-                its own two-letter glyph (II OO TT SS ZZ JJ LL) so blocks
-                stay tellable apart after locking; gold squares show as
-                "##", silver as "%%". Overrides --color-mode. The
-                de-facto standard NO_COLOR variable
-                (https://no-color.org/) is also honored: if it is set and
-                non-empty, colors default to off; set ROWHAMMER_NO_COLOR=0
-                to force them back on.
-                Env: ROWHAMMER_NO_COLOR     Default: 0
-  --color-mode MODE
-                Color palette: "auto" detects 256-color support (tput
-                colors, TERM, COLORTERM) and picks extended or basic;
-                "basic" forces the 8/16-color ANSI palette; "extended"
-                forces the xterm 256-color palette (guideline piece
-                colors incl. a real orange L, richer gold/silver).
-                Env: ROWHAMMER_COLOR_MODE   Default: auto
-  --color-theme NAME
-                Color scheme mapping piece and gold/silver colors:
-                "guideline" (default), "classic", "mono" or "colorblind".
-                Also selectable in the settings menu and persisted there.
-                Env: ROWHAMMER_COLOR_THEME  Default: guideline
-  --demo-record on|off
-                Record every round as a demo that can be watched again
-                from the "Demos" menu entry (see below). Also switchable
-                in the settings menu and persisted there.
-                Env: ROWHAMMER_DEMO_RECORD  Default: on
-  --render-mode MODE
-                How the play screen is pushed to the terminal:
-                "partial" rewrites only the lines that changed since the
-                previous frame (the default - about half the time and a
-                fourteenth of the output of a full frame); "full"
-                rewrites the whole 48x22 block on every frame, the way
-                the renderer worked before 0.22.0. Use "full" on a
-                terminal or multiplexer that draws the incremental
-                update incorrectly, or to read whole frames out of the
-                debug frame log.
-                Env: ROWHAMMER_RENDER_MODE  Default: partial
-  --reset TARGET
-                Reset persistent data in the data directory and exit
-                without starting the game. TARGET is one of:
-                  config     the config file rowhammer.conf
-                  stats      the statistics file stats
-                  highscore  all highscore lists (highscore,
-                             highscore-ultra, highscore-sprint and
-                             highscore-timeattack)
-                  save       the savegame save (the wonder progress)
-                  demo       the demo recordings (the demos directory)
-                  all        all of the above
-                Nothing is deleted: every affected file is moved to
-                <file>-YYYYMMDDhhmmss.bak next to it, so a reset can be
-                undone by moving the backup back. Running the same reset
-                twice within one second waits for the next second rather
-                than overwriting the backup just written.
-                On a terminal the affected files are listed and
-                confirmed first ([N/y], the default answer is no);
-                without a tty (scripting, CI) the reset runs right away,
-                since a waiting prompt would hang the script. Files that
-                do not exist are not an error.
-                Env: ROWHAMMER_RESET        Default: (no reset)
-  --force       Answer confirmation questions with "yes" instead of
-                asking. Combines with any other option; currently the
-                only question asked outside the menus is the --reset
-                one, so "--reset all --force" resets without a prompt.
-                Env: ROWHAMMER_FORCE        Default: 0
-  --debug       Enable the debug/trace mode: the session is recorded
-                into log files (see below). Logs can grow to several
-                megabytes in long sessions.
-                Env: ROWHAMMER_DEBUG        Default: 0
-  --debug-dir DIR
-                Directory for the debug logs of this run.
-                Env: ROWHAMMER_DEBUG_DIR
-                Default: ~/.local/state/rowhammer/debug/<timestamp>.<pid>
-  -h, --help    Show this help and exit.
-
-Debug mode writes three correlated log files (shared millisecond
-timestamps and a screen update counter) meant to make bug reports
-reproducible:
-  events.log    session header (version, terminal, seed, key bindings,
-                config files) and every game action: spawns, moves and
-                rotations (including blocked ones), falls, locks, square
-                formation, line clears with credit details, hold, pause,
-                menu choices, config saves and a board snapshot after
-                every lock.
-  input.log     every key press, raw bytes and mapped symbol.
-  frames.log    every screen update byte for byte (1:1, ANSI included).
-The log directory is printed when the game exits.
-
-Controls (defaults). The letter key of every action is rebindable in the
-settings menu; the arrow keys, space and w listed beside them are wired
-in on top of the bindings and always work:
-  arrow left / right          move piece (no letter key by default)
-  d                           rotate clockwise
-  a                           rotate counter-clockwise
-  s or arrow down             soft drop
-  space or arrow up           hard drop (no letter key by default)
-  c or w                      hold / swap piece (once per piece)
-  p                           pause / resume
-  x or ESC                    open the pause menu: resume, restart the
-                              round in the same mode, go to the main
-                              menu with the round suspended (resumable
-                              via the "Fortsetzen" entry in the main and
-                              singleplayer menus), or end the round
-  r                           restart (on the game over screen)
-
-Square mechanics (The New Tetris): fill a 4x4 area with exactly four
-complete, uncut pieces to form a square - gold if all four are the same
-type, silver if mixed. Every cleared row is worth 1 row of credit, plus
-10 per gold square and 5 per silver square it runs through (additive);
-clearing 4 rows at once (a Tetris) adds 1 extra. The credit is shown as
-"Rows" in the HUD and is the game's only score: cleared rows are the
-sole source of points - drops, square formation and spins earn nothing.
-Famous maximum for a single move: a Tetris through two complete gold
-squares = 4 + 1 + 8 x 10 = 85.
-
-Game modes (singleplayer menu): "Marathon" is the endless round
-that ends on a top-out. "Ultra" is a race - clear 150 rows of credit as
-fast as possible; the run ends the moment that target is reached and its
-play time is the result. "Sprint" is the mirror image - score as many
-rows of credit as possible within 3 minutes of play time; the run ends
-when the time is up. "Time Attack" turns the clock into the stake: the
-round starts with 1 minute of play time counting down and every row of
-credit scored adds 1 second back, so the run lasts exactly as long as it
-is kept fed and ends when the clock hits zero (or on a top-out before
-that); the rows are the result. The HUD shows the goal and what is still
-left of it (rows resp. time) while a run of any of the three is going.
-Each keeps its results in a list of its own - Ultra ranked by time
-(<data-dir>/highscore-ultra, fastest first), Sprint and Time Attack by
-rows (<data-dir>/highscore-sprint, <data-dir>/highscore-timeattack) - so
-they never displace the endless list's top ten. For Ultra and Sprint
-only a run that got there is recorded: an attempt that topped out early
-has neither a comparable time nor the full three minutes to score in.
-Its rows still count toward the wonders and the statistics, like any
-other round. Every Time Attack run is recorded, by contrast: its rows
-are the same achievement whether the clock or the stack ended it. The
-"Highscores" main menu entry asks which of the four lists to show.
-
-Wonders: the row credit of every round is added to a persistent counter
-stored in <data-dir>/save. It builds seven world wonders in a fixed
-sequence; the current wonder and its build percentage are shown in the
-HUD, the construction site (ASCII art revealed bottom-up) after every
-round and via the "Weltwunder" main menu entry.
-
-Demos: every round is recorded and can be watched again from the "Demos"
-main menu entry, which lists the recordings with date, mode, play time
-and rows and offers to play or to delete the one picked. What is recorded
-are the moves, the gravity steps and the piece stream of the round - not
-the screen - so a replay runs the round through the real game logic
-again: it costs about 2 kB per minute of play, is independent of the
-terminal size, the colors and the render mode of either session, and
-lasts as long as the round did. While a demo plays, the pause key
-(or space) halts it, the left/right arrows step the speed between 0.25x
-and 4x, and the quit key returns to the list; "r" replays it from the
-start once it has finished. Recordings live in <data-dir>/demos, the ten
-newest are kept, and the round being recorded is written to a RAM disk
-(XDG_RUNTIME_DIR resp. /dev/shm) so playing costs no disk writes.
-Recording can be switched off with --demo-record off or in the settings
-menu; a replay never enters the highscore lists, the wonder progress or
-the statistics.
-
-Statistics: every finished round also adds its cleared rows, bonus rows
-(the gold/silver/Tetris part of the row credit) and the gold and silver
-squares built to persistent all-time counters in <data-dir>/stats; the
-results of the last three rounds (rows, bonus rows, squares) and the
-number of rounds played per game mode - including how often Ultra
-reached its target, Sprint played its full time and Time Attack ran its
-clock down - are kept there as well. Every counter is also kept per
-game mode, so the same figures can be read for Marathon, Ultra, Sprint
-or Time Attack alone; the all-time counters stay what they always were
-and are not summed from those. The "Statistik" main menu entry asks
-which of the two to show.
-
-Settings (player name, key bindings) are stored in the config file
-<data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
-best 10 rounds are kept in <data-dir>/highscore (Ultra: the best 10 runs
-in <data-dir>/highscore-ultra, Sprint: <data-dir>/highscore-sprint,
-Time Attack: <data-dir>/highscore-timeattack); all
-four lists are shown under the
-"Highscores" main menu entry, which asks for the mode first, and a
-finished round reports its rank on the game over
-screen. Key bindings can also be overridden
-via environment variables ROWHAMMER_KEY_LEFT, ROWHAMMER_KEY_RIGHT,
-ROWHAMMER_KEY_ROT_CW, ROWHAMMER_KEY_ROT_CCW, ROWHAMMER_KEY_SOFT,
-ROWHAMMER_KEY_HARD, ROWHAMMER_KEY_PAUSE, ROWHAMMER_KEY_QUIT,
-ROWHAMMER_KEY_HOLD (single characters a-z or 0-9, or the words SPACE and
-NONE; NONE leaves an action without a letter key). Defaults: a/d rotate
-counter-clockwise/clockwise, s soft drop, c hold, p pause, x menu. Moving
-left/right (arrow keys), the hard drop (space, arrow up) and holding (w)
-always work through their fixed secondary keys as well.
-
-Precedence for every option: command-line argument > environment variable
-> config file > built-in default.
-
-Example:
-  rowhammer.sh --seed 42 --name Alice --no-color
-EOF
+    i18n_usage_text
 }
 
 # die MESSAGE...
@@ -616,6 +437,18 @@ while [ "$#" -gt 0 ]; do
             CLI_COLOR_THEME="${1#*=}"
             shift
             ;;
+        --lang)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            CLI_LANGUAGE="${2}"
+            shift 2
+            ;;
+        --lang=*)
+            CLI_LANGUAGE="${1#*=}"
+            shift
+            ;;
         --demo-record)
             if [ "$#" -lt 2 ]; then
                 printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
@@ -663,16 +496,25 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         -h|--help)
-            usage
-            exit 0
+            # Only noted here: the help text is translated (lib/i18n.sh)
+            # and the language is not resolved until the config file, the
+            # environment and the rest of this command line have been
+            # read, which happens below.
+            HELP_OPT=1
+            shift
             ;;
         --)
             shift
             break
             ;;
         *)
+            # CHANGE 2026-08-04: a wrong option no longer dumps the whole
+            # usage text to STDERR. That text is translated now and is
+            # therefore unavailable at this point - and pointing at
+            # --help is what the reader needs anyway, since the error
+            # itself already says what was wrong.
             printf '%s: unknown option: %s\n' "${SCRIPT_NAME}" "${1}" >&2
-            usage >&2
+            printf "Try '%s --help' for the list of options.\n" "${SCRIPT_NAME}" >&2
             exit 2
             ;;
     esac
@@ -783,7 +625,7 @@ TERM_RESIZED=0
 # take the piece stream from a recording during playback, and the
 # renderer reads it as well, so the flags have to exist before either
 # module runs.
-for _lib in debug config demo pieces board squares highscore save stats wonders input render menu; do
+for _lib in debug config i18n demo pieces board squares highscore save stats wonders input render menu; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -791,6 +633,34 @@ for _lib in debug config demo pieces board squares highscore save stats wonders 
     . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
 unset _lib
+
+# --- Language resolution (default < config < env < CLI) -------------------
+# Ahead of everything else that talks to the user, because everything
+# else that talks to the user is translated: the --help text, the reset
+# dialog and, later on, the menus. That is also why config_load runs
+# here and not down in the settings block - the config file is where the
+# chosen language is stored, and reading it twice to keep the blocks
+# apart would be a fork of the same file for nothing. The remaining
+# config-driven settings are resolved as before, further down; loading
+# them early is harmless, since nothing reads them until then.
+config_load
+LANGUAGE="${ROWHAMMER_LANG:-${LANGUAGE}}"
+if [ -n "${CLI_LANGUAGE}" ]; then
+    LANGUAGE="${CLI_LANGUAGE}"
+fi
+# Validated like every other setting that comes out of a file, the
+# environment or the command line. The message stays English: it is a
+# diagnostic on STDERR (script conventions) and, more to the point, the
+# language it would have to be written in is exactly what is broken.
+if ! i18n_is_valid "${LANGUAGE}"; then
+    die "Invalid language: '${LANGUAGE}' (allowed: auto, ${I18N_LANGS[*]})"
+fi
+i18n_init
+
+if [ "${HELP_OPT}" -eq 1 ]; then
+    usage
+    exit 0
+fi
 
 # --- Reset of persistent data (runs before the game starts) ---------------
 # How often reset_run retries when a backup of the current second is
@@ -846,16 +716,16 @@ reset_run() {
         *)         die "Unhandled reset target: ${target}" ;;
     esac
 
-    printf 'Reset "%s" betrifft diese Dateien in %s:\n' "${target}" "${DATA_DIR}"
+    printf "${I18N[reset_affects]}\n" "${target}" "${DATA_DIR}"
     for name in "${names[@]}"; do
         path="${DATA_DIR}/${name}"
         if [ -e "${path}" ]; then
             printf '  %s\n' "${path}"
         else
-            printf '  %s (nicht vorhanden)\n' "${path}"
+            printf '  %s %s\n' "${path}" "${I18N[reset_absent]}"
         fi
     done
-    printf 'Sie werden nicht geloescht, sondern nach <datei>-YYYYMMDDhhmmss.bak verschoben.\n'
+    printf '%s\n' "${I18N[reset_note]}"
 
     # Ask first - but only when someone is there to answer and --force
     # did not answer already. Without a tty (scripting, CI) a waiting
@@ -865,13 +735,17 @@ reset_run() {
         # The declining answer is the default, so it is spelled first and
         # capitalized - a reset must never be the path of least
         # resistance (same rule as menu_confirm's preselected "no").
-        printf 'Bist du sicher, dass du %s zuruecksetzen moechtest? [N/y] ' "${target}"
+        printf "${I18N[reset_confirm]}" "${target}"
         # EOF (Ctrl-D) leaves the answer empty and therefore declines.
         read -r answer || answer=""
+        # The accepting answers stay the English y/yes in every language:
+        # the prompt spells the two letters out as "[N/y]", and a
+        # scripted caller that answers "y" must not depend on the
+        # language the terminal happens to run in.
         case "${answer}" in
             y|Y|yes|YES) : ;;
             *)
-                printf 'Reset abgebrochen, es wurde nichts verschoben.\n'
+                printf '%s\n' "${I18N[reset_aborted]}"
                 return 0
                 ;;
         esac
@@ -895,7 +769,7 @@ reset_run() {
             stamp="${try}"
             break
         fi
-        printf 'Backup aus derselben Sekunde vorhanden, warte auf die naechste...\n'
+        printf '%s\n' "${I18N[reset_wait]}"
         sleep 1
     done
     if [ -z "${stamp}" ]; then
@@ -917,15 +791,15 @@ reset_run() {
         if ! mv -- "${path}" "${backup}"; then
             die "Failed to move aside: ${path}"
         fi
-        printf 'Verschoben: %s -> %s\n' "${path}" "${backup}"
+        printf "${I18N[reset_moved]}\n" "${path}" "${backup}"
         moved=$(( moved + 1 ))
     done
     # The line the user asked for, kept short and always the same, so it
     # is easy to grep for in a script. The counts follow on their own
     # line: a reset of a target whose files never existed is a success
     # too (the goal is reached), and the numbers say which case it was.
-    printf 'Reset erfolgreich\n'
-    printf 'Reset "%s": %d Datei(en) gesichert, %d nicht vorhanden.\n' \
+    printf '%s\n' "${I18N[reset_done]}"
+    printf "${I18N[reset_summary]}\n" \
         "${target}" "${moved}" "${missing}"
     return 0
 }
@@ -951,8 +825,8 @@ if [ "${TERM_TOO_SMALL}" -eq 1 ]; then
 fi
 
 # --- Settings resolution (default < config < env < CLI) -------------------
-# The config file may override the built-in defaults above.
-config_load
+# The config file was already read by the language resolution above (it
+# holds the language too), so its values are in place here.
 
 # Environment variables override the config file.
 PLAYER_NAME="${ROWHAMMER_PLAYER_NAME:-${PLAYER_NAME}}"
@@ -2099,15 +1973,19 @@ main() {
     # grows a "Fortsetzen" entry at the top; the other entries shift
     # down by one, so the selection is normalized before the dispatch.
     local -a entries
-    local choice
+    local choice round_line
     while :; do
         entries=()
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-            entries+=("Fortsetzen")
+            entries+=("${I18N[main_resume]}")
         fi
-        entries+=("Einzelspieler" "Mehrspieler" "Highscores" \
-            "Weltwunder" "Statistik" "Demos" "Einstellungen" "Anleitung" \
-            "Beenden")
+        entries+=("${I18N[main_single]}" "${I18N[main_multi]}" \
+            "${I18N[main_highscores]}" "${I18N[main_wonders]}" \
+            "${I18N[main_stats]}" "${I18N[main_demos]}" \
+            "${I18N[main_settings]}" "${I18N[main_help]}" \
+            "${I18N[main_quit]}")
+        # The title is the game's name and therefore the one screen text
+        # that is the same in every language.
         menu_run "R O W H A M M E R" "${entries[@]}"
         choice="${MENU_CHOICE}"
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -2130,9 +2008,8 @@ main() {
                 ;;
             1)
                 # Placeholder until the multiplayer phase (see CLAUDE.md).
-                menu_message "Mehrspieler" \
-                    "Der Mehrspieler-Modus ist noch nicht verfuegbar." \
-                    "Er folgt in einer spaeteren Phase (siehe Roadmap)."
+                i18n_lines mp_body
+                menu_message "${I18N[main_multi]}" "${I18N_LINES[@]}"
                 ;;
             2)
                 # Picks the mode first (Marathon or Ultra): the two
@@ -2175,13 +2052,15 @@ main() {
                 # and records it, which keeps its row credit (aborted
                 # rounds count, see CLAUDE.md).
                 if [ "${GAME_SUSPENDED}" -eq 1 ]; then
-                    if ! menu_confirm "Wirklich beenden?" \
-                        "Ja, beenden" "Nein, zurueck" \
-                        "Eine pausierte Runde wartet noch:" \
-                        "${CLEARED_TOTAL} Lines, ${ROW_CREDIT} Rows, Level ${LEVEL}." \
+                    printf -v round_line "${I18N[round_state]}" \
+                        "${CLEARED_TOTAL}" "${ROW_CREDIT}" "${LEVEL}"
+                    i18n_lines quit_tail
+                    if ! menu_confirm "${I18N[quit_title]}" \
+                        "${I18N[quit_yes]}" "${I18N[confirm_no]}" \
+                        "${I18N[quit_head]}" \
+                        "${round_line}" \
                         "" \
-                        "Beim Beenden wird sie gewertet und ist danach" \
-                        "nicht mehr fortsetzbar."; then
+                        "${I18N_LINES[@]}"; then
                         continue
                     fi
                     GAME_SUSPENDED=0

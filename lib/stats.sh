@@ -59,7 +59,7 @@
 #   to the plain truncated text instead of risking a cut escape sequence.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.10.0  (2026-08-04)
+# Version: 0.11.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -137,21 +137,13 @@ STATS_MODE_FIELDS=(rounds goal lines bonus_rows gold_squares
                    silver_squares rowhammers pieces play_time)
 declare -A STATS_MODE=()
 
-# German labels for the modes and for their goal counter, kept next to
-# the mode list so the overview screen, the per-mode screen and the
-# picker in lib/menu.sh cannot drift apart in their wording. Each timed
-# mode names its own regular ending; Marathon has none.
-declare -A STATS_MODE_LABEL=(
-    [marathon]="Marathon"
-    [ultra]="Ultra"
-    [sprint]="Sprint"
-    [timeattack]="Time Attack"
-)
-declare -A STATS_MODE_GOAL_LABEL=(
-    [ultra]="davon Ziel erreicht:"
-    [sprint]="davon volle Zeit:"
-    [timeattack]="davon Zeit abgelaufen:"
-)
+# CHANGE 2026-08-04: the two label tables that used to sit here (the
+# mode names and the wording of their goal counter) are gone into the
+# translation layer, keyed by mode: "mode_<mode>" for the name, which
+# the pickers in lib/menu.sh read as well, and "stats_goal_<mode>" for
+# the goal counter. Marathon has no goal to reach and therefore no
+# stats_goal_marathon key - the screens test for exactly that, so an
+# empty lookup still means "this mode has no goal line".
 
 # stats_mode_reset
 # Put every per-mode counter back to 0. Called by stats_load before
@@ -361,8 +353,8 @@ stats_add_round() {
 # Show the all-time statistics - the counters over every round ever
 # played, in every mode - as a menu-style info screen and wait for a
 # key. One mode's own counters are stats_mode_screen's job; both are
-# reached through menu_stats (lib/menu.sh). Labels are German like the menus (ASCII, no umlauts per the
-# conventions). The weighted total (lines + bonus rows) is shown as a
+# reached through menu_stats (lib/menu.sh). The labels come from the
+# translation table (lib/i18n.sh). The weighted total (lines + bonus rows) is shown as a
 # summary line because it is the number that builds the wonders, and the
 # placement rate (pieces per minute over all rounds ever played) as the
 # summary of pieces and play time. The results of the last
@@ -380,40 +372,40 @@ stats_screen() {
     local -a body=()
     local line entry r_lines r_bonus r_gold r_silver r_hammers r_pieces
     local r_time r_date secs plain mode total
-    printf -v line '%-26s %10d' "Abgebaute Reihen:" "${STATS_LINES}"
+    printf -v line '%-26s %10d' "${I18N[stats_lines]}" "${STATS_LINES}"
     body+=("${line}")
-    printf -v line '%-26s %10d' "Bonusreihen:" "${STATS_BONUS_ROWS}"
+    printf -v line '%-26s %10d' "${I18N[stats_bonus]}" "${STATS_BONUS_ROWS}"
     body+=("${line}")
-    printf -v line '%-26s %s%10d%s' "Reihen gesamt (gewertet):" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_total]}" \
         "${TXT_ACCENT_SGR}" "$(( STATS_LINES + STATS_BONUS_ROWS ))" \
         "${TXT_RESET_SGR}"
     body+=("${line}")
     body+=("")
-    printf -v line '%-26s %s%10d%s' "Goldbloecke:" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_gold]}" \
         "${TXT_GOLD_SGR}" "${STATS_GOLD}" "${TXT_RESET_SGR}"
     body+=("${line}")
-    printf -v line '%-26s %s%10d%s' "Silberbloecke:" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_silver]}" \
         "${TXT_SILVER_SGR}" "${STATS_SILVER}" "${TXT_RESET_SGR}"
     body+=("${line}")
     # The namesake move: four rows cleared in one go.
-    printf -v line '%-26s %s%10d%s' "Rowhammer (4 Reihen):" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_hammer]}" \
         "${TXT_WARN_SGR}" "${STATS_ROWHAMMERS}" "${TXT_RESET_SGR}"
     body+=("${line}")
     body+=("")
-    printf -v line '%-26s %10d' "Abgelegte Steine:" "${STATS_PIECES}"
+    printf -v line '%-26s %10d' "${I18N[stats_pieces]}" "${STATS_PIECES}"
     body+=("${line}")
     # Total play time as H:MM:SS - fmt_duration's MM:SS is meant for a
     # single round and would grow to four-digit minutes here.
     secs="${STATS_PLAY_TIME}"
-    printf -v line '%-26s %10s' "Spielzeit gesamt:" \
+    printf -v line '%-26s %10s' "${I18N[stats_playtime]}" \
         "$(printf '%d:%02d:%02d' "$(( secs / 3600 ))" \
             "$(( secs % 3600 / 60 ))" "$(( secs % 60 ))")"
     body+=("${line}")
     fmt_ppm "${STATS_PIECES}" "${STATS_PLAY_TIME}"
-    printf -v line '%-26s %10s' "Steine/Minute (PCS/min):" "${FMT_PPM}"
+    printf -v line '%-26s %10s' "${I18N[stats_ppm]}" "${FMT_PPM}"
     body+=("${line}")
     debug_event "stats screen shown (counters)"
-    menu_message "Statistik (1/3)" "${body[@]}"
+    menu_message "${I18N[stats_title]} (1/3)" "${body[@]}"
 
     # Second screen: the recent rounds. The first line per round carries
     # the date and the row counters, the second the squares, the
@@ -421,15 +413,15 @@ stats_screen() {
     # score (lines + bonus), derived instead of stored so the file can
     # never contradict itself.
     body=()
-    body+=("Letzte Spiele (neueste zuerst):")
+    body+=("${I18N[stats_recent_head]}")
     body+=("")
     if [ "${#STATS_RECENT[@]}" -eq 0 ]; then
-        body+=("Noch keine Spiele.")
+        body+=("${I18N[stats_recent_none]}")
     else
         for entry in "${STATS_RECENT[@]}"; do
             IFS='|' read -r r_lines r_bonus r_gold r_silver r_hammers \
                 r_pieces r_time r_date <<< "${entry}"
-            printf -v plain '%10s Rows %5d Reihen %4d Bonus %4d' \
+            printf -v plain "%10s ${I18N[stats_recent_rows]} %5d ${I18N[stats_recent_lines]} %4d ${I18N[stats_recent_bonus]} %4d" \
                 "${r_date}" "$(( r_lines + r_bonus ))" "${r_lines}" \
                 "${r_bonus}"
             # Same safety fallback as highscore_screen: the counters here
@@ -438,7 +430,7 @@ stats_screen() {
             # oversized line skips coloring rather than risking a cut
             # escape sequence.
             if [ "${#plain}" -le 46 ]; then
-                printf -v line '%10s %sRows %5d%s Reihen %4d Bonus %4d' \
+                printf -v line "%10s %s${I18N[stats_recent_rows]} %5d%s ${I18N[stats_recent_lines]} %4d ${I18N[stats_recent_bonus]} %4d" \
                     "${r_date}" "${TXT_ACCENT_SGR}" \
                     "$(( r_lines + r_bonus ))" "${TXT_RESET_SGR}" \
                     "${r_lines}" "${r_bonus}"
@@ -447,11 +439,11 @@ stats_screen() {
                 body+=("${plain:0:46}")
             fi
             fmt_ppm "${r_pieces}" "${r_time}"
-            printf -v plain '  Gold %3d Silb %3d RH %2d PCS %4d PPM %5s' \
+            printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
                 "${r_gold}" "${r_silver}" "${r_hammers}" "${r_pieces}" \
                 "${FMT_PPM}"
             if [ "${#plain}" -le 46 ]; then
-                printf -v line '  %sGold %3d%s %sSilb %3d%s %sRH %2d%s PCS %4d PPM %5s' \
+                printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
                     "${TXT_GOLD_SGR}" "${r_gold}" "${TXT_RESET_SGR}" \
                     "${TXT_SILVER_SGR}" "${r_silver}" "${TXT_RESET_SGR}" \
                     "${TXT_WARN_SGR}" "${r_hammers}" "${TXT_RESET_SGR}" \
@@ -464,7 +456,7 @@ stats_screen() {
         done
     fi
     debug_event "stats screen shown (${#STATS_RECENT[@]} recent rounds)"
-    menu_message "Statistik (2/3)" "${body[@]}"
+    menu_message "${I18N[stats_title]} (2/3)" "${body[@]}"
 
     # Third screen (2026-08-03): the rounds played per game mode. Its own
     # screen rather than a block on the first one - that one is full at
@@ -478,29 +470,29 @@ stats_screen() {
     # the four modes side by side, which is exactly what a picker wants
     # to show before it is used.
     body=()
-    body+=("Runden je Spielmodus:")
+    body+=("${I18N[stats_modes_head]}")
     body+=("")
     total=0
     for mode in "${STATS_MODES[@]}"; do
-        printf -v line '%-26s %10d' "${STATS_MODE_LABEL[${mode}]}:" \
+        printf -v line '%-26s %10d' "${I18N[mode_${mode}]}:" \
             "${STATS_MODE[${mode}_rounds]}"
         body+=("${line}")
         total=$(( total + STATS_MODE[${mode}_rounds] ))
         # Marathon is the one mode without a goal, hence without the
         # indented line below its round count.
-        if [ -n "${STATS_MODE_GOAL_LABEL[${mode}]:-}" ]; then
+        if [ -n "${I18N[stats_goal_${mode}]:-}" ]; then
             printf -v line '  %-24s %s%10d%s' \
-                "${STATS_MODE_GOAL_LABEL[${mode}]}" \
+                "${I18N[stats_goal_${mode}]}" \
                 "${TXT_ACCENT_SGR}" "${STATS_MODE[${mode}_goal]}" \
                 "${TXT_RESET_SGR}"
             body+=("${line}")
         fi
     done
     body+=("")
-    printf -v line '%-26s %10d' "Runden gesamt:" "${total}"
+    printf -v line '%-26s %10d' "${I18N[stats_rounds_total]}" "${total}"
     body+=("${line}")
     debug_event "stats screen shown (rounds per mode)"
-    menu_message "Statistik (3/3)" "${body[@]}"
+    menu_message "${I18N[stats_title]} (3/3)" "${body[@]}"
     return 0
 }
 
@@ -523,66 +515,66 @@ stats_mode_screen() {
     local line secs rounds rows
     rounds="${STATS_MODE[${mode}_rounds]}"
     rows=$(( STATS_MODE[${mode}_lines] + STATS_MODE[${mode}_bonus_rows] ))
-    printf -v line '%-26s %10d' "Runden:" "${rounds}"
+    printf -v line '%-26s %10d' "${I18N[stats_rounds]}" "${rounds}"
     body+=("${line}")
-    if [ -n "${STATS_MODE_GOAL_LABEL[${mode}]:-}" ]; then
+    if [ -n "${I18N[stats_goal_${mode}]:-}" ]; then
         printf -v line '  %-24s %s%10d%s' \
-            "${STATS_MODE_GOAL_LABEL[${mode}]}" "${TXT_ACCENT_SGR}" \
+            "${I18N[stats_goal_${mode}]}" "${TXT_ACCENT_SGR}" \
             "${STATS_MODE[${mode}_goal]}" "${TXT_RESET_SGR}"
         body+=("${line}")
         if [ "${rounds}" -gt 0 ]; then
-            printf -v line '  %-24s %9d%%' "Erfolgsquote:" \
+            printf -v line '  %-24s %9d%%' "${I18N[stats_goal_rate]}" \
                 "$(( STATS_MODE[${mode}_goal] * 100 / rounds ))"
         else
-            printf -v line '  %-24s %10s' "Erfolgsquote:" "-"
+            printf -v line '  %-24s %10s' "${I18N[stats_goal_rate]}" "-"
         fi
         body+=("${line}")
     fi
     body+=("")
-    printf -v line '%-26s %10d' "Abgebaute Reihen:" \
+    printf -v line '%-26s %10d' "${I18N[stats_lines]}" \
         "${STATS_MODE[${mode}_lines]}"
     body+=("${line}")
-    printf -v line '%-26s %10d' "Bonusreihen:" \
+    printf -v line '%-26s %10d' "${I18N[stats_bonus]}" \
         "${STATS_MODE[${mode}_bonus_rows]}"
     body+=("${line}")
-    printf -v line '%-26s %s%10d%s' "Reihen gesamt (gewertet):" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_total]}" \
         "${TXT_ACCENT_SGR}" "${rows}" "${TXT_RESET_SGR}"
     body+=("${line}")
     if [ "${rounds}" -gt 0 ]; then
-        printf -v line '%-26s %10d' "Rows je Runde:" \
+        printf -v line '%-26s %10d' "${I18N[stats_rows_per_round]}" \
             "$(( rows / rounds ))"
     else
-        printf -v line '%-26s %10s' "Rows je Runde:" "-"
+        printf -v line '%-26s %10s' "${I18N[stats_rows_per_round]}" "-"
     fi
     body+=("${line}")
     body+=("")
-    printf -v line '%-26s %s%10d%s' "Goldbloecke:" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_gold]}" \
         "${TXT_GOLD_SGR}" "${STATS_MODE[${mode}_gold_squares]}" \
         "${TXT_RESET_SGR}"
     body+=("${line}")
-    printf -v line '%-26s %s%10d%s' "Silberbloecke:" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_silver]}" \
         "${TXT_SILVER_SGR}" "${STATS_MODE[${mode}_silver_squares]}" \
         "${TXT_RESET_SGR}"
     body+=("${line}")
-    printf -v line '%-26s %s%10d%s' "Rowhammer (4 Reihen):" \
+    printf -v line '%-26s %s%10d%s' "${I18N[stats_hammer]}" \
         "${TXT_WARN_SGR}" "${STATS_MODE[${mode}_rowhammers]}" \
         "${TXT_RESET_SGR}"
     body+=("${line}")
     body+=("")
-    printf -v line '%-26s %10d' "Abgelegte Steine:" \
+    printf -v line '%-26s %10d' "${I18N[stats_pieces]}" \
         "${STATS_MODE[${mode}_pieces]}"
     body+=("${line}")
     # Play time as H:MM:SS like the all-time screen: this is a sum over
     # rounds too, so fmt_duration's MM:SS would grow four-digit minutes.
     secs="${STATS_MODE[${mode}_play_time]}"
-    printf -v line '%-26s %10s' "Spielzeit gesamt:" \
+    printf -v line '%-26s %10s' "${I18N[stats_playtime]}" \
         "$(printf '%d:%02d:%02d' "$(( secs / 3600 ))" \
             "$(( secs % 3600 / 60 ))" "$(( secs % 60 ))")"
     body+=("${line}")
     fmt_ppm "${STATS_MODE[${mode}_pieces]}" "${secs}"
-    printf -v line '%-26s %10s' "Steine/Minute (PCS/min):" "${FMT_PPM}"
+    printf -v line '%-26s %10s' "${I18N[stats_ppm]}" "${FMT_PPM}"
     body+=("${line}")
     debug_event "stats screen shown (mode ${mode})"
-    menu_message "Statistik - ${STATS_MODE_LABEL[${mode}]}" "${body[@]}"
+    menu_message "${I18N[stats_title]} - ${I18N[mode_${mode}]}" "${body[@]}"
     return 0
 }

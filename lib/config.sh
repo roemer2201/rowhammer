@@ -3,8 +3,9 @@
 # lib/config.sh
 #
 # Description:
-#   User configuration for rowhammer: player name, color theme, key
-#   bindings and whether rounds are recorded as demos (lib/demo.sh).
+#   User configuration for rowhammer: player name, interface language,
+#   color theme, key bindings and whether rounds are recorded as demos
+#   (lib/demo.sh).
 #   The config file lives at ${DATA_DIR}/rowhammer.conf (default
 #   ~/.config/rowhammer/rowhammer.conf), the shared game data directory that
 #   also holds the highscore list (lib/highscore.sh). Saving from the
@@ -16,7 +17,7 @@
 #   debug_init); saves are logged as debug events at runtime.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.6.0  (2026-08-03)
+# Version: 0.7.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -36,8 +37,9 @@ CONFIG_NAME="rowhammer.conf"
 
 # The configurable key binding variables. Shared by the settings menu
 # (rebinding), validation and config_save, so new bindings only need to
-# be added here, in KEY_LABELS (lib/menu.sh) and in the defaults/env
-# blocks of rowhammer.sh. A binding holds a single character, SPACE, or
+# be added here, with its label in the language files (key
+# "keylabel_<VAR>", see lib/i18n.sh) and in the defaults/env blocks of
+# rowhammer.sh. A binding holds a single character, SPACE, or
 # NONE for "this action has no letter key" (since 2026-07-30 the default
 # for moving left/right, which the arrow keys cover); NONE is the one
 # value several actions may share.
@@ -78,6 +80,10 @@ config_save() {
         printf '# rowhammer user configuration.\n'
         printf '# Written by the in-game settings menu; sourced on startup.\n'
         printf "PLAYER_NAME='%s'\n" "${PLAYER_NAME}"
+        # The language is stored as picked, "auto" included: a player who
+        # chose "follow the locale" wants that to keep following it, not
+        # the language it happened to resolve to when it was saved.
+        printf "LANGUAGE='%s'\n" "${LANGUAGE}"
         printf "COLOR_THEME='%s'\n" "${COLOR_THEME}"
         printf "DEMO_RECORD='%s'\n" "${DEMO_RECORD}"
         for var in "${KEY_ACTIONS[@]}"; do

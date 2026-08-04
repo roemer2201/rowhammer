@@ -1,3 +1,37 @@
+rowhammer (0.48.0) unstable; urgency=medium
+
+  * Multi-language user interface (roadmap item "Mehrsprachige
+    Oberflaeche"): every text a player sees - the menus, the manual, the
+    HUD labels, the result box over the board, the highscore and
+    statistics tables, the wonder screen, the demo list, the reset
+    dialog and the --help output - now comes from a translation table
+    instead of being written into the code.
+  * Two languages ship with it: German, the language the menus were
+    written in and the reference the table is translated from, and
+    English. A language is one file below lib/lang/ plus its entry in
+    I18N_LANGS, so a third one needs no change anywhere else.
+  * New option --lang de|en|auto (ROWHAMMER_LANG), also selectable in
+    the settings menu and stored in the config file as LANGUAGE. The
+    default "auto" takes the language from the locale variables (LC_ALL,
+    LC_MESSAGES, LANG) and falls back to German when they name none of
+    the supported ones. Switching in the settings menu applies at once,
+    without restarting the game.
+  * The config file is read and the language resolved before anything
+    is printed, so --help and the --reset report already speak the
+    chosen language. Diagnostics on STDERR stay English per the script
+    conventions - they have to work when the language itself is what is
+    broken.
+  * A wrong option no longer dumps the whole usage text to STDERR but
+    points at --help, which is the text that is now translated.
+  * Fixed along the way: several German screen texts were longer than
+    the 46 columns a 48-column terminal leaves and were cut off there -
+    the multiplayer placeholder, the three rebind messages, the cancel
+    footer of a confirmation and one line each on the first and third
+    manual page. The width contract is documented in the language files
+    now.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 16:00:00 +0200
+
 rowhammer (0.47.0) unstable; urgency=medium
 
   * Every all-time statistics counter now exists a second time per game
