@@ -81,6 +81,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.52.0 | Bestenlisten mit Cursor, Blaettern und Demo-Wiedergabe | 3.5, 3.8, 4.5 |
 | 0.53.0 | Modus-Eintraege mit ausgerichteter Beschreibung | 3.6, 4.2 |
 | 0.54.0 | Wunder-Bildschirm blaettert zu den fertigen Wundern | 3.3, 3.5 |
+| 0.55.0 | Verhaeltnis Reihen/Bonus in jeder Statistik | 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1443,3 +1444,47 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
         sitzt mit 18 Zeilen auf `MENU_BODY_MAX` -, also ist ihr
         Schlussabsatz enger formuliert und sagt in denselben vier Zeilen
         jetzt beides.
+- [x] **Verhaeltnis von abgebauten Reihen zu Bonusreihen in jeder
+      Statistik** (Version 0.55.0, Nutzerwunsch; aktueller Stand siehe
+      4.5): "Abgebaute Reihen" und "Bonusreihen" standen auf jedem
+      Statistik-Bildschirm direkt untereinander - was sie zueinander
+      sagen, naemlich wie viel der Reihenwertung aus den Gold- und
+      Silber-Quadraten kam statt aus den Reihen selbst, musste man sich
+      dazu im Kopf teilen. Jeder dieser Bildschirme nennt das
+      Verhaeltnis jetzt selbst: der Gesamtbildschirm, jede der drei
+      letzten Runden und jeder der fuenf Modus-Bildschirme. Die
+      Entscheidungen dahinter:
+      - **Die Form ist "1:X.XX"**, nicht ein Prozentsatz und nicht ein
+        blosser Quotient: genau das sind die beiden Zahlen - eine Reihe
+        des Feldes und der Bonus, den sie getragen hat. Zwei
+        Nachkommastellen, weil die interessanten Unterschiede zweier
+        Spielweisen in der zweiten stehen; gerechnet wird wie bei
+        `fmt_ppm` in Hundertsteln, weil Bash keine Fliesskommazahlen
+        kennt.
+      - **Ohne eine abgebaute Reihe steht "-".** Es ist der einzige
+        Division-durch-0-Fall und zugleich der einzige, in dem die Zahl
+        ohnehin nichts sagen wuerde - ohne Reihe gibt es keinen Bonus.
+      - **Der Platz ist zwischen den beiden Zaehlern und der
+        gewichteten Gesamtsumme.** Das Verhaeltnis setzt die rohen
+        Zahlen zueinander, waehrend Gesamtsumme und Rows je Runde aus
+        ihnen abgeleitet sind. Ohne Faerbung, weil die Akzentfarbe auf
+        diesen Bildschirmen der Gesamtsumme gehoert - der Zahl, die die
+        Wunder baut.
+      - **Bei den letzten Spielen kostet es eine dritte Zeile je
+        Runde.** Die beiden vorhandenen sind mit 44 der 46 verfuegbaren
+        Zeichen voll; eine ihrer Spalten fuer eine ableitbare Zahl
+        herzugeben waere der falsche Tausch gewesen. Mit drei Zeilen je
+        Runde landet der Bildschirm bei 14 der 18 Zeilen aus
+        `MENU_BODY_MAX`, der laengste Modus-Bildschirm (Zeitmodus) bei
+        17.
+      - **`stats_ratio` liegt in `lib/stats.sh`**, nicht neben
+        `fmt_ppm` in `rowhammer.sh`: `fmt_ppm` teilen sich Statistik
+        und Bestenlisten, dieses Verhaeltnis ist eine reine
+        Statistik-Zahl.
+      - **Ein absurdes Verhaeltnis wird gekappt** ("1:>9999"). In einer
+        gespielten Runde bleibt der ganzzahlige Teil unter 21 (ein
+        Tetris durch zwei Gold-Quadrate sind 4 Reihen und 81
+        Bonusreihen); groessere Werte koennen nur aus einer von Hand
+        bearbeiteten Datei kommen und wuerden bloss die Zeile ueber ihre
+        46 Zeichen hinaus schieben - dieselbe Vorsicht, mit der die
+        Runden-Zeilen daneben bei Ueberlaenge auf Farbe verzichten.

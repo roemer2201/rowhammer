@@ -51,7 +51,13 @@
 #   third, which doubles as the overview in front of the per-mode
 #   screens. stats_mode_screen shows one mode's own counters on a single
 #   screen; menu_stats (lib/menu.sh) picks between the two the way
-#   menu_highscores picks a list. Since 0.8.0 the weighted total, the
+#   menu_highscores picks a list. Since 0.13.0 (user request) every one
+#   of those screens - the all-time counters, each recent round and each
+#   mode - also states the ratio of cleared rows to bonus rows
+#   (stats_ratio, "1:X.XX"): both numbers were always there, but how much
+#   of the row credit came from the gold/silver squares rather than from
+#   the rows themselves had to be divided in one's head.
+#   Since 0.8.0 the weighted total, the
 #   gold/silver/rowhammer counters and the recent-round Rows/Gold/Silb/RH
 #   figures are colored with the TXT_* SGR globals (lib/render.sh,
 #   theme-aware, empty in --no-color/NO_COLOR mode); a recent-round line
@@ -59,7 +65,7 @@
 #   to the plain truncated text instead of risking a cut escape sequence.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.12.0  (2026-08-04)
+# Version: 0.13.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -371,6 +377,47 @@ stats_add_round() {
     return 0
 }
 
+# stats_ratio LINES BONUS
+# Format the ratio of cleared physical rows to bonus rows into the global
+# STATS_RATIO as "1:X.XX" - per cleared row, that many bonus rows were
+# earned on top. "-" while no row has been cleared yet, which is the only
+# division-by-zero case (and the only case in which the ratio would say
+# nothing anyway: without a cleared row there is no bonus either).
+# Added 2026-08-04 (user request): both figures were on every statistics
+# screen, but how they relate - how much of the row credit came from the
+# gold/silver squares rather than from the rows themselves - had to be
+# divided in one's head.
+# The 1:X form rather than a percentage or a plain quotient, because that
+# is what the two numbers are: one row of the field, however many bonus
+# rows it was worth. Two decimals rather than one, because the
+# interesting differences between two playing styles sit in the second
+# one. Bash has no floating point, so the value is computed in hundredths
+# and split for printing, the same way fmt_ppm (rowhammer.sh) does it.
+# Local to this file rather than next to fmt_ppm: fmt_ppm is shared with
+# the highscore screens, this ratio is a statistics figure only.
+STATS_RATIO="-"
+stats_ratio() {
+    local lines="${1}" bonus="${2}" hundredths
+    if [ "${lines}" -le 0 ]; then
+        STATS_RATIO="-"
+        return 0
+    fi
+    hundredths=$(( bonus * 100 / lines ))
+    # A hand-edited or corrupted stats file can hold any pair of numbers,
+    # and the value goes into a ten-character field on every screen that
+    # shows it. In a played round the integer part stays below 21 (a
+    # Tetris through two gold squares is 4 lines and 81 bonus rows), so
+    # anything beyond four digits is garbage anyway and is cut off here
+    # rather than allowed to push the line past its 46-character budget.
+    if (( hundredths / 100 > 9999 )); then
+        STATS_RATIO="1:>9999"
+        return 0
+    fi
+    printf -v STATS_RATIO '1:%d.%02d' \
+        "$(( hundredths / 100 ))" "$(( hundredths % 100 ))"
+    return 0
+}
+
 # stats_screen
 # Show the all-time statistics - the counters over every round ever
 # played, in every mode - as a menu-style info screen and wait for a
@@ -397,6 +444,14 @@ stats_screen() {
     printf -v line '%-26s %10d' "${I18N[stats_lines]}" "${STATS_LINES}"
     body+=("${line}")
     printf -v line '%-26s %10d' "${I18N[stats_bonus]}" "${STATS_BONUS_ROWS}"
+    body+=("${line}")
+    # The two counters above in relation (2026-08-04, user request),
+    # directly below them and above the weighted total: it relates the raw
+    # figures, while the total and the per-round average below are derived
+    # from them. Left uncolored on purpose - the accent color on this
+    # screen marks the weighted total, the number that builds the wonders.
+    stats_ratio "${STATS_LINES}" "${STATS_BONUS_ROWS}"
+    printf -v line '%-26s %10s' "${I18N[stats_ratio]}" "${STATS_RATIO}"
     body+=("${line}")
     printf -v line '%-26s %s%10d%s' "${I18N[stats_total]}" \
         "${TXT_ACCENT_SGR}" "$(( STATS_LINES + STATS_BONUS_ROWS ))" \
@@ -474,6 +529,21 @@ stats_screen() {
             else
                 body+=("${plain:0:46}")
             fi
+            # The round's rows-to-bonus ratio (2026-08-04, user request).
+            # A third line of its own, because the two above are full: at
+            # 44 of the 46 available characters neither has room for the
+            # seven the value needs, and dropping one of their columns to
+            # make space would trade a stored figure for a derived one.
+            # Three lines per round still fit - the screen shows
+            # STATS_RECENT_MAX rounds and lands at 14 of the 18 lines
+            # MENU_BODY_MAX offers. No color and hence no length
+            # fallback like the two lines above: there is no escape
+            # sequence here that a cut could tear apart, and stats_ratio
+            # caps the value's width itself.
+            stats_ratio "${r_lines}" "${r_bonus}"
+            printf -v plain "  %s %s" "${I18N[stats_recent_ratio]}" \
+                "${STATS_RATIO}"
+            body+=("${plain:0:46}")
             body+=("")
         done
     fi
@@ -558,6 +628,13 @@ stats_mode_screen() {
     body+=("${line}")
     printf -v line '%-26s %10d' "${I18N[stats_bonus]}" \
         "${STATS_MODE[${mode}_bonus_rows]}"
+    body+=("${line}")
+    # Same place and same reasoning as on the all-time screen: this is
+    # the figure that says how a mode was actually played, and comparing
+    # it between two modes is the whole point of the per-mode screens.
+    stats_ratio "${STATS_MODE[${mode}_lines]}" \
+        "${STATS_MODE[${mode}_bonus_rows]}"
+    printf -v line '%-26s %10s' "${I18N[stats_ratio]}" "${STATS_RATIO}"
     body+=("${line}")
     printf -v line '%-26s %s%10d%s' "${I18N[stats_total]}" \
         "${TXT_ACCENT_SGR}" "${rows}" "${TXT_RESET_SGR}"

@@ -1,3 +1,21 @@
+rowhammer (0.55.0) unstable; urgency=medium
+
+  * Every statistics screen now states the ratio of cleared rows to bonus
+    rows (user request): the all-time counters, each of the three recent
+    rounds and each per-mode screen. Both numbers were always shown, but
+    how much of the row credit came from the gold and silver squares
+    rather than from the rows themselves had to be worked out in one's
+    head.
+  * The value reads "1:X.XX" - one cleared row of the field was worth
+    that many bonus rows on top - and "-" while no row has been cleared
+    yet.
+  * On the recent rounds the ratio takes a third line per round: the two
+    existing ones are full at 44 of the 46 available characters, and
+    dropping one of their columns would have traded a stored figure for
+    a derived one.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 05 Aug 2026 00:40:00 +0200
+
 rowhammer (0.54.0) unstable; urgency=medium
 
   * The wonders screen is browsable now (user request): the left and
@@ -16,7 +34,6 @@ rowhammer (0.54.0) unstable; urgency=medium
   * The manual page about the wonders names the keys.
 
  -- roemer2201 <r.oliver@web.de>  Wed, 05 Aug 2026 00:20:00 +0200
-
 rowhammer (0.53.0) unstable; urgency=medium
 
   * The game mode entries are tidier (user request): every mode is

@@ -193,7 +193,12 @@ Das Startmenue bietet:
   **Hochwasser** zeigen
   dieselben Zaehler fuer nur diesen Modus, dazu seine Runden, die
   Rows je Runde und - bei den drei Zeitmodi - die Erfolgsquote seiner
-  Laeufe
+  Laeufe.
+  Jeder dieser Bildschirme - der Gesamtbildschirm, jede der letzten
+  drei Runden und jeder Modus - nennt ausserdem das **Verhaeltnis von
+  abgebauten Reihen zu Bonusreihen** ("1:2.34" heisst: eine abgebaute
+  Reihe war 2.34 Bonusreihen wert), also wie viel der Reihenwertung aus
+  den Gold- und Silber-Quadraten kam
 - **Demos** - die aufgezeichneten Runden, neueste zuerst, mit Datum,
   Modus, Spielzeit und Rows. Die ausgewaehlte Aufnahme laesst sich
   **abspielen** oder **loeschen**. Aufbewahrt werden die 10 neuesten
@@ -454,7 +459,8 @@ Umgesetzt:
   Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der
   "Rowhammer" (vier Reihen auf einmal - der Namensgeber des Spiels)
   sowie abgelegte Teile und Spielzeit (daraus die Ablegerate in
-  Teilen je Minute); dazu die Ergebnisse
+  Teilen je Minute) und das Verhaeltnis von abgebauten Reihen zu
+  Bonusreihen; dazu die Ergebnisse
   der letzten drei Spiele und die gespielten Runden je Modus (bei den
   drei Zeitmodi mit der Zahl der erfolgreichen Laeufe), einsehbar im
   Hauptmenue. **Jeder dieser Zaehler wird zusaetzlich je Spielmodus
