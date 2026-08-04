@@ -75,7 +75,7 @@
 #   incomparable "did not finish" state (see highscore_timeattack_add).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.13.0  (2026-08-03)
+# Version: 0.14.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -102,15 +102,23 @@ HS_LAST_RANK=0
 HS_FIELD_NUM_RE='^[0-9]+$'
 HS_FIELD_NAME_RE='^[A-Za-z0-9_ -]{1,16}$'
 HS_FIELD_DATE_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+# The round hash (round_hash in rowhammer.sh) that every list carries as
+# its last field since 0.46.0: eight hex digits, or "-" for an entry
+# written before the field existed. It ties an entry to the demo
+# recording of the same round, whose file name carries it too - which is
+# how the demo pruning knows which recordings still back a highscore and
+# must be kept (see demo_prune in lib/demo.sh).
+HS_FIELD_HASH_RE='^([0-9a-f]{8}|-)$'
 
 # Field counts accepted for a stored line: the mandatory "rows|lines|
 # level|name|date" prefix (5 fields), optionally extended by gold and
 # silver together (7), then time (8), then rowhammers (9), then pieces
-# (10) - exactly the order these fields were appended after the 0.4.0
+# (10), then the round hash (11) - exactly the order these fields were
+# appended after the 0.4.0
 # scoring rebuild made rows the leading field. Any other count (an old
 # pre-rebuild line, or something simply broken) is rejected by
 # highscore_parse_line before it looks at individual fields.
-HS_FIELD_COUNTS=(5 7 8 9 10)
+HS_FIELD_COUNTS=(5 7 8 9 10 11)
 
 # highscore_parse_line LINE
 # Validate one stored line and, on success, append its normalized
@@ -138,11 +146,15 @@ highscore_parse_line() {
     [[ "${f[2]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
     [[ "${f[3]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
     [[ "${f[4]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
-    for ((i = 5; i < n; i++)); do
+    # The counters; the eleventh field is the round hash, not a number.
+    for ((i = 5; i < n && i < 10; i++)); do
         [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
     done
+    if [ "${n}" -ge 11 ]; then
+        [[ "${f[10]}" =~ ${HS_FIELD_HASH_RE} ]] || return 0
+    fi
 
-    HS_ENTRIES+=("${f[0]}|${f[1]}|${f[2]}|${f[3]}|${f[4]}|${f[5]:-0}|${f[6]:-0}|${f[7]:-0}|${f[8]:-0}|${f[9]:-0}")
+    HS_ENTRIES+=("${f[0]}|${f[1]}|${f[2]}|${f[3]}|${f[4]}|${f[5]:-0}|${f[6]:-0}|${f[7]:-0}|${f[8]:-0}|${f[9]:-0}|${f[10]:--}")
     return 0
 }
 
@@ -186,7 +198,7 @@ highscore_save() {
     return 0
 }
 
-# highscore_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS PIECES
+# highscore_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS PIECES HASH
 # Insert a finished round into the sorted list and persist it. TIME is
 # the round's play time in whole seconds, ROWHAMMERS the number of
 # four-row clears and PIECES the number of pieces placed (TIME and
@@ -198,14 +210,14 @@ highscore_save() {
 highscore_add() {
     local rows="${1}" lines="${2}" level="${3}" name="${4}"
     local gold="${5}" silver="${6}" time="${7}" hammers="${8}"
-    local pieces="${9}"
+    local pieces="${9}" hash="${10:--}"
     local entry e placed=0 rank=0
     local -a merged=()
     HS_LAST_RANK=0
     if [ "${rows}" -le 0 ]; then
         return 0
     fi
-    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}"
+    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}|${hash}"
     if [ "${#HS_ENTRIES[@]}" -gt 0 ]; then
         for e in "${HS_ENTRIES[@]}"; do
             if [ "${placed}" -eq 0 ] && [ "${rows}" -gt "${e%%|*}" ]; then
@@ -232,6 +244,48 @@ highscore_add() {
     return 0
 }
 
+# highscore_hash_set
+# Collect the round hashes of every list into the associative array
+# HS_HASH_SET (the hash is the key, the value is always 1). It is what
+# the demo pruning asks: a recording whose hash is in here still backs a
+# highscore entry and must not be deleted (demo_prune in lib/demo.sh).
+# All four formats carry the hash as their last field, so one expansion
+# fits them all. Entries written before the field existed carry "-",
+# which is filtered out here - it would otherwise protect every old
+# recording at once.
+declare -A HS_HASH_SET=()
+highscore_hash_set() {
+    local e h
+    local -a lists=()
+    HS_HASH_SET=()
+    # Expanding an empty array trips set -u on bash < 4.4, so each list
+    # is only added when it holds something. Spelled as if-statements
+    # rather than "[ ... ] && ..." so no line can end the function with a
+    # non-zero status under set -e.
+    if [ "${#HS_ENTRIES[@]}" -gt 0 ]; then
+        lists+=("${HS_ENTRIES[@]}")
+    fi
+    if [ "${#HSU_ENTRIES[@]}" -gt 0 ]; then
+        lists+=("${HSU_ENTRIES[@]}")
+    fi
+    if [ "${#HSS_ENTRIES[@]}" -gt 0 ]; then
+        lists+=("${HSS_ENTRIES[@]}")
+    fi
+    if [ "${#HSA_ENTRIES[@]}" -gt 0 ]; then
+        lists+=("${HSA_ENTRIES[@]}")
+    fi
+    if [ "${#lists[@]}" -eq 0 ]; then
+        return 0
+    fi
+    for e in "${lists[@]}"; do
+        h="${e##*|}"
+        if [[ "${h}" =~ ^[0-9a-f]{8}$ ]]; then
+            HS_HASH_SET["${h}"]=1
+        fi
+    done
+    return 0
+}
+
 # --- Ultra mode list ------------------------------------------------------
 # The Ultra mode (added 0.10.0) is a race: clear ULTRA_TARGET_ROWS rows
 # of credit as fast as possible (see rowhammer.sh). Its results live in
@@ -255,12 +309,15 @@ HSU_FILE_NAME="highscore-ultra"
 HSU_ENTRIES=()
 HSU_LAST_RANK=0
 
-# Field count of a stored Ultra line. A single accepted count on purpose:
-# unlike the normal list (HS_FIELD_COUNTS, which tolerates lines written
-# before a counter was appended), this format is new and has never
-# shipped in a shorter shape, so the project's usual
-# no-backward-compatibility rule applies unchanged.
-HSU_FIELDS=10
+# Field counts of a stored Ultra line: 11 fields, or 10 for a line
+# written before the round hash was appended in 0.46.0. The same
+# tolerance the Marathon list has always had (HS_FIELD_COUNTS) and for
+# the same reason - an entry must not disappear just because it is older
+# than a field. It is a deliberate exception from the project's
+# no-backward-compatibility rule, kept narrow: exactly these two counts,
+# and the missing hash reads as "-" (no recording tied to this entry).
+HSU_FIELDS=11
+HSU_FIELDS_HASHLESS=10
 
 # highscore_ultra_parse_line LINE
 # Validate one stored Ultra line and, on success, append it to
@@ -271,10 +328,12 @@ HSU_FIELDS=10
 highscore_ultra_parse_line() {
     local line="${1}"
     local -a f=()
-    local i
+    local i n
 
     IFS='|' read -r -a f <<< "${line}"
-    [ "${#f[@]}" -eq "${HSU_FIELDS}" ] || return 0
+    n="${#f[@]}"
+    [ "${n}" -eq "${HSU_FIELDS}" ] || [ "${n}" -eq "${HSU_FIELDS_HASHLESS}" ] \
+        || return 0
 
     # time, rows, lines, level.
     for ((i = 0; i < 4; i++)); do
@@ -283,15 +342,24 @@ highscore_ultra_parse_line() {
     [[ "${f[4]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
     [[ "${f[5]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
     # gold, silver, rowhammers, pieces.
-    for ((i = 6; i < HSU_FIELDS; i++)); do
+    for ((i = 6; i < HSU_FIELDS_HASHLESS; i++)); do
         [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
     done
+    if [ "${n}" -eq "${HSU_FIELDS}" ]; then
+        [[ "${f[HSU_FIELDS_HASHLESS]}" =~ ${HS_FIELD_HASH_RE} ]] || return 0
+    fi
     # A run without a measured time cannot be ranked against the others;
     # it can only come from a hand-edited file, so drop it here rather
     # than let it take the first place forever.
     [ "${f[0]}" -gt 0 ] || return 0
 
-    HSU_ENTRIES+=("${line}")
+    # Normalized to the full field count, so everything reading an entry
+    # can rely on the hash being there (as "-" when the line predates it).
+    if [ "${n}" -eq "${HSU_FIELDS_HASHLESS}" ]; then
+        HSU_ENTRIES+=("${line}|-")
+    else
+        HSU_ENTRIES+=("${line}")
+    fi
     return 0
 }
 
@@ -332,7 +400,8 @@ highscore_ultra_save() {
     return 0
 }
 
-# highscore_ultra_add TIME_MS ROWS LINES LEVEL NAME GOLD SILVER ROWHAMMERS PIECES
+# highscore_ultra_add TIME_MS ROWS LINES LEVEL NAME GOLD SILVER ROWHAMMERS
+#                     PIECES HASH
 # Insert one finished Ultra run into the sorted list and persist it.
 # TIME_MS is the run's play time in milliseconds and ranks the list,
 # fastest first; equal times rank below existing ones, so the older entry
@@ -347,13 +416,14 @@ highscore_ultra_save() {
 highscore_ultra_add() {
     local time="${1}" rows="${2}" lines="${3}" level="${4}" name="${5}"
     local gold="${6}" silver="${7}" hammers="${8}" pieces="${9}"
+    local hash="${10:--}"
     local entry e placed=0 rank=0
     local -a merged=()
     HSU_LAST_RANK=0
     if [ "${time}" -le 0 ]; then
         return 0
     fi
-    entry="${time}|${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${hammers}|${pieces}"
+    entry="${time}|${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${hammers}|${pieces}|${hash}"
     if [ "${#HSU_ENTRIES[@]}" -gt 0 ]; then
         for e in "${HSU_ENTRIES[@]}"; do
             if [ "${placed}" -eq 0 ] && [ "${time}" -lt "${e%%|*}" ]; then
@@ -430,8 +500,11 @@ highscore_screen() {
         "Nr" "Name" "Rows" "Zeit" "Datum"
     body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HS_ENTRIES[@]}"; do
+        # The trailing "_" takes the round hash: the last variable of a
+        # read absorbs everything left of the line, so without it the
+        # pieces column would read "57|d2949228".
         IFS='|' read -r hs_rows _ _ hs_name hs_date hs_gold hs_silver \
-            hs_time hs_hammers hs_pieces <<< "${HS_ENTRIES[i]}"
+            hs_time hs_hammers hs_pieces _ <<< "${HS_ENTRIES[i]}"
         fmt_duration "${hs_time}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %5s %10s' \
@@ -516,7 +589,7 @@ highscore_ultra_screen() {
     body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HSU_ENTRIES[@]}"; do
         IFS='|' read -r hsu_time hsu_rows _ _ hsu_name hsu_date hsu_gold \
-            hsu_silver hsu_hammers hsu_pieces <<< "${HSU_ENTRIES[i]}"
+            hsu_silver hsu_hammers hsu_pieces _ <<< "${HSU_ENTRIES[i]}"
         fmt_duration_ms "${hsu_time}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %9s %10s' \
@@ -587,12 +660,13 @@ HSS_FILE_NAME="highscore-sprint"
 HSS_ENTRIES=()
 HSS_LAST_RANK=0
 
-# Field count of a stored Sprint line. A single accepted count, like the
-# Ultra list and unlike the Marathon one (HS_FIELD_COUNTS, which
-# tolerates lines written before a trailing counter existed): this format
-# is new and has never shipped in a shorter shape, so the project's usual
-# no-backward-compatibility rule applies unchanged.
-HSS_FIELDS=10
+# Field counts of a stored Sprint line: 11 fields, or 10 for a line
+# written before the round hash was appended in 0.46.0 - the same
+# tolerance the Marathon list has always had (HS_FIELD_COUNTS), for the
+# same reason: an entry must not disappear just because it is older than
+# a field. A missing hash reads as "-" (no recording tied to this entry).
+HSS_FIELDS=11
+HSS_FIELDS_HASHLESS=10
 
 # highscore_sprint_parse_line LINE
 # Validate one stored Sprint line and, on success, append it to
@@ -602,10 +676,12 @@ HSS_FIELDS=10
 highscore_sprint_parse_line() {
     local line="${1}"
     local -a f=()
-    local i
+    local i n
 
     IFS='|' read -r -a f <<< "${line}"
-    [ "${#f[@]}" -eq "${HSS_FIELDS}" ] || return 0
+    n="${#f[@]}"
+    [ "${n}" -eq "${HSS_FIELDS}" ] || [ "${n}" -eq "${HSS_FIELDS_HASHLESS}" ] \
+        || return 0
 
     # rows, lines, level.
     for ((i = 0; i < 3; i++)); do
@@ -614,11 +690,20 @@ highscore_sprint_parse_line() {
     [[ "${f[3]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
     [[ "${f[4]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
     # gold, silver, time, rowhammers, pieces.
-    for ((i = 5; i < HSS_FIELDS; i++)); do
+    for ((i = 5; i < HSS_FIELDS_HASHLESS; i++)); do
         [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
     done
+    if [ "${n}" -eq "${HSS_FIELDS}" ]; then
+        [[ "${f[HSS_FIELDS_HASHLESS]}" =~ ${HS_FIELD_HASH_RE} ]] || return 0
+    fi
 
-    HSS_ENTRIES+=("${line}")
+    # Normalized to the full field count, so everything reading an entry
+    # can rely on the hash being there (as "-" when the line predates it).
+    if [ "${n}" -eq "${HSS_FIELDS_HASHLESS}" ]; then
+        HSS_ENTRIES+=("${line}|-")
+    else
+        HSS_ENTRIES+=("${line}")
+    fi
     return 0
 }
 
@@ -659,7 +744,8 @@ highscore_sprint_save() {
     return 0
 }
 
-# highscore_sprint_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS PIECES
+# highscore_sprint_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS
+#                      PIECES HASH
 # Insert one finished Sprint run into the sorted list and persist it.
 # Arguments and order are the Marathon list's (highscore_add), TIME again
 # the play time in whole seconds; equal row credits rank below existing
@@ -674,14 +760,14 @@ highscore_sprint_save() {
 highscore_sprint_add() {
     local rows="${1}" lines="${2}" level="${3}" name="${4}"
     local gold="${5}" silver="${6}" time="${7}" hammers="${8}"
-    local pieces="${9}"
+    local pieces="${9}" hash="${10:--}"
     local entry e placed=0 rank=0
     local -a merged=()
     HSS_LAST_RANK=0
     if [ "${rows}" -le 0 ]; then
         return 0
     fi
-    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}"
+    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}|${hash}"
     if [ "${#HSS_ENTRIES[@]}" -gt 0 ]; then
         for e in "${HSS_ENTRIES[@]}"; do
             if [ "${placed}" -eq 0 ] && [ "${rows}" -gt "${e%%|*}" ]; then
@@ -743,7 +829,7 @@ highscore_sprint_screen() {
     body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HSS_ENTRIES[@]}"; do
         IFS='|' read -r hss_rows hss_lines _ hss_name hss_date hss_gold \
-            hss_silver hss_time hss_hammers hss_pieces <<< "${HSS_ENTRIES[i]}"
+            hss_silver hss_time hss_hammers hss_pieces _ <<< "${HSS_ENTRIES[i]}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %5d %10s' \
             "${rank}" "${hss_name}" "${hss_rows}" "${hss_lines}" \
@@ -820,12 +906,13 @@ HSA_FILE_NAME="highscore-timeattack"
 HSA_ENTRIES=()
 HSA_LAST_RANK=0
 
-# Field count of a stored Time Attack line. A single accepted count, like
-# the Ultra and the Sprint list and unlike the Marathon one
-# (HS_FIELD_COUNTS): this format is new and has never shipped in a
-# shorter shape, so the project's no-backward-compatibility rule applies
-# unchanged.
-HSA_FIELDS=10
+# Field counts of a stored Time Attack line: 11 fields, or 10 for a line
+# written before the round hash was appended in 0.46.0 - the same
+# tolerance the Marathon list has always had (HS_FIELD_COUNTS), for the
+# same reason: an entry must not disappear just because it is older than
+# a field. A missing hash reads as "-" (no recording tied to this entry).
+HSA_FIELDS=11
+HSA_FIELDS_HASHLESS=10
 
 # highscore_timeattack_parse_line LINE
 # Validate one stored Time Attack line and, on success, append it to
@@ -835,10 +922,12 @@ HSA_FIELDS=10
 highscore_timeattack_parse_line() {
     local line="${1}"
     local -a f=()
-    local i
+    local i n
 
     IFS='|' read -r -a f <<< "${line}"
-    [ "${#f[@]}" -eq "${HSA_FIELDS}" ] || return 0
+    n="${#f[@]}"
+    [ "${n}" -eq "${HSA_FIELDS}" ] || [ "${n}" -eq "${HSA_FIELDS_HASHLESS}" ] \
+        || return 0
 
     # rows, lines, level.
     for ((i = 0; i < 3; i++)); do
@@ -847,11 +936,20 @@ highscore_timeattack_parse_line() {
     [[ "${f[3]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
     [[ "${f[4]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
     # gold, silver, time, rowhammers, pieces.
-    for ((i = 5; i < HSA_FIELDS; i++)); do
+    for ((i = 5; i < HSA_FIELDS_HASHLESS; i++)); do
         [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
     done
+    if [ "${n}" -eq "${HSA_FIELDS}" ]; then
+        [[ "${f[HSA_FIELDS_HASHLESS]}" =~ ${HS_FIELD_HASH_RE} ]] || return 0
+    fi
 
-    HSA_ENTRIES+=("${line}")
+    # Normalized to the full field count, so everything reading an entry
+    # can rely on the hash being there (as "-" when the line predates it).
+    if [ "${n}" -eq "${HSA_FIELDS_HASHLESS}" ]; then
+        HSA_ENTRIES+=("${line}|-")
+    else
+        HSA_ENTRIES+=("${line}")
+    fi
     return 0
 }
 
@@ -892,7 +990,8 @@ highscore_timeattack_save() {
     return 0
 }
 
-# highscore_timeattack_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS PIECES
+# highscore_timeattack_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS
+#                      PIECES HASH
 # Insert one finished Time Attack run into the sorted list and persist
 # it. Arguments and order are the Marathon list's (highscore_add), TIME
 # the play time in whole seconds - here the time the run survived, which
@@ -909,14 +1008,14 @@ highscore_timeattack_save() {
 highscore_timeattack_add() {
     local rows="${1}" lines="${2}" level="${3}" name="${4}"
     local gold="${5}" silver="${6}" time="${7}" hammers="${8}"
-    local pieces="${9}"
+    local pieces="${9}" hash="${10:--}"
     local entry e placed=0 rank=0
     local -a merged=()
     HSA_LAST_RANK=0
     if [ "${rows}" -le 0 ]; then
         return 0
     fi
-    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}"
+    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}|${hash}"
     if [ "${#HSA_ENTRIES[@]}" -gt 0 ]; then
         for e in "${HSA_ENTRIES[@]}"; do
             if [ "${placed}" -eq 0 ] && [ "${rows}" -gt "${e%%|*}" ]; then
@@ -975,7 +1074,7 @@ highscore_timeattack_screen() {
     body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
     for i in "${!HSA_ENTRIES[@]}"; do
         IFS='|' read -r hsa_rows _ _ hsa_name hsa_date hsa_gold \
-            hsa_silver hsa_time hsa_hammers hsa_pieces <<< "${HSA_ENTRIES[i]}"
+            hsa_silver hsa_time hsa_hammers hsa_pieces _ <<< "${HSA_ENTRIES[i]}"
         fmt_duration "${hsa_time}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %5s %10s' \

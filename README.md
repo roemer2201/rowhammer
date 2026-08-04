@@ -64,14 +64,14 @@ sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
 unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
 und nach jeder Runde sowie im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
-Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik,
+Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik, Demos,
 Einstellungen und einer kurzen Anleitung;
 die besten
 10 Runden werden dauerhaft gespeichert. Dazu kommen die Politur-Schritte
 aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
-(Marathon/Ultra/Sprint/Time Attack), Anleitung, Lock Delay und der
+(Marathon/Ultra/Sprint/Time Attack), Anleitung, Lock Delay, der
 gezielte Reset
-gespeicherter Daten. Das vollstaendige Konzept
+gespeicherter Daten und die Demo-Aufzeichnung mit Wiedergabe. Das vollstaendige Konzept
 und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
 abgeschlossenen Entwicklungsschritte je Version in
 [HISTORY.md](HISTORY.md).
@@ -159,9 +159,16 @@ Das Startmenue bietet:
   zuletzt die gespielten Runden je Modus - bei Ultra, Sprint und Time
   Attack jeweils mit der Zahl der Laeufe, die ihr Ziel bzw. die volle
   Zeit erreicht haben
+- **Demos** - die aufgezeichneten Runden, neueste zuerst, mit Datum,
+  Modus, Spielzeit und Rows. Die ausgewaehlte Aufnahme laesst sich
+  **abspielen** oder **loeschen**. Aufbewahrt werden die 10 neuesten
+  Runden; Aufnahmen, die noch einen Highscore-Eintrag belegen, sind mit
+  `*` markiert und bleiben darueber hinaus erhalten (verknuepft ueber
+  einen Hash im Dateinamen)
 - **Einstellungen** - Tastenbelegung aendern, Farbschema waehlen
   (`guideline`, `classic`, `mono` oder `colorblind`, jeweils mit einer
-  Farbvorschau in der Liste) und Spielernamen setzen; alles drei wird in
+  Farbvorschau in der Liste), Spielernamen setzen und die
+  Demo-Aufzeichnung an- oder abschalten; alles vier wird in
   der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`). Der Spielername ist die
   Vorgabe der Namensabfrage am Rundenende (siehe unten)
@@ -169,13 +176,14 @@ Das Startmenue bietet:
   den Pfeiltasten links/rechts durchblaetterbar (umlaufend):
   Spielprinzip, Steuerung (mit der gerade eingestellten
   Tastenbelegung), Vorschau und Hold, Gold-/Silber-Quadrate mit ihrer
-  Reihenwertung, der Weltwunderbau, die vier Spielmodi und die
-  Bestenlisten
+  Reihenwertung, der Weltwunderbau, die vier Spielmodi, die
+  Bestenlisten und die Demos
 
 Alle Spieldaten (Konfiguration, Highscores inklusive der Ultra-, der
 Sprint- und der Time-Attack-Liste,
 Weltwunder-Spielstand,
-Statistik) liegen im Datenverzeichnis
+Statistik, Demo-Aufzeichnungen im Unterverzeichnis `demos`)
+liegen im Datenverzeichnis
 `~/.config/rowhammer`, aenderbar per `--data-dir`.
 
 Optionen:
@@ -189,6 +197,7 @@ Optionen:
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
 | `--color-theme N`| `ROWHAMMER_COLOR_THEME`  | Farbschema: `guideline` (Standard), `classic`, `mono`, `colorblind` |
 | `--render-mode M`| `ROWHAMMER_RENDER_MODE`  | Bildaufbau: `partial` (Standard, nur geaenderte Zeilen), `full` (ganzer Block je Frame) |
+| `--demo-record on\|off` | `ROWHAMMER_DEMO_RECORD` | Runden als Demo mitschneiden (Standard: `on`) |
 | `--reset ZIEL`   | `ROWHAMMER_RESET`        | Persistente Daten zuruecksetzen und beenden (s. unten) |
 | `--force`        | `ROWHAMMER_FORCE`        | Sicherheitsabfragen automatisch mit "ja" beantworten |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
@@ -201,7 +210,8 @@ zurueck und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
 Statistik), `highscore` (alle Bestenlisten - `highscore`,
 `highscore-ultra`, `highscore-sprint` und `highscore-timeattack`),
 `save` (der
-Weltwunder-Fortschritt) oder `all`
+Weltwunder-Fortschritt), `demo` (das Verzeichnis `demos` mit den
+Aufzeichnungen) oder `all`
 (alles zusammen).
 
 **Geloescht wird dabei nichts:** jede betroffene Datei wird nach
@@ -318,12 +328,31 @@ Umgesetzt:
   Highscore- und Statistik-Bildschirm nutzen dieselben Themenfarben
   (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
-  Weltwunder, Statistik, Einstellungen und Anleitung
-- **Anleitung im Spiel:** sieben Bildschirme zu Spielprinzip,
+  Weltwunder, Statistik, Demos, Einstellungen und Anleitung
+- **Anleitung im Spiel:** acht Bildschirme zu Spielprinzip,
   Steuerung,
   Vorschau/Hold, Gold- und Silberbloecken, Weltwunderbau, den
-  Spielmodi und den Bestenlisten; die
+  Spielmodi, den Bestenlisten und den Demos; die
   Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
+- **Highscore-Eintraege mit Runden-Hash:** jede gewertete Runde bekommt
+  einen kurzen Hash aus ihren eigenen Ergebnissen. Er steht im
+  Highscore-Eintrag und im Dateinamen der zugehoerigen Demo - so ist die
+  Aufnahme zu einem Highscore identifizierbar und wird beim Aufraeumen
+  nie geloescht, solange der Eintrag in der Liste steht
+- **Demo-Aufzeichnung und -Wiedergabe:** jede Runde wird mitgeschnitten
+  und laesst sich ueber den Menuepunkt "Demos" noch einmal ansehen.
+  Aufgezeichnet werden die Zuege, die Gravitationsschritte und die
+  Steinfolge - nicht der Bildschirm: eine Wiedergabe spielt die Runde
+  also wirklich noch einmal durch die echte Spiellogik. Das kostet rund
+  2 kB je Spielminute und ist unabhaengig von Terminalgroesse, Farben
+  und Render-Modus, in denen aufgenommen wurde. Waehrend der Runde wird
+  ausschliesslich auf eine RAM-Disk geschrieben, erst am Rundenende
+  wandert die fertige Aufnahme ins Datenverzeichnis (`demos/`, die 10
+  neuesten). Die Wiedergabe laesst sich anhalten und zwischen 0.25x und
+  4x Tempo abspielen; gewertet wird sie nie (kein Highscore, kein
+  Weltwunder-Fortschritt, keine Statistik). Aufnahmen, die noch einen
+  Highscore-Eintrag halten, sind in der Liste mit `*` markiert und
+  bleiben ueber die 10 hinaus erhalten
 - **Spielmodi:** endloses **Marathon**, **Ultra** (150 Rows auf
   Zeit, eigene Bestenliste nach kuerzester Zeit), **Sprint**
   (3 Minuten auf Rows, eigene Bestenliste nach den meisten Rows) und
@@ -456,6 +485,15 @@ stehen jetzt die Rundenzaehler:
 | `p`                       | Pause                       |
 | `Esc` / `x`               | Pausenmenue (Fortsetzen / Neustarten / Ins Hauptmenue / Runde beenden) |
 | `r`                       | Neustart (im Game-Over-Bild)|
+
+Waehrend der Wiedergabe einer Demo (Menuepunkt "Demos"):
+
+| Taste                     | Aktion                      |
+|---------------------------|-----------------------------|
+| `p` / Leertaste           | Anhalten / weiter           |
+| Pfeil links / rechts      | Tempo (0.25x bis 4x)        |
+| `x` / `Esc`               | Zurueck zur Demo-Liste      |
+| `r`                       | Noch einmal (am Ende)       |
 
 Links, Rechts und Hard-Drop haben in der Standardbelegung bewusst keine
 Buchstabentaste (`a`, `d` und `w` werden fuer Drehen und Hold gebraucht);

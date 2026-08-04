@@ -72,6 +72,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.42.0 | Time-Attack-Modus samt Bestenliste, Statistik je Modus | 3.5, 3.6, 4.5 |
 | 0.43.0 | "Neustarten" im Pausenmenue | 3.1, 3.3 |
 | 0.45.0 | Namensabfrage am Rundenende (vormarkierte Vorgabe) | 3.7, 4.3, 4.5 |
+| 0.46.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.8, 4.10 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -955,3 +956,86 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       (`MENU_INPUT_RE`, `MENU_INPUT_MAX`). Der Editor kann damit keinen
       ungueltigen Namen erzeugen, und die frueher noetige Fehlermeldung
       nach der Eingabe entfaellt.
+
+- [x] **Demo-Aufzeichnung und Demo-Player** (Version 0.46.0): eigene
+      Runden werden mitgeschnitten und lassen sich ueber den neuen
+      Hauptmenuepunkt "Demos" noch einmal ansehen (`lib/demo.sh`,
+      `menu_demos` in `lib/menu.sh`; aktueller Stand siehe 3.8 und
+      4.10). Die drei Punkte, die die Roadmap offen gelassen hatte, samt
+      der Groessenabschaetzung, die sie vor der Formatwahl verlangt hat:
+      1. **Aufzeichnungsformat: Zuege statt Bildschirm, Steinfolge statt
+         Seed.** Aufgezeichnet werden die Tastenaktionen, die
+         Gravitationsschritte, das Ablaufen des Lock Delays und die
+         Steinfolge; die Wiedergabe fuettert sie in dieselben
+         Spielfunktionen, die eine echte Runde benutzt. Gemessen an
+         echten Runden kostet das rund **2 kB je Spielminute** (etwa
+         4 Ereignisse/s a 9 Byte plus ein Byte je Stein und ein knapp
+         300 Byte grosser Kopf) - ein Frame-Mitschnitt haette je
+         Bildschirmaenderung den halben Bildschirm gekostet. Zwei
+         weitere Gruende sprachen dagegen: eine Bildaufzeichnung haette
+         Terminalgroesse, Farben und - seit 0.41.0 - den Render-Modus
+         festgeschrieben und zwingend im Full-Modus laufen muessen,
+         waehrend eine Zug-Aufzeichnung kein einziges ANSI-Byte
+         enthaelt und in jeder Kombination abspielbar ist. Und der in
+         der Roadmap skizzierte **Seed** kam bewusst nicht: `RANDOM`
+         wird einmal je Sitzung gesetzt, nicht je Runde, und sein
+         Generator hat sich zwischen Bash-Versionen geaendert - ein Byte
+         je Stein macht die Frage gegenstandslos.
+      2. **Obergrenze: eine Stueckzahl, keine Gesamtgroesse.**
+         `DEMO_MAX` = 10 wie die Bestenlisten; bei ~20 kB fuer eine
+         lange Runde waere ein Groessenbudget Aufwand ohne Gegenwert.
+         Zehn Eintraege plus "Zurueck" passen ausserdem mit Luft in ein
+         22-Zeilen-Terminal, was eine groessere Zahl nicht taete.
+      3. **Abspielgeschwindigkeit: Pause, Vorspulen und Zeitlupe.**
+         Pausetaste bzw. Leertaste haelt an (ueber denselben
+         "PAUSED"-Kasten wie im Spiel), Pfeil links/rechts stellt fuenf
+         Stufen von 0.25x bis 4x, `r` spielt eine durchgelaufene Demo
+         noch einmal. Moeglich wird das dadurch, dass die Wiedergabe
+         eine eigene Uhr gegen absolute Zeitstempel laufen laesst,
+         statt je Ereignis zu schlafen: kein Fehler summiert sich auf,
+         und ein Tempowechsel wirkt sofort.
+      Die uebrigen Vorgaben der Roadmap wurden wie beschrieben
+      umgesetzt: waehrend der Runde wird **ausschliesslich auf eine
+      RAM-Disk** geschrieben (`XDG_RUNTIME_DIR`, sonst `/dev/shm`),
+      gepuffert in Bloecken von 64 Ereignissen, und erst beim echten
+      Rundenende (`record_round`) wandert die fertige Aufnahme atomar
+      ins Datenverzeichnis; die **Demo-Verwaltung** ist ein eigener
+      Menuepunkt mit Datum, Modus, Spielzeit und Rows je Eintrag,
+      Abspielen und einzelnem Loeschen.
+      **Nachgereicht auf Nutzerwunsch (gleiche Version):** jeder
+      Highscore-Eintrag bekam einen Hash aus den Ergebnissen seiner
+      Runde (`round_hash`), der als letztes Feld in allen vier Listen
+      und im Dateinamen der zugehoerigen Aufnahme steht. Damit weiss das
+      Aufraeumen, welche Aufnahme zu einem noch gueltigen Highscore
+      gehoert, und laesst sie stehen; verliert der Eintrag seinen Platz,
+      endet der Schutz von selbst. Drei Entscheidungen dazu:
+      `DEMO_MAX` zaehlt nur die ungeschuetzten Aufnahmen (sonst waere
+      das Budget bei zehn Highscore-Demos aufgebraucht und jede neue
+      Runde haette ihre Aufnahme sofort wieder verloren - genau das
+      brachte der Test ans Licht); der Hash steht im Dateinamen statt in
+      der Datei, damit Liste und Pruning ohne Dateizugriffe auskommen;
+      und er ist FNV-1a in reinem Bash statt eines `cksum`-Aufrufs.
+      Weil die Demo-Liste damit laenger als der Bildschirm werden kann,
+      blaettert `menu_run` seither mit der Auswahl durch lange Listen.
+      Die vier Listenformate wurden dafuer um ein Feld erweitert und
+      akzeptieren beide Laengen - dieselbe Kulanz, die die
+      Marathon-Liste seit 0.29.0 hat, aus demselben Grund.
+      Drei Dinge kamen bei der Umsetzung dazu, die die Roadmap nicht
+      vorgesehen hatte:
+      - Eine **Wiedergabe wird nie gewertet** (Guard in `record_round`
+        selbst, weil eine Wiedergabe die Funktion durch genau die
+        Spielfunktionen erreicht, die sie nachspielt) und ist waehrend
+        einer ueber das Pausenmenue geparkten Runde **gesperrt** - sie
+        laeuft durch denselben Rundenzustand und wuerde ihn verwerfen.
+      - Die **Blink-Animation skaliert** mit dem Abspieltempo
+        (`flash_rows`), sonst verschluckt sie bei 4x nach jedem
+        Reihenabbau ein Stueck Demo-Zeit.
+      - `DEMO_RECORD` (`--demo-record on|off`, Einstellungsmenue) ist
+        anders als `--render-mode` ein **Config-Wert**: ob
+        mitgeschnitten wird, ist Geschmack und keine Eigenschaft des
+        Terminals. Dazu kam das Reset-Ziel `demo` (siehe 4.8) - das
+        einzige, das ein Verzeichnis statt einer Datei beiseite legt.
+      Nebenbefund: `tools/demo/probe_pieces.sh` sourct `lib/pieces.sh`
+      allein und brauchte deshalb einen Stub fuer die neue
+      Demo-Anbindung in `queue_fill` (analog dem bereits vorhandenen
+      Stub fuer `debug_event`).
