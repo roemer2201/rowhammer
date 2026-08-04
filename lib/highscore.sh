@@ -28,11 +28,23 @@
 #   entry, never break the game. Saving is atomic (temp file + mv).
 #   highscore_add records a finished round and reports the achieved rank
 #   in HS_LAST_RANK (0 = did not make the list), which the game over
-#   sidebar shows. highscore_screen renders the list for the main menu
-#   via menu_pages (lib/menu.sh), two lines per entry: rank, name, rows,
+#   sidebar shows. highscore_screen renders the list for the main menu,
+#   two lines per entry: rank, name, rows,
 #   play time (MM:SS) and date on the first, gold/silver squares,
 #   rowhammers, pieces placed and the resulting pieces per minute on the
-#   second. Since 0.9.0 the table is colored with the TXT_* SGR globals
+#   second.
+#   Since 0.17.0 (user request) all five lists are shown by one browser
+#   (highscore_browse): a cursor walks the entries with the up/down keys
+#   and turns the page when it runs past the edge, left/right turn the
+#   page directly, and Enter watches the demo recording of the entry the
+#   cursor stands on - marked with a "*" in the list. Which entry has a
+#   recording is answered by the round hash both the entry and the
+#   recording's file name carry (demo_hash_map, lib/demo.sh), so the
+#   lookup costs one directory glob and no file read. Before that the
+#   lists were read-only info screens dealt out one page per key press
+#   (menu_pages, lib/menu.sh, since removed) with no way back to the page
+#   before.
+#   Since 0.9.0 the table is colored with the TXT_* SGR globals
 #   (lib/render.sh, theme-aware, empty in --no-color/NO_COLOR mode): rank
 #   1/2 in gold/silver, the rows column and other ranks in the theme's
 #   accent color, the Gold/Silb/RH figures in gold/silver/warn color. An
@@ -83,7 +95,7 @@
 #   would never reach the top ten of the endless list.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.16.0  (2026-08-04)
+# Version: 0.17.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -461,26 +473,227 @@ highscore_ultra_add() {
     return 0
 }
 
-# How many entries one page of the highscore screen shows, and the
-# number of body lines that takes: each entry is a three-line block (two
-# data lines plus a separating blank), and the table head costs one more.
-# 1 + 5 * 3 = 16 body lines stay within MENU_BODY_MAX (lib/menu.sh), so
-# a full list of ten needs exactly two pages.
+# How many entries one page of a highscore screen shows. Each entry is
+# two data lines, the entries are separated by a blank line and the table
+# head costs one more, so a page is 1 + 5 * 2 + 4 = 15 body lines - well
+# within the MENU_BODY_MAX (lib/menu.sh) an info screen has, and a full
+# list of ten needs exactly two pages.
 HS_PAGE_ENTRIES=5
-HS_PAGE_LINES=$(( HS_PAGE_ENTRIES * 3 ))
+
+# How wide one line of an entry may get. A menu line has 46 characters
+# (the 48-column minimum minus the two-column menu indent) and the
+# browser spends two of them on the cursor and the demo marker in front
+# of every entry, which leaves 44 for the text itself. A line that would
+# exceed that - only reachable with a hand-edited file, since
+# HS_FIELD_NUM_RE caps no digit count - is shown truncated and without
+# colors rather than risking a cut escape sequence.
+HS_LINE_MAX=44
+
+# --- List browser ---------------------------------------------------------
+# All five lists are shown by one browser (highscore_browse below). The
+# screens fill these globals and hand it the title: the table head, the
+# two lines of every entry and, per entry, the demo recording belonging
+# to it ("" when there is none).
+HSB_HEAD=""
+HSB_L1=()
+HSB_L2=()
+HSB_DEMO=()
+
+# highscore_rank_sgr RANK
+# The color of a rank number, into the global HS_RANK_SGR: gold for the
+# first place, silver for the second and the theme's accent color for the
+# rest - the medal look all five screens share, in one place so they
+# cannot drift apart.
+HS_RANK_SGR=""
+highscore_rank_sgr() {
+    case "${1}" in
+        1) HS_RANK_SGR="${TXT_GOLD_SGR}" ;;
+        2) HS_RANK_SGR="${TXT_SILVER_SGR}" ;;
+        *) HS_RANK_SGR="${TXT_ACCENT_SGR}" ;;
+    esac
+    return 0
+}
+
+# highscore_row2 GOLD SILVER ROWHAMMERS PIECES SECONDS
+# The second line of an entry, into the global HS_ROW2: the gold and
+# silver squares, the rowhammers ("RH", four rows at once), the pieces
+# placed ("PCS") and the rate that follows from those and the play time
+# ("PPM", pieces per minute, see fmt_ppm). Identical on all five screens,
+# so it is built once here; SECONDS is whole seconds, which is what
+# fmt_ppm takes (the Ultra list stores milliseconds and divides them down
+# before calling).
+# Its own two-space indent sets the line off against the first one; with
+# the browser's two cursor columns in front, a full line ends at exactly
+# the 46 characters a menu line has (see HS_LINE_MAX).
+HS_ROW2=""
+highscore_row2() {
+    local gold="${1}" silver="${2}" hammers="${3}" pieces="${4}" secs="${5}"
+    local plain
+    fmt_ppm "${pieces}" "${secs}"
+    printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
+        "${gold}" "${silver}" "${hammers}" "${pieces}" "${FMT_PPM}"
+    if [ "${#plain}" -gt "${HS_LINE_MAX}" ]; then
+        HS_ROW2="${plain:0:HS_LINE_MAX}"
+        return 0
+    fi
+    printf -v HS_ROW2 "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
+        "${TXT_GOLD_SGR}" "${gold}" "${TXT_RESET_SGR}" \
+        "${TXT_SILVER_SGR}" "${silver}" "${TXT_RESET_SGR}" \
+        "${TXT_WARN_SGR}" "${hammers}" "${TXT_RESET_SGR}" \
+        "${pieces}" "${FMT_PPM}"
+    return 0
+}
+
+# highscore_demo_open FILE
+# Watch the recording of the entry under the cursor. An entry without one
+# says so instead of doing nothing: the marker in the list only tells
+# which entries have a recording, not why the others do not.
+# A replay is refused while a round is suspended in the main menu, for
+# the reason menu_demos (lib/menu.sh) refuses it there: the replay runs
+# through the very game state that round is parked in and would silently
+# throw it away.
+highscore_demo_open() {
+    local file="${1}"
+    if [ -z "${file}" ]; then
+        i18n_lines hs_no_demo
+        menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
+        return 0
+    fi
+    if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+        i18n_lines demo_busy
+        menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
+        return 0
+    fi
+    debug_event "highscore: playing the demo of the selected entry (${file})"
+    demo_play "${file}"
+    # The replay owned the whole screen; the next menu frame has to clear
+    # it before drawing (the three places in lib/render.sh and
+    # lib/input.sh that take the screen over set this flag the same way).
+    MENU_FULL=1
+    return 0
+}
+
+# highscore_browse TITLE
+# Show the list held in the HSB_* globals and let the player walk it:
+# up/down move the cursor from entry to entry - turning the page when it
+# runs past the edge - left/right turn the page directly, Enter watches
+# the recording of the entry under the cursor and ESC or x leaves. Both
+# directions wrap around, like every other list in this game. The title
+# carries a "Seite p/n" marker as soon as there is more than one page.
+# The cursor is a ">" in front of the entry's first line rather than the
+# reverse video menu_run uses for its entries: an entry line is built
+# from SGR sequences that end in a reset, which would cut a reverse video
+# span in the middle.
+# Added 0.17.0 (user request). Before that the lists were read-only info
+# screens dealt out one page per key press (menu_pages, lib/menu.sh) with
+# no way back to the page before - and no way to point at an entry, which
+# is what watching its recording needs.
+highscore_browse() {
+    local title="${1}"
+    local n sel=0 page pages first i dirty=1 cur mark head any=0
+    local -a lines
+    n="${#HSB_L1[@]}"
+    if [ "${n}" -eq 0 ]; then
+        return 0
+    fi
+    pages=$(( (n + HS_PAGE_ENTRIES - 1) / HS_PAGE_ENTRIES ))
+    # The marker legend only appears when there is a marker to explain.
+    for (( i = 0; i < n; i++ )); do
+        if [ -n "${HSB_DEMO[i]}" ]; then
+            any=1
+            break
+        fi
+    done
+    while :; do
+        if [ "${dirty}" -eq 1 ]; then
+            page=$(( sel / HS_PAGE_ENTRIES ))
+            if [ "${pages}" -gt 1 ]; then
+                printf -v head "${I18N[menu_page]}" "${title}" \
+                    "$(( page + 1 ))" "${pages}"
+            else
+                head="${title}"
+            fi
+            # Two spaces in front of the head as well, so the column
+            # titles stay above their columns despite the cursor columns.
+            lines=("  ${head}" "" "    ${HSB_HEAD}")
+            first=$(( page * HS_PAGE_ENTRIES ))
+            for (( i = first; i < first + HS_PAGE_ENTRIES && i < n; i++ )); do
+                if [ "${i}" -gt "${first}" ]; then
+                    lines+=("")
+                fi
+                if [ "${i}" -eq "${sel}" ]; then
+                    cur=">"
+                else
+                    cur=" "
+                fi
+                if [ -n "${HSB_DEMO[i]}" ]; then
+                    mark="*"
+                else
+                    mark=" "
+                fi
+                lines+=("  ${cur}${mark}${HSB_L1[i]}")
+                # The second line keeps the cursor columns blank: the
+                # block is one entry, and a second ">" would read like a
+                # second selection.
+                lines+=("    ${HSB_L2[i]}")
+            done
+            lines+=("")
+            if [ "${any}" -eq 1 ]; then
+                lines+=("  ${I18N[hs_legend_demo]}")
+            fi
+            lines+=("  ${I18N[hs_nav]}")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        read_key
+        # A terminal resize handled inside read_key clears the screen and
+        # raises REDRAW_PENDING; repaint so the list does not vanish.
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+        fi
+        case "${KEY}" in
+            UP|w)   sel=$(( (sel + n - 1) % n )); dirty=1 ;;
+            DOWN|s) sel=$(( (sel + 1) % n )); dirty=1 ;;
+            LEFT)
+                # Paging puts the cursor on the first entry of the page it
+                # lands on, so the selection is always visible.
+                sel=$(( ((page + pages - 1) % pages) * HS_PAGE_ENTRIES ))
+                dirty=1
+                ;;
+            RIGHT)
+                sel=$(( ((page + 1) % pages) * HS_PAGE_ENTRIES ))
+                dirty=1
+                ;;
+            ENTER|SPACE)
+                highscore_demo_open "${HSB_DEMO[sel]}"
+                dirty=1
+                ;;
+            ESC|x)
+                debug_event "highscore browse '${title}': left at entry $(( sel + 1 ))"
+                return 0
+                ;;
+        esac
+    done
+}
 
 # highscore_screen
-# Show the list as a menu-style info screen (paged via menu_pages) and
-# wait for any key per page. Labels
+# Show the list as a browsable menu screen (highscore_browse). Labels
 # come from the translation table like every other text; the Rows column
 # reuses the HUD
 # term. Shown per entry, on two lines: rank, name, rows, the round's
 # play time (MM:SS) and the date on the first, then the gold/silver
 # squares, the rowhammers ("RH", four rows at once), the pieces placed
 # ("PCS") and the resulting pieces per minute ("PPM", pieces divided by
-# play time, see fmt_ppm) on the second. Lines and level stay stored
-# but are not displayed; the rows column is the score and drives the
-# ranking (scoring rebuild, 0.4.0).
+# play time, see fmt_ppm) on the second (highscore_row2). Lines and level
+# stay stored but are not displayed; the rows column is the score and
+# drives the ranking (scoring rebuild, 0.4.0).
+# CHANGE 2026-08-04 (0.17.0, user request): the screen is a browser with
+# a cursor now instead of a sequence of read-only pages - see
+# highscore_browse. Which entry has a recording is answered by its round
+# hash: the entry's last field and the demo's file name carry the same
+# one (demo_hash_map, lib/demo.sh).
 # CHANGE 2026-08-02 (0.11.0): the title says "Marathon" now. The Ultra
 # mode has a list of its own (highscore_ultra_screen below), and both are
 # reached through the mode picker of the "Highscores" menu entry
@@ -494,12 +707,12 @@ HS_PAGE_LINES=$(( HS_PAGE_ENTRIES * 3 ))
 # had taken from the name in 0.25.0: names show with 12 characters
 # again instead of 6. The second line carries its own labels, so it
 # needs no column head, and the numbers are printed with widths that fit
-# any realistic round; the line is clamped to 46 characters afterwards
-# so implausible values cannot wrap the screen.
+# any realistic round; the line is clamped to HS_LINE_MAX characters
+# afterwards so implausible values cannot wrap the screen.
 highscore_screen() {
     local -a body=()
-    local i line plain rank rank_sgr hs_rows hs_name hs_date hs_gold
-    local hs_silver hs_time hs_hammers hs_pieces title
+    local i line plain rank hs_rows hs_name hs_date hs_gold
+    local hs_silver hs_time hs_hammers hs_pieces hs_hash title
     # Title and mode name are composed rather than stored as one string,
     # so a mode is named the same way here as in every picker.
     title="${I18N[hs_title]} - ${I18N[mode_marathon]}"
@@ -515,65 +728,55 @@ highscore_screen() {
     printf -v line '%2s %-12s %6s %5s %10s' \
         "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
         "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
-    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    HSB_HEAD="${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}"
+    HSB_L1=()
+    HSB_L2=()
+    HSB_DEMO=()
+    # Read fresh on every open rather than kept around: a round played or
+    # a recording deleted in between changes which entries have one.
+    demo_hash_map
     for i in "${!HS_ENTRIES[@]}"; do
-        # The trailing "_" takes the round hash: the last variable of a
-        # read absorbs everything left of the line, so without it the
-        # pieces column would read "57|d2949228".
         IFS='|' read -r hs_rows _ _ hs_name hs_date hs_gold hs_silver \
-            hs_time hs_hammers hs_pieces _ <<< "${HS_ENTRIES[i]}"
+            hs_time hs_hammers hs_pieces hs_hash <<< "${HS_ENTRIES[i]}"
         fmt_duration "${hs_time}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %5s %10s' \
             "${rank}" "${hs_name}" "${hs_rows}" "${FMT_DURATION}" \
             "${hs_date}"
         # Color only the common case (plausible values, still within the
-        # 46-char budget); an implausibly long line (a hand-edited file -
-        # HS_FIELD_NUM_RE has no digit cap) falls back to the plain
+        # HS_LINE_MAX budget); an implausibly long line (a hand-edited
+        # file - HS_FIELD_NUM_RE has no digit cap) falls back to the plain
         # truncated text instead of risking a cut escape sequence.
-        if [ "${#plain}" -le 46 ]; then
-            rank_sgr="${TXT_ACCENT_SGR}"
-            case "${rank}" in
-                1) rank_sgr="${TXT_GOLD_SGR}" ;;
-                2) rank_sgr="${TXT_SILVER_SGR}" ;;
-            esac
+        if [ "${#plain}" -le "${HS_LINE_MAX}" ]; then
+            highscore_rank_sgr "${rank}"
             printf -v line '%s%2d%s %-12.12s %s%6d%s %5s %10s' \
-                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hs_name}" \
+                "${HS_RANK_SGR}" "${rank}" "${TXT_RESET_SGR}" "${hs_name}" \
                 "${TXT_ACCENT_SGR}" "${hs_rows}" "${TXT_RESET_SGR}" \
                 "${FMT_DURATION}" "${hs_date}"
-            body+=("${line}")
+            HSB_L1+=("${line}")
         else
-            body+=("${plain:0:46}")
+            HSB_L1+=("${plain:0:HS_LINE_MAX}")
         fi
-        fmt_ppm "${hs_pieces}" "${hs_time}"
-        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
-            "${hs_gold}" "${hs_silver}" "${hs_hammers}" "${hs_pieces}" \
-            "${FMT_PPM}"
-        if [ "${#plain}" -le 46 ]; then
-            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
-                "${TXT_GOLD_SGR}" "${hs_gold}" "${TXT_RESET_SGR}" \
-                "${TXT_SILVER_SGR}" "${hs_silver}" "${TXT_RESET_SGR}" \
-                "${TXT_WARN_SGR}" "${hs_hammers}" "${TXT_RESET_SGR}" \
-                "${hs_pieces}" "${FMT_PPM}"
-            body+=("${line}")
-        else
-            body+=("${plain:0:46}")
-        fi
-        body+=("")
+        highscore_row2 "${hs_gold}" "${hs_silver}" "${hs_hammers}" \
+            "${hs_pieces}" "${hs_time}"
+        HSB_L2+=("${HS_ROW2}")
+        # An entry from before the hash field carries "-", which is never
+        # a key of the map, so it simply has no recording.
+        HSB_DEMO+=("${DEMO_HASH_FILE[${hs_hash}]:-}")
     done
     debug_event "highscore screen shown (${#HS_ENTRIES[@]} entries)"
-    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    highscore_browse "${title}"
     return 0
 }
 
 # highscore_ultra_screen
 # Show the Ultra list the same way highscore_screen shows the Marathon
-# one: paged via menu_pages, two lines per entry, same column widths and
+# one: browsed via highscore_browse, two lines per entry, same column
+# widths and
 # the same coloring rules, so switching between the two screens in the
 # mode picker (menu_highscores, lib/menu.sh) is a change of numbers, not
-# of layout. Reuses HS_PAGE_ENTRIES/HS_PAGE_LINES for that reason - the
-# entry height is identical, so a separate pair of constants could only
-# ever drift apart from them.
+# of layout. Reuses HS_PAGE_ENTRIES for that reason - the entry height is
+# identical, so a separate constant could only ever drift apart from it.
 # Two things differ, both because this list ranks by time:
 #   - the time column is the score here, so it carries the accent color
 #     the Marathon screen puts on Rows, and it is printed by
@@ -588,8 +791,8 @@ highscore_screen() {
 # without a screen, this is the screen.
 highscore_ultra_screen() {
     local -a body=()
-    local i line plain rank rank_sgr hsu_time hsu_rows hsu_name hsu_date
-    local hsu_gold hsu_silver hsu_hammers hsu_pieces title
+    local i line plain rank hsu_time hsu_rows hsu_name hsu_date
+    local hsu_gold hsu_silver hsu_hammers hsu_pieces hsu_hash title
     title="${I18N[hs_title]} - ${I18N[mode_ultra]}"
     if [ "${#HSU_ENTRIES[@]}" -eq 0 ]; then
         body+=("${I18N[hs_empty]}")
@@ -603,51 +806,40 @@ highscore_ultra_screen() {
     printf -v line '%2s %-12s %6s %9s %10s' \
         "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
         "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
-    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    HSB_HEAD="${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}"
+    HSB_L1=()
+    HSB_L2=()
+    HSB_DEMO=()
+    demo_hash_map
     for i in "${!HSU_ENTRIES[@]}"; do
         IFS='|' read -r hsu_time hsu_rows _ _ hsu_name hsu_date hsu_gold \
-            hsu_silver hsu_hammers hsu_pieces _ <<< "${HSU_ENTRIES[i]}"
+            hsu_silver hsu_hammers hsu_pieces hsu_hash <<< "${HSU_ENTRIES[i]}"
         fmt_duration_ms "${hsu_time}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %9s %10s' \
             "${rank}" "${hsu_name}" "${hsu_rows}" "${FMT_DURATION_MS}" \
             "${hsu_date}"
         # Same guard as the Marathon screen: color only while the line
-        # stays within the 46-char budget, so a hand-edited file with
+        # stays within the HS_LINE_MAX budget, so a hand-edited file with
         # implausible numbers costs the colors, never a cut escape
         # sequence.
-        if [ "${#plain}" -le 46 ]; then
-            rank_sgr="${TXT_ACCENT_SGR}"
-            case "${rank}" in
-                1) rank_sgr="${TXT_GOLD_SGR}" ;;
-                2) rank_sgr="${TXT_SILVER_SGR}" ;;
-            esac
+        if [ "${#plain}" -le "${HS_LINE_MAX}" ]; then
+            highscore_rank_sgr "${rank}"
             printf -v line '%s%2d%s %-12.12s %6d %s%9s%s %10s' \
-                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hsu_name}" \
+                "${HS_RANK_SGR}" "${rank}" "${TXT_RESET_SGR}" "${hsu_name}" \
                 "${hsu_rows}" "${TXT_ACCENT_SGR}" "${FMT_DURATION_MS}" \
                 "${TXT_RESET_SGR}" "${hsu_date}"
-            body+=("${line}")
+            HSB_L1+=("${line}")
         else
-            body+=("${plain:0:46}")
+            HSB_L1+=("${plain:0:HS_LINE_MAX}")
         fi
-        fmt_ppm "${hsu_pieces}" "$(( hsu_time / 1000 ))"
-        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
-            "${hsu_gold}" "${hsu_silver}" "${hsu_hammers}" "${hsu_pieces}" \
-            "${FMT_PPM}"
-        if [ "${#plain}" -le 46 ]; then
-            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
-                "${TXT_GOLD_SGR}" "${hsu_gold}" "${TXT_RESET_SGR}" \
-                "${TXT_SILVER_SGR}" "${hsu_silver}" "${TXT_RESET_SGR}" \
-                "${TXT_WARN_SGR}" "${hsu_hammers}" "${TXT_RESET_SGR}" \
-                "${hsu_pieces}" "${FMT_PPM}"
-            body+=("${line}")
-        else
-            body+=("${plain:0:46}")
-        fi
-        body+=("")
+        highscore_row2 "${hsu_gold}" "${hsu_silver}" "${hsu_hammers}" \
+            "${hsu_pieces}" "$(( hsu_time / 1000 ))"
+        HSB_L2+=("${HS_ROW2}")
+        HSB_DEMO+=("${DEMO_HASH_FILE[${hsu_hash}]:-}")
     done
     debug_event "highscore ultra screen shown (${#HSU_ENTRIES[@]} entries)"
-    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    highscore_browse "${title}"
     return 0
 }
 
@@ -813,9 +1005,9 @@ highscore_sprint_add() {
 
 # highscore_sprint_screen
 # Show the Sprint list the way the other two screens show theirs: paged
-# via menu_pages (HS_PAGE_ENTRIES/HS_PAGE_LINES again - identical entry
-# height, and a fourth pair of constants could only drift), two lines per
-# entry, same column widths and the same coloring rules. Rows rank this
+# via highscore_browse (HS_PAGE_ENTRIES again - identical entry height,
+# and a fourth constant could only drift), two lines per entry, same
+# column widths and the same coloring rules. Rows rank this
 # list and therefore carry the accent color, as on the Marathon screen.
 # One column differs: where the Marathon screen shows the round's play
 # time, this one shows the physical lines cleared. Every entry here ran
@@ -827,8 +1019,8 @@ highscore_sprint_add() {
 # its own in this mode.
 highscore_sprint_screen() {
     local -a body=()
-    local i line plain rank rank_sgr hss_rows hss_lines hss_name hss_date
-    local hss_gold hss_silver hss_time hss_hammers hss_pieces title
+    local i line plain rank hss_rows hss_lines hss_name hss_date
+    local hss_gold hss_silver hss_time hss_hammers hss_pieces hss_hash title
     title="${I18N[hs_title]} - ${I18N[mode_sprint]}"
     if [ "${#HSS_ENTRIES[@]}" -eq 0 ]; then
         fmt_duration $(( SPRINT_TIME_MS / 1000 ))
@@ -843,50 +1035,40 @@ highscore_sprint_screen() {
     printf -v line '%2s %-12s %6s %5s %10s' \
         "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
         "${I18N[hs_col_lines]}" "${I18N[hs_col_date]}"
-    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    HSB_HEAD="${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}"
+    HSB_L1=()
+    HSB_L2=()
+    HSB_DEMO=()
+    demo_hash_map
     for i in "${!HSS_ENTRIES[@]}"; do
         IFS='|' read -r hss_rows hss_lines _ hss_name hss_date hss_gold \
-            hss_silver hss_time hss_hammers hss_pieces _ <<< "${HSS_ENTRIES[i]}"
+            hss_silver hss_time hss_hammers hss_pieces hss_hash \
+            <<< "${HSS_ENTRIES[i]}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %5d %10s' \
             "${rank}" "${hss_name}" "${hss_rows}" "${hss_lines}" \
             "${hss_date}"
         # Same guard as the other two screens: color only while the line
-        # stays within the 46-char budget, so a hand-edited file with
+        # stays within the HS_LINE_MAX budget, so a hand-edited file with
         # implausible numbers costs the colors, never a cut escape
         # sequence.
-        if [ "${#plain}" -le 46 ]; then
-            rank_sgr="${TXT_ACCENT_SGR}"
-            case "${rank}" in
-                1) rank_sgr="${TXT_GOLD_SGR}" ;;
-                2) rank_sgr="${TXT_SILVER_SGR}" ;;
-            esac
+        if [ "${#plain}" -le "${HS_LINE_MAX}" ]; then
+            highscore_rank_sgr "${rank}"
             printf -v line '%s%2d%s %-12.12s %s%6d%s %5d %10s' \
-                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hss_name}" \
+                "${HS_RANK_SGR}" "${rank}" "${TXT_RESET_SGR}" "${hss_name}" \
                 "${TXT_ACCENT_SGR}" "${hss_rows}" "${TXT_RESET_SGR}" \
                 "${hss_lines}" "${hss_date}"
-            body+=("${line}")
+            HSB_L1+=("${line}")
         else
-            body+=("${plain:0:46}")
+            HSB_L1+=("${plain:0:HS_LINE_MAX}")
         fi
-        fmt_ppm "${hss_pieces}" "${hss_time}"
-        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
-            "${hss_gold}" "${hss_silver}" "${hss_hammers}" "${hss_pieces}" \
-            "${FMT_PPM}"
-        if [ "${#plain}" -le 46 ]; then
-            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
-                "${TXT_GOLD_SGR}" "${hss_gold}" "${TXT_RESET_SGR}" \
-                "${TXT_SILVER_SGR}" "${hss_silver}" "${TXT_RESET_SGR}" \
-                "${TXT_WARN_SGR}" "${hss_hammers}" "${TXT_RESET_SGR}" \
-                "${hss_pieces}" "${FMT_PPM}"
-            body+=("${line}")
-        else
-            body+=("${plain:0:46}")
-        fi
-        body+=("")
+        highscore_row2 "${hss_gold}" "${hss_silver}" "${hss_hammers}" \
+            "${hss_pieces}" "${hss_time}"
+        HSB_L2+=("${HS_ROW2}")
+        HSB_DEMO+=("${DEMO_HASH_FILE[${hss_hash}]:-}")
     done
     debug_event "highscore sprint screen shown (${#HSS_ENTRIES[@]} entries)"
-    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    highscore_browse "${title}"
     return 0
 }
 
@@ -1061,7 +1243,7 @@ highscore_timeattack_add() {
 
 # highscore_timeattack_screen
 # Show the Time Attack list the way the other three screens show theirs:
-# paged via menu_pages (HS_PAGE_ENTRIES/HS_PAGE_LINES again), two lines
+# browsed via highscore_browse (HS_PAGE_ENTRIES again), two lines
 # per entry, same column widths and the same coloring rules. Rows rank
 # this list and therefore carry the accent color, as on the Marathon and
 # the Sprint screen.
@@ -1072,8 +1254,8 @@ highscore_timeattack_add() {
 # ended early - the single number that tells the two apart.
 highscore_timeattack_screen() {
     local -a body=()
-    local i line plain rank rank_sgr hsa_rows hsa_name hsa_date hsa_gold
-    local hsa_silver hsa_time hsa_hammers hsa_pieces title
+    local i line plain rank hsa_rows hsa_name hsa_date hsa_gold
+    local hsa_silver hsa_time hsa_hammers hsa_pieces hsa_hash title
     title="${I18N[hs_title]} - ${I18N[mode_timeattack]}"
     if [ "${#HSA_ENTRIES[@]}" -eq 0 ]; then
         fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
@@ -1088,51 +1270,41 @@ highscore_timeattack_screen() {
     printf -v line '%2s %-12s %6s %5s %10s' \
         "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
         "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
-    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    HSB_HEAD="${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}"
+    HSB_L1=()
+    HSB_L2=()
+    HSB_DEMO=()
+    demo_hash_map
     for i in "${!HSA_ENTRIES[@]}"; do
         IFS='|' read -r hsa_rows _ _ hsa_name hsa_date hsa_gold \
-            hsa_silver hsa_time hsa_hammers hsa_pieces _ <<< "${HSA_ENTRIES[i]}"
+            hsa_silver hsa_time hsa_hammers hsa_pieces hsa_hash \
+            <<< "${HSA_ENTRIES[i]}"
         fmt_duration "${hsa_time}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %5s %10s' \
             "${rank}" "${hsa_name}" "${hsa_rows}" "${FMT_DURATION}" \
             "${hsa_date}"
         # Same guard as the other three screens: color only while the
-        # line stays within the 46-char budget, so a hand-edited file
+        # line stays within the HS_LINE_MAX budget, so a hand-edited file
         # with implausible numbers costs the colors, never a cut escape
         # sequence.
-        if [ "${#plain}" -le 46 ]; then
-            rank_sgr="${TXT_ACCENT_SGR}"
-            case "${rank}" in
-                1) rank_sgr="${TXT_GOLD_SGR}" ;;
-                2) rank_sgr="${TXT_SILVER_SGR}" ;;
-            esac
+        if [ "${#plain}" -le "${HS_LINE_MAX}" ]; then
+            highscore_rank_sgr "${rank}"
             printf -v line '%s%2d%s %-12.12s %s%6d%s %5s %10s' \
-                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hsa_name}" \
+                "${HS_RANK_SGR}" "${rank}" "${TXT_RESET_SGR}" "${hsa_name}" \
                 "${TXT_ACCENT_SGR}" "${hsa_rows}" "${TXT_RESET_SGR}" \
                 "${FMT_DURATION}" "${hsa_date}"
-            body+=("${line}")
+            HSB_L1+=("${line}")
         else
-            body+=("${plain:0:46}")
+            HSB_L1+=("${plain:0:HS_LINE_MAX}")
         fi
-        fmt_ppm "${hsa_pieces}" "${hsa_time}"
-        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
-            "${hsa_gold}" "${hsa_silver}" "${hsa_hammers}" "${hsa_pieces}" \
-            "${FMT_PPM}"
-        if [ "${#plain}" -le 46 ]; then
-            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
-                "${TXT_GOLD_SGR}" "${hsa_gold}" "${TXT_RESET_SGR}" \
-                "${TXT_SILVER_SGR}" "${hsa_silver}" "${TXT_RESET_SGR}" \
-                "${TXT_WARN_SGR}" "${hsa_hammers}" "${TXT_RESET_SGR}" \
-                "${hsa_pieces}" "${FMT_PPM}"
-            body+=("${line}")
-        else
-            body+=("${plain:0:46}")
-        fi
-        body+=("")
+        highscore_row2 "${hsa_gold}" "${hsa_silver}" "${hsa_hammers}" \
+            "${hsa_pieces}" "${hsa_time}"
+        HSB_L2+=("${HS_ROW2}")
+        HSB_DEMO+=("${DEMO_HASH_FILE[${hsa_hash}]:-}")
     done
     debug_event "highscore timeattack screen shown (${#HSA_ENTRIES[@]} entries)"
-    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    highscore_browse "${title}"
     return 0
 }
 
@@ -1287,7 +1459,7 @@ highscore_flood_add() {
 
 # highscore_flood_screen
 # Show the Hochwasser list the way the other four screens show theirs:
-# paged via menu_pages (HS_PAGE_ENTRIES/HS_PAGE_LINES again), two lines
+# browsed via highscore_browse (HS_PAGE_ENTRIES again), two lines
 # per entry, same column widths and the same coloring rules. Rows rank
 # this list and therefore carry the accent color, as on the Marathon,
 # the Sprint and the Time Attack screen.
@@ -1298,8 +1470,8 @@ highscore_flood_add() {
 # by which of them held out longer.
 highscore_flood_screen() {
     local -a body=()
-    local i line plain rank rank_sgr hsf_rows hsf_name hsf_date hsf_gold
-    local hsf_silver hsf_time hsf_hammers hsf_pieces title
+    local i line plain rank hsf_rows hsf_name hsf_date hsf_gold
+    local hsf_silver hsf_time hsf_hammers hsf_pieces hsf_hash title
     title="${I18N[hs_title]} - ${I18N[mode_flood]}"
     if [ "${#HSF_ENTRIES[@]}" -eq 0 ]; then
         body+=("${I18N[hs_empty]}")
@@ -1314,50 +1486,40 @@ highscore_flood_screen() {
     printf -v line '%2s %-12s %6s %5s %10s' \
         "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
         "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
-    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    HSB_HEAD="${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}"
+    HSB_L1=()
+    HSB_L2=()
+    HSB_DEMO=()
+    demo_hash_map
     for i in "${!HSF_ENTRIES[@]}"; do
         IFS='|' read -r hsf_rows _ _ hsf_name hsf_date hsf_gold \
-            hsf_silver hsf_time hsf_hammers hsf_pieces _ <<< "${HSF_ENTRIES[i]}"
+            hsf_silver hsf_time hsf_hammers hsf_pieces hsf_hash \
+            <<< "${HSF_ENTRIES[i]}"
         fmt_duration "${hsf_time}"
         rank=$(( i + 1 ))
         printf -v plain '%2d %-12.12s %6d %5s %10s' \
             "${rank}" "${hsf_name}" "${hsf_rows}" "${FMT_DURATION}" \
             "${hsf_date}"
         # Same guard as the other four screens: color only while the
-        # line stays within the 46-char budget, so a hand-edited file
+        # line stays within the HS_LINE_MAX budget, so a hand-edited file
         # with implausible numbers costs the colors, never a cut escape
         # sequence.
-        if [ "${#plain}" -le 46 ]; then
-            rank_sgr="${TXT_ACCENT_SGR}"
-            case "${rank}" in
-                1) rank_sgr="${TXT_GOLD_SGR}" ;;
-                2) rank_sgr="${TXT_SILVER_SGR}" ;;
-            esac
+        if [ "${#plain}" -le "${HS_LINE_MAX}" ]; then
+            highscore_rank_sgr "${rank}"
             printf -v line '%s%2d%s %-12.12s %s%6d%s %5s %10s' \
-                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hsf_name}" \
+                "${HS_RANK_SGR}" "${rank}" "${TXT_RESET_SGR}" "${hsf_name}" \
                 "${TXT_ACCENT_SGR}" "${hsf_rows}" "${TXT_RESET_SGR}" \
                 "${FMT_DURATION}" "${hsf_date}"
-            body+=("${line}")
+            HSB_L1+=("${line}")
         else
-            body+=("${plain:0:46}")
+            HSB_L1+=("${plain:0:HS_LINE_MAX}")
         fi
-        fmt_ppm "${hsf_pieces}" "${hsf_time}"
-        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
-            "${hsf_gold}" "${hsf_silver}" "${hsf_hammers}" "${hsf_pieces}" \
-            "${FMT_PPM}"
-        if [ "${#plain}" -le 46 ]; then
-            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
-                "${TXT_GOLD_SGR}" "${hsf_gold}" "${TXT_RESET_SGR}" \
-                "${TXT_SILVER_SGR}" "${hsf_silver}" "${TXT_RESET_SGR}" \
-                "${TXT_WARN_SGR}" "${hsf_hammers}" "${TXT_RESET_SGR}" \
-                "${hsf_pieces}" "${FMT_PPM}"
-            body+=("${line}")
-        else
-            body+=("${plain:0:46}")
-        fi
-        body+=("")
+        highscore_row2 "${hsf_gold}" "${hsf_silver}" "${hsf_hammers}" \
+            "${hsf_pieces}" "${hsf_time}"
+        HSB_L2+=("${HS_ROW2}")
+        HSB_DEMO+=("${DEMO_HASH_FILE[${hsf_hash}]:-}")
     done
     debug_event "highscore flood screen shown (${#HSF_ENTRIES[@]} entries)"
-    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    highscore_browse "${title}"
     return 0
 }

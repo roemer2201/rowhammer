@@ -66,9 +66,18 @@
 #   plain data, and a corrupted or hand-edited file must be rejected
 #   rather than executed. Every field has its own pattern.
 #
+#   Round hash. A recording carries the hash of the round it holds in its
+#   file name (round_hash in rowhammer.sh), the same one the round's
+#   highscore entry stores as its last field. Both directions of that
+#   link are read off the file name alone, without opening a single
+#   recording: demo_protected asks whether a recording still backs a
+#   highscore entry and must be kept (demo_prune), demo_hash_map answers
+#   the opposite question for the highscore screens - which entry still
+#   has a recording to watch (highscore_browse, lib/highscore.sh).
+#
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-08-04)
+# Version: 0.4.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -502,6 +511,45 @@ demo_protected() {
         return 1
     fi
     [ -n "${HS_HASH_SET[${DEMO_FILE_HASH}]:-}" ]
+}
+
+# demo_hash_map
+# Fill the associative array DEMO_HASH_FILE with one entry per recording
+# that carries a round hash in its name: the hash is the key, the file
+# path the value. It is the mirror image of highscore_hash_set
+# (lib/highscore.sh) - that one asks "does this recording still back a
+# highscore entry", this one asks "does this highscore entry still have
+# a recording", which is what the list browser needs to mark an entry and
+# to play it (highscore_browse). Reading the hash off the file name means
+# the whole map costs one glob and no file read at all, so a highscore
+# screen can rebuild it every time it is opened instead of caching a
+# state that a round played in between would invalidate.
+# Two recordings sharing a hash cannot happen in practice (the round's
+# play time in milliseconds goes into it, see round_hash in
+# rowhammer.sh); should it ever happen, the newer file wins, because the
+# glob is sorted oldest first.
+declare -A DEMO_HASH_FILE=()
+demo_hash_map() {
+    local -a files
+    local i
+    DEMO_HASH_FILE=()
+    demo_dir
+    if [ ! -d "${DEMO_DIR}" ]; then
+        return 0
+    fi
+    files=("${DEMO_DIR}"/*"${DEMO_FILE_EXT}")
+    # An unmatched glob stays unexpanded; that single non-existing entry
+    # is the empty-directory case.
+    if [ ! -e "${files[0]}" ]; then
+        return 0
+    fi
+    for (( i = 0; i < ${#files[@]}; i++ )); do
+        demo_file_hash "${files[i]}"
+        if [ "${DEMO_FILE_HASH}" != "-" ]; then
+            DEMO_HASH_FILE["${DEMO_FILE_HASH}"]="${files[i]}"
+        fi
+    done
+    return 0
 }
 
 # demo_prune [KEEP]

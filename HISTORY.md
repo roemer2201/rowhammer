@@ -76,6 +76,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.47.0 | Vollstaendige Statistik je Spielmodus | 4.5 |
 | 0.48.0 | Mehrsprachige Oberflaeche (Deutsch/Englisch) | 4.11 |
 | 0.49.0 | Hochwasser-Modus samt eigener Bestenliste | 3.5, 3.6, 4.5, 4.10 |
+| 0.50.0 | Bestenlisten mit Cursor, Blaettern und Demo-Wiedergabe | 3.5, 3.8, 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1239,3 +1240,63 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       `MENU_BODY_MAX`) und ist in zwei Seiten geteilt - Marathon, Ultra
       und Sprint auf der einen, Time Attack und Hochwasser auf der
       anderen; die Anleitung hat damit neun Seiten.
+
+- [x] **Bestenlisten mit Cursor, Blaettern und Demo-Wiedergabe**
+      (Version 0.50.0, Nutzerwunsch; aktueller Stand siehe 4.5): die
+      fuenf Highscore-Listen waren bis dahin schreibgeschuetzte
+      Info-Bildschirme, die `menu_pages` seitenweise ausgab - eine Taste
+      je Seite, immer nur vorwaerts und ohne Weg zurueck. Sie sind jetzt
+      ein Browser mit Cursor (`highscore_browse` in `lib/highscore.sh`):
+      Pfeil hoch/runter waehlt den Eintrag und blaettert dabei die Seite
+      mit, Pfeil links/rechts blaettert direkt, beides umlaufend,
+      `ESC`/`x` geht zurueck - und **Enter spielt die
+      Demo-Aufzeichnung des ausgewaehlten Eintrags ab**.
+      Die Entscheidungen dahinter:
+      - **Die Frage "gibt es zu diesem Eintrag eine Aufnahme?"
+        beantwortet der Runden-Hash aus 0.46.0.** Er steht als letztes
+        Feld im Highscore-Eintrag und im Dateinamen der Aufnahme; die
+        Verknuepfung existierte also schon, sie wurde bisher nur in der
+        Gegenrichtung benutzt (das Aufraeumen fragt, welche Aufnahme
+        noch einen Highscore haelt). `demo_hash_map` (`lib/demo.sh`) ist
+        die Umkehrung von `highscore_hash_set`: Hash auf Dateipfad, ein
+        Glob und kein einziger Dateizugriff, bei jedem Oeffnen eines
+        Listen-Bildschirms neu gebaut, weil eine zwischendurch gespielte
+        Runde oder eine geloeschte Aufnahme genau dieses Ergebnis
+        aendert.
+      - **Der Cursor ist ein `>`, keine Invertierung.** Eine
+        Eintragszeile besteht aus SGR-Sequenzen, die auf einen Reset
+        enden - die Invertierung, mit der `menu_run` seine Eintraege
+        markiert, waere darin mittendrin abgeschnitten worden. Die
+        zweite Zeile eines Eintrags laesst die Cursor-Spalte leer: ein
+        zweites `>` laese sich wie eine zweite Auswahl.
+      - **Zwei Spalten der Zeile bezahlen das** (`HS_LINE_MAX` 44 statt
+        46): eine fuer den Cursor, eine fuer die `*`-Markierung der
+        Eintraege mit Aufnahme. Die zweite Zeile eines Eintrags nutzt
+        ihre 44 Zeichen im Vollausbau genau aus, die erste bleibt
+        darunter - das Layout passt damit weiterhin exakt in das
+        48-Spalten-Minimum.
+      - **Ein Eintrag ohne Aufnahme sagt das auf Enter**, statt nichts
+        zu tun: die Markierung sagt nur, welche Eintraege eine haben,
+        nicht warum die anderen keine haben (geloescht, Aufzeichnung
+        war aus, oder aelter als die Demo-Funktion).
+      - **Waehrend eine pausierte Runde im Hauptmenue wartet, ist die
+        Wiedergabe gesperrt** - dieselbe Regel und dieselbe Meldung wie
+        im Demo-Menue (3.8): eine Wiedergabe laeuft durch genau den
+        Rundenzustand, in dem diese Runde parkt.
+      - **`menu_pages` ist ersatzlos entfallen.** Die fuenf Listen waren
+        seine einzigen Aufrufer; ein Widget ohne Aufrufer
+        stehenzulassen, waere toter Code. Sein Seitenzaehler-Text
+        (`I18N[menu_page]`) lebt im Browser weiter.
+      - **Die fuenf Listenbildschirme teilen sich jetzt zwei Helfer**
+        (`highscore_row2` fuer die zweite Zeile, `highscore_rank_sgr`
+        fuer die Medaillenfarbe): sie waren in allen fuenf Funktionen
+        wortgleich kopiert, und der Umbau haette die Kopie sonst ein
+        fuenftes Mal angefasst.
+      Nebenbefund und mitbehoben: `menu_demos` rief nach einer
+      Wiedergabe `render_menu_dirty` auf - eine Funktion, die mit ihrem
+      anderen Aufrufer in 0.45.0 entfallen war. Unter `set -e` beendete
+      dieser Aufruf das Spiel, sobald man eine ueber das Demo-Menue
+      gestartete Wiedergabe verliess ("command not found"). Die Stelle
+      setzt `MENU_FULL=1` jetzt direkt, so wie es die Stellen in
+      `lib/render.sh` und `lib/input.sh` tun, die den Bildschirm
+      uebernehmen.

@@ -377,7 +377,11 @@ in fester Reihenfolge einmal durchzureichen:
    Zuege und nicht der Bildschirm aufgezeichnet werden (und die
    Wiedergabe die Runde deshalb wirklich noch einmal spielt), wie viele
    Aufnahmen aufbewahrt werden, wo sich einzelne loeschen und die
-   Aufzeichnung abschalten laesst, und die Tasten der Wiedergabe.
+   Aufzeichnung abschalten laesst, dass auch die Bestenliste eine Demo
+   startet (seit 0.50.0, siehe 4.5) und die Tasten der Wiedergabe. Die
+   Zeile fuer den neuen Weg hat der Einleitungsabsatz bezahlt: die Seite
+   sass mit 18 Zeilen schon auf `MENU_BODY_MAX`, und der Absatz sagte in
+   fuenf Zeilen, was in vieren steht.
 
 Fuenf Teile werden bewusst aus dem laufenden Zustand gelesen statt
 ausgeschrieben, damit die Anleitung nicht luegen kann: die
@@ -694,7 +698,10 @@ Jede gespielte Runde wird mitgeschnitten und laesst sich ueber den
 Hauptmenuepunkt **"Demos"** noch einmal ansehen (`lib/demo.sh`,
 `menu_demos` in `lib/menu.sh`). Der Menuepunkt steht zwischen
 "Statistik" und "Einstellungen" - beides sind Rueckblicke auf bereits
-gespielte Runden.
+gespielte Runden. Seit 0.50.0 gibt es einen zweiten Weg dorthin: in
+einer Bestenliste startet Enter die Aufnahme des ausgewaehlten Eintrags
+(siehe 4.5) - dieselbe Wiedergabe, nur von der anderen Seite der
+Hash-Verknuepfung aus.
 
 **Aufgezeichnet werden die Zuege, nicht der Bildschirm.** Eine Demo ist
 die Liste dessen, was der Runde widerfahren ist: die Tastenaktionen des
@@ -743,8 +750,9 @@ Frage - Pause und Vorspulen: beides, plus Zeitlupe):
   4x** (`DEMO_SPEEDS`). Die aktuelle Stufe steht im HUD in der linken
   Spalte (Zeile 18, Label "Demo") - die einzige Angabe, die dem Bild
   sonst fehlen wuerde.
-- Quit-Taste (`x`) oder `ESC` kehrt zur Liste zurueck, `r` spielt eine
-  durchgelaufene Demo noch einmal von vorn.
+- Quit-Taste (`x`) oder `ESC` kehrt zur Liste zurueck (zu der, aus der
+  die Wiedergabe gestartet wurde - Demo-Liste oder Bestenliste), `r`
+  spielt eine durchgelaufene Demo noch einmal von vorn.
 - Am Ende erscheint der Kasten ueber dem Spielfeld ("DEMO ENDE" mit
   Rows, Zeit und der Art des Rundenendes) - ein weiterer Ausgang des
   `render_status_box` (siehe 3.6), der bewusst **vor** allen anderen
@@ -930,7 +938,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.49.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.50.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
@@ -1264,10 +1272,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   verschwinden, nur weil er aelter ist als ein Feld.
   **Anzeige (seit 0.38.0, Nutzerwunsch):** `highscore_ultra_screen`
   zeigt die Liste so, wie `highscore_screen` die Marathon-Liste zeigt -
-  seitenweise ueber `menu_pages`, zwei Zeilen je Eintrag, gleiche
+  seitenweise ueber `highscore_browse`, zwei Zeilen je Eintrag, gleiche
   Spaltenbreiten, gleiche Faerbung (deshalb teilt sie sich auch
-  `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`: gleiche Eintragshoehe, ein zweites
-  Konstantenpaar koennte nur auseinanderlaufen). Zwei Unterschiede,
+  `HS_PAGE_ENTRIES`: gleiche Eintragshoehe, eine zweite Konstante
+  koennte nur auseinanderlaufen). Zwei Unterschiede,
   beide aus der Rangordnung nach Zeit: die Zeit-Spalte traegt die
   Akzentfarbe, die auf dem Marathon-Bildschirm die Rows-Spalte hat (sie
   ist hier der Score), und die PPM-Spalte rechnet die Millisekunden auf
@@ -1294,8 +1302,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   eine Zeile ohne den Runden-Hash; jede andere faellt bei der
   Validierung heraus.
   **Anzeige:** `highscore_sprint_screen` zeigt die Liste im Layout der
-  beiden anderen (seitenweise ueber `menu_pages`, dieselben
-  `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`, zwei Zeilen je Eintrag, gleiche
+  beiden anderen (seitenweise ueber `highscore_browse`, dasselbe
+  `HS_PAGE_ENTRIES`, zwei Zeilen je Eintrag, gleiche
   Spaltenbreiten und Faerbung, Rows in der Akzentfarbe wie auf dem
   Marathon-Bildschirm). Eine Spalte weicht ab: wo die Marathon-Liste die
   Spielzeit zeigt, stehen hier die physischen Reihen ("Lines"). Jeder
@@ -1319,8 +1327,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   (Entscheidung in 3.6) - dieser Modus hat keinen Zustand
   "unvollstaendig", der sich nicht vergleichen liesse.
   **Anzeige:** `highscore_timeattack_screen` zeigt die Liste im Layout
-  der drei anderen (seitenweise ueber `menu_pages`, dieselben
-  `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`, zwei Zeilen je Eintrag, Rows in der
+  der drei anderen (seitenweise ueber `highscore_browse`, dasselbe
+  `HS_PAGE_ENTRIES`, zwei Zeilen je Eintrag, Rows in der
   Akzentfarbe). Die Spalten sind die der Marathon-Liste samt
   Spielzeit - und die verdient ihren Platz hier: ein Lauf an der Uhr
   spielt genau Startzeit + eine Sekunde je Row, eine kuerzere Zeit
@@ -1339,8 +1347,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gespeichert (Entscheidung in 3.6) - dieser Modus endet immer im Game
   Over, einen Zustand "unvollstaendig" gibt es nicht.
   **Anzeige:** `highscore_flood_screen` zeigt die Liste im Layout der
-  vier anderen (seitenweise ueber `menu_pages`, dieselben
-  `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`, zwei Zeilen je Eintrag, Rows in der
+  vier anderen (seitenweise ueber `highscore_browse`, dasselbe
+  `HS_PAGE_ENTRIES`, zwei Zeilen je Eintrag, Rows in der
   Akzentfarbe), mit den Spalten der Marathon-Liste samt Spielzeit: das
   Wasser steigt nach der Uhr, die ueberlebte Zeit sagt also, gegen wie
   viele Flutreihen ein Eintrag angespielt hat, und trennt zwei Runden
@@ -1362,6 +1370,39 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gemeinsame Liste waere keine Alternative: sie muesste mehrere
   Ordnungen
   in eine Tabelle mischen (siehe 3.6).
+  **Bedienung der Listen (seit 0.50.0, Nutzerwunsch):** alle fuenf
+  Bildschirme sind ein Browser mit Cursor (`highscore_browse` in
+  `lib/highscore.sh`), nicht mehr eine Folge von Info-Bildschirmen. Pfeil
+  hoch/runter waehlt den Eintrag und blaettert dabei die Seite mit, Pfeil
+  links/rechts blaettert die Seiten direkt, `ESC`/`x` geht zurueck; beide
+  Richtungen laufen um wie in jeder anderen Liste des Spiels. **Enter
+  spielt die Demo-Aufzeichnung des ausgewaehlten Eintrags ab** (siehe
+  3.8). Entscheidungen dahinter:
+  - **Der Cursor ist ein `>` vor der ersten Zeile des Eintrags**, nicht
+    die Invertierung, mit der `menu_run` seine Eintraege markiert: eine
+    Eintragszeile besteht aus SGR-Sequenzen, die auf einen Reset enden,
+    und der wuerde eine invertierte Strecke mittendrin abschneiden. Die
+    zweite Zeile laesst die Cursor-Spalte leer - ein zweites `>` laese
+    sich wie eine zweite Auswahl.
+  - **Blaettern setzt den Cursor auf den ersten Eintrag der Seite**,
+    damit die Auswahl immer sichtbar ist.
+  - **Ob es zu einem Eintrag eine Aufnahme gibt, beantwortet der
+    Runden-Hash**: er steht als letztes Feld im Eintrag und im
+    Dateinamen der Aufnahme (siehe 3.8 und 4.10). `demo_hash_map`
+    (`lib/demo.sh`) baut daraus die Umkehrung von `highscore_hash_set` -
+    Hash auf Dateipfad - und kostet dafuer ein Glob und keinen einzigen
+    Dateizugriff. Gebaut wird sie bei jedem Oeffnen eines Listen-
+    Bildschirms neu: eine zwischendurch gespielte Runde oder eine
+    geloeschte Aufnahme aendert genau dieses Ergebnis.
+  - **Markiert sind solche Eintraege mit `*`**, samt Legende unter der
+    Tabelle; die Legende erscheint nur, wenn die Liste ueberhaupt eine
+    Markierung traegt. Ein Eintrag ohne Aufnahme sagt auf Enter, dass es
+    keine gibt, statt nichts zu tun - die Markierung sagt nur, welche
+    Eintraege eine haben, nicht warum die anderen keine haben.
+  - **Waehrend eine Runde pausiert im Hauptmenue wartet, ist die
+    Wiedergabe gesperrt** - dieselbe Regel und dieselbe Meldung wie im
+    Demo-Menue (siehe 3.8): eine Wiedergabe laeuft durch genau den
+    Rundenzustand, in dem diese Runde parkt.
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
@@ -1372,9 +1413,9 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   (0.25.0) auf 6. Fuer PCS und PPM war kein Platz mehr uebrig; der
   Zeilenumbruch gibt dem Namen dafuer 12 Zeichen zurueck (gespeichert
   bleiben weiterhin bis zu 16). Die Liste ist damit zu hoch fuer einen
-  22-Zeilen-Bildschirm und wird von `menu_pages` (`lib/menu.sh`)
-  seitenweise gezeigt - fuenf Eintraege je Seite, Tabellenkopf auf
-  jeder Seite wiederholt, Seitenzaehler im Titel.
+  22-Zeilen-Bildschirm und wird seitenweise gezeigt - fuenf Eintraege je
+  Seite (`HS_PAGE_ENTRIES`), Tabellenkopf auf jeder Seite wiederholt,
+  Seitenzaehler im Titel.
   **Farbige Darstellung (seit 0.30.0):** die Tabelle nutzt seither
   dieselbe Theme-Infrastruktur wie das Spielfeld (`COLOR_THEME`,
   `COLOR_MODE`, siehe 4.1): `render_colors_init` (`lib/render.sh`)
@@ -1818,7 +1859,7 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 
 ```
 version=2            Formatversion (jede andere wird abgelehnt)
-game=0.49.0          Spielversion, die aufgenommen hat (nur Info)
+game=0.50.0          Spielversion, die aufgenommen hat (nur Info)
 mode=marathon        marathon|ultra|sprint|timeattack|flood - die Regeln
 name=Player          Spielername
 date=2026-08-03 21:40
@@ -2822,8 +2863,8 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.48.0
-  (mehrsprachige Oberflaeche); die
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.50.0
+  (Bestenlisten mit Cursor und Demo-Wiedergabe); die
   Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen ist der Punkt unten
 
@@ -3049,11 +3090,15 @@ Multi-Server zuletzt.
 - Tabellenbreite: erledigt fuer den naechsten Zuwachs. Der
   Pieces-Zaehler (0.27.0) hat die Ein-Zeilen-Grenze der beiden Tabellen
   gesprengt; auf Nutzerentscheidung ist ein Eintrag jetzt zwei Zeilen
-  breit, seitenweise angezeigt (`menu_pages`). Weitere Werte kosten
+  breit, seitenweise angezeigt (bis 0.49.0 ueber `menu_pages`, seit
+  0.50.0 ueber `highscore_browse`, siehe 4.5). Weitere Werte kosten
   damit keine vorhandene Spalte mehr, sondern Zeilen - und irgendwann
   eine weitere Seite: pro Info-Bildschirm passen 18 Zeilen
   (`MENU_BODY_MAX`, seit 0.28.0 eine mehr), die Highscore-Liste zeigt fuenf Eintraege je
   Seite, die Statistik teilt sich in Gesamtzaehler und letzte Spiele.
+  Eine Zeile der Liste hat seit 0.50.0 zwei Zeichen weniger fuer sich
+  (`HS_LINE_MAX` 44 statt 46): die beiden vordersten Spalten gehoeren
+  dem Cursor und der Demo-Markierung.
 - Spielmodi: die drei Fragen zum Ultra-Modus sind mit 0.34.0
   entschieden (Rows statt Lines, gescheiterte Versuche ohne
   Listeneintrag, HUD-Zaehler "Goal"/"Left" in der linken Spalte, siehe

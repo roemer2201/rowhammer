@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.1.0  (2026-08-04)
+# Version: 1.2.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -243,6 +243,16 @@ You can delete it in the demo menu."
     [hs_col_date]="Date"
     [hs_lbl_gold]="Gold"
     [hs_lbl_silver]="Silv"
+    # Footer and legend of the list browser (highscore_browse). The
+    # footer names the four things the keys do; the legend appears only
+    # when at least one entry has a recording.
+    [hs_nav]="^v entry  <> page  Enter demo  ESC back"
+    [hs_legend_demo]="* = recording available"
+    [hs_no_demo]="There is no recording for this entry.
+
+It was deleted, recording was switched off
+while the round was played, or the entry is
+older than the demo feature."
     [hs_empty]="No entries yet."
     [hs_empty_marathon]="Play a round to get onto the list."
     [hs_empty_ultra]="Reach the goal of %s rows in an Ultra
@@ -424,6 +434,7 @@ plays the round once more.
 and are kept beyond that. Single ones can
 be deleted in the demo menu, the recording
 switched off in the settings.
+The highscore lists play them with Enter.
 
 During a replay:"
     [help_demo_pause]="Pause / resume"

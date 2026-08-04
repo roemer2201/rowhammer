@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.1.0  (2026-08-04)
+# Version: 1.2.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -269,6 +269,17 @@ Du kannst sie im Demo-Menue loeschen."
     [hs_col_date]="Datum"
     [hs_lbl_gold]="Gold"
     [hs_lbl_silver]="Silb"
+    # Footer and legend of the list browser (highscore_browse). The
+    # footer names the four things the keys do; the legend appears only
+    # when at least one entry has a recording.
+    [hs_nav]="^v Eintrag  <> Seite  Enter Demo  ESC zurueck"
+    [hs_legend_demo]="* = Aufzeichnung vorhanden"
+    [hs_no_demo]="Zu diesem Eintrag gibt es keine
+Aufzeichnung.
+
+Sie wurde geloescht, war beim Spielen
+ausgeschaltet, oder der Eintrag ist aelter
+als die Demo-Funktion."
     [hs_empty]="Noch keine Eintraege."
     [hs_empty_marathon]="Spiele eine Runde, um dich einzutragen."
     [hs_empty_ultra]="Erreiche das Ziel von %s Rows in einer
@@ -447,15 +458,15 @@ ein."
 
 Jede gespielte Runde wird mitgeschnitten und
 kann spaeter noch einmal angesehen werden.
-Aufgezeichnet werden die Zuege, nicht der
-Bildschirm - die Wiedergabe spielt die Runde
-wirklich noch einmal.
+Aufgezeichnet werden die Zuege, nicht das
+Bild - die Wiedergabe spielt die Runde neu.
 "
     [help_p8_kept]="Aufbewahrt werden die %d neuesten Runden;"
     [help_p8_mid]="Aufnahmen mit * halten noch einen Highscore
 und bleiben darueber hinaus erhalten.
 Einzelne loeschen kannst du im Demo-Menue,
 die Aufzeichnung in den Einstellungen.
+Die Highscore-Liste spielt sie mit Enter ab.
 
 Waehrend der Wiedergabe:"
     [help_demo_pause]="Pause / weiter"

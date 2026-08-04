@@ -147,6 +147,13 @@ Das Startmenue bietet:
   seitenweise geblaettert: Name, Rows (die Punkte der Runde), Spielzeit
   und Datum in der ersten, Gold-/Silberquadrate, Rowhammer ("RH"),
   abgelegte Teile ("PCS") und Teile je Minute ("PPM") in der zweiten.
+  **Durch die Liste laeuft ein Cursor:** Pfeil hoch/runter waehlt den
+  Eintrag (und blaettert dabei automatisch weiter), Pfeil links/rechts
+  blaettert die Seiten vor und zurueck, `Esc` geht zurueck - beide
+  Richtungen laufen um. Ein Eintrag, zu dem es noch eine
+  **Demo-Aufzeichnung** gibt, ist mit `*` markiert; **Enter** spielt sie
+  ab (siehe Menuepunkt "Demos"). Verknuepft sind Eintrag und Aufnahme
+  ueber den Runden-Hash, den beide tragen.
   Die Ultra-Liste ist nach der kuerzesten Zeit sortiert und zeigt sie
   auf die Millisekunde genau (MM:SS.mmm) - dort ist die Zeit der Score,
   in den anderen vier Listen sind es die Rows. Die
@@ -185,7 +192,9 @@ Das Startmenue bietet:
   **abspielen** oder **loeschen**. Aufbewahrt werden die 10 neuesten
   Runden; Aufnahmen, die noch einen Highscore-Eintrag belegen, sind mit
   `*` markiert und bleiben darueber hinaus erhalten (verknuepft ueber
-  einen Hash im Dateinamen)
+  einen Hash im Dateinamen). Dieselbe Verknuepfung nutzt die
+  Highscore-Liste in der Gegenrichtung: dort startet Enter die
+  Aufzeichnung des ausgewaehlten Eintrags
 - **Einstellungen** - Tastenbelegung aendern, **Sprache waehlen**
   (`Automatisch`, `Deutsch` oder `English`; die Auswahl gilt sofort,
   ohne Neustart), Farbschema waehlen
@@ -407,7 +416,8 @@ Umgesetzt:
   4x Tempo abspielen; gewertet wird sie nie (kein Highscore, kein
   Weltwunder-Fortschritt, keine Statistik). Aufnahmen, die noch einen
   Highscore-Eintrag halten, sind in der Liste mit `*` markiert und
-  bleiben ueber die 10 hinaus erhalten
+  bleiben ueber die 10 hinaus erhalten; umgekehrt startet Enter in der
+  Highscore-Liste die Aufnahme des dort ausgewaehlten Eintrags
 - **Spielmodi:** endloses **Marathon**, **Ultra** (150 Rows auf
   Zeit, eigene Bestenliste nach kuerzester Zeit), **Sprint**
   (3 Minuten auf Rows, eigene Bestenliste nach den meisten Rows),
@@ -556,6 +566,15 @@ Waehrend der Wiedergabe einer Demo (Menuepunkt "Demos"):
 | Pfeil links / rechts      | Tempo (0.25x bis 4x)        |
 | `x` / `Esc`               | Zurueck zur Demo-Liste      |
 | `r`                       | Noch einmal (am Ende)       |
+
+In einer Bestenliste (Menuepunkt "Highscores"):
+
+| Taste                     | Aktion                      |
+|---------------------------|-----------------------------|
+| Pfeil hoch / runter       | Eintrag waehlen             |
+| Pfeil links / rechts      | Seite vor / zurueck         |
+| Enter                     | Demo des Eintrags ansehen   |
+| `x` / `Esc`               | Zurueck                     |
 
 Links, Rechts und Hard-Drop haben in der Standardbelegung bewusst keine
 Buchstabentaste (`a`, `d` und `w` werden fuer Drehen und Hold gebraucht);

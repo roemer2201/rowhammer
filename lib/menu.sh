@@ -25,9 +25,9 @@
 #   preselected; it guards leaving the game while a round is still
 #   suspended and, since 0.18.0, the two pause menu entries that
 #   discard the running round.
-#   menu_pages (since 0.10.0) shows a table that outgrew one
-#   screen as a sequence of info screens with a repeated table head, which
-#   is what the two-line highscore entries need. menu_help (since
+#   The paged info screen menu_pages (0.10.0 to 0.23.0) is gone: the
+#   highscore lists were its only callers and browse themselves since
+#   0.24.0 (highscore_browse, lib/highscore.sh). menu_help (since
 #   0.12.0, user request) is the "Anleitung" main menu entry: eight info
 #   screens explaining the game, the controls, hold and preview, the
 #   gold/silver squares, the wonder construction, the game modes, how
@@ -84,7 +84,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.23.0  (2026-08-04)
+# Version: 0.24.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -244,51 +244,14 @@ menu_message() {
 # would renumber the pages under the player's hands on every resize.
 MENU_BODY_MAX=$(( MIN_TERM_ROWS - 4 ))
 
-# menu_pages TITLE HEAD PAGE LINE...
-# Show a table too tall for one screen as a sequence of info screens.
-# The first HEAD lines are the table head and are repeated on every page,
-# the remaining lines are dealt out PAGE at a time; the title carries a
-# "Seite p/n" marker as soon as there is more than one page. Each page
-# waits for a key like menu_message does. Callers pick PAGE as a whole
-# multiple of their entry height, so an entry is never torn apart, and
-# keep HEAD + PAGE within MENU_BODY_MAX.
-# Added 0.27.0: the highscore list grew a second line per entry (pieces
-# and PCS/min) and no longer fits a single 22-row screen.
-menu_pages() {
-    local title="${1}" head="${2}" page="${3}"
-    shift 3
-    local -a lines=("$@")
-    local -a body=()
-    local total rest pages p from i paged
-    total="${#lines[@]}"
-    rest=$(( total - head ))
-    if [ "${rest}" -lt 0 ]; then
-        rest=0
-    fi
-    # Ceiling division; a head-only call still shows one page.
-    pages=$(( (rest + page - 1) / page ))
-    if [ "${pages}" -lt 1 ]; then
-        pages=1
-    fi
-    for (( p = 0; p < pages; p++ )); do
-        body=()
-        for (( i = 0; i < head; i++ )); do
-            body+=("${lines[i]}")
-        done
-        from=$(( head + p * page ))
-        for (( i = from; i < from + page && i < total; i++ )); do
-            body+=("${lines[i]}")
-        done
-        if [ "${pages}" -gt 1 ]; then
-            printf -v paged "${I18N[menu_page]}" "${title}" \
-                "$(( p + 1 ))" "${pages}"
-            menu_message "${paged}" "${body[@]}"
-        else
-            menu_message "${title}" "${body[@]}"
-        fi
-    done
-    return 0
-}
+# CHANGE 2026-08-04 (0.24.0): menu_pages is gone. It showed a table too
+# tall for one screen as a sequence of info screens - the table head
+# repeated on every page, one key press per page and no way back to the
+# one before. The five highscore lists were its only callers, and they
+# browse themselves now (highscore_browse, lib/highscore.sh): a cursor
+# that walks the entries, pages that can be turned in both directions,
+# and Enter to watch the recording of the entry it stands on. Its page
+# marker text (I18N[menu_page]) lives on there.
 
 # Number of screens menu_help walks through; used both to number the
 # titles ("Anleitung (2/9)") and to wrap the left/right paging
@@ -917,8 +880,14 @@ menu_demos() {
                 fi
                 demo_play "${file}"
                 # The replay owned the whole screen; the next menu frame
-                # has to clear it before drawing.
-                render_menu_dirty
+                # has to clear it before drawing. Setting the flag
+                # directly, the way the places inside lib/render.sh and
+                # lib/input.sh that take the screen over do: the helper
+                # render_menu_dirty this used to call was dropped with
+                # its other caller in 0.45.0, which left this line
+                # calling a function that no longer existed - and under
+                # "set -e" that ended the game right after a replay.
+                MENU_FULL=1
                 ;;
             1)
                 # A protected recording can still be deleted - it is an

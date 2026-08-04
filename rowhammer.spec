@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.49.0
+Version:        0.50.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,15 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.50.0-1
+- The highscore lists are browsable: a cursor walks the entries with
+  up/down, left/right turn the pages in both directions.
+- An entry whose demo recording still exists is marked "*" and Enter
+  watches it; the round hash in the entry and in the recording's file
+  name is what ties the two together.
+- Fixed: leaving a replay started from the "Demos" menu ended the game
+  with "render_menu_dirty: command not found".
+
 * Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.49.0-1
 - New game mode "Hochwasser": Marathon under rising water - every 20
   seconds of play time a full row with a single gap is pushed in from
