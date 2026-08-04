@@ -71,7 +71,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.41.0 | Umschaltbarer Render-Modus (`partial`/`full`) | 4.3 |
 | 0.42.0 | Time-Attack-Modus samt Bestenliste, Statistik je Modus | 3.5, 3.6, 4.5 |
 | 0.43.0 | "Neustarten" im Pausenmenue | 3.1, 3.3 |
-| 0.44.0 | Namensabfrage am Rundenende (vormarkierte Vorgabe) | 3.7, 4.3, 4.5 |
+| 0.45.0 | Namensabfrage am Rundenende (vormarkierte Vorgabe) | 3.7, 4.3, 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -237,7 +237,9 @@ Lizenz) stehen weiterhin in der Roadmap.
 
 _Spaeter ueberholt: der Baufortschritt hat den HUD in 0.25.0 verlassen
 und steht seither nur noch auf dem Weltwunder-Bildschirm (siehe
-CLAUDE.md 3.3, 3.4)._
+CLAUDE.md 3.3, 3.4). Die hier skalierten Reihen-Kosten (100..6400) sind
+in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
+(10.000..640.000, siehe CLAUDE.md 3.3)._
 
 ## Phase 4 - Politur (erledigte Punkte, nach Version sortiert)
 
@@ -505,7 +507,7 @@ CLAUDE.md 3.3, 3.4)._
       Sitzung (`term_input_raw`), die Namensabfrage holt sich fuer ihren
       `read` per `term_input_line` kurz das Zeilen-Echo zurueck (siehe
       4.3)
-      _Spaeter ueberholt: diese eine Ausnahme entfiel mit 0.44.0 - die
+      _Spaeter ueberholt: diese eine Ausnahme entfiel mit 0.45.0 - die
       Namensabfragen zeichnen ihre Zeile selbst und lesen sie im
       Textmodus der Eingabeschicht, `term_input_line` gibt es nicht
       mehr._
@@ -889,7 +891,7 @@ CLAUDE.md 3.3, 3.4)._
       Unterscheidung zwischen der konfigurierbaren Buchstabentaste und
       den fest verdrahteten Sekundaertasten. Dieselbe veraltete Angabe
       stand im Kopfkommentar von `handle_key` ("2 for hold").
-- [x] **Namensabfrage am Rundenende** (Version 0.44.0, Nutzerwunsch):
+- [x] **Namensabfrage am Rundenende** (Version 0.45.0, Nutzerwunsch):
       Am Ende einer Runde fragt das Spiel nach dem Namen, unter dem sie
       in ihre Bestenliste kommt; die Vorgabe ist der Spielername aus den
       Einstellungen und steht **vormarkiert** in der Eingabezeile, sodass

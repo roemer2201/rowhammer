@@ -195,17 +195,30 @@ Die fuer uns relevanten Merkmale des Originals:
   das erste Wunder (Maya) ist dort bei 2.500 Zeilen fertig, das letzte
   bei 500.000. Finale Liste (Reihen-Kosten je Wunder in Klammern,
   justierbar in `WONDER_COSTS`):
-  1. Maya-Tempel / Chichen Itza (100)
-  2. Stonehenge (200)
-  3. Sphinx von Gizeh (400)
-  4. Pantheon, Rom (800)
-  5. Chinesische Mauer (1600)
-  6. Taj Mahal (3200)
-  7. Basilius-Kathedrale, Moskau (6400)
+  1. Maya-Tempel / Chichen Itza (10.000)
+  2. Stonehenge (20.000)
+  3. Sphinx von Gizeh (40.000)
+  4. Pantheon, Rom (80.000)
+  5. Chinesische Mauer (160.000)
+  6. Taj Mahal (320.000)
+  7. Basilius-Kathedrale, Moskau (640.000)
   Chinesische Mauer und Taj Mahal fuellen die zwei nicht verifizierbaren
   Plaetze. Die Kosten verdoppeln sich je Wunder (grob geometrisch wie im
-  Original), sind aber auf Einzelrechner-Spielzeit herunterskaliert
-  (12.700 gewichtete Reihen insgesamt statt 500.000 Zeilen).
+  Original) und liegen seit 0.44.0 auch in dessen Groessenordnung
+  (1.270.000 gewichtete Reihen insgesamt).
+  **Kosten-Umstellung 0.44.0 (Nutzerentscheidung):** die urspruengliche
+  Reihe 100..6.400 (12.700 insgesamt) war bewusst auf
+  Einzelrechner-Spielzeit herunterskaliert und damit deutlich zu billig -
+  ein Wunder fiel in wenigen Runden. Jede Kostenstelle wurde mit 100
+  multipliziert; die Verdopplung je Wunder und die Wunder-Liste selbst
+  bleiben unveraendert, nur der Massstab wandert an den des Originals
+  (dort 2.500 bis 500.000 Zeilen je Wunder) heran, sodass ein Wunder
+  wieder ein Langfrist-Ziel ist. Ein vorhandener Spielstand behaelt
+  seinen Reihenzaehler (`save`, siehe 4.5), kauft damit aber weniger
+  Fortschritt: die Baustelle faellt auf ein frueheres Wunder und eine
+  fruehere Baustufe zurueck. Das ist Absicht und kein Datenverlust - der
+  Zaehler ist die einzige gespeicherte Groesse, Wunder und Baustufe
+  werden aus ihm abgeleitet (siehe 4.5).
 - Jedes Wunder ist **eine** ASCII-Art-Datei (`assets/wonders/`, 12
   Zeilen, max. 44 Spalten, reines ASCII). Die Baustufen werden nicht als
   separate Dateien gepflegt, sondern durch **zeilenweises Aufdecken von
@@ -520,7 +533,7 @@ wo sie passen, und weicht an genau einer Stelle begruendet ab:
 - **`r` im Rundenende-Bild startet im selben Modus neu**, wie bei den
   anderen Modi (`game_reset` ohne Argument).
 
-### 3.7 Namensabfrage am Rundenende (seit 0.44.0)
+### 3.7 Namensabfrage am Rundenende (seit 0.45.0)
 
 Am Ende einer Runde fragt das Spiel nach dem Namen, unter dem die Runde
 in ihrer Bestenliste steht (Nutzerwunsch). Der **Spielername aus den
@@ -660,7 +673,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.44.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.45.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh` und
@@ -685,7 +698,7 @@ Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
 "Rows" ist die gewichtete Reihenwertung (1/5/10), die den
 Weltwunder-Fortschritt speist und seit 0.16.0 zugleich der Score der
 Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
-treibt das Level. Seit 0.44.0 fragt jede Runde, die in eine
+treibt das Level. Seit 0.45.0 fragt jede Runde, die in eine
 Bestenliste kommt, an ihrem Ende nach dem Namen fuer den Eintrag
 (vormarkierte Vorgabe aus den Einstellungen, siehe 3.7).
 CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
@@ -734,7 +747,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Seit dem inkrementellen Rendering (0.22.0) wird eine unveraenderte
   Zeile nicht mehr neu geschrieben, sodass das echote `^[[C` stehen
   blieb (frueher hatte der naechste Voll-Frame es uebermalt). **Seit
-  0.44.0 gilt der Rohmodus ausnahmslos:** die einzige Ausnahme war die
+  0.45.0 gilt der Rohmodus ausnahmslos:** die einzige Ausnahme war die
   Namensabfrage, die per `term_input_line` in den kanonischen Modus mit
   Echo zurueckschaltete; mit dem gemeinsamen Zeileneditor `menu_text_input`
   (siehe 3.7) zeichnet das Spiel die getippte Zeile selbst, `term_input_line`
@@ -851,7 +864,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   jede dieser Stellen setzt das Flag selbst); dann loescht der
   naechste Menue-Frame zuerst den ganzen Bildschirm. Der Helfer
   `render_menu_dirty`, ueber den frueher die echoende Namensabfrage das
-  Flag setzte, ist mit ihr in 0.44.0 entfallen (siehe 3.7): der neue
+  Flag setzte, ist mit ihr in 0.45.0 entfallen (siehe 3.7): der neue
   Zeileneditor ist selbst ein regulaerer Menue-Frame. Nach einem Resize
   bauen die Warteschleifen ihren Frame neu auf, statt den gespeicherten
   erneut auszugeben - er traegt absolute Cursor-Positionen der alten
@@ -900,7 +913,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   und beim Laden gegen die bekannten Schemata validiert (unbekannt =
   Abbruch mit Meldung). Der Spielername ist die **Vorgabe** der
   Namensabfrage am Rundenende (siehe 3.7); geaendert wird er nur hier im
-  Einstellungsmenue, seit 0.44.0 mit demselben Zeileneditor
+  Einstellungsmenue, seit 0.45.0 mit demselben Zeileneditor
   (`menu_text_input`) und dem bisherigen Namen vormarkiert.
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
@@ -935,7 +948,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
   Beenden der Runde, siehe 3.3; 0 Rows zaehlt nicht, gleiche Rows
   rangieren hinter dem aelteren Eintrag). Das Feld `name` ist seit
-  0.44.0 nicht mehr zwangslaeufig der Spielername aus den Einstellungen,
+  0.45.0 nicht mehr zwangslaeufig der Spielername aus den Einstellungen,
   sondern der am Rundenende abgefragte (siehe 3.7) - fuer alle vier
   Listen gleichermassen. Der erreichte Rang erscheint im Game-Over-Bild,
   die Liste unter "Highscores" im Hauptmenue. Angezeigt wird je
@@ -2070,13 +2083,17 @@ stehen.
   abgebaute Reihe jedes Accounts zahlt dann doppelt ein: auf den
   eigenen (Account-)Zaehler und auf einen gemeinsamen Server-Zaehler.
 - **Konsequenz fuer die Kostentabelle:** Die bestehende
-  `WONDER_COSTS`-Reihe (100..6400, insgesamt 12.700 Reihen, siehe 3.3)
-  ist auf Einzelrechner-Spielzeit herunterskaliert und waere von vielen
-  gleichzeitig spielenden Accounts binnen Stunden durchgespielt. Der
-  Server-Fortschritt braucht **eine eigene, deutlich groessere
-  Kostentabelle** (`SERVER_WONDER_COSTS`) - naeher an der
-  Original-Groessenordnung (2.500 bis 500.000 Zeilen je Wunder, siehe
-  3.3) oder sogar darueber, je nach erwarteter Serverlast. Beide
+  `WONDER_COSTS`-Reihe (seit 0.44.0 10.000..640.000, insgesamt 1.270.000
+  Reihen, siehe 3.3) ist auf einen einzelnen Spieler ausgelegt und waere
+  von vielen
+  gleichzeitig spielenden Accounts durchgespielt, lange bevor ein
+  gemeinsames Wunder etwas Gemeinsames haette. Der
+  Server-Fortschritt braucht deshalb weiterhin **eine eigene, deutlich
+  groessere Kostentabelle** (`SERVER_WONDER_COSTS`) - die Umstellung in
+  0.44.0 hat den Abstand nur verkleinert, nicht aufgehoben: sie bringt
+  die Einzelspieler-Reihe erst auf die Original-Groessenordnung (2.500
+  bis 500.000 Zeilen je Wunder, siehe 3.3), die Server-Reihe muss
+  darueber liegen, je nach erwarteter Serverlast. Beide
   Tabellen nutzen dieselbe Wunder-Liste und -Logik (`lib/wonders.sh`),
   nur mit unterschiedlichem Kosten-Array und unterschiedlichem
   Zaehlerstand.
@@ -2449,9 +2466,11 @@ Multi-Server zuletzt.
   frueher offene Frage nach den Punkten fuer die Quadrat-Bildung hat
   sich damit erledigt (es gibt bewusst keine Bildungs-Punkte mehr).
 - Weltwunder-Liste und Baustufen sind seit 0.8.0 festgelegt (siehe
-  3.3). Offen bleibt: Die Reihen-Kosten je Wunder (100..6400) sind
-  gegenueber dem Original bewusst herunterskaliert und sollten nach
-  Playtesting ggf. nachjustiert werden (`WONDER_COSTS`).
+  3.3). Die Reihen-Kosten je Wunder waren gegenueber dem Original
+  bewusst herunterskaliert (100..6400) und sind mit 0.44.0 auf
+  Nutzerentscheidung mit 100 multipliziert worden (10.000..640.000,
+  Original-Groessenordnung). Offen bleibt wie bisher nur die
+  Feinjustierung nach Playtesting (`WONDER_COSTS`).
 - Mindest-Terminalgroesse: seit 0.26.0 48x22 (vorher 48x24 - die zwei
   Statuszeilen sind mit dem HUD-Umbau entfallen, siehe 3.4), seit
   0.19.0 auch waehrend des Spiels ueberwacht (SIGWINCH, siehe HISTORY.md,

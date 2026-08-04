@@ -68,7 +68,7 @@
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
 #   ~/.config/rowhammer. A round that is about to enter a list asks for
-#   the name it is filed under (since 0.44.0, user request): the name
+#   the name it is filed under (since 0.45.0, user request): the name
 #   from the settings comes preselected, so keeping it is one Enter and
 #   changing it is typing over it; what is typed applies to that round
 #   only. Finished rounds enter the highscore list of
@@ -149,7 +149,7 @@
 #                [--reset config|stats|highscore|save|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.44.0  (2026-08-03)
+# Version: 0.45.0  (2026-08-03)
 
 set -euo pipefail
 
@@ -164,7 +164,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.44.0"
+ROWHAMMER_VERSION="0.45.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config

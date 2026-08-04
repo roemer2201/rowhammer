@@ -1,4 +1,4 @@
-rowhammer (0.44.0) unstable; urgency=medium
+rowhammer (0.45.0) unstable; urgency=medium
 
   * At the end of a round the game now asks for the name the round is
     filed under in its highscore list (user request). The player name
@@ -23,6 +23,24 @@ rowhammer (0.44.0) unstable; urgency=medium
     no error message afterwards).
 
  -- roemer2201 <r.oliver@web.de>  Mon, 03 Aug 2026 18:00:00 +0000
+
+rowhammer (0.44.0) unstable; urgency=medium
+
+  * Retuned the wonder goals (user decision): every entry of WONDER_COSTS
+    was multiplied by 100, so a wonder now costs 10000 to 640000 weighted
+    rows instead of 100 to 6400 - 1270000 rows for all seven instead of
+    12700. The old figures were scaled down for single-machine play and
+    turned out far too cheap; the new ones are in the order of magnitude
+    of the original (2500 to 500000 lines per wonder), where finishing a
+    wonder is a long-term goal again. The doubling per wonder and the
+    wonder sequence itself are unchanged.
+  * The wonder page of the manual ("Anleitung") widened its cost column
+    to six digits so the larger numbers keep their column.
+  * Note for existing savegames: the banked row total is untouched, but
+    it now buys less progress, so the construction site falls back to an
+    earlier wonder and build stage.
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 03 Aug 2026 12:00:00 +0200
 
 rowhammer (0.43.0) unstable; urgency=medium
 
