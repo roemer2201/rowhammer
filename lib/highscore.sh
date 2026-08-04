@@ -81,9 +81,14 @@
 #   the Time Attack one - every round of this mode ends in a top-out,
 #   that is the mode - but keeps its own file: rounds that last minutes
 #   would never reach the top ten of the endless list.
+#   Since 0.17.0 highscore_rank_preview (end of this file) answers which
+#   place a round would take in the list of its mode without inserting
+#   it, which is what lets the name prompt at the end of a round show
+#   that place while it still asks for the name (prompt_round_name,
+#   lib/menu.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.16.0  (2026-08-04)
+# Version: 0.17.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1359,5 +1364,105 @@ highscore_flood_screen() {
     done
     debug_event "highscore flood screen shown (${#HSF_ENTRIES[@]} entries)"
     menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    return 0
+}
+
+# --- Rank preview ---------------------------------------------------------
+# highscore_rank_preview MODE VALUE
+# Report in HS_PREVIEW_RANK which place a round of MODE would take in
+# that mode's list, and in HS_PREVIEW_MAX how many places the list has:
+# 1..HS_PREVIEW_MAX for a round that makes it, 0 for one that misses it
+# (and 0 as well for a mode without a list of its own). VALUE is what the
+# mode ranks by - the play time in milliseconds for Ultra, the row credit
+# for every other mode. Nothing is written and no list is touched.
+#
+# Added 0.17.0 (user request) for the name prompt at the end of a round
+# (prompt_round_name, lib/menu.sh): it runs before the entry is inserted
+# and therefore cannot read the *_LAST_RANK the add functions set, but it
+# is where the place belongs - it is the moment the round is worth a
+# name. Deriving the place here instead of asking for the name after the
+# insert keeps that name an input of the insert (see record_round in
+# rowhammer.sh, where it also goes into the round hash).
+#
+# The rule is the add functions': every list is kept sorted, a round is
+# placed in front of the first entry it beats, and an equal value ranks
+# behind the older entry. Its place is therefore one behind the number of
+# entries at least as good as it, and a place past the list's capacity is
+# no place at all. Both halves of that are exactly what the add function
+# of the mode does, so preview and entry cannot disagree - nothing
+# changes the list between the two.
+HS_PREVIEW_RANK=0
+HS_PREVIEW_MAX=0
+highscore_rank_preview() {
+    local mode="${1}" value="${2}"
+    local e better=0 asc=0
+    local -a entries=()
+    HS_PREVIEW_RANK=0
+    HS_PREVIEW_MAX=0
+    case "${mode}" in
+        marathon)
+            HS_PREVIEW_MAX="${HS_MAX}"
+            # Expanding an empty array trips set -u on bash < 4.4, so
+            # every list is only copied when it holds something (same
+            # precaution as in highscore_hash_set above).
+            if [ "${#HS_ENTRIES[@]}" -gt 0 ]; then
+                entries=("${HS_ENTRIES[@]}")
+            fi
+            ;;
+        ultra)
+            # The one list ranked by time, and therefore the one where
+            # the smaller value is the better one.
+            asc=1
+            HS_PREVIEW_MAX="${HSU_MAX}"
+            if [ "${#HSU_ENTRIES[@]}" -gt 0 ]; then
+                entries=("${HSU_ENTRIES[@]}")
+            fi
+            ;;
+        sprint)
+            HS_PREVIEW_MAX="${HSS_MAX}"
+            if [ "${#HSS_ENTRIES[@]}" -gt 0 ]; then
+                entries=("${HSS_ENTRIES[@]}")
+            fi
+            ;;
+        timeattack)
+            HS_PREVIEW_MAX="${HSA_MAX}"
+            if [ "${#HSA_ENTRIES[@]}" -gt 0 ]; then
+                entries=("${HSA_ENTRIES[@]}")
+            fi
+            ;;
+        flood)
+            HS_PREVIEW_MAX="${HSF_MAX}"
+            if [ "${#HSF_ENTRIES[@]}" -gt 0 ]; then
+                entries=("${HSF_ENTRIES[@]}")
+            fi
+            ;;
+        *)
+            # A mode without a list of its own: no place to report.
+            debug_event "highscore rank preview: unknown mode '${mode}'"
+            return 0
+            ;;
+    esac
+    # The add functions ignore a round without a ranking value (no rows
+    # resp. no measured time), so it has no place either.
+    if [ "${value}" -le 0 ]; then
+        return 0
+    fi
+    if [ "${#entries[@]}" -gt 0 ]; then
+        for e in "${entries[@]}"; do
+            if [ "${asc}" -eq 1 ]; then
+                if [ "${value}" -ge "${e%%|*}" ]; then
+                    better=$(( better + 1 ))
+                fi
+            else
+                if [ "${value}" -le "${e%%|*}" ]; then
+                    better=$(( better + 1 ))
+                fi
+            fi
+        done
+    fi
+    if [ "$(( better + 1 ))" -le "${HS_PREVIEW_MAX}" ]; then
+        HS_PREVIEW_RANK=$(( better + 1 ))
+    fi
+    debug_event "highscore rank preview: mode=${mode} value=${value} rank=${HS_PREVIEW_RANK}/${HS_PREVIEW_MAX}"
     return 0
 }

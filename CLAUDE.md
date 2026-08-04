@@ -679,9 +679,26 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   noetige Fehlermeldung nach der Eingabe entfaellt. Eine
   Buchstabentaste ist hier ein Buchstabe und keine Spielaktion - `x`
   schliesst den Dialog also nicht, dafuer ist `ESC` da.
+- **Der Platz in der Bestenliste steht dabei (seit 0.50.0,
+  Nutzerwunsch):** unter den Rundenzahlen nennt der Bildschirm den Rang,
+  den die Runde in der Liste ihres Modus einnehmen wird ("Bestenliste:
+  Platz 3 von 10") bzw. dass sie sie verfehlt ("kein Platz (Top 10)").
+  Er wird **vorhergesagt statt abgelesen**: der Eintrag entsteht erst
+  hinter dieser Abfrage (der Name geht in ihn hinein, siehe oben), also
+  leitet `highscore_rank_preview` (`lib/highscore.sh`, siehe 4.5) den
+  Platz aus der geladenen Liste ab, ohne sie anzufassen -
+  `round_rank_preview` (`rowhammer.sh`) sagt ihr dafuer, nach welcher
+  Zahl der Modus rangiert (Zeit bei Ultra, Rows sonst), dieselbe
+  Fallunterscheidung, die gleich darueber `round_is_ranked` trifft. Die
+  Vorschau kann vom spaeteren Eintrag nicht abweichen: sie wendet
+  dessen Einfuegeregel an, und zwischen beiden aendert nichts die
+  Liste. Dass auch die **verfehlte** Liste gemeldet wird, ist Absicht -
+  gefragt wird, sobald eine Runde ueberhaupt in eine Liste kommen
+  koennte, und ob sie die Top 10 erreicht, ist genau die Frage, die der
+  Bildschirm sonst offen liesse.
 - **Darstellung:** ein regulaerer, zentrierter Menue-Frame
-  (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level und
-  Zeit der Runde ueber der Eingabezeile. Die Markierung ist invertierter
+  (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level, Zeit
+  und Listenplatz der Runde ueber der Eingabezeile. Die Markierung ist invertierter
   Text (`\e[7m`), nach ihrem Aufheben steht ein invertierter Block als
   Cursor hinter dem Text - der echte Cursor bleibt die ganze Sitzung
   ueber ausgeblendet. Danach setzt `prompt_round_name` `RENDER_FULL=1`,
@@ -1362,6 +1379,16 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gemeinsame Liste waere keine Alternative: sie muesste mehrere
   Ordnungen
   in eine Tabelle mischen (siehe 3.6).
+  **Platz-Vorschau (seit 0.50.0):** `highscore_rank_preview MODUS WERT`
+  sagt in `HS_PREVIEW_RANK`/`HS_PREVIEW_MAX`, welchen Platz eine Runde
+  in der Liste ihres Modus einnehmen wuerde, ohne sie einzutragen (0 =
+  verfehlt). Sie bedient alle fuenf Listen - sie unterscheiden sich nur
+  im befragten Array und darin, ob der kleinere Wert der bessere ist
+  (Ultra) - und wendet die Einfuegeregel der `*_add`-Funktionen an: ein
+  Platz hinter der Zahl der mindestens gleich guten Eintraege, und kein
+  Platz, wenn das ueber `*_MAX` hinausgeht. Gebraucht wird sie von der
+  Namensabfrage am Rundenende (siehe 3.7), die vor dem Eintrag laeuft
+  und den Rang der `*_add`-Funktionen deshalb noch nicht kennt.
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.

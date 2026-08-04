@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.1.0  (2026-08-04)
+# Version: 1.2.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -155,6 +155,10 @@ A-Z a-z 0-9 Leerzeichen _ -"
     [round_mode]="Modus: %s"
     [round_rows]="Rows: %d   Lines: %d"
     [round_level]="Level: %d   Zeit: %s"
+    # Platz in der Bestenliste des Modus: 1 = Rang, 2 = Laenge der Liste.
+    # round_rank_none nennt nur die Laenge (Argument 1).
+    [round_rank]="Bestenliste: Platz %d von %d"
+    [round_rank_none]="Bestenliste: kein Platz (Top %d)"
     [round_ask_name]="Name fuer die Bestenliste:"
 
     # --- Demos ------------------------------------------------------------

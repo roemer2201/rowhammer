@@ -1,3 +1,18 @@
+rowhammer (0.50.0) unstable; urgency=medium
+
+  * The name prompt at the end of a round now also shows the place the
+    round will take in the highscore list of its mode ("Bestenliste:
+    Platz 3 von 10"), or that it misses the list ("kein Platz (Top 10)").
+  * The place is derived rather than read back: the list entry is only
+    written once the prompt has returned a name, so the new
+    highscore_rank_preview (lib/highscore.sh) computes it from the loaded
+    list without touching it. It serves all five lists and applies the
+    insert rule of the *_add functions, so preview and entry cannot
+    disagree; round_rank_preview (rowhammer.sh) tells it which number the
+    mode ranks by - the play time for Ultra, the row credit for the rest.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 21:30:00 +0200
+
 rowhammer (0.49.0) unstable; urgency=medium
 
   * New game mode "Hochwasser" (user request): Marathon under rising

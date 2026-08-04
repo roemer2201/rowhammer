@@ -179,7 +179,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.49.0  (2026-08-04)
+# Version: 0.50.0  (2026-08-04)
 
 set -euo pipefail
 
@@ -194,7 +194,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.49.0"
+ROWHAMMER_VERSION="0.50.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -1239,6 +1239,24 @@ round_is_ranked() {
         ultra)  [ "${GOAL_REACHED}" -eq 1 ] && [ "${PLAY_MS}" -gt 0 ] ;;
         sprint) [ "${GOAL_REACHED}" -eq 1 ] && [ "${ROW_CREDIT}" -gt 0 ] ;;
         *)      [ "${ROW_CREDIT}" -gt 0 ] ;;
+    esac
+}
+
+# round_rank_preview: which place the round that just ended would take in
+# the list of its mode, reported in HS_PREVIEW_RANK / HS_PREVIEW_MAX
+# (highscore_rank_preview, lib/highscore.sh; 0 = misses the list). Asked
+# by the name prompt (prompt_round_name, lib/menu.sh), which runs before
+# the entry is written and so cannot read the rank the insert reports.
+# Only meaningful for a round round_is_ranked accepts.
+#
+# It sits next to round_is_ranked because it answers with the same piece
+# of knowledge: which number of the round its mode is ranked by - the
+# play time for Ultra, the row credit everywhere else. Keeping the two
+# together means a new mode has one place to be entered, not two.
+round_rank_preview() {
+    case "${GAME_MODE}" in
+        ultra) highscore_rank_preview "${GAME_MODE}" "${PLAY_MS}" ;;
+        *)     highscore_rank_preview "${GAME_MODE}" "${ROW_CREDIT}" ;;
     esac
 }
 
