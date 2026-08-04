@@ -406,6 +406,27 @@ geht als Argument an `game_run` und liegt waehrend der Runde in
 Pausieren/Fortsetzen erhalten - eine ins Hauptmenue gelegte Runde kommt
 im Modus zurueck, in dem sie gestartet wurde).
 
+**Die Menue-Eintraege der Modi baut `menu_mode_entries`** (`lib/menu.sh`)
+fuer alle drei Auswahlen (Einzelspieler, "Highscores", "Statistik")
+gemeinsam, damit derselbe Modus ueberall gleich zu lesen ist: erst der
+Name, dann in Klammern, wogegen der Modus laeuft - Ziel, Zeitlimit bzw.
+Flut-Abstand, aus den laufenden Konstanten gelesen, sodass ein
+nachjustierter Wert kein Menue zur Luege machen kann. Zwei Festlegungen
+dazu (seit 0.53.0, Nutzerwunsch):
+
+- **Die Klammern sind eine eigene Spalte.** Jeder Name wird auf den
+  laengsten aufgefuellt, sodass alle Beschreibungen in derselben Spalte
+  beginnen statt hinter Namen von fuenf bis elf Zeichen zu flattern. Die
+  Breite wird ueber die Namen **gemessen** statt festgeschrieben: welche
+  Laenge sie haben, entscheidet die Sprache (der Hochwasser-Modus allein
+  heisst "Hochwasser" oder "Flood", siehe 4.11).
+- **Auch Marathon traegt eine Beschreibung** ("endlos, bis Game Over").
+  Er war der einzige Eintrag ohne, was sich wie ein fehlender Text las
+  statt wie der eine Modus ohne Ziel. Die Texte stehen als
+  `entry_*`-Eintraege in der Texttabelle, mit den Klammern, aber ohne
+  Namen und ohne Auffuellung - die Ausrichtung gehoert dem Code, die
+  Formulierung der Uebersetzung.
+
 - **Marathon** (`marathon`; bis 0.34.1 "Normales Spiel"/`normal` -
   Nutzerentscheidung, an den in anderen Tetris-Spielen ueblichen Namen
   fuer den endlosen Modus angeglichen): die endlose Runde wie bisher,
@@ -974,7 +995,11 @@ endlose Modus hiess bis
 "Highscores" ebenso den Modus der anzuzeigenden Bestenliste
 (`menu_highscores`, seit 0.49.0 mit fuenf Listen, siehe 4.5). Seit
 0.47.0 waehlt auch der Menuepunkt "Statistik" zuerst die Sicht
-(`menu_stats`: Gesamt oder einer der fuenf Modi, siehe 4.5); die
+(`menu_stats`: Gesamt oder einer der fuenf Modi, siehe 4.5). Die
+Modus-Eintraege dieser drei Auswahlen baut seit 0.48.0 ein gemeinsamer
+Helfer (`menu_mode_entries`); seit 0.53.0 nennt jeder Eintrag hinter dem
+Namen in einer eigenen, ausgerichteten Spalte, wogegen der Modus laeuft
+(siehe 3.6). Die
 Menue-Beschriftung
 ist seit 0.48.0 nicht mehr fest, sondern uebersetzt (siehe 4.11):
 Deutsch und Englisch stehen zur Wahl, Code, Kommentare und

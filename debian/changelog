@@ -1,3 +1,18 @@
+rowhammer (0.53.0) unstable; urgency=medium
+
+  * The game mode entries are tidier (user request): every mode is
+    followed by a short description in brackets, and the brackets start
+    in one common column instead of trailing names of five to eleven
+    characters. The column is measured from the mode names of the active
+    language, so a translation cannot push it out of alignment.
+  * Marathon has such a description now as well ("endlos, bis Game
+    Over"). It was the only entry without one, which read like a missing
+    text rather than like the one mode without a goal.
+  * The change covers all three mode pickers - singleplayer, "Highscores"
+    and "Statistik" - because they are built by one function.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 23:59:00 +0200
+
 rowhammer (0.52.0) unstable; urgency=medium
 
   * The highscore lists are browsable now (user request): a cursor walks

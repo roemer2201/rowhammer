@@ -79,6 +79,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.50.0 | Platz in der Bestenliste in der Namensabfrage | 3.7, 4.5 |
 | 0.51.0 | Marathon-Bestenliste heisst `highscore-marathon` | 4.5, 4.8 |
 | 0.52.0 | Bestenlisten mit Cursor, Blaettern und Demo-Wiedergabe | 3.5, 3.8, 4.5 |
+| 0.53.0 | Modus-Eintraege mit ausgerichteter Beschreibung | 3.6, 4.2 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1376,3 +1377,31 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       setzt `MENU_FULL=1` jetzt direkt, so wie es die Stellen in
       `lib/render.sh` und `lib/input.sh` tun, die den Bildschirm
       uebernehmen.
+
+- [x] **Aufgeraeumtes Einzelspieler-Menue: Beschreibung je Modus,
+      ausgerichtet** (Version 0.53.0, Nutzerwunsch; aktueller Stand
+      siehe 3.6): die Modus-Eintraege nannten hinter dem Namen in
+      Klammern, wogegen der Modus laeuft - aber nur vier von fuenf, und
+      jede Klammer begann dort, wo ihr Name zufaellig endete. Jetzt
+      traegt jeder Eintrag eine Beschreibung, und alle beginnen in
+      derselben Spalte. Die Entscheidungen dahinter:
+      - **Die Breite wird gemessen, nicht festgeschrieben.**
+        `menu_mode_entries` (`lib/menu.sh`) fuellt jeden Namen auf den
+        laengsten der fuenf auf. Eine feste Zahl waere in der Sprache
+        richtig gewesen, in der sie gezaehlt wurde, und in der naechsten
+        falsch - der Hochwasser-Modus allein heisst "Hochwasser" oder
+        "Flood" (4.11).
+      - **Die Texttabelle traegt die Klammern, nicht den Namen.** Die
+        `entry_*`-Eintraege sind seither die Beschreibung allein; Name
+        und Auffuellung setzt der Code davor. So gehoert die
+        Formulierung weiterhin der Uebersetzung und die Ausrichtung dem
+        Code, statt beides in einem String zu vermischen, in dem eine
+        Uebersetzung sie nur wieder zerstoeren koennte.
+      - **Marathon bekommt "endlos, bis Game Over".** Er war der
+        einzige Eintrag ohne Klammer - was sich wie ein vergessener
+        Text las statt wie der eine Modus ohne Ziel. Dass er keines
+        hat, ist selbst die Auskunft, die dort fehlte.
+      - **Alle drei Modus-Auswahlen aendern sich mit** (Einzelspieler,
+        "Highscores", "Statistik"): sie bauen ihre Eintraege seit
+        0.48.0 aus demselben Helfer, und genau dafuer gibt es ihn -
+        derselbe Modus soll sich ueberall gleich lesen.
