@@ -76,6 +76,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.47.0 | Vollstaendige Statistik je Spielmodus | 4.5 |
 | 0.48.0 | Mehrsprachige Oberflaeche (Deutsch/Englisch) | 4.11 |
 | 0.49.0 | Hochwasser-Modus samt eigener Bestenliste | 3.5, 3.6, 4.5, 4.10 |
+| 0.50.0 | Marathon-Bestenliste heisst `highscore-marathon` | 4.5, 4.8 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -257,6 +258,8 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       und Hold-Sekundaertaste auf `w`._
 - [x] Highscore-Liste (Version 0.7.0: Top 10 im Datenverzeichnis,
       Anzeige im Hauptmenue, Rang im Game-Over-Bild; siehe 4.5)
+      _Spaeter ueberholt: die Datei hiess bis 0.49.0 `highscore` und
+      heisst seit 0.50.0 `highscore-marathon` (siehe dort)._
 - [x] 256-Farben-Modus (Version 0.9.0: `--color-mode auto|basic|extended`,
       `auto` erkennt 256-Farben-Terminals selbst; erweiterte Palette mit
       Guideline-Farben inkl. echtem Orange fuer L sowie satterem
@@ -1239,3 +1242,40 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       `MENU_BODY_MAX`) und ist in zwei Seiten geteilt - Marathon, Ultra
       und Sprint auf der einen, Time Attack und Hochwasser auf der
       anderen; die Anleitung hat damit neun Seiten.
+
+- [x] **Umbenennung der Marathon-Bestenliste** (Version 0.50.0,
+      Nutzerwunsch; aktueller Stand siehe 4.5): die Datei der
+      Marathon-Liste heisst `highscore-marathon` statt `highscore` und
+      passt damit ins Schema der vier Modus-Listen, die mit 0.34.0
+      bis 0.49.0 dazugekommen sind (`highscore-ultra`,
+      `highscore-sprint`, `highscore-timeattack`, `highscore-flood`).
+      Der schlichte Name war ein Rest aus 0.7.0, als sie die einzige
+      Liste war.
+      Die Entscheidungen dahinter:
+      - **Eine vorhandene alte Datei wird umbenannt statt fallen
+        gelassen** (`highscore_migrate_legacy` in `lib/highscore.sh`,
+        ein `mv`, ausdruecklicher Nutzerwunsch). Das ist eine bewusste
+        Ausnahme von der Arbeitsregel "keine Abwaertskompatibilitaet"
+        (CLAUDE.md, Abschnitt 6) und eine sehr billige: am Inhalt der
+        Datei aendert sich kein Byte, nur am Namen - eine Top Ten
+        dafuer wegzuwerfen waere ein Verlust ohne Gegenwert. Der alte
+        Name lebt einzig als `HS_LEGACY_FILE_NAME` fuer diese eine
+        Funktion weiter.
+      - **Sie laeuft vor dem Reset-Block** in `rowhammer.sh`, nicht
+        etwa in `highscore_load`. `--reset highscore` (siehe 4.8)
+        arbeitet mit den Dateinamen, die die Module besitzen; eine noch
+        unter dem alten Namen liegende Datei waere dort als "nicht
+        vorhanden" gemeldet worden und haette ihren eigenen Reset
+        ueberlebt.
+      - **Eine schon vorhandene Zieldatei wird nie ueberschrieben**
+        (die Umbenennung hat dann bereits stattgefunden, und der alte
+        Name ist etwas von Hand Zurueckgelegtes): sie bleibt liegen und
+        meldet sich auf STDERR. Ein fehlgeschlagenes `mv` ist dagegen
+        ein harter Fehler - das Datenverzeichnis ist dann nicht
+        beschreibbar, das Spiel koennte dort ohnehin keine Liste
+        speichern, und weiterzumachen hiesse stillschweigend mit einer
+        leeren Marathon-Liste zu starten.
+      - **Die Meldung der Umbenennung ist uebersetzt**
+        (`highscore_renamed`, siehe 4.11) und geht wie der
+        Reset-Dialog auf STDOUT, bevor der Alternate-Screen aufgeht;
+        nur die beiden Fehlerfaelle bleiben englisch auf STDERR.

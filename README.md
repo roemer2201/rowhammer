@@ -232,7 +232,7 @@ Optionen:
 `--reset ZIEL` setzt gezielt gespeicherte Daten im Datenverzeichnis
 zurueck und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
 `config` (die Konfigurationsdatei `rowhammer.conf`), `stats` (die
-Statistik), `highscore` (alle Bestenlisten - `highscore`,
+Statistik), `highscore` (alle Bestenlisten - `highscore-marathon`,
 `highscore-ultra`, `highscore-sprint`, `highscore-timeattack` und
 `highscore-flood`),
 `save` (der
@@ -415,8 +415,10 @@ Umgesetzt:
   Bestenliste nach den meisten Rows) und **Hochwasser** (alle 20
   Sekunden eine Flutreihe von unten, eigene Bestenliste nach den
   meisten Rows; siehe oben)
-- Persistente Highscore-Listen: die besten 10 Runden in
-  `~/.config/rowhammer/highscore`, die 10 schnellsten Ultra-Laeufe
+- Persistente Highscore-Listen: die besten 10 Marathon-Runden in
+  `~/.config/rowhammer/highscore-marathon` (bis 0.49.0 hiess die Datei
+  `highscore`; eine vorhandene wird beim naechsten Start einmalig
+  umbenannt), die 10 schnellsten Ultra-Laeufe
   in `~/.config/rowhammer/highscore-ultra`, die 10 besten
   Sprint-Laeufe in `~/.config/rowhammer/highscore-sprint`, die 10
   besten Time-Attack-Laeufe in

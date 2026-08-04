@@ -1157,7 +1157,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${HOME}/.config/rowhammer` (seit 0.13.0, vorher `${HOME}/rowhammer`;
   aenderbar per `--data-dir DIR` bzw.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
-  Highscore-Liste `highscore`, die Ultra-Bestenliste `highscore-ultra`
+  Marathon-Bestenliste `highscore-marathon` (bis 0.49.0 `highscore`,
+  siehe unten), die Ultra-Bestenliste `highscore-ultra`
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
   (seit 0.39.0), die Time-Attack-Bestenliste `highscore-timeattack`
   (seit 0.42.0), die Hochwasser-Bestenliste `highscore-flood`
@@ -1188,7 +1189,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Einstellungsmenue, seit 0.45.0 mit demselben Zeileneditor
   (`menu_text_input`) und dem bisherigen Namen vormarkiert.
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
-  `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
+  `${DATA_DIR}/highscore-marathon` (bis 0.49.0 `highscore`, siehe die
+  Umbenennung unten), eine Zeile je Eintrag im Format
   `rows|lines|level|name|date|gold|silver|time|rowhammers|pieces|hash`,
   absteigend nach Rows
   sortiert. Seit dem Punktesystem-Umbau (0.16.0) ist die gewichtete
@@ -1345,6 +1347,34 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Wasser steigt nach der Uhr, die ueberlebte Zeit sagt also, gegen wie
   viele Flutreihen ein Eintrag angespielt hat, und trennt zwei Runden
   mit gleichen Rows.
+  **Umbenennung der Marathon-Datei (seit 0.50.0, Nutzerwunsch):** die
+  Marathon-Liste hiess bis 0.49.0 schlicht `highscore` - als einzige
+  ohne ihren Modus im Namen, ein Rest aus der Zeit, in der sie die
+  einzige Liste war. Sie heisst jetzt `${DATA_DIR}/highscore-marathon`
+  und passt damit ins Schema der vier anderen. Eine vorhandene alte
+  Datei wird beim naechsten Start **einmalig umbenannt**
+  (`highscore_migrate_legacy` in `lib/highscore.sh`, `mv`) - eine
+  bewusste Ausnahme von der Arbeitsregel "keine
+  Abwaertskompatibilitaet" (Abschnitt 6, ebenfalls Nutzerwunsch):
+  am Inhalt der Datei aendert sich nichts, nur an ihrem Namen, und eine
+  Top Ten dafuer wegzuwerfen waere ein Verlust ohne jeden Gegenwert.
+  Drei Festlegungen dazu:
+  - **Aufgerufen wird vor dem Reset-Block** in `rowhammer.sh` (also vor
+    `reset_run`, siehe 4.8) und damit vor allem, was eine Liste liest.
+    `--reset highscore` arbeitet mit den Dateinamen, die die Module
+    besitzen; eine noch unter dem alten Namen liegende Datei waere dort
+    als "nicht vorhanden" gemeldet worden und haette ihren eigenen
+    Reset ueberlebt. So kennt genau eine Funktion den alten Namen
+    (`HS_LEGACY_FILE_NAME`), und der Rest des Spiels sieht nur den
+    aktuellen.
+  - **Eine schon vorhandene Zieldatei wird nie ueberschrieben.** Dann
+    hat die Umbenennung bereits stattgefunden und der alte Name ist
+    etwas von Hand Zurueckgelegtes; die Datei bleibt unangetastet
+    liegen und meldet sich auf STDERR.
+  - **Ein fehlgeschlagenes `mv` ist ein harter Fehler** (`die`): das
+    Datenverzeichnis ist dann nicht beschreibbar, das Spiel koennte
+    dort ohnehin keine Liste speichern, und weiterzumachen hiesse
+    stillschweigend mit einer leeren Marathon-Liste zu starten.
   **Modus-Auswahl:** weil es damit mehrere Listen mit verschiedenen
   Rangordnungen
   gibt, fragt der Hauptmenuepunkt "Highscores" seit 0.38.0 zuerst nach
@@ -1632,7 +1662,7 @@ ins Menue zu starten. Ziele:
 | --- | --- |
 | `config` | `rowhammer.conf` |
 | `stats` | `stats` |
-| `highscore` | `highscore`, `highscore-ultra`, `highscore-sprint`, `highscore-timeattack` **und** `highscore-flood` |
+| `highscore` | `highscore-marathon`, `highscore-ultra`, `highscore-sprint`, `highscore-timeattack` **und** `highscore-flood` |
 | `save` | `save` (Weltwunder-Fortschritt) |
 | `demo` | das Verzeichnis `demos` (alle Aufzeichnungen) |
 | `all` | alle acht Dateien und das Verzeichnis `demos` |
@@ -1689,7 +1719,10 @@ Ablauf und Einordnung:
   Prerequisites-Block nach unten gewandert: ein Reset loescht nur
   Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
   ohne Terminal laufen. Das Terminal wird nie angefasst (kein
-  Alternate-Screen, kein Rohmodus).
+  Alternate-Screen, kein Rohmodus). Unmittelbar davor laeuft seit
+  0.50.0 die einmalige Umbenennung `highscore` ->
+  `highscore-marathon` (`highscore_migrate_legacy`, siehe 4.5), damit
+  `--reset highscore` die Datei unter ihrem aktuellen Namen antrifft.
 - **Sicherheitsabfrage:** an einem Terminal listet `reset_run` erst die
   betroffenen Pfade und fragt dann `Bist du sicher, dass du <ziel>
   zuruecksetzen moechtest? [N/y]`; wie bei `menu_confirm` ist "nein" die

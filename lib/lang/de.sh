@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.1.0  (2026-08-04)
+# Version: 1.2.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -462,6 +462,11 @@ Waehrend der Wiedergabe:"
     [help_demo_speed]="Tempo"
     [help_demo_back]="Zurueck"
 
+    # --- One-time rename of the Marathon highscore file (0.50.0) ----------
+    # Printed before the terminal is touched, like the reset dialog.
+    # Arguments: old path, new path.
+    [highscore_renamed]="Bestenliste umbenannt: %s -> %s"
+
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" betrifft diese Dateien in %s:"
     [reset_absent]="(nicht vorhanden)"
@@ -552,7 +557,7 @@ Optionen:
                 beenden, ohne das Spiel zu starten. ZIEL ist eines von:
                   config     die Konfigurationsdatei rowhammer.conf
                   stats      die Statistikdatei stats
-                  highscore  alle Bestenlisten (highscore,
+                  highscore  alle Bestenlisten (highscore-marathon,
                              highscore-ultra, highscore-sprint,
                              highscore-timeattack und highscore-flood)
                   save       der Spielstand save (Weltwunder-Fortschritt)
