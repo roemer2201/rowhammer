@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.0.0  (2026-08-04)
+# Version: 1.1.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -72,9 +72,12 @@ nicht mehr fortsetzbar."
     [mode_sprint]="Sprint"
     [mode_timeattack]="Time Attack"
     [mode_timeattack_short]="TimeAtk"
+    [mode_flood]="Hochwasser"
+    [mode_flood_short]="Flut"
     [entry_ultra]="Ultra (%s Rows auf Zeit)"
     [entry_sprint]="Sprint (%s Minuten auf Rows)"
     [entry_timeattack]="Time Attack (%s + %ss je Row)"
+    [entry_flood]="Hochwasser (Flut alle %s Sek.)"
 
     # --- Singleplayer and pause menu --------------------------------------
     [sp_title]="Einzelspieler"
@@ -205,6 +208,7 @@ Du kannst sie im Demo-Menue loeschen."
     [hud_pieces]="Steine"
     [hud_goal]="Ziel"
     [hud_left]="Rest"
+    [hud_flood]="Flut"
     [hud_demo]="Demo"
 
     # --- Result box over the board ----------------------------------------
@@ -279,6 +283,10 @@ nicht gewertet."
 mit %s Minuten Restzeit, und jede Row
 bringt eine Sekunde dazu. Gewertet wird
 jeder Lauf - auch ein vorzeitiges Game Over."
+    [hs_empty_flood]="Spiele eine Hochwasser-Runde: alle %s
+Sekunden schiebt sich eine Reihe von unten
+ins Feld. Gewertet wird jede Runde - sie
+endet ohnehin immer im Game Over."
 
     # --- Statistics -------------------------------------------------------
     [stats_title]="Statistik"
@@ -405,29 +413,37 @@ Marathon - die endlose Runde. Sie endet,
   wie moeglich. Ergebnis sind die Rows;
   die Runde endet mit Ablauf der Zeit.
 "
-    [help_p5_timeattack]="Time Attack - %s Minuten Restzeit, die
+    [help_p6_head]="Spielmodi (Fortsetzung):
+"
+    [help_p6_timeattack]="Time Attack - %s Minuten Restzeit, die
   rueckwaerts laeuft; jede Row bringt %s Sek.
   dazu. Ergebnis sind die Rows; die Runde
-  endet bei 00:00 - oder frueher im Game Over."
-    [help_p6]="Bestenlisten (Menuepunkt \"Highscores\"):
+  endet bei 00:00 - oder frueher im Game Over.
+"
+    [help_p6_flood]="Hochwasser - alle %s Sekunden schiebt
+  sich von unten eine Reihe mit einem Loch
+  ins Feld und das Feld rueckt nach oben.
+  Sonst wie Marathon: Ergebnis sind die Rows,
+  die Runde endet oben."
+    [help_p7]="Bestenlisten (Menuepunkt \"Highscores\"):
 
-Jeder Modus hat eine eigene Liste. Marathon,
-Sprint und Time Attack ranken nach Rows,
-Ultra nach der kuerzesten Zeit.
+Jeder Modus hat eine eigene Liste. Alle
+ranken nach Rows, nur Ultra nach der
+kuerzesten Zeit.
 
 Bei Ultra und Sprint zaehlt nur ein Lauf, der
 sein Ziel bzw. die volle Zeit erreicht hat -
 ein Game Over davor wird nicht gewertet.
 
-Bei Time Attack zaehlt dagegen jeder Lauf: die
-Rows sind so oder so dieselbe Leistung, und
-wer vorzeitig oben rausbaut, hat schlicht
-weniger davon.
+Bei Time Attack und Hochwasser zaehlt dagegen
+jede Runde: die Rows sind so oder so dieselbe
+Leistung, und wer vorzeitig oben rausbaut,
+hat schlicht weniger davon.
 
 Reihen und Zaehler einer abgebrochenen Runde
 fliessen immer in Weltwunder und Statistik
 ein."
-    [help_p7_head]="Demos (Menuepunkt \"Demos\"):
+    [help_p8_head]="Demos (Menuepunkt \"Demos\"):
 
 Jede gespielte Runde wird mitgeschnitten und
 kann spaeter noch einmal angesehen werden.
@@ -435,8 +451,8 @@ Aufgezeichnet werden die Zuege, nicht der
 Bildschirm - die Wiedergabe spielt die Runde
 wirklich noch einmal.
 "
-    [help_p7_kept]="Aufbewahrt werden die %d neuesten Runden;"
-    [help_p7_mid]="Aufnahmen mit * halten noch einen Highscore
+    [help_p8_kept]="Aufbewahrt werden die %d neuesten Runden;"
+    [help_p8_mid]="Aufnahmen mit * halten noch einen Highscore
 und bleiben darueber hinaus erhalten.
 Einzelne loeschen kannst du im Demo-Menue,
 die Aufzeichnung in den Einstellungen.
@@ -470,8 +486,8 @@ Aufruf: rowhammer.sh [OPTIONEN]
 
 Terminal-Tetris des rowhammer-Projekts. Startet mit einem Menue:
 Einzelspieler (endloser "Marathon", die Zeitmodi "Ultra", "Sprint" und
-"Time Attack"), Mehrspieler (Platzhalter), Highscores, Weltwunder,
-Statistik, Demos und Einstellungen.
+"Time Attack" sowie "Hochwasser"), Mehrspieler (Platzhalter), Highscores,
+Weltwunder, Statistik, Demos und Einstellungen.
 
 Optionen:
   --seed N      Startwert des Zufallsgenerators fuer eine
@@ -537,8 +553,8 @@ Optionen:
                   config     die Konfigurationsdatei rowhammer.conf
                   stats      die Statistikdatei stats
                   highscore  alle Bestenlisten (highscore,
-                             highscore-ultra, highscore-sprint und
-                             highscore-timeattack)
+                             highscore-ultra, highscore-sprint,
+                             highscore-timeattack und highscore-flood)
                   save       der Spielstand save (Weltwunder-Fortschritt)
                   demo       die Demo-Aufzeichnungen (Verzeichnis demos)
                   all        alles davon
@@ -618,17 +634,24 @@ der Zeit. "Time Attack" macht die Uhr zum Einsatz: die Runde startet mit
 1 Minute Restzeit, die rueckwaerts laeuft, und jede gewertete Row bringt
 1 Sekunde zurueck - der Lauf dauert also genau so lange, wie er sich
 selbst am Leben haelt, und endet bei 00:00 (oder vorher im Game Over);
-Ergebnis sind die Rows. Das HUD zeigt waehrend eines Laufs das Ziel und
-was davon noch fehlt. Jeder Modus hat eine eigene Bestenliste - Ultra
-nach Zeit (<data-dir>/highscore-ultra, schnellster Lauf zuerst), Sprint
-und Time Attack nach Rows (<data-dir>/highscore-sprint,
-<data-dir>/highscore-timeattack) -, sodass sie die Top Ten der endlosen
+Ergebnis sind die Rows. "Hochwasser" ist Marathon mit steigendem Wasser:
+alle 20 Sekunden Spielzeit schiebt sich von unten eine volle Reihe mit
+genau einem Loch ins Feld, das Feld rueckt dabei nach oben, und die Runde
+endet, wenn der Stapel oben ankommt; Ergebnis sind auch hier die Rows.
+Das HUD zeigt waehrend eines Laufs das Ziel und
+was davon noch fehlt bzw. wann die naechste Flutreihe kommt. Jeder Modus
+hat eine eigene Bestenliste - Ultra
+nach Zeit (<data-dir>/highscore-ultra, schnellster Lauf zuerst), Sprint,
+Time Attack und Hochwasser nach Rows (<data-dir>/highscore-sprint,
+<data-dir>/highscore-timeattack, <data-dir>/highscore-flood) -, sodass
+sie die Top Ten der endlosen
 Liste nie verdraengen. Bei Ultra und Sprint wird nur ein Lauf gewertet,
 der sein Ziel erreicht hat; seine Reihen zaehlen wie bei jeder
-abgebrochenen Runde trotzdem fuer Weltwunder und Statistik. Jeder
-Time-Attack-Lauf wird dagegen gewertet: seine Rows sind dieselbe
-Leistung, ob die Uhr oder der Stapel ihn beendet hat. Der Menuepunkt
-"Highscores" fragt, welche der vier Listen gezeigt werden soll.
+abgebrochenen Runde trotzdem fuer Weltwunder und Statistik. Jede
+Time-Attack- und jede Hochwasser-Runde wird dagegen gewertet: ihre Rows
+sind dieselbe Leistung, ob die Uhr, das Wasser oder der Stapel sie
+beendet hat. Der Menuepunkt
+"Highscores" fragt, welche der fuenf Listen gezeigt werden soll.
 
 Weltwunder: Die Reihenwertung jeder Runde wird auf einen dauerhaften
 Zaehler in <data-dir>/save addiert. Er baut nacheinander sieben
@@ -661,11 +684,11 @@ gebauten Gold- und Silberquadrate auf dauerhafte Gesamtzaehler in
 <data-dir>/stats; die Ergebnisse der letzten drei Runden und die Zahl
 der Runden je Spielmodus - samt der Laeufe, die ihr Ziel erreicht haben
 - stehen ebenfalls dort. Jeder Zaehler wird zusaetzlich je Modus
-gefuehrt, sodass sich dieselben Zahlen fuer Marathon, Ultra, Sprint oder
-Time Attack allein lesen lassen; die Gesamtzaehler bleiben, was sie
-immer waren, und werden nicht aus den Modus-Zaehlern summiert. Der
-Menuepunkt "Statistik" fragt, welche der beiden Sichten gezeigt werden
-soll.
+gefuehrt, sodass sich dieselben Zahlen fuer Marathon, Ultra, Sprint,
+Time Attack oder Hochwasser allein lesen lassen; die Gesamtzaehler
+bleiben, was sie immer waren, und werden nicht aus den Modus-Zaehlern
+summiert. Der Menuepunkt "Statistik" fragt, welche der beiden Sichten
+gezeigt werden soll.
 
 Die Einstellungen (Spielername, Sprache, Farbschema, Tastenbelegung,
 Demo-Aufzeichnung) liegen in der Konfigurationsdatei

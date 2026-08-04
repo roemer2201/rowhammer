@@ -5,11 +5,12 @@
 # Description:
 #   Demo recording and playback for rowhammer. A round is recorded as the
 #   sequence of things that happened to it - the player's actions, the
-#   gravity steps, the lock-delay locks and the piece stream the round was
+#   gravity steps, the lock-delay locks, the flood rows of the Hochwasser
+#   mode and the piece stream the round was
 #   dealt - not as a picture of the screen. Replaying feeds that sequence
 #   back into the real game functions (try_move, try_rotate, step_down,
-#   hard_drop, hold_piece, lock_and_next), so a demo shows what the game
-#   really did rather than what a terminal once printed.
+#   hard_drop, hold_piece, lock_and_next, flood_raise), so a demo shows
+#   what the game really did rather than what a terminal once printed.
 #
 #   Why actions and not frames:
 #     - Size. A frame recording costs the whole screen per update; an
@@ -67,7 +68,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.1  (2026-08-04)
+# Version: 0.3.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -84,7 +85,12 @@ DEMO_FILE_EXT=".demo"
 # Format version of the recording files. Bumped when the event alphabet
 # or the header changes; a file of any other version is rejected on load
 # rather than guessed at (no backward compatibility, see CLAUDE.md).
-DEMO_FORMAT_VERSION=1
+# Version 2 (0.49.0) added the flood event of the Hochwasser mode to the
+# alphabet. A version 1 recording would in fact still replay - the events
+# it does carry mean exactly what they always did - but the rule is the
+# rule, and a reader that has to decide which older versions are close
+# enough is exactly what this single number exists to avoid.
+DEMO_FORMAT_VERSION=2
 
 # How many recordings are kept. Ten like the highscore lists, and for the
 # same reason: it is the number a player still finds their way around in.
@@ -113,7 +119,7 @@ DEMO_SPEED_DEFAULT=2
 # (rowhammer.sh, HS_FIELD_NAME_RE in lib/highscore.sh).
 DEMO_NUM_RE='^[0-9]{1,9}$'
 DEMO_NAME_RE='^[A-Za-z0-9_ -]{1,16}$'
-DEMO_MODE_RE='^(marathon|ultra|sprint|timeattack)$'
+DEMO_MODE_RE='^(marathon|ultra|sprint|timeattack|flood)$'
 DEMO_DATE_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$'
 DEMO_PCS_RE='^[IOTSZJL]{1,80}$'
 # One event: the play-time delta in milliseconds since the previous event
@@ -123,10 +129,15 @@ DEMO_PCS_RE='^[IOTSZJL]{1,80}$'
 #   s    soft drop                  h    hard drop (locks the piece)
 #   o    hold / swap                g    gravity step
 #   k    lock delay expired (the piece locks where it rests)
+#   wN   a flood row rose, with the gap in column N (Hochwasser mode)
 # A hard drop locks by itself, so it is never followed by a "k"; a piece
 # leaving the board through a blocked spawn needs no event either, since
 # the replay reaches that spawn on its own.
-DEMO_EVENT_RE='^([0-9]{1,7})([lrcashogk])$'
+# The flood event is the only one carrying a payload, and it has to: the
+# rise itself follows the clock and the replay could compute it, but the
+# gap column is drawn from RANDOM, and a replay that guessed it would
+# play a different round from the one recorded.
+DEMO_EVENT_RE='^([0-9]{1,7})([lrcashogk]|w[0-9])$'
 DEMO_END_RE='^(over|goal|quit)$'
 
 # --- Recording state ------------------------------------------------------
@@ -739,6 +750,10 @@ demo_apply() {
         h) hard_drop ;;
         o) hold_piece ;;
         k) lock_and_next ;;
+        # The recorded gap column is handed back to the very function
+        # that drew it, so the replay floods the same column the round
+        # did (see flood_raise in rowhammer.sh).
+        w[0-9]) flood_raise "${1#w}" ;;
     esac
     return 0
 }
@@ -782,6 +797,7 @@ demo_play() {
         HSU_LAST_RANK=0
         HSS_LAST_RANK=0
         HSA_LAST_RANK=0
+        HSF_LAST_RANK=0
         # Sets up board, bag, counters and the first piece exactly like a
         # live round - only the pieces come from the recorded stream,
         # because DEMO_PLAYING is set (see queue_fill).
@@ -935,12 +951,14 @@ demo_scan() {
             continue
         fi
         # Eight columns for the mode, which is what the label format
-        # below leaves it; Time Attack has a short name of its own in
-        # the translation table, because its full one does not fit.
+        # below leaves it; Time Attack and Hochwasser have a short name
+        # of their own in the translation table, because their full ones
+        # do not fit.
         case "${DEMO_HDR_MODE}" in
             ultra)      mode_label="${I18N[mode_ultra]}" ;;
             sprint)     mode_label="${I18N[mode_sprint]}" ;;
             timeattack) mode_label="${I18N[mode_timeattack_short]}" ;;
+            flood)      mode_label="${I18N[mode_flood_short]}" ;;
             *)          mode_label="${I18N[mode_marathon]}" ;;
         esac
         fmt_duration $(( DEMO_HDR_TIME / 1000 ))

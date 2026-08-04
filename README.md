@@ -69,7 +69,8 @@ Einstellungen und einer kurzen Anleitung;
 die besten
 10 Runden werden dauerhaft gespeichert. Dazu kommen die Politur-Schritte
 aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
-(Marathon/Ultra/Sprint/Time Attack), Anleitung, Lock Delay, der
+(Marathon/Ultra/Sprint/Time Attack/Hochwasser), Anleitung, Lock Delay,
+der
 gezielte Reset
 gespeicherter Daten, die Demo-Aufzeichnung mit Wiedergabe und die
 **mehrsprachige Oberflaeche** (Deutsch und Englisch, umschaltbar im
@@ -99,36 +100,46 @@ Das Startmenue bietet:
   Eintrag steht dann auch im Einzelspieler-Menue an erster Stelle
 - **Einzelspieler** - die Spielmodi: **Marathon** (endlos, Ende
   durch Game Over), **Ultra** - 150 Rows so schnell wie moeglich
-  abbauen -, **Sprint** - in 3 Minuten so viele Rows wie moeglich - und
+  abbauen -, **Sprint** - in 3 Minuten so viele Rows wie moeglich -,
   **Time Attack** - 1 Minute Restzeit, die rueckwaerts laeuft, und je
-  abgebauter Row eine Sekunde dazu.
+  abgebauter Row eine Sekunde dazu - und **Hochwasser** - alle 20
+  Sekunden schiebt sich von unten eine volle Reihe mit einem einzigen
+  Loch ins Feld.
   Die Ultra-Runde endet in dem Moment, in dem das Ziel
   erreicht ist; das Ergebnis ist die Spielzeit. Die Sprint-Runde endet,
   wenn die Zeit abgelaufen ist; das Ergebnis sind die Rows. Die
   Time-Attack-Runde dauert genau so lange, wie sie sich selbst am Leben
   haelt, und endet bei 00:00 - oder vorher im Game Over; das Ergebnis
-  sind ebenfalls die Rows. In allen drei
-  Modi zeigt der HUD Ziel ("Goal") und Rest ("Left") - bei Ultra die
-  noch fehlenden Rows, bei Sprint die verbleibende Zeit, bei Time
-  Attack die bisher erspielte Gesamtzeit und den Rest davon. Gewertete
+  sind ebenfalls die Rows. Die Hochwasser-Runde ist sonst Marathon: sie
+  endet, wenn der steigende Stapel oben ankommt, gewertet werden die
+  Rows. In allen vier
+  Modi zeigt der HUD zwei zusaetzliche Zeilen - bei Ultra Ziel
+  ("Goal") und die noch fehlenden Rows ("Left"), bei Sprint das
+  Zeitlimit und die verbleibende Zeit, bei Time Attack die bisher
+  erspielte Gesamtzeit und den Rest davon, bei Hochwasser den
+  Flut-Abstand ("Flut") und die Zeit bis zur naechsten Reihe ("Rest").
+  Gewertete
   Rows
   zaehlen, nicht physische Reihen - Gold- und Silberquadrate sind also
   ueberall die Abkuerzung, bei Time Attack zugleich die Waehrung, mit
   der Spielzeit gekauft wird. Jeder Modus hat seine
   eigene Bestenliste
   (`~/.config/rowhammer/highscore-ultra`, schnellster Lauf
-  zuerst, `~/.config/rowhammer/highscore-sprint` bzw.
-  `~/.config/rowhammer/highscore-timeattack`, meiste Rows
+  zuerst, `~/.config/rowhammer/highscore-sprint`,
+  `~/.config/rowhammer/highscore-timeattack` bzw.
+  `~/.config/rowhammer/highscore-flood`, meiste Rows
   zuerst), die die 10 besten endlosen Runden unberuehrt laesst. Bei
   Ultra und Sprint wird ein Versuch, der vorher im Game Over endet,
   nicht eingetragen (seine
   Reihen zaehlen aber weiter fuer Weltwunder und Statistik); bei Time
-  Attack zaehlt dagegen jeder Lauf - die Rows sind so oder so dieselbe
+  Attack und Hochwasser zaehlt dagegen jede Runde - die Rows sind so
+  oder so dieselbe
   Leistung, und wer vorzeitig oben rausbaut, hat schlicht weniger
   davon
 - **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
 - **Highscores** - fragt zuerst den Modus ab (**Marathon**, **Ultra**,
-  **Sprint** oder **Time Attack**) und zeigt danach dessen
+  **Sprint**, **Time Attack** oder **Hochwasser**) und zeigt danach
+  dessen
   Bestenliste; die Auswahl
   bleibt
   stehen, bis "Zurueck" kommt, sodass sich die Listen vergleichen
@@ -138,15 +149,16 @@ Das Startmenue bietet:
   abgelegte Teile ("PCS") und Teile je Minute ("PPM") in der zweiten.
   Die Ultra-Liste ist nach der kuerzesten Zeit sortiert und zeigt sie
   auf die Millisekunde genau (MM:SS.mmm) - dort ist die Zeit der Score,
-  in den anderen drei Listen sind es die Rows. Die
+  in den anderen vier Listen sind es die Rows. Die
   Sprint-Liste zeigt an der Stelle der Spielzeit die physischen Reihen
   ("Lines"): jeder Lauf dauert dieselben 3 Minuten, eine Zeitspalte
-  stuende dort zehnmal gleich. Die Time-Attack-Liste behaelt die
+  stuende dort zehnmal gleich. Die Time-Attack- und die
+  Hochwasser-Liste behalten die
   Zeitspalte dagegen - sie zeigt, wie lange sich ein Lauf am Leben
-  gehalten hat. Ein Rundenende zeigt den
+  gehalten bzw. das Wasser abgehalten hat. Ein Rundenende zeigt den
   erreichten Rang ausserdem direkt an.
   **Wer in der Liste steht, fragt das Spiel am Ende jeder Runde**, die
-  in eine der vier Listen kommt: Der Spielername aus den Einstellungen
+  in eine der fuenf Listen kommt: Der Spielername aus den Einstellungen
   steht dort vormarkiert - Enter uebernimmt ihn, das erste getippte
   Zeichen ersetzt ihn (eine Pfeiltaste hebt die Markierung auf, wenn
   der Name nur ergaenzt werden soll). Der eingegebene Name gilt fuer
@@ -154,7 +166,7 @@ Das Startmenue bietet:
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
 - **Statistik** - fragt zuerst, welche Sicht gezeigt werden soll:
-  **Gesamt** oder einer der vier Spielmodi.
+  **Gesamt** oder einer der fuenf Spielmodi.
   **Gesamt** zeigt auf drei Bildschirmen die Zaehler ueber alle
   Runden (abgebaute Reihen, Bonusreihen, gebaute Gold- und
   Silberbloecke, die "Rowhammer" - vier Reihen auf einmal -, die
@@ -163,7 +175,8 @@ Das Startmenue bietet:
   zuletzt die gespielten Runden je Modus - bei Ultra, Sprint und Time
   Attack jeweils mit der Zahl der Laeufe, die ihr Ziel bzw. die volle
   Zeit erreicht haben.
-  **Marathon**, **Ultra**, **Sprint** und **Time Attack** zeigen
+  **Marathon**, **Ultra**, **Sprint**, **Time Attack** und
+  **Hochwasser** zeigen
   dieselben Zaehler fuer nur diesen Modus, dazu seine Runden, die
   Rows je Runde und - bei den drei Zeitmodi - die Erfolgsquote seiner
   Laeufe
@@ -182,15 +195,16 @@ Das Startmenue bietet:
   der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`). Der Spielername ist die
   Vorgabe der Namensabfrage am Rundenende (siehe unten)
-- **Anleitung** - kurze Spielerklaerung auf sieben Bildschirmen, mit
+- **Anleitung** - kurze Spielerklaerung auf neun Bildschirmen, mit
   den Pfeiltasten links/rechts durchblaetterbar (umlaufend):
   Spielprinzip, Steuerung (mit der gerade eingestellten
   Tastenbelegung), Vorschau und Hold, Gold-/Silber-Quadrate mit ihrer
-  Reihenwertung, der Weltwunderbau, die vier Spielmodi, die
+  Reihenwertung, der Weltwunderbau, die fuenf Spielmodi (auf zwei
+  Seiten), die
   Bestenlisten und die Demos
 
 Alle Spieldaten (Konfiguration, Highscores inklusive der Ultra-, der
-Sprint- und der Time-Attack-Liste,
+Sprint-, der Time-Attack- und der Hochwasser-Liste,
 Weltwunder-Spielstand,
 Statistik, Demo-Aufzeichnungen im Unterverzeichnis `demos`)
 liegen im Datenverzeichnis
@@ -219,7 +233,8 @@ Optionen:
 zurueck und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
 `config` (die Konfigurationsdatei `rowhammer.conf`), `stats` (die
 Statistik), `highscore` (alle Bestenlisten - `highscore`,
-`highscore-ultra`, `highscore-sprint` und `highscore-timeattack`),
+`highscore-ultra`, `highscore-sprint`, `highscore-timeattack` und
+`highscore-flood`),
 `save` (der
 Weltwunder-Fortschritt), `demo` (das Verzeichnis `demos` mit den
 Aufzeichnungen) oder `all`
@@ -260,7 +275,9 @@ Zwei-Zeichen-Symbol (`II OO TT SS ZZ JJ LL`), damit sich die Steine auch
 nach dem Ablegen noch unterscheiden lassen - Voraussetzung, um gezielt
 Gold- (sortenrein) und Silber-Quadrate (gemischt) zu bauen. Die Quadrate
 selbst heben sich mit eigenen Symbolen ab: Gold als `##`, Silber als
-`%%`.
+`%%`. Die Flutreihen des Hochwasser-Modus erscheinen als `::` - dieses
+Symbol auch mit Farben, weil eine Reihe, die niemand gelegt hat, in
+jedem Farbschema erkennbar bleiben soll.
 
 Zusaetzlich zu `--no-color`/`ROWHAMMER_NO_COLOR` wird die
 De-facto-Standardvariable [`NO_COLOR`](https://no-color.org/) beachtet:
@@ -367,10 +384,10 @@ Umgesetzt:
   (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
 - Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
   Weltwunder, Statistik, Demos, Einstellungen und Anleitung
-- **Anleitung im Spiel:** acht Bildschirme zu Spielprinzip,
+- **Anleitung im Spiel:** neun Bildschirme zu Spielprinzip,
   Steuerung,
   Vorschau/Hold, Gold- und Silberbloecken, Weltwunderbau, den
-  Spielmodi, den Bestenlisten und den Demos; die
+  Spielmodi (zwei Seiten), den Bestenlisten und den Demos; die
   Steuerungsseite zeigt immer die gerade eingestellte Tastenbelegung
 - **Highscore-Eintraege mit Runden-Hash:** jede gewertete Runde bekommt
   einen kurzen Hash aus ihren eigenen Ergebnissen. Er steht im
@@ -393,15 +410,18 @@ Umgesetzt:
   bleiben ueber die 10 hinaus erhalten
 - **Spielmodi:** endloses **Marathon**, **Ultra** (150 Rows auf
   Zeit, eigene Bestenliste nach kuerzester Zeit), **Sprint**
-  (3 Minuten auf Rows, eigene Bestenliste nach den meisten Rows) und
+  (3 Minuten auf Rows, eigene Bestenliste nach den meisten Rows),
   **Time Attack** (1 Minute Restzeit plus 1 Sekunde je Row, eigene
-  Bestenliste nach den meisten Rows; siehe oben)
+  Bestenliste nach den meisten Rows) und **Hochwasser** (alle 20
+  Sekunden eine Flutreihe von unten, eigene Bestenliste nach den
+  meisten Rows; siehe oben)
 - Persistente Highscore-Listen: die besten 10 Runden in
   `~/.config/rowhammer/highscore`, die 10 schnellsten Ultra-Laeufe
   in `~/.config/rowhammer/highscore-ultra`, die 10 besten
-  Sprint-Laeufe in `~/.config/rowhammer/highscore-sprint` und die 10
+  Sprint-Laeufe in `~/.config/rowhammer/highscore-sprint`, die 10
   besten Time-Attack-Laeufe in
-  `~/.config/rowhammer/highscore-timeattack`, im Menue
+  `~/.config/rowhammer/highscore-timeattack` und die 10 besten
+  Hochwasser-Runden in `~/.config/rowhammer/highscore-flood`, im Menue
   ueber eine
   Modus-Auswahl erreichbar, Ranganzeige im Rundenende-Bild
 - **Namensabfrage am Rundenende:** jede Runde, die in eine Bestenliste
@@ -419,8 +439,8 @@ Umgesetzt:
   drei Zeitmodi mit der Zahl der erfolgreichen Laeufe), einsehbar im
   Hauptmenue. **Jeder dieser Zaehler wird zusaetzlich je Spielmodus
   gefuehrt**, sodass sich dieselben Zahlen fuer Marathon, Ultra,
-  Sprint oder Time Attack allein ablesen lassen (samt Rows je Runde und
-  Erfolgsquote); die Gesamtzaehler bleiben davon unberuehrt und werden
+  Sprint, Time Attack oder Hochwasser allein ablesen lassen (samt Rows
+  je Runde und Erfolgsquote); die Gesamtzaehler bleiben davon unberuehrt und werden
   weiter ueber alle Modi gefuehrt
 - **Weltwunder-Modus:** der "Rows"-Zaehler baut ueber alle Runden
   hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,

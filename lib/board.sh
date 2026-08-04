@@ -15,14 +15,17 @@
 #   counter (ROWHAMMER_COUNT in rowhammer.sh), the move the game is
 #   named after. board_full_rows reports the full rows before they
 #   are removed, so the caller can flash them first (see flash_rows in
-#   rowhammer.sh). The two top rows are hidden spawn rows. In debug
-#   mode every cleared row is logged with its credit breakdown. Every
+#   rowhammer.sh). The two top rows are hidden spawn rows.
+#   board_flood_row lifts the whole board by one row and lets a row with a
+#   single gap in at the bottom, which is what the "Hochwasser" mode is
+#   made of. In debug mode every cleared row is logged with its credit
+#   breakdown. Every
 #   function that changes the board calls render_board_dirty
 #   (lib/render.sh) so the renderer's settled-row cache is rebuilt on the
 #   next frame.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.7.0  (2026-07-28)
+# Version: 0.8.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -39,6 +42,13 @@ EMPTY_CELL="."
 BOARD=()
 BOARD_ID=()
 BOARD_SQ=()
+
+# Cell type of a flood row (the "Hochwasser" mode, see board_flood_row and
+# flood_raise in rowhammer.sh). Its own letter rather than a piece type:
+# a flood cell is not a piece, it carries the instance id 0 and can
+# therefore never take part in a square (square_check_at rejects id 0),
+# and the renderer draws it with a look of its own (lib/render.sh).
+GARBAGE_CELL="x"
 
 # Per-instance state, keyed by instance id. Cut instances were damaged by
 # a line clear; squared instances are consumed by a formed square. Both
@@ -103,6 +113,50 @@ lock_piece() {
         BOARD_ID[idx]="${id}"
     done
     render_board_dirty
+}
+
+# board_flood_row HOLE
+# Push the whole board up by one row and let a full row with a single gap
+# at column HOLE in at the bottom: the rising water of the "Hochwasser"
+# mode (see flood_raise in rowhammer.sh, which owns the timing and the
+# gap column). Returns 1 without changing anything when the top row still
+# holds a cell - shifting would drop it off the board, and a stack that
+# high is a topped-out round, which the caller ends.
+# Rows move as a whole across all three arrays, so locked instances keep
+# their ids and their gold/silver marking and only their coordinates
+# change: a square survives being lifted, exactly as it survives a line
+# clear below it. The new row can never complete a line (it always keeps
+# its hole), so no clear check follows it.
+board_flood_row() {
+    local hole="${1}"
+    local x y idx src
+    for (( x = 0; x < BOARD_W; x++ )); do
+        if [ "${BOARD[x]}" != "${EMPTY_CELL}" ]; then
+            return 1
+        fi
+    done
+    for (( y = 0; y < BOARD_H - 1; y++ )); do
+        for (( x = 0; x < BOARD_W; x++ )); do
+            idx=$(( y * BOARD_W + x ))
+            src=$(( idx + BOARD_W ))
+            BOARD[idx]="${BOARD[src]}"
+            BOARD_ID[idx]="${BOARD_ID[src]}"
+            BOARD_SQ[idx]="${BOARD_SQ[src]}"
+        done
+    done
+    y=$(( BOARD_H - 1 ))
+    for (( x = 0; x < BOARD_W; x++ )); do
+        idx=$(( y * BOARD_W + x ))
+        if [ "${x}" -eq "${hole}" ]; then
+            BOARD[idx]="${EMPTY_CELL}"
+        else
+            BOARD[idx]="${GARBAGE_CELL}"
+        fi
+        BOARD_ID[idx]=0
+        BOARD_SQ[idx]=""
+    done
+    render_board_dirty
+    return 0
 }
 
 # board_full_rows

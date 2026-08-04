@@ -73,9 +73,17 @@
 #   not the achievement an endless round is. Unlike the other two timed
 #   lists it stores every run, finished or topped out: this mode has no
 #   incomparable "did not finish" state (see highscore_timeattack_add).
+#   Since 0.16.0 the Hochwasser mode (Marathon under a floor that rises
+#   by one row with a single gap every FLOOD_INTERVAL_MS, see
+#   rowhammer.sh) has the fifth list, in ${DATA_DIR}/highscore-flood,
+#   built from the HSF_* globals and functions at the end of this file.
+#   It ranks by rows like the Marathon list and stores every round like
+#   the Time Attack one - every round of this mode ends in a top-out,
+#   that is the mode - but keeps its own file: rounds that last minutes
+#   would never reach the top ten of the endless list.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.15.0  (2026-08-04)
+# Version: 0.16.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -249,7 +257,7 @@ highscore_add() {
 # HS_HASH_SET (the hash is the key, the value is always 1). It is what
 # the demo pruning asks: a recording whose hash is in here still backs a
 # highscore entry and must not be deleted (demo_prune in lib/demo.sh).
-# All four formats carry the hash as their last field, so one expansion
+# All five formats carry the hash as their last field, so one expansion
 # fits them all. Entries written before the field existed carry "-",
 # which is filtered out here - it would otherwise protect every old
 # recording at once.
@@ -273,6 +281,9 @@ highscore_hash_set() {
     fi
     if [ "${#HSA_ENTRIES[@]}" -gt 0 ]; then
         lists+=("${HSA_ENTRIES[@]}")
+    fi
+    if [ "${#HSF_ENTRIES[@]}" -gt 0 ]; then
+        lists+=("${HSF_ENTRIES[@]}")
     fi
     if [ "${#lists[@]}" -eq 0 ]; then
         return 0
@@ -1121,6 +1132,232 @@ highscore_timeattack_screen() {
         body+=("")
     done
     debug_event "highscore timeattack screen shown (${#HSA_ENTRIES[@]} entries)"
+    menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
+    return 0
+}
+
+# --- Hochwasser mode list -------------------------------------------------
+# The Hochwasser mode (added 0.49.0, user request) is Marathon under a
+# rising floor: every FLOOD_INTERVAL_MS a full row with a single gap is
+# pushed in from below, and the round ends when the stack reaches the
+# ceiling (see flood_raise in rowhammer.sh). Its results live in their
+# own file, for the reason each of the other modes has one: an endless
+# round and a round the board itself fills up are not the same
+# achievement, and the flood rounds - which end within minutes - would
+# never reach the top ten of the endless list.
+#
+# The score is the row credit, as in Marathon: nothing else about the
+# mode changes what a round is worth. Every run is recorded, finished or
+# not - like Time Attack and unlike Ultra and Sprint, and for the same
+# reason: this mode has no incomparable "did not finish" state. Every
+# round here ends in a top-out, that is the mode; a round that drowned
+# early simply scored fewer rows.
+HSF_MAX=10
+HSF_FILE_NAME="highscore-flood"
+
+# In-memory list, one
+# "rows|lines|level|name|date|gold|silver|time|rowhammers|pieces|hash"
+# string per element, sorted by rows descending. HSF_LAST_RANK is the
+# rank the most recently added run reached (1-based, 0 = not on the
+# list). The Marathon list's field layout again, for the reason the
+# Sprint and the Time Attack list reuse it: the same number in the same
+# unit ranks it, so a fifth layout would only be a fifth thing to keep in
+# step.
+HSF_ENTRIES=()
+HSF_LAST_RANK=0
+
+# Field count of a stored Hochwasser line. Eleven, with no shorter
+# variant: this list was born with the round hash (0.49.0), so unlike the
+# four older ones it never existed without it and has nothing to be
+# lenient about.
+HSF_FIELDS=11
+
+# highscore_flood_parse_line LINE
+# Validate one stored Hochwasser line and, on success, append it to
+# HSF_ENTRIES. Field patterns and layout are the Marathon list's; a line
+# that fails anywhere is dropped silently, so a damaged file costs single
+# entries instead of the game.
+highscore_flood_parse_line() {
+    local line="${1}"
+    local -a f=()
+    local i n
+
+    IFS='|' read -r -a f <<< "${line}"
+    n="${#f[@]}"
+    [ "${n}" -eq "${HSF_FIELDS}" ] || return 0
+
+    # rows, lines, level.
+    for ((i = 0; i < 3; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+    [[ "${f[3]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
+    [[ "${f[4]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
+    # gold, silver, time, rowhammers, pieces.
+    for ((i = 5; i < HSF_FIELDS - 1; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+    [[ "${f[HSF_FIELDS - 1]}" =~ ${HS_FIELD_HASH_RE} ]] || return 0
+
+    HSF_ENTRIES+=("${line}")
+    return 0
+}
+
+# highscore_flood_load
+# Read the Hochwasser list into HSF_ENTRIES. Missing file = empty list,
+# malformed lines are skipped (highscore_flood_parse_line).
+highscore_flood_load() {
+    HSF_ENTRIES=()
+    local f="${DATA_DIR}/${HSF_FILE_NAME}" line
+    if [ ! -r "${f}" ]; then
+        return 0
+    fi
+    while IFS= read -r line; do
+        highscore_flood_parse_line "${line}"
+        if [ "${#HSF_ENTRIES[@]}" -ge "${HSF_MAX}" ]; then
+            break
+        fi
+    done < "${f}"
+    debug_event "highscore flood loaded: ${#HSF_ENTRIES[@]} entries from ${f}"
+    return 0
+}
+
+# highscore_flood_save
+# Write HSF_ENTRIES atomically (temp file + mv), like highscore_save.
+highscore_flood_save() {
+    local f="${DATA_DIR}/${HSF_FILE_NAME}" tmp
+    mkdir -p -- "${DATA_DIR}"
+    tmp="$(mktemp -- "${DATA_DIR}/.${HSF_FILE_NAME}.XXXXXX")"
+    # Expanding an empty array under set -u errors on bash < 4.4, so the
+    # empty list writes an empty file explicitly.
+    if [ "${#HSF_ENTRIES[@]}" -gt 0 ]; then
+        printf '%s\n' "${HSF_ENTRIES[@]}" > "${tmp}"
+    else
+        : > "${tmp}"
+    fi
+    mv -f -- "${tmp}" "${f}"
+    debug_event "highscore flood saved: ${f} (${#HSF_ENTRIES[@]} entries)"
+    return 0
+}
+
+# highscore_flood_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS
+#                     PIECES HASH
+# Insert one finished Hochwasser round into the sorted list and persist
+# it. Arguments and order are the Marathon list's (highscore_add), TIME
+# the play time in whole seconds - here the time the round held the water
+# off, which is why the list shows it. Equal row credits rank below
+# existing ones, so the older entry keeps its place. Rounds without a
+# single row are ignored, and nothing is written when the round does not
+# make the list; HSF_LAST_RANK reports the outcome either way.
+highscore_flood_add() {
+    local rows="${1}" lines="${2}" level="${3}" name="${4}"
+    local gold="${5}" silver="${6}" time="${7}" hammers="${8}"
+    local pieces="${9}" hash="${10:--}"
+    local entry e placed=0 rank=0
+    local -a merged=()
+    HSF_LAST_RANK=0
+    if [ "${rows}" -le 0 ]; then
+        return 0
+    fi
+    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}|${hash}"
+    if [ "${#HSF_ENTRIES[@]}" -gt 0 ]; then
+        for e in "${HSF_ENTRIES[@]}"; do
+            if [ "${placed}" -eq 0 ] && [ "${rows}" -gt "${e%%|*}" ]; then
+                merged+=("${entry}")
+                rank="${#merged[@]}"
+                placed=1
+            fi
+            merged+=("${e}")
+        done
+    fi
+    # Not better than any existing entry: append only while there is room.
+    if [ "${placed}" -eq 0 ]; then
+        if [ "${#merged[@]}" -ge "${HSF_MAX}" ]; then
+            debug_event "highscore flood: '${name}' rows=${rows} below the top ${HSF_MAX}"
+            return 0
+        fi
+        merged+=("${entry}")
+        rank="${#merged[@]}"
+    fi
+    HSF_ENTRIES=("${merged[@]:0:HSF_MAX}")
+    HSF_LAST_RANK="${rank}"
+    debug_event "highscore flood: '${name}' rows=${rows} time=${time}s enters at rank ${rank}"
+    highscore_flood_save
+    return 0
+}
+
+# highscore_flood_screen
+# Show the Hochwasser list the way the other four screens show theirs:
+# paged via menu_pages (HS_PAGE_ENTRIES/HS_PAGE_LINES again), two lines
+# per entry, same column widths and the same coloring rules. Rows rank
+# this list and therefore carry the accent color, as on the Marathon,
+# the Sprint and the Time Attack screen.
+# The columns are the Marathon ones down to the play time, and that
+# column earns its place here for a reason of this mode's own: the water
+# rises on a fixed clock, so the time an entry survived says how many
+# rows it had to answer - two entries with the same rows are told apart
+# by which of them held out longer.
+highscore_flood_screen() {
+    local -a body=()
+    local i line plain rank rank_sgr hsf_rows hsf_name hsf_date hsf_gold
+    local hsf_silver hsf_time hsf_hammers hsf_pieces title
+    title="${I18N[hs_title]} - ${I18N[mode_flood]}"
+    if [ "${#HSF_ENTRIES[@]}" -eq 0 ]; then
+        body+=("${I18N[hs_empty]}")
+        body+=("")
+        printf -v line "${I18N[hs_empty_flood]}" \
+            "$(( FLOOD_INTERVAL_MS / 1000 ))"
+        mapfile -t -O "${#body[@]}" body <<< "${line}"
+        debug_event "highscore flood screen shown (0 entries)"
+        menu_message "${title}" "${body[@]}"
+        return 0
+    fi
+    printf -v line '%2s %-12s %6s %5s %10s' \
+        "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
+        "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
+    body+=("${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}")
+    for i in "${!HSF_ENTRIES[@]}"; do
+        IFS='|' read -r hsf_rows _ _ hsf_name hsf_date hsf_gold \
+            hsf_silver hsf_time hsf_hammers hsf_pieces _ <<< "${HSF_ENTRIES[i]}"
+        fmt_duration "${hsf_time}"
+        rank=$(( i + 1 ))
+        printf -v plain '%2d %-12.12s %6d %5s %10s' \
+            "${rank}" "${hsf_name}" "${hsf_rows}" "${FMT_DURATION}" \
+            "${hsf_date}"
+        # Same guard as the other four screens: color only while the
+        # line stays within the 46-char budget, so a hand-edited file
+        # with implausible numbers costs the colors, never a cut escape
+        # sequence.
+        if [ "${#plain}" -le 46 ]; then
+            rank_sgr="${TXT_ACCENT_SGR}"
+            case "${rank}" in
+                1) rank_sgr="${TXT_GOLD_SGR}" ;;
+                2) rank_sgr="${TXT_SILVER_SGR}" ;;
+            esac
+            printf -v line '%s%2d%s %-12.12s %s%6d%s %5s %10s' \
+                "${rank_sgr}" "${rank}" "${TXT_RESET_SGR}" "${hsf_name}" \
+                "${TXT_ACCENT_SGR}" "${hsf_rows}" "${TXT_RESET_SGR}" \
+                "${FMT_DURATION}" "${hsf_date}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
+        fmt_ppm "${hsf_pieces}" "${hsf_time}"
+        printf -v plain "  ${I18N[hs_lbl_gold]} %3d ${I18N[hs_lbl_silver]} %3d RH %2d PCS %4d PPM %5s" \
+            "${hsf_gold}" "${hsf_silver}" "${hsf_hammers}" "${hsf_pieces}" \
+            "${FMT_PPM}"
+        if [ "${#plain}" -le 46 ]; then
+            printf -v line "  %s${I18N[hs_lbl_gold]} %3d%s %s${I18N[hs_lbl_silver]} %3d%s %sRH %2d%s PCS %4d PPM %5s" \
+                "${TXT_GOLD_SGR}" "${hsf_gold}" "${TXT_RESET_SGR}" \
+                "${TXT_SILVER_SGR}" "${hsf_silver}" "${TXT_RESET_SGR}" \
+                "${TXT_WARN_SGR}" "${hsf_hammers}" "${TXT_RESET_SGR}" \
+                "${hsf_pieces}" "${FMT_PPM}"
+            body+=("${line}")
+        else
+            body+=("${plain:0:46}")
+        fi
+        body+=("")
+    done
+    debug_event "highscore flood screen shown (${#HSF_ENTRIES[@]} entries)"
     menu_pages "${title}" 1 "${HS_PAGE_LINES}" "${body[@]}"
     return 0
 }

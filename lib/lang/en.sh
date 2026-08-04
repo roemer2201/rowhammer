@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.0.0  (2026-08-04)
+# Version: 1.1.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -61,9 +61,15 @@ be resumed any more."
     [mode_sprint]="Sprint"
     [mode_timeattack]="Time Attack"
     [mode_timeattack_short]="TimeAtk"
+    # "Hochwasser" is German for "flood" and the name the mode was asked
+    # for; the English list calls it what it is, like every other entry
+    # here - the mode identifier on the command line stays "flood".
+    [mode_flood]="Flood"
+    [mode_flood_short]="Flood"
     [entry_ultra]="Ultra (%s rows against the clock)"
     [entry_sprint]="Sprint (%s minutes for rows)"
     [entry_timeattack]="Time Attack (%s + %ss per row)"
+    [entry_flood]="Flood (a row every %s sec.)"
 
     # --- Singleplayer and pause menu --------------------------------------
     [sp_title]="Singleplayer"
@@ -184,6 +190,7 @@ You can delete it in the demo menu."
     [hud_pieces]="Pieces"
     [hud_goal]="Goal"
     [hud_left]="Left"
+    [hud_flood]="Flood"
     [hud_demo]="Demo"
 
     # --- Result box over the board ----------------------------------------
@@ -249,6 +256,10 @@ recorded."
 %s minutes on the clock and every row
 buys one second. Every run is recorded -
 a top-out before the time is up as well."
+    [hs_empty_flood]="Play a Flood round: every %s seconds a
+row rises from below. Every round is
+recorded - it ends in a game over either
+way."
 
     # --- Statistics -------------------------------------------------------
     [stats_title]="Statistics"
@@ -372,37 +383,44 @@ Marathon - the endless round. It ends when
   %s minutes. The result is the rows; the
   round ends when the time is up.
 "
-    [help_p5_timeattack]="Time Attack - %s minutes on a clock that
+    [help_p6_head]="Game modes (continued):
+"
+    [help_p6_timeattack]="Time Attack - %s minutes on a clock that
   runs backwards; every row buys %s sec.
   The result is the rows; the round ends
-  at 00:00 - or earlier on a game over."
-    [help_p6]="Highscore lists (\"Highscores\" entry):
+  at 00:00 - or earlier on a game over.
+"
+    [help_p6_flood]="Flood - every %s seconds a full row with
+  a single gap rises from below and the
+  board moves up. Marathon otherwise: the
+  result is the rows, the round ends on top."
+    [help_p7]="Highscore lists (\"Highscores\" entry):
 
-Every mode has a list of its own. Marathon,
-Sprint and Time Attack rank by rows, Ultra
-by the shortest time.
+Every mode has a list of its own. All of
+them rank by rows, only Ultra ranks by the
+shortest time.
 
 For Ultra and Sprint only a run that
 reached its goal resp. played its full time
 counts - a game over before that is not
 recorded.
 
-Every Time Attack run counts, by contrast:
-its rows are the same achievement either
-way, and topping out early simply means
-fewer of them.
+Every Time Attack and every Flood round
+counts, by contrast: its rows are the same
+achievement either way, and topping out
+early simply means fewer of them.
 
 The rows and counters of an abandoned round
 always feed the wonders and the statistics."
-    [help_p7_head]="Demos (\"Demos\" menu entry):
+    [help_p8_head]="Demos (\"Demos\" menu entry):
 
 Every round played is recorded and can be
 watched again later. What is recorded are
 the moves, not the screen - a replay really
 plays the round once more.
 "
-    [help_p7_kept]="The %d newest rounds are kept;"
-    [help_p7_mid]="recordings marked * still hold a highscore
+    [help_p8_kept]="The %d newest rounds are kept;"
+    [help_p8_mid]="recordings marked * still hold a highscore
 and are kept beyond that. Single ones can
 be deleted in the demo menu, the recording
 switched off in the settings.
@@ -433,7 +451,7 @@ Usage: rowhammer.sh [OPTIONS]
 
 Terminal Tetris of the rowhammer project. Starts with a menu:
 singleplayer (endless "Marathon", the timed "Ultra", "Sprint" or
-"Time Attack" mode),
+"Time Attack" mode, or "Flood"),
 multiplayer (placeholder), highscores, wonders, statistics and settings.
 
 Options:
@@ -497,8 +515,8 @@ Options:
                   config     the config file rowhammer.conf
                   stats      the statistics file stats
                   highscore  all highscore lists (highscore,
-                             highscore-ultra, highscore-sprint and
-                             highscore-timeattack)
+                             highscore-ultra, highscore-sprint,
+                             highscore-timeattack and highscore-flood)
                   save       the savegame save (the wonder progress)
                   demo       the demo recordings (the demos directory)
                   all        all of the above
@@ -577,18 +595,25 @@ when the time is up. "Time Attack" turns the clock into the stake: the
 round starts with 1 minute of play time counting down and every row of
 credit scored adds 1 second back, so the run lasts exactly as long as it
 is kept fed and ends when the clock hits zero (or on a top-out before
-that); the rows are the result. The HUD shows the goal and what is still
-left of it (rows resp. time) while a run of any of the three is going.
+that); the rows are the result. "Flood" ("Hochwasser") is Marathon under
+rising water: every 20 seconds of play time a full row with a single gap
+is pushed in from below and the board moves up with it, and the round
+lasts until the stack reaches the ceiling; the rows are the result here
+too. The HUD shows the goal and what is still
+left of it (rows resp. time), resp. when the next flood row is due,
+while such a round is going.
 Each keeps its results in a list of its own - Ultra ranked by time
-(<data-dir>/highscore-ultra, fastest first), Sprint and Time Attack by
-rows (<data-dir>/highscore-sprint, <data-dir>/highscore-timeattack) - so
+(<data-dir>/highscore-ultra, fastest first), Sprint, Time Attack and
+Flood by rows (<data-dir>/highscore-sprint,
+<data-dir>/highscore-timeattack, <data-dir>/highscore-flood) - so
 they never displace the endless list's top ten. For Ultra and Sprint
 only a run that got there is recorded: an attempt that topped out early
 has neither a comparable time nor the full three minutes to score in.
 Its rows still count toward the wonders and the statistics, like any
-other round. Every Time Attack run is recorded, by contrast: its rows
-are the same achievement whether the clock or the stack ended it. The
-"Highscores" main menu entry asks which of the four lists to show.
+other round. Every Time Attack and every Flood round is recorded, by
+contrast: its rows are the same achievement whether the clock, the water
+or the stack ended it. The
+"Highscores" main menu entry asks which of the five lists to show.
 
 Wonders: the row credit of every round is added to a persistent counter
 stored in <data-dir>/save. It builds seven world wonders in a fixed
@@ -619,8 +644,9 @@ results of the last three rounds (rows, bonus rows, squares) and the
 number of rounds played per game mode - including how often Ultra
 reached its target, Sprint played its full time and Time Attack ran its
 clock down - are kept there as well. Every counter is also kept per
-game mode, so the same figures can be read for Marathon, Ultra, Sprint
-or Time Attack alone; the all-time counters stay what they always were
+game mode, so the same figures can be read for Marathon, Ultra, Sprint,
+Time Attack or Flood alone; the all-time counters stay what they always
+were
 and are not summed from those. The "Statistics" main menu entry asks
 which of the two to show.
 
@@ -629,8 +655,9 @@ recording) are stored in the config file
 <data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
 best 10 rounds are kept in <data-dir>/highscore (Ultra: the best 10 runs
 in <data-dir>/highscore-ultra, Sprint: <data-dir>/highscore-sprint,
-Time Attack: <data-dir>/highscore-timeattack); all
-four lists are shown under the
+Time Attack: <data-dir>/highscore-timeattack, Flood:
+<data-dir>/highscore-flood); all
+five lists are shown under the
 "Highscores" main menu entry, which asks for the mode first, and a
 finished round reports its rank on the game over
 screen. Key bindings can also be overridden

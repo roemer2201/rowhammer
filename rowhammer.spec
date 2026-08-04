@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.48.1
+Version:        0.49.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,18 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.49.0-1
+- New game mode "Hochwasser": Marathon under rising water - every 20
+  seconds of play time a full row with a single gap is pushed in from
+  below and the board moves up; the round ends at the ceiling and the
+  row credit is the score.
+- Flood rows are a cell type of their own and can never form a square;
+  lifted pieces keep their identity and their gold/silver marking.
+- Own highscore list highscore-flood (every round recorded), covered by
+  --reset highscore, the mode pickers and the per-mode statistics.
+- Demo format version 2: the flood event carries its gap column, so a
+  replay floods the same columns; version 1 recordings are rejected.
+
 * Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.48.1-1
 - Demo recording survives a full RAM disk or data directory without
   disturbing the round: every write of the demo module is checked, the

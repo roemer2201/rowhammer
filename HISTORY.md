@@ -75,6 +75,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.46.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.8, 4.10 |
 | 0.47.0 | Vollstaendige Statistik je Spielmodus | 4.5 |
 | 0.48.0 | Mehrsprachige Oberflaeche (Deutsch/Englisch) | 4.11 |
+| 0.49.0 | Hochwasser-Modus samt eigener Bestenliste | 3.5, 3.6, 4.5, 4.10 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1177,3 +1178,64 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       und je eine Zeile der ersten und dritten Anleitungsseite. Sie sind
       umbrochen; die Breitengrenzen stehen jetzt im Kopf der
       Sprachdateien.
+
+- [x] **Hochwasser-Modus** (Version 0.49.0, Nutzerwunsch; aktueller
+      Stand siehe 3.6): der fuenfte Spielmodus und der erste, in dem
+      das Spielfeld sich von selbst fuellt. Alle `FLOOD_INTERVAL_MS`
+      (20000 ms = 20 Sekunden, Nutzervorgabe "vorerst 20") Spielzeit
+      schiebt sich von unten eine volle Reihe mit genau einem Loch ins
+      Feld und das ganze Feld rueckt eine Zeile nach oben; sonst ist die
+      Runde Marathon - sie endet im Game Over, gewertet werden die Rows,
+      ein Ziel gibt es nicht (`GAME_MODE=flood`, `flood_raise` in
+      `rowhammer.sh`, `board_flood_row` in `lib/board.sh`).
+      Die Entscheidungen dahinter:
+      - **Die Flutreihe ist eine Zellsorte fuer sich** (`GARBAGE_CELL`,
+        `x`), keine Steinsorte: Instanz-ID 0, damit nie Teil eines
+        Quadrats. Das ist genau die Festlegung, die die
+        Mehrspieler-Spezifikation fuer ihre Stoerreihen trifft (5.7) -
+        der Modus nimmt sie vorweg, statt eine zweite Art Stoerreihe zu
+        erfinden, und liefert damit die Vorarbeit fuer Phase 5,
+        Schritt 7 gleich mit.
+      - **Das Hochschieben laesst die Steine heil.** `BOARD`,
+        `BOARD_ID` und `BOARD_SQ` wandern zeilenweise gemeinsam nach
+        oben, sodass Instanzen ihre ID und ihre Gold-/Silber-Markierung
+        behalten - ein Quadrat ueberlebt die Flut wie einen Reihenabbau
+        unter sich. Eine belegte oberste Zeile beendet die Runde, statt
+        eine Zelle aus dem Feld zu druecken.
+      - **Der fallende Stein bleibt stehen, wo er ist**, und rueckt nur
+        mit hoch, wenn er sonst im gestiegenen Stapel steckte: er lag
+        auf dem, was sich bewegt hat. Ist auch das blockiert, ist die
+        Runde vorbei. Ein scharfes Lock-Delay wird nur geprueft, nicht
+        neu gestellt - die Regel aus 3.1 bleibt, wie sie ist.
+      - **Die naechste Flut wird vom Eintreffen der letzten an
+        gerechnet**, nicht von ihrem Soll-Zeitpunkt: ein spaet
+        gekommener Tick (Resize, Blink-Animation) haette sonst mehrere
+        faellige Reihen auf einmal eingeschoben. Dieselbe Ueberlegung,
+        aus der die Gravitation `LAST_FALL` auf "jetzt" setzt.
+      - **Die Fluthoehe steht im Game-Loop in einem eigenen `if`**, vor
+        der Gravitationskette: ein Anstieg ist kein Rundenende und darf
+        dem Tick sein Fallen nicht nehmen. Beendet er die Runde, faengt
+        ein `GAME_OVER`-Zweig vor der Kette das ab.
+      - **Jede Runde kommt in die Bestenliste**, wie bei Time Attack:
+        einen Zustand "abgebrochen" gibt es hier nicht, jede Runde
+        dieses Modus endet im Game Over. Eigene, fuenfte Datei
+        `${DATA_DIR}/highscore-flood` (`HSF_*` in `lib/highscore.sh`),
+        Rangordnung und Zeilenformat der Marathon-Liste, aber ohne deren
+        Kulanz gegenueber kuerzeren Zeilen: die Liste ist mit dem
+        Runden-Hash entstanden und hatte nie eine Fassung ohne ihn.
+      - **Im HUD teilt sich der Modus die beiden Zeilen der Zeitmodi**
+        (Zeile 15/16 der linken Spalte), mit eigenem Label: "Flut" fuer
+        den Abstand, "Rest" fuer die Zeit bis zur naechsten Reihe. Kein
+        "Ziel", weil es keines gibt.
+      - **Die Demo-Aufzeichnung bekam ihr erstes Ereignis mit
+        Nutzlast** (`w<spalte>`) und damit Formatversion 2: der Anstieg
+        folgt der Uhr, die Lochspalte aber `RANDOM` - eine Wiedergabe,
+        die sie raet, spielte eine andere Runde (siehe 4.10).
+      - **Grau mit eigenem Glyph (`::`), auch im Farbmodus.** Im Thema
+        `mono` haben die Steine dasselbe Grau, und eine Reihe, die
+        niemand gelegt hat, soll immer als solche zu erkennen sein.
+      Nebenbefund: die Anleitungsseite "Spielmodi" fasste den fuenften
+      Modus nicht mehr (sie sass mit vier Modi schon auf
+      `MENU_BODY_MAX`) und ist in zwei Seiten geteilt - Marathon, Ultra
+      und Sprint auf der einen, Time Attack und Hochwasser auf der
+      anderen; die Anleitung hat damit neun Seiten.

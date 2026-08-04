@@ -13,13 +13,16 @@
 #   instead. In the Ultra game mode (since 0.19.0) two more counters
 #   follow below: the run's row target and the rows still missing; the
 #   Sprint mode (since 0.20.0) puts its time limit and the time left in
-#   the same two slots, and the Time Attack mode (since 0.22.0) the play
-#   time its rows have bought so far and what is left of it. Pause
+#   the same two slots, the Time Attack mode (since 0.22.0) the play
+#   time its rows have bought so far and what is left of it, and the
+#   Hochwasser mode (since 0.25.0) the interval between two flood rows
+#   and the time until the next one. Pause
 #   and game over are drawn as a box over the board, the latter with the
 #   achieved highscore rank - or, for a finished Ultra run, with its time
 #   and Ultra rank, resp. for a finished Sprint run with its rows and
-#   Sprint rank and for an ended Time Attack run with its rows and Time
-#   Attack rank. During a demo playback (since 0.23.0, lib/demo.sh) the
+#   Sprint rank, for an ended Time Attack run with its rows and Time
+#   Attack rank and for a drowned Hochwasser round with its rows and
+#   Hochwasser rank. During a demo playback (since 0.23.0, lib/demo.sh) the
 #   pane carries the replay speed and the same box shows the end of the
 #   recording, taking precedence over all of those because it has to
 #   carry the keys of the replay.
@@ -45,8 +48,9 @@
 #   previews each theme via render_theme_swatch. In the no-color mode
 #   every piece type instead draws its own two-character glyph
 #   (PIECE_GLYPH, lib/pieces.sh) and the gold/silver squares use distinct
-#   non-letter glyphs, so blocks stay tellable apart without color. All
-#   terminal output goes
+#   non-letter glyphs, so blocks stay tellable apart without color; the
+#   flood rows of the Hochwasser mode carry their own glyph in both modes
+#   (GARBAGE_GLYPH). All terminal output goes
 #   through screen_write, which mirrors every update 1:1 into the frame log
 #   when the debug mode is active (lib/debug.sh). Menus, info screens and
 #   prompts (lib/menu.sh, lib/wonders.sh) hand their lines to
@@ -66,7 +70,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.24.0  (2026-08-04)
+# Version: 0.25.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -111,6 +115,7 @@ declare -A OVERLAY_ROWS=()
 declare -A PIECE_SGR=()
 SQ_GOLD_SGR=""
 SQ_SILVER_SGR=""
+GARBAGE_SGR=""
 FLASH_SGR=""
 RESET_SGR=$'\e[0m'
 BOX_SGR=""
@@ -195,6 +200,15 @@ RENDER_MINI=""
 SQ_GOLD_GLYPH="##"
 SQ_SILVER_GLYPH="%%"
 
+# Glyph of a flood row cell (the "Hochwasser" mode, GARBAGE_CELL in
+# lib/board.sh). Unlike the pieces, this one is printed in the colored
+# mode too: its theme color is grey in every theme (see THEME_COLOR),
+# which the mono theme also gives the pieces, and a row that was never
+# played but pushed in from below should be recognizable at a glance in
+# any case. A non-letter marker like the two square glyphs, and a light
+# one - the water is the thing the player did not build.
+GARBAGE_GLYPH="::"
+
 # color_mode_resolve
 # Resolve COLOR_MODE=auto into basic or extended by probing the
 # terminal: tput colors when available (tput is optional per the
@@ -230,7 +244,7 @@ color_mode_resolve() {
 # backgrounds. Called at startup and again whenever the settings menu
 # switches the theme, so a change takes effect immediately.
 render_colors_init() {
-    local t name gname sname x
+    local t name gname sname xname x
     for t in "${PIECE_TYPES[@]}"; do
         name="${THEME_COLOR[${COLOR_THEME}:${t}]}"
         if [ "${COLOR_MODE}" = "extended" ]; then
@@ -241,9 +255,14 @@ render_colors_init() {
     done
     gname="${THEME_COLOR[${COLOR_THEME}:GOLD]}"
     sname="${THEME_COLOR[${COLOR_THEME}:SILVER]}"
+    # The flood rows of the "Hochwasser" mode are drawn like the squares -
+    # dark glyph on the theme color - because they carry a glyph too
+    # (GARBAGE_GLYPH, see there).
+    xname="${THEME_COLOR[${COLOR_THEME}:GARBAGE]}"
     if [ "${COLOR_MODE}" = "extended" ]; then
         SQ_GOLD_SGR=$'\e[38;5;16;48;5;'"${COLOR_EXT[${gname}]}m"
         SQ_SILVER_SGR=$'\e[38;5;16;48;5;'"${COLOR_EXT[${sname}]}m"
+        GARBAGE_SGR=$'\e[38;5;16;48;5;'"${COLOR_EXT[${xname}]}m"
         # Clear flash: the brightest white the palette offers, so a
         # flashing row clearly stands out from every block color.
         FLASH_SGR=$'\e[38;5;16;48;5;231m'
@@ -253,6 +272,7 @@ render_colors_init() {
         # in gname/sname is used as the key, not evaluated as a variable.
         SQ_GOLD_SGR=$'\e[30;'"$(( ${COLOR_BASIC[${gname}]} + 10 ))m"
         SQ_SILVER_SGR=$'\e[30;'"$(( ${COLOR_BASIC[${sname}]} + 10 ))m"
+        GARBAGE_SGR=$'\e[30;'"$(( ${COLOR_BASIC[${xname}]} + 10 ))m"
         FLASH_SGR=$'\e[1;30;47m'
     fi
     # The pause/game over box is drawn bold rather than colored, so it
@@ -541,6 +561,18 @@ render_board_row() {
             s+="  "
             continue
         fi
+        # A flood row cell of the "Hochwasser" mode: never a piece and
+        # never part of a square, so it is settled before the square
+        # look is even looked at. It keeps its glyph in both color modes
+        # (see GARBAGE_GLYPH).
+        if [ "${cell}" = "${GARBAGE_CELL}" ]; then
+            if [ "${USE_COLOR}" -eq 1 ]; then
+                s+="${GARBAGE_SGR}${GARBAGE_GLYPH}${RESET_SGR}"
+            else
+                s+="${GARBAGE_GLYPH}"
+            fi
+            continue
+        fi
         # Settled cell: gold/silver squares get their own look so they
         # stand out from normal pieces. With color the "##" glyph also
         # distinguishes gold from the yellow O; without color the squares
@@ -681,6 +713,23 @@ render_pane_left() {
         fi
         fmt_duration $(( (left + 999) / 1000 ))
         pane_stat 16 "${I18N[hud_left]}" "${FMT_DURATION}"
+    elif [ "${GAME_MODE}" = "flood" ]; then
+        # Hochwasser (2026-08-04): the same two lines once more, this
+        # time about the water. The upper one is the interval between two
+        # rises (FLOOD_INTERVAL_MS, a constant like Sprint's limit), the
+        # lower one the time until the next row comes in - rounded up
+        # like the other countdowns, so 00:00 never stands there while
+        # the round still has a moment left. It is not a goal, so it gets
+        # a label of its own instead of Ultra's "Ziel"; "Rest" fits the
+        # remaining time here as well as it does there.
+        fmt_duration $(( FLOOD_INTERVAL_MS / 1000 ))
+        pane_stat 15 "${I18N[hud_flood]}" "${FMT_DURATION}"
+        left=$(( FLOOD_NEXT_MS - PLAY_MS ))
+        if [ "${left}" -lt 0 ]; then
+            left=0
+        fi
+        fmt_duration $(( (left + 999) / 1000 ))
+        pane_stat 16 "${I18N[hud_left]}" "${FMT_DURATION}"
     fi
     # Demo playback (2026-08-03): the replay speed, on one of the pane's
     # free rows (see CLAUDE.md 3.4). It is the only thing about a replay
@@ -760,12 +809,13 @@ render_status_box() {
     if [ "${GAME_OVER}" -eq 1 ]; then
         local -a body=()
         body+=("")
-        # Five endings share this box, and all of them fill the same
-        # eight body lines so the borders stay put: the two timed modes
+        # Several endings share this box, and all of them fill the same
+        # eight body lines so the borders stay put: the timed modes
         # each have a finished and a failed variant (the result takes the
-        # headline's neighbouring line; a failed run gets no rank - it is
-        # not recorded, so it shows how far it got instead), and the
-        # endless round has its classic game over.
+        # headline's neighbouring line; a failed Ultra or Sprint run gets
+        # no rank - it is not recorded, so it shows how far it got
+        # instead), while the endless round and Hochwasser have their
+        # classic game over.
         case "${GAME_MODE}" in
             ultra)
                 if [ "${GOAL_REACHED}" -eq 1 ]; then
@@ -834,6 +884,25 @@ render_status_box() {
                 if [ "${HSA_LAST_RANK}" -gt 0 ]; then
                     printf -v line "${I18N[box_rank]}" \
                         "${I18N[mode_timeattack]}" "${HSA_LAST_RANK}"
+                    body+=("${line}")
+                else
+                    body+=("")
+                fi
+                ;;
+            flood)
+                # Hochwasser has the single ending Marathon has - the
+                # water always wins in the end, and there is nothing to
+                # reach - but a list of its own, so the rank names it.
+                # The rows take the line a failed timed run uses for its
+                # progress: they are what a round under a rising floor
+                # is measured by, and unlike Marathon this mode is short
+                # enough that the number is the story of the round.
+                body+=("${I18N[box_game_over]}")
+                printf -v line "${I18N[box_rows]}" "${ROW_CREDIT}"
+                body+=("${line}")
+                if [ "${HSF_LAST_RANK}" -gt 0 ]; then
+                    printf -v line "${I18N[box_rank]}" \
+                        "${I18N[mode_flood]}" "${HSF_LAST_RANK}"
                     body+=("${line}")
                 else
                     body+=("")
