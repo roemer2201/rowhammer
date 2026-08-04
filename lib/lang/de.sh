@@ -317,6 +317,10 @@ endet ohnehin immer im Game Over."
     [stats_all]="Gesamt (alle Modi)"
     [stats_lines]="Abgebaute Reihen:"
     [stats_bonus]="Bonusreihen:"
+    # Verhaeltnis der beiden Zeilen darueber, Wert "1:X.XX" (eine
+    # abgebaute Reihe zu so vielen Bonusreihen). Label hoechstens 26
+    # Zeichen wie die uebrigen Zaehler-Beschriftungen.
+    [stats_ratio]="Verhaeltnis Reihen/Bonus:"
     [stats_total]="Reihen gesamt (gewertet):"
     [stats_gold]="Goldbloecke:"
     [stats_silver]="Silberbloecke:"
@@ -329,6 +333,9 @@ endet ohnehin immer im Game Over."
     [stats_recent_rows]="Rows"
     [stats_recent_lines]="Reihen"
     [stats_recent_bonus]="Bonus"
+    # Dritte Zeile eines Eintrags der letzten Spiele, vor dem Wert
+    # "1:X.XX"; die beiden Zeilen darueber sind voll (44 von 46 Zeichen).
+    [stats_recent_ratio]="Reihen/Bonus"
     [stats_modes_head]="Runden je Spielmodus:"
     [stats_rounds]="Runden:"
     [stats_rounds_total]="Runden gesamt:"

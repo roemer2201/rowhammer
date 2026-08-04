@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.54.0
+Version:        0.55.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Wed Aug 05 2026 roemer2201 <r.oliver@web.de> - 0.55.0-1
+- Every statistics screen states the ratio of cleared rows to bonus rows
+  ("1:X.XX"): all-time counters, recent rounds and per-mode screens.
+- The recent rounds carry it on a third line, the two existing ones
+  being full at 44 of their 46 characters.
+
 * Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.54.0-1
 - The wonders screen pages back through the wonders already finished
   with the left/right keys; a wonder not started yet is not shown.

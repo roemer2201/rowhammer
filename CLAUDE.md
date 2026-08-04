@@ -1631,8 +1631,9 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Gesamtzaehler (inklusive der gewichteten Gesamtsumme Lines + Bonus,
   des Rowhammer-Zaehlers, der abgelegten Teile, der Gesamtspielzeit als
   H:MM:SS und der daraus berechneten Steine/Minute), dann die letzten
-  drei Spiele mit je zwei Zeilen (Datum, Rows, Reihen, Bonus / Gold,
-  Silb, RH, PCS, PPM), zuletzt die Runden je Modus (die Erfolgszahl der
+  drei Spiele mit je drei Zeilen (Datum, Rows, Reihen, Bonus / Gold,
+  Silb, RH, PCS, PPM / Reihen-Bonus-Verhaeltnis, seit 0.55.0), zuletzt
+  die Runden je Modus (die Erfolgszahl der
   Zeitmodi jeweils eingerueckt unter der Rundenzahl, weil sie ein
   Anteil davon ist, dazu die Gesamtzahl). Der dritte Bildschirm ist ein
   eigener, weil der erste mit zehn Zeilen Zaehlern voll ist. Die ersten
@@ -1655,8 +1656,41 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gewichtete Gesamtsumme und die PCS/min): **Rows je Runde**, die Zahl,
   die zwei Modi ueberhaupt vergleichbar macht, und bei den Zeitmodi die
   **Erfolgsquote** in Prozent; ohne eine einzige Runde des Modus steht
-  in beiden ein "-" statt einer Division durch 0. Mit 16 Zeilen im
-  laengsten Fall (Zeitmodus) bleibt der Bildschirm in `MENU_BODY_MAX`.
+  in beiden ein "-" statt einer Division durch 0. Mit 17 Zeilen im
+  laengsten Fall (Zeitmodus, seit 0.55.0 eine mehr) bleibt der
+  Bildschirm in `MENU_BODY_MAX`.
+  **Verhaeltnis Reihen/Bonus (seit 0.55.0, Nutzerwunsch):** jeder
+  Statistik-Bildschirm nennt seither, wie die beiden Zaehler "Abgebaute
+  Reihen" und "Bonusreihen" zueinander stehen - der Gesamtbildschirm,
+  jede der drei letzten Runden und jeder Modus-Bildschirm. Beide Zahlen
+  standen laengst nebeneinander; wie viel der Reihenwertung aus den
+  Gold-/Silber-Quadraten kam und wie viel aus den Reihen selbst, musste
+  man sich dazu im Kopf teilen. `stats_ratio` (`lib/stats.sh`)
+  formatiert es als "1:X.XX" - eine abgebaute Reihe war so viele
+  Bonusreihen wert. Vier Festlegungen:
+  - **Die Form "1:X.XX" statt Prozent oder blossem Quotienten**, weil
+    genau das die beiden Zahlen sind: eine Reihe des Feldes und der
+    Bonus, den sie getragen hat. Zwei Nachkommastellen, weil die
+    interessanten Unterschiede zweier Spielweisen in der zweiten
+    stehen. Ohne eine einzige abgebaute Reihe steht "-" - der einzige
+    Division-durch-0-Fall, und zugleich der einzige, in dem die Zahl
+    ohnehin nichts sagen wuerde (ohne Reihe kein Bonus).
+  - **Der Platz ist zwischen "Bonusreihen" und der gewichteten
+    Gesamtsumme.** Das Verhaeltnis setzt die beiden rohen Zaehler
+    zueinander, waehrend Gesamtsumme und Rows je Runde aus ihnen
+    abgeleitet sind. Bewusst ohne Faerbung: die Akzentfarbe gehoert auf
+    diesen Bildschirmen der Gesamtsumme, der Zahl, die die Wunder baut.
+  - **Bei den letzten Spielen kostet es eine dritte Zeile je Runde.**
+    Die beiden vorhandenen sind mit 44 der 46 Zeichen voll, und eine
+    ihrer Spalten fuer eine ableitbare Zahl herzugeben waere der
+    falsche Tausch gewesen - eine gespeicherte gegen eine gerechnete.
+    Drei Zeilen je Runde passen: der Bildschirm landet bei 14 der 18
+    Zeilen aus `MENU_BODY_MAX`.
+  - **Ein absurdes Verhaeltnis wird gekappt** ("1:>9999"): in einer
+    gespielten Runde bleibt der ganzzahlige Teil unter 21 (ein Tetris
+    durch zwei Gold-Quadrate sind 4 Reihen und 81 Bonusreihen), alles
+    darueber kann nur aus einer von Hand bearbeiteten Datei kommen und
+    wuerde bloss die Zeilenbreite sprengen.
   **Farbige Darstellung (seit 0.30.0):** wie die Highscore-Liste nutzt
   auch dieser Bildschirm die `TXT_*`-SGR-Farben aus `lib/render.sh`
   (siehe dort): die gewichtete Gesamtsumme in der Akzentfarbe, Gold-
