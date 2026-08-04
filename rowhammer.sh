@@ -144,18 +144,21 @@
 #      table - everything printed from here on is translated, --help
 #      and the reset report included. Print the help and exit if
 #      -h/--help was given.
-#   5. Carry out --reset if requested: move the selected persistent
+#   5. Rename a leftover "highscore" file to "highscore-marathon" once
+#      (the Marathon list names its mode like the other four since
+#      0.51.0), ahead of the reset so it works on the current name.
+#   6. Carry out --reset if requested: move the selected persistent
 #      files below the data directory aside to timestamped .bak copies
 #      and exit, without ever touching the terminal.
-#   6. Verify the remaining prerequisites (interactive terminal, minimum
+#   7. Verify the remaining prerequisites (interactive terminal, minimum
 #      size; the size is rechecked live via SIGWINCH while running).
-#   7. Resolve the remaining settings with precedence default < config
+#   8. Resolve the remaining settings with precedence default < config
 #      file < env < CLI and validate them.
-#   8. Install the cleanup trap, start the debug logs (when --debug is
+#   9. Install the cleanup trap, start the debug logs (when --debug is
 #      set), load the highscore lists, the savegame and the statistics
 #      and enter the alternate screen in raw input mode (echo and
 #      canonical mode off for the whole session).
-#   9. Run the main menu loop; the singleplayer entry picks a game mode and
+#  10. Run the main menu loop; the singleplayer entry picks a game mode and
 #      starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
 #      clearing, rendering), finished rounds are recorded - under the
@@ -168,7 +171,7 @@
 #      game while such a round waits asks for confirmation first. A
 #      round restarted via the pause menu is recorded like any other
 #      abandoned one before the fresh round replaces it.
-#  10. Restore the terminal on exit and close the debug logs.
+#  11. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--lang de|en|auto]
@@ -179,7 +182,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.50.0  (2026-08-04)
+# Version: 0.52.0  (2026-08-04)
 
 set -euo pipefail
 
@@ -194,7 +197,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.50.0"
+ROWHAMMER_VERSION="0.52.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -665,6 +668,15 @@ if [ "${HELP_OPT}" -eq 1 ]; then
     usage
     exit 0
 fi
+
+# --- One-time rename of the Marathon highscore file -----------------------
+# "highscore" became "highscore-marathon" in 0.51.0 (user decision), so
+# the list names its mode like the four others do. This has to run
+# before the reset block below: --reset highscore works from the names
+# the modules own, and a file still sitting under the old name would be
+# reported as absent and then survive its own reset. It is also before
+# anything reads a list, so the game only ever sees the current name.
+highscore_migrate_legacy
 
 # --- Reset of persistent data (runs before the game starts) ---------------
 # How often reset_run retries when a backup of the current second is
@@ -1239,6 +1251,24 @@ round_is_ranked() {
         ultra)  [ "${GOAL_REACHED}" -eq 1 ] && [ "${PLAY_MS}" -gt 0 ] ;;
         sprint) [ "${GOAL_REACHED}" -eq 1 ] && [ "${ROW_CREDIT}" -gt 0 ] ;;
         *)      [ "${ROW_CREDIT}" -gt 0 ] ;;
+    esac
+}
+
+# round_rank_preview: which place the round that just ended would take in
+# the list of its mode, reported in HS_PREVIEW_RANK / HS_PREVIEW_MAX
+# (highscore_rank_preview, lib/highscore.sh; 0 = misses the list). Asked
+# by the name prompt (prompt_round_name, lib/menu.sh), which runs before
+# the entry is written and so cannot read the rank the insert reports.
+# Only meaningful for a round round_is_ranked accepts.
+#
+# It sits next to round_is_ranked because it answers with the same piece
+# of knowledge: which number of the round its mode is ranked by - the
+# play time for Ultra, the row credit everywhere else. Keeping the two
+# together means a new mode has one place to be entered, not two.
+round_rank_preview() {
+    case "${GAME_MODE}" in
+        ultra) highscore_rank_preview "${GAME_MODE}" "${PLAY_MS}" ;;
+        *)     highscore_rank_preview "${GAME_MODE}" "${ROW_CREDIT}" ;;
     esac
 }
 

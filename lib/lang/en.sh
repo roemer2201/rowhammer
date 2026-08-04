@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.2.0  (2026-08-04)
+# Version: 1.3.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -141,6 +141,10 @@ A-Z a-z 0-9 space _ -"
     [round_mode]="Mode: %s"
     [round_rows]="Rows: %d   Lines: %d"
     [round_level]="Level: %d   Time: %s"
+    # Place in the list of the round's mode: 1 = rank, 2 = list length.
+    # round_rank_none names the length only (argument 1).
+    [round_rank]="Highscore list: rank %d of %d"
+    [round_rank_none]="Highscore list: no rank (top %d)"
     [round_ask_name]="Name for the highscore list:"
 
     # --- Demos ------------------------------------------------------------
@@ -441,6 +445,11 @@ During a replay:"
     [help_demo_speed]="Speed"
     [help_demo_back]="Back"
 
+    # --- One-time rename of the Marathon highscore file (0.51.0) ----------
+    # Printed before the terminal is touched, like the reset dialog.
+    # Arguments: old path, new path.
+    [highscore_renamed]="Highscore list renamed: %s -> %s"
+
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" affects these files in %s:"
     [reset_absent]="(not present)"
@@ -525,7 +534,7 @@ Options:
                 without starting the game. TARGET is one of:
                   config     the config file rowhammer.conf
                   stats      the statistics file stats
-                  highscore  all highscore lists (highscore,
+                  highscore  all highscore lists (highscore-marathon,
                              highscore-ultra, highscore-sprint,
                              highscore-timeattack and highscore-flood)
                   save       the savegame save (the wonder progress)
@@ -664,8 +673,9 @@ which of the two to show.
 Settings (player name, language, color theme, key bindings, demo
 recording) are stored in the config file
 <data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
-best 10 rounds are kept in <data-dir>/highscore (Ultra: the best 10 runs
-in <data-dir>/highscore-ultra, Sprint: <data-dir>/highscore-sprint,
+best 10 rounds are kept in <data-dir>/highscore-marathon (Ultra: the
+best 10 runs in <data-dir>/highscore-ultra, Sprint:
+<data-dir>/highscore-sprint,
 Time Attack: <data-dir>/highscore-timeattack, Flood:
 <data-dir>/highscore-flood); all
 five lists are shown under the

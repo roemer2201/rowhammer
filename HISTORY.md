@@ -76,7 +76,9 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.47.0 | Vollstaendige Statistik je Spielmodus | 4.5 |
 | 0.48.0 | Mehrsprachige Oberflaeche (Deutsch/Englisch) | 4.11 |
 | 0.49.0 | Hochwasser-Modus samt eigener Bestenliste | 3.5, 3.6, 4.5, 4.10 |
-| 0.50.0 | Bestenlisten mit Cursor, Blaettern und Demo-Wiedergabe | 3.5, 3.8, 4.5 |
+| 0.50.0 | Platz in der Bestenliste in der Namensabfrage | 3.7, 4.5 |
+| 0.51.0 | Marathon-Bestenliste heisst `highscore-marathon` | 4.5, 4.8 |
+| 0.52.0 | Bestenlisten mit Cursor, Blaettern und Demo-Wiedergabe | 3.5, 3.8, 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -258,6 +260,8 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       und Hold-Sekundaertaste auf `w`._
 - [x] Highscore-Liste (Version 0.7.0: Top 10 im Datenverzeichnis,
       Anzeige im Hauptmenue, Rang im Game-Over-Bild; siehe 4.5)
+      _Spaeter ueberholt: die Datei hiess bis 0.50.0 `highscore` und
+      heisst seit 0.51.0 `highscore-marathon` (siehe dort)._
 - [x] 256-Farben-Modus (Version 0.9.0: `--color-mode auto|basic|extended`,
       `auto` erkennt 256-Farben-Terminals selbst; erweiterte Palette mit
       Guideline-Farben inkl. echtem Orange fuer L sowie satterem
@@ -1241,8 +1245,80 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       und Sprint auf der einen, Time Attack und Hochwasser auf der
       anderen; die Anleitung hat damit neun Seiten.
 
+- [x] **Platz in der Bestenliste in der Namensabfrage** (Version 0.50.0,
+      Nutzerwunsch; aktueller Stand siehe 3.7): Die Namensabfrage am
+      Rundenende (0.45.0) nennt ueber der Eingabezeile jetzt auch den
+      Platz, den die Runde in der Bestenliste ihres Modus einnehmen wird
+      - "Bestenliste: Platz 3 von 10" bzw. "Bestenliste: kein Platz
+      (Top 10)", wenn sie die Liste verfehlt. Die Entscheidungen dahinter:
+      - **Der Platz wird vorhergesagt, nicht abgelesen.** Der
+        Listeneintrag entsteht erst, wenn die Abfrage einen Namen
+        zurueckgegeben hat (`record_round` in `rowhammer.sh`: der Name
+        geht in den Eintrag *und* in den Runden-Hash), also **nach** dem
+        Bildschirm, der den Platz zeigen soll. Die Abfrage dahinter zu
+        schieben waere der kuerzere Weg gewesen und haette genau diese
+        Reihenfolge umgedreht. Stattdessen leitet
+        `highscore_rank_preview` (`lib/highscore.sh`) den Platz aus der
+        geladenen Liste ab, ohne sie anzufassen.
+      - **Eine Funktion fuer alle fuenf Listen** statt fuenf Kopien der
+        Einfuegeregel: sie unterscheiden sich nur darin, welches Array
+        sie befragen und ob der kleinere Wert der bessere ist (Ultra
+        rangiert nach Zeit, alle anderen nach Rows). Der Platz ist
+        derselbe, den die `*_add`-Funktion vergeben wuerde - eins hinter
+        der Zahl der mindestens gleich guten Eintraege, und kein Platz,
+        wenn das ueber die Laenge der Liste hinausgeht. Zwischen Vorschau
+        und Eintrag aendert nichts die Liste, beide koennen also nicht
+        auseinanderlaufen; ein Zufallstest ueber 180 Runden hat das gegen
+        die drei Einfuegefunktionen geprueft.
+      - **Welche Zahl die Runde rangiert, weiss `round_rank_preview`**
+        (`rowhammer.sh`) - dieselbe Modus-Fallunterscheidung, die
+        gleich darueber schon `round_is_ranked` trifft. Ein kuenftiger
+        Modus wird damit an einer Stelle eingetragen, nicht an zweien.
+      - **Auch die verfehlte Liste steht dort.** Eine Runde wird nach
+        dem Namen gefragt, sobald sie ueberhaupt in eine Liste kommen
+        koennte (`round_is_ranked`) - ob sie die Top 10 dann wirklich
+        erreicht, ist eine andere Frage, und sie unbeantwortet zu lassen
+        waere die einzige Stelle, an der der Bildschirm schweigt.
+
+- [x] **Umbenennung der Marathon-Bestenliste** (Version 0.51.0,
+      Nutzerwunsch; aktueller Stand siehe 4.5): die Datei der
+      Marathon-Liste heisst `highscore-marathon` statt `highscore` und
+      passt damit ins Schema der vier Modus-Listen, die mit 0.34.0
+      bis 0.49.0 dazugekommen sind (`highscore-ultra`,
+      `highscore-sprint`, `highscore-timeattack`, `highscore-flood`).
+      Der schlichte Name war ein Rest aus 0.7.0, als sie die einzige
+      Liste war.
+      Die Entscheidungen dahinter:
+      - **Eine vorhandene alte Datei wird umbenannt statt fallen
+        gelassen** (`highscore_migrate_legacy` in `lib/highscore.sh`,
+        ein `mv`, ausdruecklicher Nutzerwunsch). Das ist eine bewusste
+        Ausnahme von der Arbeitsregel "keine Abwaertskompatibilitaet"
+        (CLAUDE.md, Abschnitt 6) und eine sehr billige: am Inhalt der
+        Datei aendert sich kein Byte, nur am Namen - eine Top Ten
+        dafuer wegzuwerfen waere ein Verlust ohne Gegenwert. Der alte
+        Name lebt einzig als `HS_LEGACY_FILE_NAME` fuer diese eine
+        Funktion weiter.
+      - **Sie laeuft vor dem Reset-Block** in `rowhammer.sh`, nicht
+        etwa in `highscore_load`. `--reset highscore` (siehe 4.8)
+        arbeitet mit den Dateinamen, die die Module besitzen; eine noch
+        unter dem alten Namen liegende Datei waere dort als "nicht
+        vorhanden" gemeldet worden und haette ihren eigenen Reset
+        ueberlebt.
+      - **Eine schon vorhandene Zieldatei wird nie ueberschrieben**
+        (die Umbenennung hat dann bereits stattgefunden, und der alte
+        Name ist etwas von Hand Zurueckgelegtes): sie bleibt liegen und
+        meldet sich auf STDERR. Ein fehlgeschlagenes `mv` ist dagegen
+        ein harter Fehler - das Datenverzeichnis ist dann nicht
+        beschreibbar, das Spiel koennte dort ohnehin keine Liste
+        speichern, und weiterzumachen hiesse stillschweigend mit einer
+        leeren Marathon-Liste zu starten.
+      - **Die Meldung der Umbenennung ist uebersetzt**
+        (`highscore_renamed`, siehe 4.11) und geht wie der
+        Reset-Dialog auf STDOUT, bevor der Alternate-Screen aufgeht;
+        nur die beiden Fehlerfaelle bleiben englisch auf STDERR.
+
 - [x] **Bestenlisten mit Cursor, Blaettern und Demo-Wiedergabe**
-      (Version 0.50.0, Nutzerwunsch; aktueller Stand siehe 4.5): die
+      (Version 0.52.0, Nutzerwunsch; aktueller Stand siehe 4.5): die
       fuenf Highscore-Listen waren bis dahin schreibgeschuetzte
       Info-Bildschirme, die `menu_pages` seitenweise ausgab - eine Taste
       je Seite, immer nur vorwaerts und ohne Weg zurueck. Sie sind jetzt

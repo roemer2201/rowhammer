@@ -378,7 +378,7 @@ in fester Reihenfolge einmal durchzureichen:
    Wiedergabe die Runde deshalb wirklich noch einmal spielt), wie viele
    Aufnahmen aufbewahrt werden, wo sich einzelne loeschen und die
    Aufzeichnung abschalten laesst, dass auch die Bestenliste eine Demo
-   startet (seit 0.50.0, siehe 4.5) und die Tasten der Wiedergabe. Die
+   startet (seit 0.52.0, siehe 4.5) und die Tasten der Wiedergabe. Die
    Zeile fuer den neuen Weg hat der Einleitungsabsatz bezahlt: die Seite
    sass mit 18 Zeilen schon auf `MENU_BODY_MAX`, und der Absatz sagte in
    fuenf Zeilen, was in vieren steht.
@@ -683,9 +683,26 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   noetige Fehlermeldung nach der Eingabe entfaellt. Eine
   Buchstabentaste ist hier ein Buchstabe und keine Spielaktion - `x`
   schliesst den Dialog also nicht, dafuer ist `ESC` da.
+- **Der Platz in der Bestenliste steht dabei (seit 0.50.0,
+  Nutzerwunsch):** unter den Rundenzahlen nennt der Bildschirm den Rang,
+  den die Runde in der Liste ihres Modus einnehmen wird ("Bestenliste:
+  Platz 3 von 10") bzw. dass sie sie verfehlt ("kein Platz (Top 10)").
+  Er wird **vorhergesagt statt abgelesen**: der Eintrag entsteht erst
+  hinter dieser Abfrage (der Name geht in ihn hinein, siehe oben), also
+  leitet `highscore_rank_preview` (`lib/highscore.sh`, siehe 4.5) den
+  Platz aus der geladenen Liste ab, ohne sie anzufassen -
+  `round_rank_preview` (`rowhammer.sh`) sagt ihr dafuer, nach welcher
+  Zahl der Modus rangiert (Zeit bei Ultra, Rows sonst), dieselbe
+  Fallunterscheidung, die gleich darueber `round_is_ranked` trifft. Die
+  Vorschau kann vom spaeteren Eintrag nicht abweichen: sie wendet
+  dessen Einfuegeregel an, und zwischen beiden aendert nichts die
+  Liste. Dass auch die **verfehlte** Liste gemeldet wird, ist Absicht -
+  gefragt wird, sobald eine Runde ueberhaupt in eine Liste kommen
+  koennte, und ob sie die Top 10 erreicht, ist genau die Frage, die der
+  Bildschirm sonst offen liesse.
 - **Darstellung:** ein regulaerer, zentrierter Menue-Frame
-  (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level und
-  Zeit der Runde ueber der Eingabezeile. Die Markierung ist invertierter
+  (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level, Zeit
+  und Listenplatz der Runde ueber der Eingabezeile. Die Markierung ist invertierter
   Text (`\e[7m`), nach ihrem Aufheben steht ein invertierter Block als
   Cursor hinter dem Text - der echte Cursor bleibt die ganze Sitzung
   ueber ausgeblendet. Danach setzt `prompt_round_name` `RENDER_FULL=1`,
@@ -698,7 +715,7 @@ Jede gespielte Runde wird mitgeschnitten und laesst sich ueber den
 Hauptmenuepunkt **"Demos"** noch einmal ansehen (`lib/demo.sh`,
 `menu_demos` in `lib/menu.sh`). Der Menuepunkt steht zwischen
 "Statistik" und "Einstellungen" - beides sind Rueckblicke auf bereits
-gespielte Runden. Seit 0.50.0 gibt es einen zweiten Weg dorthin: in
+gespielte Runden. Seit 0.52.0 gibt es einen zweiten Weg dorthin: in
 einer Bestenliste startet Enter die Aufnahme des ausgewaehlten Eintrags
 (siehe 4.5) - dieselbe Wiedergabe, nur von der anderen Seite der
 Hash-Verknuepfung aus.
@@ -938,7 +955,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.50.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.52.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
@@ -1165,7 +1182,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${HOME}/.config/rowhammer` (seit 0.13.0, vorher `${HOME}/rowhammer`;
   aenderbar per `--data-dir DIR` bzw.
   `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
-  Highscore-Liste `highscore`, die Ultra-Bestenliste `highscore-ultra`
+  Marathon-Bestenliste `highscore-marathon` (bis 0.50.0 `highscore`,
+  siehe unten), die Ultra-Bestenliste `highscore-ultra`
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
   (seit 0.39.0), die Time-Attack-Bestenliste `highscore-timeattack`
   (seit 0.42.0), die Hochwasser-Bestenliste `highscore-flood`
@@ -1196,7 +1214,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Einstellungsmenue, seit 0.45.0 mit demselben Zeileneditor
   (`menu_text_input`) und dem bisherigen Namen vormarkiert.
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
-  `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
+  `${DATA_DIR}/highscore-marathon` (bis 0.50.0 `highscore`, siehe die
+  Umbenennung unten), eine Zeile je Eintrag im Format
   `rows|lines|level|name|date|gold|silver|time|rowhammers|pieces|hash`,
   absteigend nach Rows
   sortiert. Seit dem Punktesystem-Umbau (0.16.0) ist die gewichtete
@@ -1353,6 +1372,34 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Wasser steigt nach der Uhr, die ueberlebte Zeit sagt also, gegen wie
   viele Flutreihen ein Eintrag angespielt hat, und trennt zwei Runden
   mit gleichen Rows.
+  **Umbenennung der Marathon-Datei (seit 0.51.0, Nutzerwunsch):** die
+  Marathon-Liste hiess bis 0.50.0 schlicht `highscore` - als einzige
+  ohne ihren Modus im Namen, ein Rest aus der Zeit, in der sie die
+  einzige Liste war. Sie heisst jetzt `${DATA_DIR}/highscore-marathon`
+  und passt damit ins Schema der vier anderen. Eine vorhandene alte
+  Datei wird beim naechsten Start **einmalig umbenannt**
+  (`highscore_migrate_legacy` in `lib/highscore.sh`, `mv`) - eine
+  bewusste Ausnahme von der Arbeitsregel "keine
+  Abwaertskompatibilitaet" (Abschnitt 6, ebenfalls Nutzerwunsch):
+  am Inhalt der Datei aendert sich nichts, nur an ihrem Namen, und eine
+  Top Ten dafuer wegzuwerfen waere ein Verlust ohne jeden Gegenwert.
+  Drei Festlegungen dazu:
+  - **Aufgerufen wird vor dem Reset-Block** in `rowhammer.sh` (also vor
+    `reset_run`, siehe 4.8) und damit vor allem, was eine Liste liest.
+    `--reset highscore` arbeitet mit den Dateinamen, die die Module
+    besitzen; eine noch unter dem alten Namen liegende Datei waere dort
+    als "nicht vorhanden" gemeldet worden und haette ihren eigenen
+    Reset ueberlebt. So kennt genau eine Funktion den alten Namen
+    (`HS_LEGACY_FILE_NAME`), und der Rest des Spiels sieht nur den
+    aktuellen.
+  - **Eine schon vorhandene Zieldatei wird nie ueberschrieben.** Dann
+    hat die Umbenennung bereits stattgefunden und der alte Name ist
+    etwas von Hand Zurueckgelegtes; die Datei bleibt unangetastet
+    liegen und meldet sich auf STDERR.
+  - **Ein fehlgeschlagenes `mv` ist ein harter Fehler** (`die`): das
+    Datenverzeichnis ist dann nicht beschreibbar, das Spiel koennte
+    dort ohnehin keine Liste speichern, und weiterzumachen hiesse
+    stillschweigend mit einer leeren Marathon-Liste zu starten.
   **Modus-Auswahl:** weil es damit mehrere Listen mit verschiedenen
   Rangordnungen
   gibt, fragt der Hauptmenuepunkt "Highscores" seit 0.38.0 zuerst nach
@@ -1370,7 +1417,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gemeinsame Liste waere keine Alternative: sie muesste mehrere
   Ordnungen
   in eine Tabelle mischen (siehe 3.6).
-  **Bedienung der Listen (seit 0.50.0, Nutzerwunsch):** alle fuenf
+  **Bedienung der Listen (seit 0.52.0, Nutzerwunsch):** alle fuenf
   Bildschirme sind ein Browser mit Cursor (`highscore_browse` in
   `lib/highscore.sh`), nicht mehr eine Folge von Info-Bildschirmen. Pfeil
   hoch/runter waehlt den Eintrag und blaettert dabei die Seite mit, Pfeil
@@ -1403,6 +1450,16 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
     Wiedergabe gesperrt** - dieselbe Regel und dieselbe Meldung wie im
     Demo-Menue (siehe 3.8): eine Wiedergabe laeuft durch genau den
     Rundenzustand, in dem diese Runde parkt.
+  **Platz-Vorschau (seit 0.50.0):** `highscore_rank_preview MODUS WERT`
+  sagt in `HS_PREVIEW_RANK`/`HS_PREVIEW_MAX`, welchen Platz eine Runde
+  in der Liste ihres Modus einnehmen wuerde, ohne sie einzutragen (0 =
+  verfehlt). Sie bedient alle fuenf Listen - sie unterscheiden sich nur
+  im befragten Array und darin, ob der kleinere Wert der bessere ist
+  (Ultra) - und wendet die Einfuegeregel der `*_add`-Funktionen an: ein
+  Platz hinter der Zahl der mindestens gleich guten Eintraege, und kein
+  Platz, wenn das ueber `*_MAX` hinausgeht. Gebraucht wird sie von der
+  Namensabfrage am Rundenende (siehe 3.7), die vor dem Eintrag laeuft
+  und den Rang der `*_add`-Funktionen deshalb noch nicht kennt.
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
@@ -1673,7 +1730,7 @@ ins Menue zu starten. Ziele:
 | --- | --- |
 | `config` | `rowhammer.conf` |
 | `stats` | `stats` |
-| `highscore` | `highscore`, `highscore-ultra`, `highscore-sprint`, `highscore-timeattack` **und** `highscore-flood` |
+| `highscore` | `highscore-marathon`, `highscore-ultra`, `highscore-sprint`, `highscore-timeattack` **und** `highscore-flood` |
 | `save` | `save` (Weltwunder-Fortschritt) |
 | `demo` | das Verzeichnis `demos` (alle Aufzeichnungen) |
 | `all` | alle acht Dateien und das Verzeichnis `demos` |
@@ -1730,7 +1787,10 @@ Ablauf und Einordnung:
   Prerequisites-Block nach unten gewandert: ein Reset loescht nur
   Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
   ohne Terminal laufen. Das Terminal wird nie angefasst (kein
-  Alternate-Screen, kein Rohmodus).
+  Alternate-Screen, kein Rohmodus). Unmittelbar davor laeuft seit
+  0.51.0 die einmalige Umbenennung `highscore` ->
+  `highscore-marathon` (`highscore_migrate_legacy`, siehe 4.5), damit
+  `--reset highscore` die Datei unter ihrem aktuellen Namen antrifft.
 - **Sicherheitsabfrage:** an einem Terminal listet `reset_run` erst die
   betroffenen Pfade und fragt dann `Bist du sicher, dass du <ziel>
   zuruecksetzen moechtest? [N/y]`; wie bei `menu_confirm` ist "nein" die
@@ -1859,7 +1919,7 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 
 ```
 version=2            Formatversion (jede andere wird abgelehnt)
-game=0.50.0          Spielversion, die aufgenommen hat (nur Info)
+game=0.52.0          Spielversion, die aufgenommen hat (nur Info)
 mode=marathon        marathon|ultra|sprint|timeattack|flood - die Regeln
 name=Player          Spielername
 date=2026-08-03 21:40
@@ -2863,7 +2923,7 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.50.0
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.52.0
   (Bestenlisten mit Cursor und Demo-Wiedergabe); die
   Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen ist der Punkt unten
@@ -3090,13 +3150,13 @@ Multi-Server zuletzt.
 - Tabellenbreite: erledigt fuer den naechsten Zuwachs. Der
   Pieces-Zaehler (0.27.0) hat die Ein-Zeilen-Grenze der beiden Tabellen
   gesprengt; auf Nutzerentscheidung ist ein Eintrag jetzt zwei Zeilen
-  breit, seitenweise angezeigt (bis 0.49.0 ueber `menu_pages`, seit
-  0.50.0 ueber `highscore_browse`, siehe 4.5). Weitere Werte kosten
+  breit, seitenweise angezeigt (bis 0.51.0 ueber `menu_pages`, seit
+  0.52.0 ueber `highscore_browse`, siehe 4.5). Weitere Werte kosten
   damit keine vorhandene Spalte mehr, sondern Zeilen - und irgendwann
   eine weitere Seite: pro Info-Bildschirm passen 18 Zeilen
   (`MENU_BODY_MAX`, seit 0.28.0 eine mehr), die Highscore-Liste zeigt fuenf Eintraege je
   Seite, die Statistik teilt sich in Gesamtzaehler und letzte Spiele.
-  Eine Zeile der Liste hat seit 0.50.0 zwei Zeichen weniger fuer sich
+  Eine Zeile der Liste hat seit 0.52.0 zwei Zeichen weniger fuer sich
   (`HS_LINE_MAX` 44 statt 46): die beiden vordersten Spalten gehoeren
   dem Cursor und der Demo-Markierung.
 - Spielmodi: die drei Fragen zum Ultra-Modus sind mit 0.34.0

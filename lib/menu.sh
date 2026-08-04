@@ -27,7 +27,7 @@
 #   discard the running round.
 #   The paged info screen menu_pages (0.10.0 to 0.23.0) is gone: the
 #   highscore lists were its only callers and browse themselves since
-#   0.24.0 (highscore_browse, lib/highscore.sh). menu_help (since
+#   0.25.0 (highscore_browse, lib/highscore.sh). menu_help (since
 #   0.12.0, user request) is the "Anleitung" main menu entry: eight info
 #   screens explaining the game, the controls, hold and preview, the
 #   gold/silver squares, the wonder construction, the game modes, how
@@ -65,6 +65,10 @@
 #   would be - the first character typed replaces it, Enter keeps it -
 #   which is why the editor draws and reads the line itself instead of
 #   handing the terminal back into line mode as the old prompt did.
+#   Since 0.24.0 (user request) that round prompt also names the place
+#   the round would take in the list of its mode, asked from
+#   highscore_rank_preview (lib/highscore.sh) because the entry itself is
+#   only written once the prompt has returned a name.
 #   Since 0.20.0 menu_demos is the "Demos" main menu entry: the recorded
 #   rounds (lib/demo.sh) newest first, each of them to watch again or to
 #   delete, the ones still backing a highscore entry marked with a "*".
@@ -84,7 +88,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.24.0  (2026-08-04)
+# Version: 0.25.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -244,7 +248,7 @@ menu_message() {
 # would renumber the pages under the player's hands on every resize.
 MENU_BODY_MAX=$(( MIN_TERM_ROWS - 4 ))
 
-# CHANGE 2026-08-04 (0.24.0): menu_pages is gone. It showed a table too
+# CHANGE 2026-08-04 (0.25.0): menu_pages is gone. It showed a table too
 # tall for one screen as a sequence of info screens - the table head
 # repeated on every page, one key press per page and no way back to the
 # one before. The five highscore lists were its only callers, and they
@@ -1323,6 +1327,12 @@ ROUND_NAME=""
 # of the lists: a round nobody files anywhere has no name to ask for.
 # Everything else the round feeds - wonder progress, statistics - is
 # nameless anyway.
+#
+# Above the input line the prompt shows what the round achieved,
+# including the place it would take in the list of its mode (0.24.0, user
+# request): that place is the reason the name is being asked for, so it
+# belongs where the name is typed rather than only in the result box
+# behind it.
 prompt_round_name() {
     local -a body
     local line
@@ -1332,6 +1342,21 @@ prompt_round_name() {
     printf -v line "${I18N[round_rows]}" "${ROW_CREDIT}" "${CLEARED_TOTAL}"
     body+=("${line}")
     printf -v line "${I18N[round_level]}" "${LEVEL}" "${FMT_DURATION}"
+    body+=("${line}")
+    # The place this round would take in the list of its mode (0.24.0,
+    # user request). It is derived from the list rather than read from it
+    # after the fact: the entry is only written once this prompt has
+    # returned the name it is filed under (see record_round). A round
+    # that misses the list says so instead of showing nothing - it is
+    # asked for a name all the same, because whether a round makes the
+    # top ten is not what round_is_ranked decides.
+    round_rank_preview
+    if [ "${HS_PREVIEW_RANK}" -gt 0 ]; then
+        printf -v line "${I18N[round_rank]}" "${HS_PREVIEW_RANK}" \
+            "${HS_PREVIEW_MAX}"
+    else
+        printf -v line "${I18N[round_rank_none]}" "${HS_PREVIEW_MAX}"
+    fi
     body+=("${line}" "" "${I18N[round_ask_name]}")
     ROUND_NAME="${PLAYER_NAME}"
     if menu_text_input "${I18N[round_title]}" "${PLAYER_NAME}" "${body[@]}"; then

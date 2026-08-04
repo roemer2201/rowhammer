@@ -1,4 +1,4 @@
-rowhammer (0.50.0) unstable; urgency=medium
+rowhammer (0.52.0) unstable; urgency=medium
 
   * The highscore lists are browsable now (user request): a cursor walks
     the entries with the up/down keys, left/right turn the pages in both
@@ -17,7 +17,40 @@ rowhammer (0.50.0) unstable; urgency=medium
     whole session down.
   * The manual's demo page mentions the new way to start a replay.
 
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 23:15:00 +0200
+
+rowhammer (0.51.0) unstable; urgency=medium
+
+  * The Marathon highscore list is stored in "highscore-marathon" from
+    now on (user request). It was the only list without its mode in the
+    file name - a leftover from the time when it was the only list there
+    was - while highscore-ultra, highscore-sprint, highscore-timeattack
+    and highscore-flood all name theirs.
+  * An existing "highscore" file is renamed once at startup (mv), so no
+    top ten is lost over a name: nothing about the file's content
+    changes. The rename runs before --reset, which works from the file
+    names the modules own and would otherwise report the file as absent
+    and leave it behind. A target file that is already there is never
+    overwritten; a failing rename is a hard error, because the data
+    directory is then unwritable anyway.
+  * --help, the manual and the README name the new file.
+
  -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 22:30:00 +0200
+
+rowhammer (0.50.0) unstable; urgency=medium
+
+  * The name prompt at the end of a round now also shows the place the
+    round will take in the highscore list of its mode ("Bestenliste:
+    Platz 3 von 10"), or that it misses the list ("kein Platz (Top 10)").
+  * The place is derived rather than read back: the list entry is only
+    written once the prompt has returned a name, so the new
+    highscore_rank_preview (lib/highscore.sh) computes it from the loaded
+    list without touching it. It serves all five lists and applies the
+    insert rule of the *_add functions, so preview and entry cannot
+    disagree; round_rank_preview (rowhammer.sh) tells it which number the
+    mode ranks by - the play time for Ultra, the row credit for the rest.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 21:30:00 +0200
 
 rowhammer (0.49.0) unstable; urgency=medium
 

@@ -169,7 +169,10 @@ Das Startmenue bietet:
   steht dort vormarkiert - Enter uebernimmt ihn, das erste getippte
   Zeichen ersetzt ihn (eine Pfeiltaste hebt die Markierung auf, wenn
   der Name nur ergaenzt werden soll). Der eingegebene Name gilt fuer
-  diese Runde; die Einstellung bleibt unveraendert
+  diese Runde; die Einstellung bleibt unveraendert. Ueber der
+  Eingabezeile steht neben den Zahlen der Runde auch der **Platz, den
+  sie in der Liste einnehmen wird** ("Bestenliste: Platz 3 von 10") -
+  oder dass sie die Top 10 verfehlt
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
 - **Statistik** - fragt zuerst, welche Sicht gezeigt werden soll:
@@ -241,7 +244,7 @@ Optionen:
 `--reset ZIEL` setzt gezielt gespeicherte Daten im Datenverzeichnis
 zurueck und beendet das Spiel, ohne es zu starten. Moegliche Ziele:
 `config` (die Konfigurationsdatei `rowhammer.conf`), `stats` (die
-Statistik), `highscore` (alle Bestenlisten - `highscore`,
+Statistik), `highscore` (alle Bestenlisten - `highscore-marathon`,
 `highscore-ultra`, `highscore-sprint`, `highscore-timeattack` und
 `highscore-flood`),
 `save` (der
@@ -425,8 +428,10 @@ Umgesetzt:
   Bestenliste nach den meisten Rows) und **Hochwasser** (alle 20
   Sekunden eine Flutreihe von unten, eigene Bestenliste nach den
   meisten Rows; siehe oben)
-- Persistente Highscore-Listen: die besten 10 Runden in
-  `~/.config/rowhammer/highscore`, die 10 schnellsten Ultra-Laeufe
+- Persistente Highscore-Listen: die besten 10 Marathon-Runden in
+  `~/.config/rowhammer/highscore-marathon` (bis 0.50.0 hiess die Datei
+  `highscore`; eine vorhandene wird beim naechsten Start einmalig
+  umbenannt), die 10 schnellsten Ultra-Laeufe
   in `~/.config/rowhammer/highscore-ultra`, die 10 besten
   Sprint-Laeufe in `~/.config/rowhammer/highscore-sprint`, die 10
   besten Time-Attack-Laeufe in
@@ -438,7 +443,8 @@ Umgesetzt:
   kommt, fragt vorher nach dem Namen fuer den Eintrag - mit dem
   Spielernamen aus den Einstellungen als vormarkierter Vorgabe, die ein
   einziger Tastendruck ersetzt. Der eingegebene Name gilt nur fuer diese
-  Runde
+  Runde. Der Bildschirm nennt dabei den Platz, den die Runde in der
+  Bestenliste ihres Modus einnehmen wird
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
   Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der
