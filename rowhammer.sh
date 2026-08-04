@@ -86,9 +86,13 @@
 #   Every round also feeds persistent statistics (cleared rows, bonus
 #   rows, gold/silver squares built, rowhammers, pieces placed and time
 #   played, plus the results of
-#   the last three rounds with their play date and the rounds played per
-#   game mode), shown via the "Statistik" main
-#   menu entry; the highscore list shows each entry's date as well.
+#   the last three rounds with their play date), shown via the
+#   "Statistik" main menu entry. Since 0.47.0 (user request) every one
+#   of those counters exists a second time per game mode, so the entry
+#   asks which set to show first - the all-time counters over every
+#   round ever played, or one mode's own; the rounds played per mode
+#   and, for the timed ones, how many reached their goal are part of
+#   both. The highscore list shows each entry's date as well.
 #   Every round is also recorded as a demo (lib/demo.sh) and can be
 #   watched again from the "Demos" main menu entry, which lists the
 #   recordings and plays or deletes the one picked. Recorded are the
@@ -159,7 +163,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.46.0  (2026-08-04)
+# Version: 0.47.0  (2026-08-04)
 
 set -euo pipefail
 
@@ -174,7 +178,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.46.0"
+ROWHAMMER_VERSION="0.47.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -474,8 +478,11 @@ squares built to persistent all-time counters in <data-dir>/stats; the
 results of the last three rounds (rows, bonus rows, squares) and the
 number of rounds played per game mode - including how often Ultra
 reached its target, Sprint played its full time and Time Attack ran its
-clock down - are kept there as well. All three are
-shown via the "Statistik" main menu entry.
+clock down - are kept there as well. Every counter is also kept per
+game mode, so the same figures can be read for Marathon, Ultra, Sprint
+or Time Attack alone; the all-time counters stay what they always were
+and are not summed from those. The "Statistik" main menu entry asks
+which of the two to show.
 
 Settings (player name, key bindings) are stored in the config file
 <data-dir>/rowhammer.conf, by default ~/.config/rowhammer/rowhammer.conf. The
@@ -2139,7 +2146,9 @@ main() {
                 wonder_screen "${TOTAL_ROW_CREDIT}"
                 ;;
             4)
-                stats_screen
+                # Picks between the all-time counters and one mode's
+                # own, the way "Highscores" picks a list (lib/stats.sh).
+                menu_stats
                 ;;
             5)
                 # Recorded rounds: watch one again or delete it. It sits

@@ -151,14 +151,20 @@ Das Startmenue bietet:
   diese Runde; die Einstellung bleibt unveraendert
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
-- **Statistik** - auf drei Bildschirmen: Gesamtzaehler ueber alle
+- **Statistik** - fragt zuerst, welche Sicht gezeigt werden soll:
+  **Gesamt** oder einer der vier Spielmodi.
+  **Gesamt** zeigt auf drei Bildschirmen die Zaehler ueber alle
   Runden (abgebaute Reihen, Bonusreihen, gebaute Gold- und
   Silberbloecke, die "Rowhammer" - vier Reihen auf einmal -, die
   abgelegten Teile, die Gesamtspielzeit und die daraus berechneten
   Steine/Minute), danach die Ergebnisse der letzten drei Spiele und
   zuletzt die gespielten Runden je Modus - bei Ultra, Sprint und Time
   Attack jeweils mit der Zahl der Laeufe, die ihr Ziel bzw. die volle
-  Zeit erreicht haben
+  Zeit erreicht haben.
+  **Marathon**, **Ultra**, **Sprint** und **Time Attack** zeigen
+  dieselben Zaehler fuer nur diesen Modus, dazu seine Runden, die
+  Rows je Runde und - bei den drei Zeitmodi - die Erfolgsquote seiner
+  Laeufe
 - **Demos** - die aufgezeichneten Runden, neueste zuerst, mit Datum,
   Modus, Spielzeit und Rows. Die ausgewaehlte Aufnahme laesst sich
   **abspielen** oder **loeschen**. Aufbewahrt werden die 10 neuesten
@@ -379,7 +385,11 @@ Umgesetzt:
   Teilen je Minute); dazu die Ergebnisse
   der letzten drei Spiele und die gespielten Runden je Modus (bei den
   drei Zeitmodi mit der Zahl der erfolgreichen Laeufe), einsehbar im
-  Hauptmenue
+  Hauptmenue. **Jeder dieser Zaehler wird zusaetzlich je Spielmodus
+  gefuehrt**, sodass sich dieselben Zahlen fuer Marathon, Ultra,
+  Sprint oder Time Attack allein ablesen lassen (samt Rows je Runde und
+  Erfolgsquote); die Gesamtzaehler bleiben davon unberuehrt und werden
+  weiter ueber alle Modi gefuehrt
 - **Weltwunder-Modus:** der "Rows"-Zaehler baut ueber alle Runden
   hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,
   Chinesische Mauer, Taj Mahal, Basilius-Kathedrale) als ASCII-Art

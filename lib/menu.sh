@@ -71,6 +71,10 @@
 #   That list is also the first menu that can outgrow the screen, so
 #   menu_run scrolls its window with the selection since 0.20.0
 #   (MENU_LIST_MAX).
+#   Since 0.21.0 (user request) menu_stats does the same for the
+#   "Statistik" entry: the all-time counters as before, or one game
+#   mode's own counters (lib/stats.sh keeps both, the totals are not
+#   summed from the modes).
 #   Since 0.11.0 every screen here is built as an array of plain content
 #   lines and handed to render_menu_frame (lib/render.sh), which draws it
 #   centered like the play screen instead of into the top left corner;
@@ -78,7 +82,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.20.0  (2026-08-04)
+# Version: 0.21.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -855,6 +859,44 @@ menu_highscores() {
             1) highscore_ultra_screen ;;
             2) highscore_sprint_screen ;;
             3) highscore_timeattack_screen ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+# menu_stats: the "Statistik" main menu entry. Picks between the
+# all-time statistics - the counters over every round ever played, on
+# three screens - and one game mode's own counters (lib/stats.sh, per
+# mode since 0.21.0, user request). A picker in front of them for the
+# same reason menu_highscores has one: the modes are played for
+# different things, so their counters only mean something next to the
+# label of the mode they were scored in, and putting four more tables on
+# the sequence of screens the "Statistik" entry already walks through
+# would bury the all-time figures behind them.
+# The mode entries are worded exactly like the ones in menu_highscores
+# and in the singleplayer menu, so a mode reads the same way wherever it
+# is picked. Loops instead of returning after one screen, so comparing
+# the modes costs no walk back through the main menu; ESC or "Zurueck"
+# leaves.
+menu_stats() {
+    local sprint_label
+    while :; do
+        fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+        sprint_label="${FMT_DURATION}"
+        fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
+        menu_run "Statistik" \
+            "Gesamt (alle Modi)" \
+            "Marathon" \
+            "Ultra (${ULTRA_TARGET_ROWS} Rows auf Zeit)" \
+            "Sprint (${sprint_label} Minuten auf Rows)" \
+            "Time Attack (${FMT_DURATION} + $(( TIME_ATTACK_ROW_MS / 1000 ))s je Row)" \
+            "Zurueck"
+        case "${MENU_CHOICE}" in
+            0) stats_screen ;;
+            1) stats_mode_screen "marathon" ;;
+            2) stats_mode_screen "ultra" ;;
+            3) stats_mode_screen "sprint" ;;
+            4) stats_mode_screen "timeattack" ;;
             *) return 0 ;;
         esac
     done

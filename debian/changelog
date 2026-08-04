@@ -1,3 +1,31 @@
+rowhammer (0.47.0) unstable; urgency=medium
+
+  * Every all-time statistics counter now exists a second time per game
+    mode (user request): cleared rows, bonus rows, gold and silver
+    squares, rowhammers, pieces placed and play time are counted for
+    Marathon, Ultra, Sprint and Time Attack separately, next to the
+    rounds played per mode and, for the three timed modes, the runs that
+    reached their goal.
+  * The all-time counters are kept exactly as they were and are not
+    summed from the per-mode ones. A round of an unknown mode - only
+    reachable from a future mode - is counted in the totals and nowhere
+    else, so the totals stay the complete picture and the per-mode
+    screens show a gap instead of a wrong attribution.
+  * The "Statistik" main menu entry therefore asks which set to show
+    first, the way "Highscores" asks which list: the all-time counters
+    on their three screens as before, or one mode's own counters on a
+    screen of their own. The per-mode screen reads like the all-time one
+    and adds the two figures that make modes comparable - the rows per
+    round and, for the timed modes, the share of runs that reached the
+    goal.
+  * The per-mode data is stored as "mode_<mode>_<field>=N" lines in
+    <data-dir>/stats. That replaces the "rounds_<mode>[_goal]" keys of
+    0.42.0, whose two figures are now fields of the same scheme; an
+    existing statistics file loses its per-mode round counts and keeps
+    everything else.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 12:00:00 +0200
+
 rowhammer (0.46.0) unstable; urgency=medium
 
   * Rounds are recorded as demos and can be watched again from the new
