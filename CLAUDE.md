@@ -245,6 +245,32 @@ Die fuer uns relevanten Merkmale des Originals:
   Der Wunder-Zustand wird deshalb nicht mehr je Reihenabbau
   nachgerechnet, sondern nur noch beim Rundenende (`record_round`) und
   beim Anzeigen des Wunder-Bildschirms (`wonder_screen` rechnet selbst).
+- **Blaettern zu den fertigen Wundern (seit 0.54.0, Nutzerwunsch):**
+  Pfeil links/rechts schaltet auf dem Wunder-Bildschirm zwischen den
+  bereits **fertiggestellten** Wundern und der aktuellen Baustelle um
+  (`wonder_screen` in `lib/wonders.sh`, ein Bildschirm je Wunder gebaut
+  von `wonder_screen_lines`). Entscheidungen dazu:
+  - **Der Bereich ist 0..`WONDER_INDEX`**, also die fertigen Wunder
+    plus die laufende Baustelle. Ein noch nicht begonnenes Wunder wird
+    nicht gezeigt - es waere nur ein leerer Rahmen und naehme dem
+    Weiterbauen die Ueberraschung. Geblaettert wird umlaufend wie in
+    jeder anderen Liste des Spiels (Anleitung, Bestenlisten).
+  - **Ein fertiges Wunder zeigt seine Art vollstaendig** und in der
+    Zahlenzeile seine Kosten als erreichten Stand ("Baustufe 12/12 -
+    20000/20000 Reihen (100%)"). Die Zahlen kommen aus `WONDER_COSTS`
+    und nicht aus einem gespeicherten Stand: gespeichert ist allein der
+    Gesamtzaehler (siehe 4.5), und die Reihen, die dieses Wunder gebaut
+    haben, stecken laengst in den Wundern danach.
+  - **Solange nichts fertig ist, bleibt der Bildschirm, was er war:**
+    ein Bild, das jede Taste schliesst ("Beliebige Taste druecken").
+    Es gibt dann nichts zu blaettern, und genau so erwartet es der
+    Ablauf nach einer Runde. Erst als Blaetterer nennt die Fusszeile
+    die Tasten und schliesst nur noch auf `Enter`, Leertaste, `x` oder
+    `ESC` - die Pfeile bedeuten jetzt etwas anderes. Das ist dieselbe
+    Aufteilung, die die Anleitung seit 0.33.0 hat.
+  - **Der Bildschirm nach einer Runde ist derselbe** und kann deshalb
+    ebenfalls blaettern; ein zweiter Bildschirm nur fuers Zurueckschauen
+    waere dieselbe Anzeige ein zweites Mal.
 
 ### 3.4 Anzeige / HUD
 
@@ -351,7 +377,11 @@ in fester Reihenfolge einmal durchzureichen:
 3. Vorschau ("Next") und Hold (ein Tausch je Zug).
 4. Gold-/Silber-Quadrate und die Reihenwertung (Werte aus
    `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`, siehe 3.2).
-5. Weltwunderbau mit der Kostentabelle aus `lib/wonders.sh`.
+5. Weltwunderbau mit der Kostentabelle aus `lib/wonders.sh`, dazu seit
+   0.54.0 der Hinweis auf das Blaettern zu den fertigen Wundern (siehe
+   3.3). Eine Zeile mehr war dafuer nicht zu haben - die Seite sitzt mit
+   18 Zeilen auf `MENU_BODY_MAX` -, also ist der Schlussabsatz enger
+   formuliert und sagt in denselben vier Zeilen jetzt beides.
 6. Spielmodi, Teil 1 (seit 0.39.0): Marathon, Ultra und Sprint mit
    ihrem jeweiligen Ende und Ergebnis.
    Die Seite kam bewusst erst mit dem Sprint-Modus dazu: die

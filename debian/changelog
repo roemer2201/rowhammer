@@ -1,3 +1,22 @@
+rowhammer (0.54.0) unstable; urgency=medium
+
+  * The wonders screen is browsable now (user request): the left and
+    right arrow keys switch between the wonders already finished and the
+    construction site currently being built, wrapping around like every
+    other list of the game. A wonder not started yet is not shown - it
+    would be an empty frame and spoil what is still ahead.
+  * A finished wonder is drawn complete, with its cost from the wonder
+    table as the progress it reached. Only the all-time row counter is
+    stored, and the rows that built it are long spent on the wonders
+    after it.
+  * As long as no wonder is finished there is nothing to browse, so the
+    screen stays what it was: any key closes it. Once it browses, it
+    closes on Enter, space, "x" or ESC, because the arrows now mean
+    something else.
+  * The manual page about the wonders names the keys.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 05 Aug 2026 00:20:00 +0200
+
 rowhammer (0.53.0) unstable; urgency=medium
 
   * The game mode entries are tidier (user request): every mode is

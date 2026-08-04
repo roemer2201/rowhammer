@@ -80,6 +80,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.51.0 | Marathon-Bestenliste heisst `highscore-marathon` | 4.5, 4.8 |
 | 0.52.0 | Bestenlisten mit Cursor, Blaettern und Demo-Wiedergabe | 3.5, 3.8, 4.5 |
 | 0.53.0 | Modus-Eintraege mit ausgerichteter Beschreibung | 3.6, 4.2 |
+| 0.54.0 | Wunder-Bildschirm blaettert zu den fertigen Wundern | 3.3, 3.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1405,3 +1406,40 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
         "Highscores", "Statistik"): sie bauen ihre Eintraege seit
         0.48.0 aus demselben Helfer, und genau dafuer gibt es ihn -
         derselbe Modus soll sich ueberall gleich lesen.
+
+- [x] **Weltwunder-Bildschirm blaettert zu den fertigen Wundern**
+      (Version 0.54.0, Nutzerwunsch; aktueller Stand siehe 3.3): der
+      Bildschirm zeigte immer nur die laufende Baustelle - ein fertig
+      gebautes Wunder war nach dem naechsten Reihenabbau nicht mehr zu
+      sehen, obwohl es die Arbeit vieler Runden war. Pfeil links/rechts
+      schaltet jetzt zwischen den fertigen Wundern und der aktuellen
+      Baustelle um. Die Entscheidungen dahinter:
+      - **Der Bereich endet bei der laufenden Baustelle**
+        (0..`WONDER_INDEX`). Ein noch nicht begonnenes Wunder waere ein
+        leerer Rahmen und naehme dem Weiterbauen die Ueberraschung;
+        gezeigt wird, was erreicht ist. Geblaettert wird umlaufend wie
+        in jeder anderen Liste des Spiels.
+      - **Ein fertiges Wunder wird aus der Kostentabelle gerechnet**,
+        nicht aus einem gespeicherten Stand: `wonder_screen_lines`
+        (`lib/wonders.sh`) zeigt es vollstaendig aufgedeckt und mit
+        `WONDER_COSTS` als erreichtem Stand (100 %). Gespeichert ist
+        allein der Gesamtzaehler (4.5), und die Reihen, die dieses
+        Wunder gebaut haben, stecken laengst in den Wundern danach - ein
+        zweiter, je Wunder mitgefuehrter Zaehler koennte von ihm nur
+        abweichen.
+      - **Ohne ein fertiges Wunder bleibt der Bildschirm, was er war:**
+        jede Taste schliesst ihn, die Fusszeile sagt genau das. Es gibt
+        dann nichts zu blaettern, und der Ablauf nach einer Runde
+        erwartet es so. Erst als Blaetterer nennt die Fusszeile die
+        Tasten und schliesst nur noch auf `Enter`, Leertaste, `x` oder
+        `ESC` - dieselbe Aufteilung, die die Anleitung seit 0.33.0 hat,
+        und aus demselben Grund: die Pfeile bedeuten jetzt etwas
+        anderes.
+      - **Der Bildschirm nach einer Runde blaettert mit.** Es ist
+        derselbe Bildschirm und dieselbe Funktion; ein zweiter, nur
+        fuers Zurueckschauen, waere dieselbe Anzeige ein zweites Mal.
+      - **Die Anleitungsseite zum Wunderbau nennt die Tasten**
+        (Seite 5). Eine Zeile mehr war dort nicht zu haben - die Seite
+        sitzt mit 18 Zeilen auf `MENU_BODY_MAX` -, also ist ihr
+        Schlussabsatz enger formuliert und sagt in denselben vier Zeilen
+        jetzt beides.

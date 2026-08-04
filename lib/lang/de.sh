@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.4.0  (2026-08-04)
+# Version: 1.5.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -258,6 +258,9 @@ Du kannst sie im Demo-Menue loeschen."
     [wonder_finished]="%s ist fertig."
     [wonder_stage]="Baustufe %d/%d - %d/%d Reihen (%d%%)"
     [wonder_total]="Reihen gesamt: %d"
+    # Footer of the wonder screen once there is more than one wonder to
+    # look at; before that it carries menu_any_key, as it always did.
+    [wonder_nav]="Pfeil li/re: Wunder   Enter/ESC: zurueck"
     [wonder_mayan_temple]="Maya-Tempel (Chichen Itza)"
     [wonder_stonehenge]="Stonehenge"
     [wonder_sphinx]="Sphinx von Gizeh"
@@ -417,10 +420,10 @@ sieben Weltwunder auf.
 
 Gewertete Reihen je Weltwunder:"
     [help_p4_tail]="
-Der Menuepunkt \"Weltwunder\" zeigt die
-aktuelle Baustelle: das Bauwerk waechst von
-unten Zeile fuer Zeile und steht bei 100
-Prozent fertig da - ebenso nach jeder Runde."
+\"Weltwunder\" zeigt die Baustelle: sie waechst
+von unten und steht bei 100 Prozent fertig -
+ebenso nach jeder Runde. Pfeil links/rechts
+blaettert zurueck zu den fertigen Wundern."
     [help_p5_head]="Spielmodi (Menuepunkt \"Einzelspieler\"):
 
 Marathon - die endlose Runde. Sie endet,
