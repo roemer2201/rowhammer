@@ -103,7 +103,7 @@ HS_FIELD_NUM_RE='^[0-9]+$'
 HS_FIELD_NAME_RE='^[A-Za-z0-9_ -]{1,16}$'
 HS_FIELD_DATE_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
 # The round hash (round_hash in rowhammer.sh) that every list carries as
-# its last field since 0.44.0: eight hex digits, or "-" for an entry
+# its last field since 0.45.0: eight hex digits, or "-" for an entry
 # written before the field existed. It ties an entry to the demo
 # recording of the same round, whose file name carries it too - which is
 # how the demo pruning knows which recordings still back a highscore and
@@ -310,7 +310,7 @@ HSU_ENTRIES=()
 HSU_LAST_RANK=0
 
 # Field counts of a stored Ultra line: 11 fields, or 10 for a line
-# written before the round hash was appended in 0.44.0. The same
+# written before the round hash was appended in 0.45.0. The same
 # tolerance the Marathon list has always had (HS_FIELD_COUNTS) and for
 # the same reason - an entry must not disappear just because it is older
 # than a field. It is a deliberate exception from the project's
@@ -661,7 +661,7 @@ HSS_ENTRIES=()
 HSS_LAST_RANK=0
 
 # Field counts of a stored Sprint line: 11 fields, or 10 for a line
-# written before the round hash was appended in 0.44.0 - the same
+# written before the round hash was appended in 0.45.0 - the same
 # tolerance the Marathon list has always had (HS_FIELD_COUNTS), for the
 # same reason: an entry must not disappear just because it is older than
 # a field. A missing hash reads as "-" (no recording tied to this entry).
@@ -907,7 +907,7 @@ HSA_ENTRIES=()
 HSA_LAST_RANK=0
 
 # Field counts of a stored Time Attack line: 11 fields, or 10 for a line
-# written before the round hash was appended in 0.44.0 - the same
+# written before the round hash was appended in 0.45.0 - the same
 # tolerance the Marathon list has always had (HS_FIELD_COUNTS), for the
 # same reason: an entry must not disappear just because it is older than
 # a field. A missing hash reads as "-" (no recording tied to this entry).

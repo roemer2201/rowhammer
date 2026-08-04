@@ -414,7 +414,7 @@ demo_record_finish() {
 # demo_file_hash FILE
 # The round hash a recording carries in its name, into the global
 # DEMO_FILE_HASH ("-" when the name has none, which is what a file from
-# before 0.44.0 or a renamed one looks like). Reading it off the name
+# before 0.45.0 or a renamed one looks like). Reading it off the name
 # instead of out of the file is the whole point of putting it there:
 # listing and pruning stay free of file reads.
 DEMO_FILE_HASH="-"

@@ -21,11 +21,11 @@
 #   explicit \e[H\e[K it used to carry against a bleeding-through first
 #   line is part of that helper now. Wonder names,
 #   sequence and row costs live in the tables below; costs double per
-#   wonder like the roughly geometric line requirements of the original,
-#   but are scaled down to fit single-machine play.
+#   wonder like the roughly geometric line requirements of the original
+#   and are, since 0.3.0, in its order of magnitude as well.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-07-28)
+# Version: 0.3.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -49,7 +49,14 @@ WONDER_NAMES_DE=("Maya-Tempel (Chichen Itza)" "Stonehenge"
                  "Basilius-Kathedrale (Moskau)")
 WONDER_NAMES_HUD=("Mayan Temple" "Stonehenge" "Sphinx" "Pantheon"
                   "Great Wall" "Taj Mahal" "St Basils")
-WONDER_COSTS=(100 200 400 800 1600 3200 6400)
+# CHANGE 2026-08-03 (0.44.0, user decision): every cost multiplied by 100
+# (100..6400 -> 10000..640000, 12.700 -> 1.270.000 weighted rows in
+# total). The old figures were scaled down for single-machine play and
+# turned out to be far too cheap - a wonder fell within a few rounds.
+# The new ones sit in the order of magnitude of the original (2.500 to
+# 500.000 lines per wonder), where a wonder is a long-term goal again.
+# The doubling per wonder is untouched; only the scale moved.
+WONDER_COSTS=(10000 20000 40000 80000 160000 320000 640000)
 
 # State computed by wonders_update from a row total; only the wonder
 # screen reads these. WONDER_PREV_INDEX tracks completions

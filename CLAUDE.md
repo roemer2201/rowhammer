@@ -57,7 +57,7 @@ Die fuer uns relevanten Merkmale des Originals:
     Buchstabentaste)
   - Hold: `c` bzw. `w`
   - Pause: `p`; `Esc`/`x` oeffnet das Pausenmenue (seit 0.12.0, Issue
-    #12): Fortsetzen, Neustarten (seit 0.44.0, Nutzerwunsch), Ins
+    #12): Fortsetzen, Neustarten (seit 0.43.0, Nutzerwunsch), Ins
     Hauptmenue (Runde pausiert, wieder aufnehmbar
     ueber den Eintrag "Fortsetzen", der dann im Hauptmenue und im
     Einzelspieler-Menue an erster Stelle steht) oder Runde beenden.
@@ -195,17 +195,30 @@ Die fuer uns relevanten Merkmale des Originals:
   das erste Wunder (Maya) ist dort bei 2.500 Zeilen fertig, das letzte
   bei 500.000. Finale Liste (Reihen-Kosten je Wunder in Klammern,
   justierbar in `WONDER_COSTS`):
-  1. Maya-Tempel / Chichen Itza (100)
-  2. Stonehenge (200)
-  3. Sphinx von Gizeh (400)
-  4. Pantheon, Rom (800)
-  5. Chinesische Mauer (1600)
-  6. Taj Mahal (3200)
-  7. Basilius-Kathedrale, Moskau (6400)
+  1. Maya-Tempel / Chichen Itza (10.000)
+  2. Stonehenge (20.000)
+  3. Sphinx von Gizeh (40.000)
+  4. Pantheon, Rom (80.000)
+  5. Chinesische Mauer (160.000)
+  6. Taj Mahal (320.000)
+  7. Basilius-Kathedrale, Moskau (640.000)
   Chinesische Mauer und Taj Mahal fuellen die zwei nicht verifizierbaren
   Plaetze. Die Kosten verdoppeln sich je Wunder (grob geometrisch wie im
-  Original), sind aber auf Einzelrechner-Spielzeit herunterskaliert
-  (12.700 gewichtete Reihen insgesamt statt 500.000 Zeilen).
+  Original) und liegen seit 0.44.0 auch in dessen Groessenordnung
+  (1.270.000 gewichtete Reihen insgesamt).
+  **Kosten-Umstellung 0.45.0 (Nutzerentscheidung):** die urspruengliche
+  Reihe 100..6.400 (12.700 insgesamt) war bewusst auf
+  Einzelrechner-Spielzeit herunterskaliert und damit deutlich zu billig -
+  ein Wunder fiel in wenigen Runden. Jede Kostenstelle wurde mit 100
+  multipliziert; die Verdopplung je Wunder und die Wunder-Liste selbst
+  bleiben unveraendert, nur der Massstab wandert an den des Originals
+  (dort 2.500 bis 500.000 Zeilen je Wunder) heran, sodass ein Wunder
+  wieder ein Langfrist-Ziel ist. Ein vorhandener Spielstand behaelt
+  seinen Reihenzaehler (`save`, siehe 4.5), kauft damit aber weniger
+  Fortschritt: die Baustelle faellt auf ein frueheres Wunder und eine
+  fruehere Baustufe zurueck. Das ist Absicht und kein Datenverlust - der
+  Zaehler ist die einzige gespeicherte Groesse, Wunder und Baustufe
+  werden aus ihm abgeleitet (siehe 4.5).
 - Jedes Wunder ist **eine** ASCII-Art-Datei (`assets/wonders/`, 12
   Zeilen, max. 44 Spalten, reines ASCII). Die Baustufen werden nicht als
   separate Dateien gepflegt, sondern durch **zeilenweises Aufdecken von
@@ -289,7 +302,7 @@ Die fuer uns relevanten Merkmale des Originals:
     "Goal" und "Left"; seit 0.39.0 nutzt der Sprint-Modus dieselben
     beiden Zeilen fuer sein Zeitlimit und die Restzeit, seit 0.42.0 der
     Time-Attack-Modus fuer seine mitwachsende Restzeit (die drei Modi
-    laufen nie gleichzeitig). Eine weitere (Zeile 18) nutzt seit 0.44.0
+    laufen nie gleichzeitig). Eine weitere (Zeile 18) nutzt seit 0.45.0
     die Demo-Wiedergabe fuer das Abspieltempo (Label "Demo", siehe 3.7);
     sie liegt zwei Zeilen unter den Ziel-Zaehlern, damit eine
     wiedergegebene Runde eines Zeitmodus ihre beiden weiter zeigt.
@@ -352,7 +365,7 @@ in fester Reihenfolge einmal durchzureichen:
    vierte Modus fuellte diese bis auf die letzte ihrer `MENU_BODY_MAX`
    Zeilen, und der Absatz handelt ohnehin von der Wertung statt vom
    Spielablauf.
-8. Demos (seit 0.44.0): dass jede Runde mitgeschnitten wird, dass die
+8. Demos (seit 0.45.0): dass jede Runde mitgeschnitten wird, dass die
    Zuege und nicht der Bildschirm aufgezeichnet werden (und die
    Wiedergabe die Runde deshalb wirklich noch einmal spielt), wie viele
    Aufnahmen aufbewahrt werden, wo sich einzelne loeschen und die
@@ -532,7 +545,7 @@ wo sie passen, und weicht an genau einer Stelle begruendet ab:
 - **`r` im Rundenende-Bild startet im selben Modus neu**, wie bei den
   anderen Modi (`game_reset` ohne Argument).
 
-### 3.7 Demos: Aufzeichnung und Wiedergabe (seit 0.44.0)
+### 3.7 Demos: Aufzeichnung und Wiedergabe (seit 0.45.0)
 
 Jede gespielte Runde wird mitgeschnitten und laesst sich ueber den
 Hauptmenuepunkt **"Demos"** noch einmal ansehen (`lib/demo.sh`,
@@ -559,7 +572,7 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
   Roadmap offen gelassene Frage nach einer Obergrenze entschieden: eine
   reine **Stueckzahl** (`DEMO_MAX`, 10 wie die Bestenlisten) reicht, ein
   Gesamtgroessen-Budget waere Aufwand ohne Gegenwert. Die Grenze gilt
-  seit 0.44.0 nur fuer die **gewoehnlichen** Aufnahmen; eine, die noch
+  seit 0.45.0 nur fuer die **gewoehnlichen** Aufnahmen; eine, die noch
   einen Highscore-Eintrag haelt, wird nie geloescht (siehe unten).
 - **Unabhaengigkeit vom Terminal.** Die Datei enthaelt kein einziges
   ANSI-Byte. Terminalgroesse, Farbmodus, Farbschema und - ausdruecklich
@@ -596,7 +609,7 @@ Frage - Pause und Vorspulen: beides, plus Zeitlupe):
   den Demo-Kasten, weil dessen Tasten die der Wiedergabe sein muessen.
 
 **Aufnahmen zu Highscore-Eintraegen bleiben erhalten** (Nutzerwunsch,
-seit 0.44.0). Jede beendete Runde bekommt einen kurzen Hash aus ihren
+seit 0.45.0). Jede beendete Runde bekommt einen kurzen Hash aus ihren
 eigenen Ergebnissen (`round_hash` in `rowhammer.sh`); er steht als
 letztes Feld im Highscore-Eintrag (siehe 4.5) und im **Dateinamen** der
 Aufnahme (siehe 4.10). Damit weiss das Aufraeumen, welche Aufnahme zu
@@ -632,7 +645,7 @@ Entscheidungen dahinter:
   Loeschbefehl ist etwas anderes als das automatische Aufraeumen.
 - **Markiert sind sie mit einem `*`** in der Demo-Liste, samt Legende
   im Titel. Weil die Liste damit laenger als der Bildschirm werden kann,
-  blaettert `menu_run` seit 0.44.0 mit der Auswahl durch lange Listen
+  blaettert `menu_run` seit 0.45.0 mit der Auswahl durch lange Listen
   (`MENU_LIST_MAX`, siehe `lib/menu.sh`) - die Demo-Liste ist das erste
   Menue, dessen Laenge nicht von einer Konstanten begrenzt ist.
 - **Der Hash ist FNV-1a (32 Bit) in reinem Bash**, kein Aufruf von
@@ -764,7 +777,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.44.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.45.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
@@ -806,9 +819,9 @@ Einstellungsmenue waehlbar und in der Config gespeichert),
 `--render-mode partial|full` (`ROWHAMMER_RENDER_MODE`, Standard
 `partial`, seit 0.41.0, siehe 4.3),
 `--demo-record on|off` (`ROWHAMMER_DEMO_RECORD`, Standard `on`, seit
-0.44.0; auch im Einstellungsmenue und in der Config, siehe 3.7/4.10),
+0.45.0; auch im Einstellungsmenue und in der Config, siehe 3.7/4.10),
 `--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
-0.35.0, das Ziel `demo` seit 0.44.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
+0.35.0, das Ziel `demo` seit 0.45.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
 beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
 Resets; frei mit anderen Optionen kombinierbar),
 `--debug` (`ROWHAMMER_DEBUG`),
@@ -968,7 +981,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
   (seit 0.39.0), die Time-Attack-Bestenliste `highscore-timeattack`
   (seit 0.42.0), der Spielstand `save`, die
-  Statistik `stats` und - seit 0.44.0 - das Unterverzeichnis `demos`
+  Statistik `stats` und - seit 0.45.0 - das Unterverzeichnis `demos`
   mit den aufgezeichneten Runden (Format und Ablage siehe 4.10; als
   einziger Eintrag ein Verzeichnis statt einer Datei, weil es beliebig
   viele Aufnahmen bis `DEMO_MAX` fasst).
@@ -983,7 +996,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
   (Spielername, Farbschema seit 0.21.0, Tastenbelegung,
-  Demo-Aufzeichnung seit 0.44.0) schreibt
+  Demo-Aufzeichnung seit 0.45.0) schreibt
   `${DATA_DIR}/rowhammer.conf`;
   Werte werden validiert und single-quoted geschrieben, da die Datei
   gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
@@ -1000,7 +1013,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   die Spielzeit der Runde in ganzen Sekunden, `rowhammers` (seit
   0.25.0) die Zahl der Vierfach-Abbaeue der Runde und das
   abschliessende Feld `pieces` (seit 0.27.0) die Zahl der abgelegten
-  Teile. Seit 0.44.0 folgt darauf `hash`, der aus den Ergebnissen der
+  Teile. Seit 0.45.0 folgt darauf `hash`, der aus den Ergebnissen der
   Runde berechnete Kennwert (`round_hash` in `rowhammer.sh`, acht
   Hex-Ziffern oder `-` fuer einen aelteren Eintrag ohne). Er verbindet
   den Eintrag mit der Aufzeichnung derselben Runde, die ihn im
@@ -1013,7 +1026,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   mehr alle elf Felder tragen. Akzeptiert werden 5, 7, 8, 9, 10 oder 11
   Felder - genau die Laengen, die das Format seit dem Punktesystem-
   Umbau (0.16.0, Rows fuehrend) beim schrittweisen Anhaengen von
-  Gold/Silber, Zeit, Rowhammer, Pieces und - seit 0.44.0 - dem
+  Gold/Silber, Zeit, Rowhammer, Pieces und - seit 0.45.0 - dem
   Runden-Hash tatsaechlich durchlaufen hat
   (`HS_FIELD_COUNTS`, `highscore_parse_line` in `lib/highscore.sh`).
   Fehlende Zaehler werden beim Laden als `0` ergaenzt statt die ganze
@@ -1055,7 +1068,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   wuerden; angezeigt wird das ueber `fmt_duration_ms` als
   MM:SS.mmm. Gespeichert werden nur Laeufe, die das Ziel erreicht haben
   (Entscheidung in 3.6). Es gilt die uebliche Arbeitsregel "keine
-  Abwaertskompatibilitaet": seit 0.44.0 elf Felder, oder zehn fuer eine Zeile
+  Abwaertskompatibilitaet": seit 0.45.0 elf Felder, oder zehn fuer eine Zeile
   ohne den Runden-Hash; jede andere faellt bei der Validierung heraus.
   Die Kulanz um genau diese eine Laenge kam mit dem Hash: das Format hat
   seither doch in einer kuerzeren Fassung existiert, und es gilt derselbe
@@ -1089,7 +1102,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   sind nicht dasselbe - die Rows der endlosen Liste wuerden die kurzen
   Laeufe schlicht verdraengen. Gespeichert werden nur Laeufe, die ihre
   volle Zeit gespielt haben (Entscheidung in 3.6). Wie bei der
-  Ultra-Liste werden seit 0.44.0 elf Felder erwartet, oder zehn fuer
+  Ultra-Liste werden seit 0.45.0 elf Felder erwartet, oder zehn fuer
   eine Zeile ohne den Runden-Hash; jede andere faellt bei der
   Validierung heraus.
   **Anzeige:** `highscore_sprint_screen` zeigt die Liste im Layout der
@@ -1108,7 +1121,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${DATA_DIR}/highscore-timeattack`, Zeilenformat und Rangordnung
   wieder wie die Marathon-Liste (absteigend nach Rows, gleiche Rows
   hinter dem aelteren Eintrag), ebenfalls Top 10 (`HSA_*` in
-  `lib/highscore.sh`), seit 0.44.0 ebenfalls elf Felder mit dem
+  `lib/highscore.sh`), seit 0.45.0 ebenfalls elf Felder mit dem
   Runden-Hash am Ende (oder zehn ohne ihn, wie bei den anderen Listen). Dass die Rows und nicht die ueberlebte Zeit die
   Wertung sind, ist in 3.6 begruendet (beide ergeben dieselbe
   Rangfolge). Eine eigene Datei ist noetig, weil ein Lauf auf einer
@@ -1284,7 +1297,7 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
     mit Instanz-IDs, Reihenabbau mit Credit-Aufschluesselung je Reihe,
     Hold, Pause, Bag-Refills, Menuewahl, Config-Speicherungen, fatale
     Fehler sowie ein Board-Snapshot (Typ- und Quadrat-Gitter plus
-    cut/squared-Instanzlisten) nach jedem Lock. Seit 0.44.0 auch Beginn,
+    cut/squared-Instanzlisten) nach jedem Lock. Seit 0.45.0 auch Beginn,
     Ablage und Wiedergabe von Demos (siehe 3.7/4.10) - eine abgespielte
     Demo erzeugt dabei dieselben Spielereignisse wie die Runde, die sie
     aufgezeichnet hat, was sie zum Vergleichen zweier Laeufe brauchbar
@@ -1403,7 +1416,7 @@ Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
   lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
   einen Reset zu fein.
 - **`demo` ist das einzige Ziel, das ein Verzeichnis bewegt** (seit
-  0.44.0). Verschoben wird `demos` als Ganzes - dieselbe `mv`-Schleife
+  0.45.0). Verschoben wird `demos` als Ganzes - dieselbe `mv`-Schleife
   wie fuer die Dateien, die den Unterschied nicht kennen muss -, sodass
   die Aufnahmen eines Resets zusammen in einem `.bak`-Verzeichnis
   liegen und sich in einem Zug zurueckholen lassen. Ein eigenes Ziel
@@ -1542,7 +1555,7 @@ Entscheidungen zu den Workflows:
   CI-Lauf des Branches zu verlassen: ein Tag darf auf jedem beliebigen
   Commit sitzen.
 
-### 4.10 Demo-Format und Ablage (seit 0.44.0)
+### 4.10 Demo-Format und Ablage (seit 0.45.0)
 
 Das Konzept und die Entscheidungen dahinter stehen in 3.7; hier das
 Dateiformat und der Weg einer Aufnahme.
@@ -1554,7 +1567,7 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 
 ```
 version=1            Formatversion (jede andere wird abgelehnt)
-game=0.44.0          Spielversion, die aufgenommen hat (nur Info)
+game=0.45.0          Spielversion, die aufgenommen hat (nur Info)
 mode=marathon        marathon|ultra|sprint|timeattack - die Regeln
 name=Player          Spielername
 date=2026-08-03 21:40
@@ -2254,13 +2267,17 @@ stehen.
   abgebaute Reihe jedes Accounts zahlt dann doppelt ein: auf den
   eigenen (Account-)Zaehler und auf einen gemeinsamen Server-Zaehler.
 - **Konsequenz fuer die Kostentabelle:** Die bestehende
-  `WONDER_COSTS`-Reihe (100..6400, insgesamt 12.700 Reihen, siehe 3.3)
-  ist auf Einzelrechner-Spielzeit herunterskaliert und waere von vielen
-  gleichzeitig spielenden Accounts binnen Stunden durchgespielt. Der
-  Server-Fortschritt braucht **eine eigene, deutlich groessere
-  Kostentabelle** (`SERVER_WONDER_COSTS`) - naeher an der
-  Original-Groessenordnung (2.500 bis 500.000 Zeilen je Wunder, siehe
-  3.3) oder sogar darueber, je nach erwarteter Serverlast. Beide
+  `WONDER_COSTS`-Reihe (seit 0.45.0 10.000..640.000, insgesamt 1.270.000
+  Reihen, siehe 3.3) ist auf einen einzelnen Spieler ausgelegt und waere
+  von vielen
+  gleichzeitig spielenden Accounts durchgespielt, lange bevor ein
+  gemeinsames Wunder etwas Gemeinsames haette. Der
+  Server-Fortschritt braucht deshalb weiterhin **eine eigene, deutlich
+  groessere Kostentabelle** (`SERVER_WONDER_COSTS`) - die Umstellung in
+  0.45.0 hat den Abstand nur verkleinert, nicht aufgehoben: sie bringt
+  die Einzelspieler-Reihe erst auf die Original-Groessenordnung (2.500
+  bis 500.000 Zeilen je Wunder, siehe 3.3), die Server-Reihe muss
+  darueber liegen, je nach erwarteter Serverlast. Beide
   Tabellen nutzen dieselbe Wunder-Liste und -Logik (`lib/wonders.sh`),
   nur mit unterschiedlichem Kosten-Array und unterschiedlichem
   Zaehlerstand.
@@ -2402,7 +2419,7 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.44.0
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.45.0
   (Demo-Aufzeichnung und Demo-Player); die
   Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen sind die zwei Punkte unten
@@ -2609,9 +2626,11 @@ Multi-Server zuletzt.
   frueher offene Frage nach den Punkten fuer die Quadrat-Bildung hat
   sich damit erledigt (es gibt bewusst keine Bildungs-Punkte mehr).
 - Weltwunder-Liste und Baustufen sind seit 0.8.0 festgelegt (siehe
-  3.3). Offen bleibt: Die Reihen-Kosten je Wunder (100..6400) sind
-  gegenueber dem Original bewusst herunterskaliert und sollten nach
-  Playtesting ggf. nachjustiert werden (`WONDER_COSTS`).
+  3.3). Die Reihen-Kosten je Wunder waren gegenueber dem Original
+  bewusst herunterskaliert (100..6400) und sind mit 0.45.0 auf
+  Nutzerentscheidung mit 100 multipliziert worden (10.000..640.000,
+  Original-Groessenordnung). Offen bleibt wie bisher nur die
+  Feinjustierung nach Playtesting (`WONDER_COSTS`).
 - Mindest-Terminalgroesse: seit 0.26.0 48x22 (vorher 48x24 - die zwei
   Statuszeilen sind mit dem HUD-Umbau entfallen, siehe 3.4), seit
   0.19.0 auch waehrend des Spiels ueberwacht (SIGWINCH, siehe HISTORY.md,

@@ -71,7 +71,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.41.0 | Umschaltbarer Render-Modus (`partial`/`full`) | 4.3 |
 | 0.42.0 | Time-Attack-Modus samt Bestenliste, Statistik je Modus | 3.5, 3.6, 4.5 |
 | 0.43.0 | "Neustarten" im Pausenmenue | 3.1, 3.3 |
-| 0.44.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.7, 4.10 |
+| 0.45.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.7, 4.10 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -237,7 +237,9 @@ Lizenz) stehen weiterhin in der Roadmap.
 
 _Spaeter ueberholt: der Baufortschritt hat den HUD in 0.25.0 verlassen
 und steht seither nur noch auf dem Weltwunder-Bildschirm (siehe
-CLAUDE.md 3.3, 3.4)._
+CLAUDE.md 3.3, 3.4). Die hier skalierten Reihen-Kosten (100..6400) sind
+in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
+(10.000..640.000, siehe CLAUDE.md 3.3)._
 
 ## Phase 4 - Politur (erledigte Punkte, nach Version sortiert)
 
@@ -886,7 +888,7 @@ CLAUDE.md 3.3, 3.4)._
       den fest verdrahteten Sekundaertasten. Dieselbe veraltete Angabe
       stand im Kopfkommentar von `handle_key` ("2 for hold").
 
-- [x] **Demo-Aufzeichnung und Demo-Player** (Version 0.44.0): eigene
+- [x] **Demo-Aufzeichnung und Demo-Player** (Version 0.45.0): eigene
       Runden werden mitgeschnitten und lassen sich ueber den neuen
       Hauptmenuepunkt "Demos" noch einmal ansehen (`lib/demo.sh`,
       `menu_demos` in `lib/menu.sh`; aktueller Stand siehe 3.7 und
