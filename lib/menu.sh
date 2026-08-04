@@ -84,7 +84,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.22.0  (2026-08-04)
+# Version: 0.23.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -291,9 +291,9 @@ menu_pages() {
 }
 
 # Number of screens menu_help walks through; used both to number the
-# titles ("Anleitung (2/7)") and to wrap the left/right paging
+# titles ("Anleitung (2/9)") and to wrap the left/right paging
 # (menu_help below), so the pages stay self-describing.
-MENU_HELP_PAGES=8
+MENU_HELP_PAGES=9
 
 # menu_help_keys FIXED VAR
 # Build the key list for one action as the help screen shows it:
@@ -457,10 +457,15 @@ menu_help_body() {
             # CHANGE 2026-08-03 (0.17.0, with the Time Attack mode): the
             # fourth mode filled this page to the last of its
             # MENU_BODY_MAX lines, so the note about the highscore lists
-            # moved to a page of its own (page 6 below). It is the part
+            # moved to a page of its own (page 7 below). It is the part
             # that is about the modes' scoring rather than about how
             # they are played, and with four modes it had grown past a
             # closing paragraph anyway.
+            # CHANGE 2026-08-04 (0.23.0, with the Hochwasser mode): with
+            # nothing left to move off it, the fifth mode split the page
+            # itself. Three modes here, two on page 6 - the cut runs
+            # between the modes that are played against a goal or a
+            # clock and the two whose clock is the round itself.
             i18n_lines help_p5_head
             HELP_BODY=("${I18N_LINES[@]}")
             printf -v line "${I18N[help_p5_ultra]}" "${ULTRA_TARGET_ROWS}"
@@ -468,31 +473,39 @@ menu_help_body() {
             fmt_duration $(( SPRINT_TIME_MS / 1000 ))
             printf -v line "${I18N[help_p5_sprint]}" "${FMT_DURATION}"
             mapfile -t -O "${#HELP_BODY[@]}" HELP_BODY <<< "${line}"
-            fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
-            printf -v line "${I18N[help_p5_timeattack]}" "${FMT_DURATION}" \
-                "$(( TIME_ATTACK_ROW_MS / 1000 ))"
-            mapfile -t -O "${#HELP_BODY[@]}" HELP_BODY <<< "${line}"
             ;;
         6)
-            # Split off page 5 in 0.17.0 (see there): how the modes are
-            # scored, in one place. The rule differs by mode, and the
-            # Time Attack exception in particular needs its reason
-            # spelled out - otherwise it reads like an oversight next to
-            # the other two timed modes.
-            i18n_lines help_p6
+            # The second half of the modes page (see page 5).
+            i18n_lines help_p6_head
             HELP_BODY=("${I18N_LINES[@]}")
+            fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
+            printf -v line "${I18N[help_p6_timeattack]}" "${FMT_DURATION}" \
+                "$(( TIME_ATTACK_ROW_MS / 1000 ))"
+            mapfile -t -O "${#HELP_BODY[@]}" HELP_BODY <<< "${line}"
+            printf -v line "${I18N[help_p6_flood]}" \
+                "$(( FLOOD_INTERVAL_MS / 1000 ))"
+            mapfile -t -O "${#HELP_BODY[@]}" HELP_BODY <<< "${line}"
             ;;
         7)
+            # Split off the modes page in 0.17.0 (see page 5): how the
+            # modes are scored, in one place. The rule differs by mode,
+            # and the Time Attack exception in particular needs its
+            # reason spelled out - otherwise it reads like an oversight
+            # next to the other two timed modes.
+            i18n_lines help_p7
+            HELP_BODY=("${I18N_LINES[@]}")
+            ;;
+        8)
             # Added 0.20.0 with the demo feature. The count and the
             # playback keys are read from the live state (DEMO_MAX,
             # KEY_PAUSE, KEY_QUIT) for the same reason as the pages
             # before: a retuned constant or a rebound key must not leave
             # the manual lying.
-            i18n_lines help_p7_head
+            i18n_lines help_p8_head
             HELP_BODY=("${I18N_LINES[@]}")
-            printf -v line "${I18N[help_p7_kept]}" "${DEMO_MAX}"
+            printf -v line "${I18N[help_p8_kept]}" "${DEMO_MAX}"
             HELP_BODY+=("${line}")
-            i18n_lines help_p7_mid
+            i18n_lines help_p8_mid
             HELP_BODY+=("${I18N_LINES[@]}")
             menu_help_keys "${I18N[key_space]}" KEY_PAUSE
             printf -v line '%-17s %s' "${I18N[help_demo_pause]}" "${MENU_HELP_KEYS}"
@@ -510,15 +523,17 @@ menu_help_body() {
 
 # menu_help
 # The "Anleitung" main menu entry (added 0.12.0, user request): a short
-# tour through the game on eight info screens - what the game is about,
+# tour through the game on nine info screens - what the game is about,
 # the controls, hold and preview, the gold/silver squares, the wonder
-# construction, the game modes, how their highscore lists are kept and
+# construction, the game modes (two pages since the fifth one), how
+# their highscore lists are kept and
 # the demos (menu_help_body builds each page's
 # content). Four things are read from the live state
 # instead of being spelled out: the control page prints the current
 # bindings (menu_help_keys), the wonder page lists the names and costs
-# from lib/wonders.sh, the modes page names the Ultra row target and
-# the Sprint and Time Attack times, and the demo page the number of
+# from lib/wonders.sh, the mode pages name the Ultra row target, the
+# Sprint and Time Attack times and the Hochwasser interval, and the demo
+# page the number of
 # recordings kept plus the playback keys - a rebind, a retuned
 # WONDER_COSTS or a retuned goal must never leave the manual lying.
 # The text itself comes from the translation table
@@ -702,10 +717,11 @@ menu_pause() {
 }
 
 # menu_mode_entries
-# Fill the global array MENU_MODE_ENTRIES with the four game modes as the
-# three pickers (singleplayer, highscores, statistics) offer them: the
-# three timed ones name their goal, read from the live constants, so a
-# retuned goal cannot leave a menu lying. One builder for all three, so
+# Fill the global array MENU_MODE_ENTRIES with the five game modes as the
+# three pickers (singleplayer, highscores, statistics) offer them: every
+# mode but Marathon names what it is up against - a goal, a time limit or
+# the flood interval - read from the live constants, so a retuned value
+# cannot leave a menu lying. One builder for all three, so
 # the same mode reads the same way wherever it is picked - which used to
 # be three copies of the same four strings.
 MENU_MODE_ENTRIES=()
@@ -721,15 +737,19 @@ menu_mode_entries() {
     printf -v entry "${I18N[entry_timeattack]}" "${FMT_DURATION}" \
         "$(( TIME_ATTACK_ROW_MS / 1000 ))"
     MENU_MODE_ENTRIES+=("${entry}")
+    printf -v entry "${I18N[entry_flood]}" \
+        "$(( FLOOD_INTERVAL_MS / 1000 ))"
+    MENU_MODE_ENTRIES+=("${entry}")
     return 0
 }
 
 # menu_singleplayer: the game modes. "Marathon" is the endless
 # round, "Ultra" the race for ULTRA_TARGET_ROWS rows against the clock
 # (0.14.0, user request), "Sprint" its mirror image - as many rows as
-# possible within SPRINT_TIME_MS (0.16.0, user request) - and
+# possible within SPRINT_TIME_MS (0.16.0, user request) -,
 # "Time Attack" the countdown a run extends by TIME_ATTACK_ROW_MS per
-# row of credit (0.17.0, user request). The chosen entry
+# row of credit (0.17.0, user request) and "Hochwasser" Marathon with a
+# flood row rising every FLOOD_INTERVAL_MS (0.23.0, user request). The chosen entry
 # is passed to game_run as the mode name, so adding one is a matter of
 # an entry plus its case branch. After a
 # game session the wonder construction site is shown with the freshly
@@ -769,6 +789,7 @@ menu_singleplayer() {
             1) game_run ultra ;;
             2) game_run sprint ;;
             3) game_run timeattack ;;
+            4) game_run flood ;;
             *) return 0 ;;
         esac
         if [ "${GAME_SUSPENDED}" -eq 1 ]; then
@@ -803,6 +824,7 @@ menu_highscores() {
             1) highscore_ultra_screen ;;
             2) highscore_sprint_screen ;;
             3) highscore_timeattack_screen ;;
+            4) highscore_flood_screen ;;
             *) return 0 ;;
         esac
     done
@@ -833,6 +855,7 @@ menu_stats() {
             2) stats_mode_screen "ultra" ;;
             3) stats_mode_screen "sprint" ;;
             4) stats_mode_screen "timeattack" ;;
+            5) stats_mode_screen "flood" ;;
             *) return 0 ;;
         esac
     done

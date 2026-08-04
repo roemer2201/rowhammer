@@ -59,7 +59,7 @@
 #   to the plain truncated text instead of risking a cut escape sequence.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.11.0  (2026-08-04)
+# Version: 0.12.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -94,7 +94,7 @@ STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){6}\|[0-9]{4}-[0-9]{2}-[0-9]
 # lose their per-mode round counts (project rule: no backward
 # compatibility); the all-time counters and the recent rounds, which
 # were never per mode, are unaffected.
-STATS_MODE_RE='^mode_(marathon|ultra|sprint|timeattack)_(rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|pieces|play_time)=([0-9]{1,15})$'
+STATS_MODE_RE='^mode_(marathon|ultra|sprint|timeattack|flood)_(rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|pieces|play_time)=([0-9]{1,15})$'
 
 # How many recent rounds are kept and shown.
 STATS_RECENT_MAX=3
@@ -125,25 +125,47 @@ STATS_RECENT=()
 # Keys are "<mode>_<field>" of the two lists below, so the file format,
 # the reset, the write and both screens walk the same two loops; every
 # combination exists from startup on, which keeps reads free of set -u
-# guards. Marathon has no goal to reach, so its "goal" entry stays 0 and
-# is neither written nor shown.
+# guards. Marathon and Hochwasser have no goal to reach - both end in a
+# top-out and nothing else - so their "goal" entry stays 0 and is neither
+# written nor shown.
 # CHANGE 2026-08-04 (user request): 0.9.0 had seven scalars here and
 # counted only rounds per mode. Extending that shape to every counter
 # would have meant 36 more globals, so the per-mode data moved into one
 # keyed array - the fixed field list below took over from the variable
 # names as the single source of truth for what may appear in the file.
-STATS_MODES=(marathon ultra sprint timeattack)
+STATS_MODES=(marathon ultra sprint timeattack flood)
 STATS_MODE_FIELDS=(rounds goal lines bonus_rows gold_squares
                    silver_squares rowhammers pieces play_time)
 declare -A STATS_MODE=()
+
+# The modes whose round can only ever end in a top-out and that
+# therefore have no goal to reach: their "goal" counter would be a
+# permanent 0. Kept as data here rather than derived from the presence
+# of a translated label, so what the file contains never depends on a
+# language file (stats_mode_has_goal is what everything asks).
+STATS_MODES_NO_GOAL=(marathon flood)
+
+# stats_mode_has_goal MODE
+# True when MODE has a regular ending of its own besides the top-out, and
+# therefore a "goal" counter worth writing and showing.
+stats_mode_has_goal() {
+    local m
+    for m in "${STATS_MODES_NO_GOAL[@]}"; do
+        if [ "${m}" = "${1}" ]; then
+            return 1
+        fi
+    done
+    return 0
+}
 
 # CHANGE 2026-08-04: the two label tables that used to sit here (the
 # mode names and the wording of their goal counter) are gone into the
 # translation layer, keyed by mode: "mode_<mode>" for the name, which
 # the pickers in lib/menu.sh read as well, and "stats_goal_<mode>" for
-# the goal counter. Marathon has no goal to reach and therefore no
-# stats_goal_marathon key - the screens test for exactly that, so an
-# empty lookup still means "this mode has no goal line".
+# the goal counter. Marathon and Hochwasser have no goal to reach and
+# therefore no stats_goal_marathon / stats_goal_flood key; which modes
+# those are is decided by stats_mode_has_goal above, not by the presence
+# of the label.
 
 # stats_mode_reset
 # Put every per-mode counter back to 0. Called by stats_load before
@@ -241,12 +263,12 @@ stats_write() {
         printf 'pieces=%d\n' "${STATS_PIECES}"
         printf 'play_time=%d\n' "${STATS_PLAY_TIME}"
         # The same counters per mode, in the order of the two lists at
-        # the top of this file. Marathon's "goal" is skipped: the mode
-        # has no goal to reach, so the key would be a permanent 0 that
-        # only invites the question what it means.
+        # the top of this file. The "goal" of a mode that has no goal to
+        # reach (Marathon, Hochwasser) is skipped: the key would be a
+        # permanent 0 that only invites the question what it means.
         for mode in "${STATS_MODES[@]}"; do
             for field in "${STATS_MODE_FIELDS[@]}"; do
-                if [ "${field}" = "goal" ] && [ "${mode}" = "marathon" ]; then
+                if [ "${field}" = "goal" ] && ! stats_mode_has_goal "${mode}"; then
                     continue
                 fi
                 printf 'mode_%s_%s=%d\n' "${mode}" "${field}" \
@@ -464,10 +486,10 @@ stats_screen() {
     # would not fit next to it in the 18 lines MENU_BODY_MAX leaves. The
     # timed modes carry their success count indented below their round
     # count, because it is a share of that number and not a figure of its
-    # own; Marathon has none, having no goal to reach.
+    # own; Marathon and Hochwasser have none, having no goal to reach.
     # Since 0.10.0 this is also the overview in front of the per-mode
     # screens (menu_stats in lib/menu.sh): it is the one place that puts
-    # the four modes side by side, which is exactly what a picker wants
+    # all modes side by side, which is exactly what a picker wants
     # to show before it is used.
     body=()
     body+=("${I18N[stats_modes_head]}")
@@ -478,9 +500,9 @@ stats_screen() {
             "${STATS_MODE[${mode}_rounds]}"
         body+=("${line}")
         total=$(( total + STATS_MODE[${mode}_rounds] ))
-        # Marathon is the one mode without a goal, hence without the
-        # indented line below its round count.
-        if [ -n "${I18N[stats_goal_${mode}]:-}" ]; then
+        # Marathon and Hochwasser are the modes without a goal, hence
+        # without the indented line below their round count.
+        if stats_mode_has_goal "${mode}"; then
             printf -v line '  %-24s %s%10d%s' \
                 "${I18N[stats_goal_${mode}]}" \
                 "${TXT_ACCENT_SGR}" "${STATS_MODE[${mode}_goal]}" \
@@ -517,7 +539,7 @@ stats_mode_screen() {
     rows=$(( STATS_MODE[${mode}_lines] + STATS_MODE[${mode}_bonus_rows] ))
     printf -v line '%-26s %10d' "${I18N[stats_rounds]}" "${rounds}"
     body+=("${line}")
-    if [ -n "${I18N[stats_goal_${mode}]:-}" ]; then
+    if stats_mode_has_goal "${mode}"; then
         printf -v line '  %-24s %s%10d%s' \
             "${I18N[stats_goal_${mode}]}" "${TXT_ACCENT_SGR}" \
             "${STATS_MODE[${mode}_goal]}" "${TXT_RESET_SGR}"

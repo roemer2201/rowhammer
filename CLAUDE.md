@@ -301,7 +301,9 @@ Die fuer uns relevanten Merkmale des Originals:
     Zwei davon (Zeile 15 und 16) nutzt seit 0.34.0 der Ultra-Modus fuer
     "Goal" und "Left"; seit 0.39.0 nutzt der Sprint-Modus dieselben
     beiden Zeilen fuer sein Zeitlimit und die Restzeit, seit 0.42.0 der
-    Time-Attack-Modus fuer seine mitwachsende Restzeit (die drei Modi
+    Time-Attack-Modus fuer seine mitwachsende Restzeit und seit 0.49.0
+    der Hochwasser-Modus fuer den Flut-Abstand ("Flut") und die Zeit bis
+    zur naechsten Flutreihe ("Rest") (die vier Modi
     laufen nie gleichzeitig). Eine weitere (Zeile 18) nutzt seit 0.46.0
     die Demo-Wiedergabe fuer das Abspieltempo (Label "Demo", siehe 3.8);
     sie liegt zwei Zeilen unter den Ziel-Zaehlern, damit eine
@@ -326,7 +328,7 @@ Die fuer uns relevanten Merkmale des Originals:
 ### 3.5 Anleitung (seit 0.32.0)
 
 Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
-"Beenden" und erklaert das Spiel auf sieben Info-Bildschirmen
+"Beenden" und erklaert das Spiel auf neun Info-Bildschirmen
 (`menu_help` in `lib/menu.sh`, ueber `render_menu_frame` zentriert wie
 der Spielblock). **Seit Version 0.33.0 (Nutzerwunsch)** blaettert man mit
 den **Pfeiltasten links/rechts** durch die Seiten (umlaufend: von der
@@ -350,22 +352,28 @@ in fester Reihenfolge einmal durchzureichen:
 4. Gold-/Silber-Quadrate und die Reihenwertung (Werte aus
    `ROWS_NORMAL`/`ROWS_SILVER`/`ROWS_GOLD`/`ROWS_TETRIS`, siehe 3.2).
 5. Weltwunderbau mit der Kostentabelle aus `lib/wonders.sh`.
-6. Spielmodi (seit 0.39.0, um Time Attack erweitert in 0.42.0):
-   Marathon, Ultra, Sprint und Time Attack mit ihrem
-   jeweiligen Ende und Ergebnis.
+6. Spielmodi, Teil 1 (seit 0.39.0): Marathon, Ultra und Sprint mit
+   ihrem jeweiligen Ende und Ergebnis.
    Die Seite kam bewusst erst mit dem Sprint-Modus dazu: die
    urspruenglichen fuenf Seiten stammen aus der Zeit, als es nur die
    endlose Runde gab, und mit Sprint liessen sich alle drei Modi in
    einem Zug erklaeren, statt die Seite zweimal umzubauen.
-7. Bestenlisten (seit 0.42.0): eine eigene Liste je Modus, welche Zahl
+7. Spielmodi, Teil 2 (seit 0.49.0): Time Attack (Seite 6 in 0.42.0)
+   und Hochwasser. Der fuenfte Modus sprengte die Modus-Seite, von der
+   mit den Bestenlisten schon einmal etwas abgegeben worden war; der
+   Schnitt laeuft dort, wo die Modi mit festem Ziel bzw. festem
+   Zeitlimit aufhoeren und die beginnen, deren Uhr die Runde selbst
+   traegt.
+8. Bestenlisten (seit 0.42.0): eine eigene Liste je Modus, welche Zahl
    sie jeweils rangiert, und welche Laeufe ueberhaupt gewertet werden -
    bei Ultra und Sprint nur einer, der sein Ziel bzw. die volle Zeit
-   erreicht hat, bei Time Attack dagegen jeder, samt Begruendung (siehe
+   erreicht hat, bei Time Attack und Hochwasser dagegen jeder, samt
+   Begruendung (siehe
    3.6). Die Seite ist der abgespaltene Schluss der Modus-Seite: der
    vierte Modus fuellte diese bis auf die letzte ihrer `MENU_BODY_MAX`
    Zeilen, und der Absatz handelt ohnehin von der Wertung statt vom
    Spielablauf.
-8. Demos (seit 0.46.0): dass jede Runde mitgeschnitten wird, dass die
+9. Demos (seit 0.46.0): dass jede Runde mitgeschnitten wird, dass die
    Zuege und nicht der Bildschirm aufgezeichnet werden (und die
    Wiedergabe die Runde deshalb wirklich noch einmal spielt), wie viele
    Aufnahmen aufbewahrt werden, wo sich einzelne loeschen und die
@@ -377,7 +385,8 @@ Tastenbelegung (`menu_help_keys` setzt die konfigurierbare Taste vor die
 fest verdrahteten Sekundaertasten, laesst `NONE` weg und vermeidet
 Dubletten wie `KEY_HARD=SPACE` neben der Leertaste), die Wunder-Namen
 samt Kosten, die Ziele der drei Zeitmodi (`ULTRA_TARGET_ROWS`,
-`SPRINT_TIME_MS`, `TIME_ATTACK_START_MS`/`TIME_ATTACK_ROW_MS`) und auf
+`SPRINT_TIME_MS`, `TIME_ATTACK_START_MS`/`TIME_ATTACK_ROW_MS`) samt dem
+Flut-Abstand des Hochwasser-Modus (`FLOOD_INTERVAL_MS`) und auf
 der Demo-Seite die Zahl der aufbewahrten Aufnahmen (`DEMO_MAX`) samt
 den Wiedergabetasten. Jeder
 Bildschirm bleibt in den 46 Zeichen Breite und
@@ -385,7 +394,7 @@ den `MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst - die
 Bestenlisten-Seite nutzt sie mit 18 Zeilen genau aus, die Demo-Seite
 mit 17.
 
-### 3.6 Spielmodi (Ultra seit 0.34.0, Sprint seit 0.39.0, Time Attack seit 0.42.0)
+### 3.6 Spielmodi (Ultra seit 0.34.0, Sprint seit 0.39.0, Time Attack seit 0.42.0, Hochwasser seit 0.49.0)
 
 Das Einzelspieler-Menue waehlt den Modus der Runde; der gewaehlte Name
 geht als Argument an `game_run` und liegt waehrend der Runde in
@@ -421,6 +430,15 @@ im Modus zurueck, in dem sie gestartet wurde).
   = Startzeit + Rows x Gutschrift): die Reihenwertung ist ohnehin die
   eine Zahl, um die sich der ganze Modus dreht, und ein zweiter, bei
   jedem Abbau fortgeschriebener Zaehler koennte von ihr nur abweichen.
+- **Hochwasser** (`flood`, Nutzerwunsch, seit 0.49.0): Marathon mit
+  steigendem Wasser. Alle `FLOOD_INTERVAL_MS` (20000 ms = 20 Sekunden)
+  Spielzeit schiebt sich von unten eine volle Reihe mit **genau einem
+  Loch** ins Feld; das ganze Feld rueckt dabei um eine Zeile nach oben
+  (`flood_raise` in `rowhammer.sh`, `board_flood_row` in
+  `lib/board.sh`). Sonst ist die Runde Marathon: sie endet im Game Over,
+  das Ergebnis sind die Rows, ein Ziel gibt es nicht. Gemessen wird wie
+  ueberall `PLAY_MS` (siehe 3.4), eine Pause laesst also kein Wasser
+  herein.
 
 Entscheidungen zu Ultra (die drei in der Roadmap offen gelassenen
 Punkte, im Sinne der dortigen Empfehlung entschieden):
@@ -544,6 +562,76 @@ wo sie passen, und weicht an genau einer Stelle begruendet ab:
   oder festgesetzt werden.
 - **`r` im Rundenende-Bild startet im selben Modus neu**, wie bei den
   anderen Modi (`game_reset` ohne Argument).
+
+Entscheidungen zu Hochwasser (0.49.0). Die Uhr dieses Modus beendet die
+Runde nicht, sie fuellt das Feld; wo die drei Zeitmodi eine Sonderregel
+haben, folgt er deshalb dem Marathon:
+
+- **Die Flutreihe ist eine Reihe eigener Art** (`GARBAGE_CELL`, `x`,
+  in `lib/board.sh`), kein Baustein: sie traegt die Instanz-ID 0 und
+  kann damit nie Teil eines Quadrats werden (`square_check_at` weist
+  ID 0 ab). Das ist dieselbe Festlegung, die die Mehrspieler-
+  Spezifikation fuer ihre Garbage-Reihen trifft (siehe 5.7) - der
+  Hochwasser-Modus nimmt sie vorweg, statt eine zweite zu erfinden.
+  Angezeigt wird sie grau mit einem eigenen Glyph (`::`,
+  `GARBAGE_GLYPH` in `lib/render.sh`), **auch im Farbmodus**: im Thema
+  `mono` haben die Steine dasselbe Grau, und eine Reihe, die niemand
+  gelegt hat, soll in jedem Fall als solche zu erkennen sein.
+- **Das Hochschieben laesst die Steine heil.** `board_flood_row`
+  verschiebt `BOARD`, `BOARD_ID` und `BOARD_SQ` zeilenweise gemeinsam;
+  Instanzen behalten ihre ID und ihre Gold-/Silber-Markierung und
+  wandern nur nach oben - ein Quadrat ueberlebt die Flut also genauso,
+  wie es einen Reihenabbau unter sich ueberlebt. Eine neue Flutreihe
+  kann nie eine volle Reihe ergeben (sie hat immer ihr Loch), deshalb
+  folgt ihr keine Abbaupruefung.
+- **Ist die oberste Zeile belegt, ist die Runde vorbei.** Verschieben
+  wuerde eine belegte Zelle aus dem Feld druecken; das ist das Game
+  Over dieses Modus, so wie der blockierte Spawn das des Marathons ist.
+  `board_flood_row` meldet den Fall, ohne etwas zu aendern, und
+  `flood_raise` beendet die Runde.
+- **Der fallende Stein bleibt, wo er ist** - der Stapel steigt unter
+  ihm. Nur wenn er danach im gestiegenen Stapel steckt, rueckt er eine
+  Zeile mit hoch: er lag auf dem, was sich bewegt hat, und sitzt damit
+  wieder genau dort, wo er sass. Ist auch das blockiert (der Stein
+  steht ganz oben), endet die Runde. Ein scharfes Lock-Delay wird nur
+  geprueft, nicht neu gestellt (`lock_delay_recheck`) - die Regel aus
+  3.1 gilt unveraendert: nur wer wieder fallen kann, faellt weiter.
+- **Die naechste Flut wird vom Eintreffen der letzten an gerechnet**
+  (`FLOOD_NEXT_MS` = `PLAY_MS` + `FLOOD_INTERVAL_MS`), nicht von ihrem
+  Soll-Zeitpunkt. Sonst haette ein spaet gekommener Tick (Resize,
+  Blink-Animation, langsames Terminal) mehrere faellige Reihen auf
+  einmal im Feld - dieselbe Ueberlegung, aus der die Gravitation
+  `LAST_FALL` auf "jetzt" setzt.
+- **Die Fluthoehe steht im Game-Loop vor der Gravitation, aber in einem
+  eigenen `if`.** Ein Anstieg ist kein Rundenende und darf dem Tick
+  seine Gravitation nicht nehmen - das Wasser kommt, waehrend der Stein
+  weiterfaellt, das ist der Modus. Beendet er die Runde, faengt das
+  `GAME_OVER`-Zweiglein vor der Kette das ab: auf einer beendeten Runde
+  faellt und lockt nichts mehr.
+- **Jede Runde kommt in die Hochwasser-Bestenliste**, wie bei Time
+  Attack und aus demselben Grund: es gibt keinen Zustand
+  "abgebrochen", der sich nicht vergleichen liesse - jede Runde dieses
+  Modus endet im Game Over, das ist der Modus. Eigene Datei
+  `${DATA_DIR}/highscore-flood` (siehe 4.5), Rangordnung nach Rows wie
+  im Marathon, denn am Wert einer Runde aendert die Flut nichts.
+- **HUD:** dieselben zwei Zeilen wie die drei Zeitmodi
+  (`render_pane_left`, Zeile 15/16, siehe 3.4), aber mit eigenem Label:
+  "Flut" ist der Abstand zweier Flutreihen (`FLOOD_INTERVAL_MS`,
+  MM:SS), "Rest" die Zeit bis zur naechsten, aufgerundet wie bei
+  Sprint. Kein "Ziel", weil es hier keines gibt.
+- **Rundenende-Kasten** (`render_status_box`): ein weiterer Ausgang mit
+  denselben acht Innenzeilen - "GAME OVER" mit den erreichten Rows und
+  dem Hochwasser-Rang; damit traegt der Kasten acht Ausgaenge. Der Rang
+  steht hier neben dem Game Over, weil jede Runde gewertet wird, und
+  die Rows nehmen die Zeile, die einem gescheiterten Zeitmodus-Lauf
+  seinen Stand zeigt: sie sind die Geschichte einer Runde, die kuerzer
+  ist als eine Marathon-Runde.
+- **`r` im Rundenende-Bild startet im selben Modus neu**, wie ueberall
+  (`game_reset` ohne Argument).
+- **Der Abstand ist eine justierbare Konstante**, kein
+  Kommandozeilen-Schalter: wie `ULTRA_TARGET_ROWS` und `SPRINT_TIME_MS`
+  gehoert er zum Spielgefuehl und wird nach Playtesting nachgezogen
+  (siehe Abschnitt 8), nicht je Runde gewaehlt.
 
 ### 3.7 Namensabfrage am Rundenende (seit 0.45.0)
 
@@ -784,6 +872,12 @@ Entscheidungen dahinter:
   fuer Gold, `%%` fuer Silber), damit ein Quadrat nie mit einer Steinsorte
   kollidiert (insbesondere kollidiert der S-Stein `SS` so nie mit einem
   Silber-Quadrat).
+- Die Flutreihen des Hochwasser-Modus (seit 0.49.0, siehe 3.6) haben
+  einen eigenen Farbslot je Theme (`THEME_COLOR[...:GARBAGE]`, ueberall
+  `grey`) und ein eigenes Glyph (`GARBAGE_GLYPH` in `lib/render.sh`:
+  `::`) - anders als die Steine **auch im Farbmodus**, denn im Thema
+  `mono` sind die Steine ebenfalls grau, und eine Reihe, die niemand
+  gelegt hat, soll immer als solche zu erkennen sein.
 
 ### 4.2 Architektur und Dateistruktur
 
@@ -836,7 +930,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.48.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.49.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
@@ -848,14 +942,14 @@ Anleitung / Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
 erster Stelle, ebenso im Einzelspieler-Untermenue). Das
 Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
-("Marathon", "Ultra", seit 0.39.0 "Sprint" und seit 0.42.0
-"Time Attack", siehe 3.6; der
+("Marathon", "Ultra", seit 0.39.0 "Sprint", seit 0.42.0
+"Time Attack" und seit 0.49.0 "Hochwasser", siehe 3.6; der
 endlose Modus hiess bis
 0.34.1 "Normales Spiel"), und seit 0.38.0 waehlt der Menuepunkt
 "Highscores" ebenso den Modus der anzuzeigenden Bestenliste
-(`menu_highscores`, seit 0.42.0 mit vier Listen, siehe 4.5). Seit
+(`menu_highscores`, seit 0.49.0 mit fuenf Listen, siehe 4.5). Seit
 0.47.0 waehlt auch der Menuepunkt "Statistik" zuerst die Sicht
-(`menu_stats`: Gesamt oder einer der vier Modi, siehe 4.5); die
+(`menu_stats`: Gesamt oder einer der fuenf Modi, siehe 4.5); die
 Menue-Beschriftung
 ist seit 0.48.0 nicht mehr fest, sondern uebersetzt (siehe 4.11):
 Deutsch und Englisch stehen zur Wahl, Code, Kommentare und
@@ -1066,7 +1160,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Highscore-Liste `highscore`, die Ultra-Bestenliste `highscore-ultra`
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
   (seit 0.39.0), die Time-Attack-Bestenliste `highscore-timeattack`
-  (seit 0.42.0), der Spielstand `save`, die
+  (seit 0.42.0), die Hochwasser-Bestenliste `highscore-flood`
+  (seit 0.49.0), der Spielstand `save`, die
   Statistik `stats` und - seit 0.46.0 - das Unterverzeichnis `demos`
   mit den aufgezeichneten Runden (Format und Ablage siehe 4.10; als
   einziger Eintrag ein Verzeichnis statt einer Datei, weil es beliebig
@@ -1230,17 +1325,38 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Spielzeit - und die verdient ihren Platz hier: ein Lauf an der Uhr
   spielt genau Startzeit + eine Sekunde je Row, eine kuerzere Zeit
   weist den Eintrag also als vorzeitig beendet aus.
+  **Hochwasser-Bestenliste (seit 0.49.0, Nutzerwunsch, siehe 3.6):**
+  die Ergebnisse des Hochwasser-Modus liegen in einer fuenften Datei
+  `${DATA_DIR}/highscore-flood`, Zeilenformat und Rangordnung wieder wie
+  die Marathon-Liste (absteigend nach Rows, gleiche Rows hinter dem
+  aelteren Eintrag), ebenfalls Top 10 (`HSF_*` in `lib/highscore.sh`).
+  Anders als die vier aelteren Listen kennt sie **nur die volle
+  Feldzahl** (elf, mit dem Runden-Hash am Ende): sie ist mit ihm
+  entstanden und hat deshalb keine kuerzere Fassung, gegenueber der sie
+  kulant sein muesste. Eine eigene Datei ist noetig, weil eine Runde
+  unter steigendem Wasser nach Minuten endet und in der endlosen Liste
+  nie einen Platz saehe. Wie bei Time Attack wird **jede** Runde
+  gespeichert (Entscheidung in 3.6) - dieser Modus endet immer im Game
+  Over, einen Zustand "unvollstaendig" gibt es nicht.
+  **Anzeige:** `highscore_flood_screen` zeigt die Liste im Layout der
+  vier anderen (seitenweise ueber `menu_pages`, dieselben
+  `HS_PAGE_ENTRIES`/`HS_PAGE_LINES`, zwei Zeilen je Eintrag, Rows in der
+  Akzentfarbe), mit den Spalten der Marathon-Liste samt Spielzeit: das
+  Wasser steigt nach der Uhr, die ueberlebte Zeit sagt also, gegen wie
+  viele Flutreihen ein Eintrag angespielt hat, und trennt zwei Runden
+  mit gleichen Rows.
   **Modus-Auswahl:** weil es damit mehrere Listen mit verschiedenen
   Rangordnungen
   gibt, fragt der Hauptmenuepunkt "Highscores" seit 0.38.0 zuerst nach
   dem Modus (`menu_highscores` in `lib/menu.sh`: Marathon / Ultra /
-  Sprint / Time Attack / Zurueck, der Sprint-Eintrag seit 0.39.0, der
-  Time-Attack-Eintrag seit 0.42.0) und zeigt danach die
+  Sprint / Time Attack / Hochwasser / Zurueck, der Sprint-Eintrag seit
+  0.39.0, der Time-Attack-Eintrag seit 0.42.0, der
+  Hochwasser-Eintrag seit 0.49.0) und zeigt danach die
   gewaehlte Liste; die Auswahl bleibt
   stehen, bis "Zurueck" oder `ESC` kommt, sodass ein Vergleich der
   Listen nicht durchs Hauptmenue muss. Die Bildschirmtitel nennen ihren
-  Modus ("Highscores - Marathon", "- Ultra", "- Sprint" bzw.
-  "- Time Attack"), sonst
+  Modus ("Highscores - Marathon", "- Ultra", "- Sprint", "- Time Attack"
+  bzw. "- Hochwasser"), sonst
   waere
   nicht zu sehen, welche gerade auf dem Schirm steht. Eine
   gemeinsame Liste waere keine Alternative: sie muesste mehrere
@@ -1314,14 +1430,16 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   **Statistik je Spielmodus (Runden seit 0.42.0, alle Zaehler seit
   0.47.0 auf Nutzerwunsch):** jeder Zaehler oben existiert ein zweites
   Mal je Modus, als Zeile `mode_<modus>_<feld>=N` mit `<modus>` aus
-  `marathon|ultra|sprint|timeattack` und `<feld>` aus
+  `marathon|ultra|sprint|timeattack|flood` und `<feld>` aus
   `rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|`
   `pieces|play_time` (`STATS_MODE_RE`, im Code das assoziative Array
   `STATS_MODE` mit dem Schluessel `<modus>_<feld>`). `rounds` zaehlt die
   verbuchten Runden des Modus, `goal` die davon, die im regulaeren Ende
   des Modus ausgingen statt im Game Over (Ziel erreicht / volle Zeit
-  gespielt / Uhr abgelaufen) - Marathon hat kein Ziel und deshalb kein
-  `goal`-Feld in der Datei. `record_round` reicht dafuer `GAME_MODE` und
+  gespielt / Uhr abgelaufen) - Marathon und Hochwasser haben kein Ziel
+  und deshalb kein `goal`-Feld in der Datei; welche Modi das sind, sagt
+  `stats_mode_has_goal` (`lib/stats.sh`), damit der Dateiinhalt nicht
+  daran haengt, ob eine Sprachdatei die passende Beschriftung kennt. `record_round` reicht dafuer `GAME_MODE` und
   `GOAL_REACHED` an `stats_add_round` durch - die einzigen beiden
   Rundenangaben, die sich aus den uebrigen Zaehlern nicht
   rekonstruieren lassen, und die Erfolgsquote der Zeitmodi steht
@@ -1349,10 +1467,11 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Anzeige ueber den Hauptmenuepunkt
   "Statistik", der seit 0.47.0 wie "Highscores" zuerst nach der Sicht
   fragt (`menu_stats` in `lib/menu.sh`: Gesamt / Marathon / Ultra /
-  Sprint / Time Attack / Zurueck, wortgleich mit dem Einzelspieler- und
+  Sprint / Time Attack / Hochwasser / Zurueck, wortgleich mit dem
+  Einzelspieler- und
   dem Highscore-Menue, und in einer Schleife, sodass ein Vergleich nicht
-  durchs Hauptmenue muss). Vier weitere Bildschirme an die vorhandenen
-  anzuhaengen war die Alternative und haette bedeutet, sich durch sieben
+  durchs Hauptmenue muss). Weitere Bildschirme an die vorhandenen
+  anzuhaengen war die Alternative und haette bedeutet, sich durch acht
   Bildschirme zu druecken, um den letzten zu sehen.
   **Gesamt** (`stats_screen`) steht seit 0.27.0 auf **zwei** und seit
   0.42.0 auf **drei Bildschirmen**: erst die
@@ -1372,7 +1491,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gestrichener Spalten. Jede Zeile bleibt in den 46 Zeichen, die der
   Zwei-Zeichen-Einzug vom 48-Spalten-Minimum uebriglaesst. Der dritte
   Bildschirm ist seit 0.47.0 zugleich der Ueberblick vor der Auswahl -
-  der eine Bildschirm, der die vier Modi nebeneinander stellt.
+  der eine Bildschirm, der alle Modi nebeneinander stellt.
   **Ein Modus** (`stats_mode_screen`, seit 0.47.0) steht dagegen auf
   **einem** Bildschirm: dieselben Zaehler in derselben Reihenfolge, mit
   denselben Beschriftungen und derselben Faerbung wie der
@@ -1513,10 +1632,10 @@ ins Menue zu starten. Ziele:
 | --- | --- |
 | `config` | `rowhammer.conf` |
 | `stats` | `stats` |
-| `highscore` | `highscore`, `highscore-ultra`, `highscore-sprint` **und** `highscore-timeattack` |
+| `highscore` | `highscore`, `highscore-ultra`, `highscore-sprint`, `highscore-timeattack` **und** `highscore-flood` |
 | `save` | `save` (Weltwunder-Fortschritt) |
 | `demo` | das Verzeichnis `demos` (alle Aufzeichnungen) |
-| `all` | alle sieben Dateien und das Verzeichnis `demos` |
+| `all` | alle acht Dateien und das Verzeichnis `demos` |
 
 **Reset heisst verschieben, nicht loeschen (seit 0.36.0,
 Nutzerentscheidung).** Jede betroffene Datei wandert nach
@@ -1540,8 +1659,9 @@ Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
   Weltwunder-Fortschritt zuruecksetzen will, hat dafuer das eigene Ziel
   `save` (der in der Roadmap angedachte Wert), das die uebrigen Dateien
   unangetastet laesst.
-- **`highscore` trifft alle Bestenlisten.** Endlos-, Ultra-, Sprint-
-  und Time-Attack-Liste (seit 0.34.0, 0.39.0 bzw. 0.42.0, siehe 4.5)
+- **`highscore` trifft alle Bestenlisten.** Endlos-, Ultra-, Sprint-,
+  Time-Attack- und Hochwasser-Liste (seit 0.34.0, 0.39.0, 0.42.0 bzw.
+  0.49.0, siehe 4.5)
   sind dieselbe Art
   Daten; eine davon stehen zu
   lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
@@ -1563,8 +1683,8 @@ Ablauf und Einordnung:
 - **Zeitpunkt:** direkt nach dem Sourcen der Module (die Dateinamen
   kommen aus den Modulen, die sie besitzen: `CONFIG_NAME`,
   `STATS_FILE_NAME`,
-  `HS_FILE_NAME`/`HSU_FILE_NAME`/`HSS_FILE_NAME`/`HSA_FILE_NAME`,
-  `SAVE_FILE_NAME`, `DEMO_DIR_NAME`)
+  `HS_FILE_NAME`/`HSU_FILE_NAME`/`HSS_FILE_NAME`/`HSA_FILE_NAME`/
+  `HSF_FILE_NAME`, `SAVE_FILE_NAME`, `DEMO_DIR_NAME`)
   und **vor** der TTY-Pruefung. Die TTY-Pruefung ist dafuer aus dem
   Prerequisites-Block nach unten gewandert: ein Reset loescht nur
   Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
@@ -1697,9 +1817,9 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 (`DEMO_*_RE`). Erst der Kopf, dann die Steinfolge, dann die Ereignisse:
 
 ```
-version=1            Formatversion (jede andere wird abgelehnt)
-game=0.46.0          Spielversion, die aufgenommen hat (nur Info)
-mode=marathon        marathon|ultra|sprint|timeattack - die Regeln
+version=2            Formatversion (jede andere wird abgelehnt)
+game=0.49.0          Spielversion, die aufgenommen hat (nur Info)
+mode=marathon        marathon|ultra|sprint|timeattack|flood - die Regeln
 name=Player          Spielername
 date=2026-08-03 21:40
 time=123456          Spielzeit der Runde in Millisekunden
@@ -1713,12 +1833,23 @@ e=120l               ein Ereignis: Zeitdelta in ms + Aktionsbuchstabe
 Das Ereignis-Alphabet ist bewusst ein Buchstabe je Sache, die einer
 Runde zustossen kann: `l`/`r` links/rechts, `c`/`a` Drehen im/gegen den
 Uhrzeigersinn, `s` Soft-Drop, `h` Hard-Drop (setzt selbst fest), `o`
-Hold, `g` ein Gravitationsschritt, `k` das Ablaufen des Lock Delays.
+Hold, `g` ein Gravitationsschritt, `k` das Ablaufen des Lock Delays und
+- seit 0.49.0 - `w<spalte>` eine Flutreihe des Hochwasser-Modus (siehe
+3.6).
 Soft-Drop und Gravitation tun dasselbe und bleiben trotzdem zwei
 Buchstaben, damit die Aufnahme noch sagt, welches von beidem es war. Ein
 blockierter Spawn braucht kein Ereignis - die Wiedergabe laeuft von
 selbst hinein. Auch **blockierte** Bewegungen werden aufgezeichnet: die
 Wiedergabe fuehrt sie gegen dasselbe Brett aus, wo sie ebenso scheitern.
+
+Die Flutreihe ist das **einzige Ereignis mit Nutzlast**, und sie braucht
+sie: der Anstieg selbst folgt der Uhr und liesse sich nachrechnen, die
+Spalte des Lochs kommt aber aus `RANDOM` - eine Wiedergabe, die sie
+raet, spielte eine andere Runde. Mit ihr wanderte die Formatversion von
+1 auf 2 (`DEMO_FORMAT_VERSION`): eine aeltere Aufnahme wuerde zwar noch
+korrekt ablaufen, aber die Regel "keine Abwaertskompatibilitaet" gilt
+auch hier, und genau die Frage, welche alten Versionen nahe genug sind,
+soll diese eine Zahl ersparen.
 
 **Zeit.** Jedes Ereignis traegt die **Spielzeit** (`PLAY_MS`, Pausen
 also ausgenommen) als Delta zum vorherigen. Beim Laden werden die Deltas
@@ -2210,6 +2341,13 @@ Zuordnung auch ohne Namenslesen funktioniert.
   nur ihre Koordinaten wandern. Faellt dabei eine belegte Zelle aus dem
   sichtbaren Bereich oder kollidiert der aktive Stein nach dem
   Verschieben, ist das ein Top-Out.
+  **Dieser Teil existiert seit 0.49.0 bereits**: der Hochwasser-Modus
+  (siehe 3.6) schiebt genau solche Reihen ein und hat dafuer
+  `GARBAGE_CELL` und `board_flood_row` (`lib/board.sh`) samt der
+  Top-Out-Pruefung mitgebracht. Der Mehrspieler-Modus wird beides
+  benutzen, statt eine zweite Sorte Stoerreihe einzufuehren; offen
+  bleibt fuer ihn nur, mehrere Reihen auf einmal einzuschieben und die
+  Lochspalte vom Hub statt aus `RANDOM` zu nehmen.
 - **Zielwahl:**
   - 2 Spieler: der Gegner, trivial.
   - 3+ Spieler: Standard `random` (der Hub waehlt je Angriff einen
@@ -2738,6 +2876,10 @@ Details stehen jeweils im genannten Unterabschnitt.
       Vorwarn-Balken im HUD. Zuerst nur fuer 2 Spieler. Abnahme:
       Tetris und Gold-Quadrat erzeugen die spezifizierten Mengen,
       Quadrate ueberleben das Hochschieben.
+      **Vorarbeit erledigt:** Zellsorte, Hochschieben, Top-Out-Pruefung
+      und die Darstellung stehen seit 0.49.0 mit dem Hochwasser-Modus
+      (`GARBAGE_CELL`/`board_flood_row` in `lib/board.sh`, siehe 3.6);
+      offen bleiben Warteschlange, Verrechnung und die Hub-Seite.
 - [ ] **Schritt 8 - Rundenende, KO-Reihenfolge, Zuschauermodus,
       Verbindungsabbruch** (siehe 5.8).
       `TOPOUT`/`KO`/`END`, Platzierung, Endbildschirm mit Rangliste,
@@ -2892,10 +3034,15 @@ Multi-Server zuletzt.
   Quadrat-Boni ist die Ultra-Strecke deutlich kuerzer als 150 physische
   Reihen, das ist so gewollt, und aus demselben Grund verlaengert ein
   Rowhammer durch zwei Gold-Quadrate eine Time-Attack-Runde gleich um
-  85 Sekunden. Die Anzeige der Ultra-Liste ist mit
+  85 Sekunden. Hochwasser (0.49.0) folgt derselben Linie: Rows als
+  Wertung, jede Runde gewertet (es gibt nur ein Ende), und offen ist
+  auch hier allein die Justierung - ob 20 Sekunden je Flutreihe
+  (`FLOOD_INTERVAL_MS`, Nutzervorgabe "vorerst") auf Dauer die richtige
+  Steigung sind, entscheidet Playtesting. Die Anzeige der Ultra-Liste
+  ist mit
   0.38.0 nachgezogen (Modus-Auswahl unter "Highscores", siehe 4.5), die
   Sprint-Liste mit 0.39.0, die Time-Attack-Liste samt Statistik je
-  Modus mit 0.42.0.
+  Modus mit 0.42.0 und die Hochwasser-Liste mit 0.49.0.
 - Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
   0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
   bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach

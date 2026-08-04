@@ -10,19 +10,23 @@
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
 #   restart. Completed rows blink briefly before they are removed, so
-#   the player sees which rows scored. The singleplayer menu offers four
+#   the player sees which rows scored. The singleplayer menu offers five
 #   game modes: the endless "Marathon", "Ultra", a race to
 #   clear ULTRA_TARGET_ROWS rows of credit as fast as possible - it ends
 #   the moment the target is reached and the play time is the result -
 #   "Sprint", its mirror image: as much row credit as possible within
-#   SPRINT_TIME_MS, ending when the time is up - and "Time Attack",
+#   SPRINT_TIME_MS, ending when the time is up - "Time Attack",
 #   which starts with TIME_ATTACK_START_MS on a clock running backwards
 #   and pays TIME_ATTACK_ROW_MS back per row of credit, so the run lasts
-#   as long as it is kept fed and the rows are the result. Each mode
+#   as long as it is kept fed and the rows are the result - and
+#   "Hochwasser", Marathon under a rising floor: every FLOOD_INTERVAL_MS
+#   a full row with a single gap is pushed in from below, and the round
+#   lasts until the stack reaches the ceiling. Each mode
 #   keeps a highscore list of its own (lib/highscore.sh); of the two
 #   fixed-goal modes only successful runs are recorded, while every Time
-#   Attack run is, its rows being the same achievement whether the clock
-#   or the stack ended it. The play screen is one fixed
+#   Attack and every Hochwasser round is - their rows are the same
+#   achievement whether the clock, the water or the stack ended them.
+#   The play screen is one fixed
 #   48x22 block centered in the terminal: the hold piece with the round
 #   counters below it on the left, the board in the middle and the three
 #   upcoming pieces top right; pause and game
@@ -190,7 +194,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.48.0"
+ROWHAMMER_VERSION="0.49.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -697,7 +701,8 @@ reset_run() {
         config)    names=("${CONFIG_NAME}") ;;
         stats)     names=("${STATS_FILE_NAME}") ;;
         highscore) names=("${HS_FILE_NAME}" "${HSU_FILE_NAME}"
-                          "${HSS_FILE_NAME}" "${HSA_FILE_NAME}") ;;
+                          "${HSS_FILE_NAME}" "${HSA_FILE_NAME}"
+                          "${HSF_FILE_NAME}") ;;
         save)      names=("${SAVE_FILE_NAME}") ;;
         # The only target that is a directory rather than a file. It is
         # moved aside as a whole, which the loop below does without
@@ -708,6 +713,7 @@ reset_run() {
         all)       names=("${CONFIG_NAME}" "${STATS_FILE_NAME}"
                           "${HS_FILE_NAME}" "${HSU_FILE_NAME}"
                           "${HSS_FILE_NAME}" "${HSA_FILE_NAME}"
+                          "${HSF_FILE_NAME}"
                           "${SAVE_FILE_NAME}" "${DEMO_DIR_NAME}") ;;
         # Unreachable: the value is validated against RESET_TARGETS
         # right after the argument parsing. Kept so a new target added
@@ -978,6 +984,8 @@ ROUND_RECORDED=0
 # in and whether the HUD shows the goal counters (render_pane_left).
 # "timeattack" (2026-08-03, user request) is the fourth: a countdown that
 # the player extends by playing - see TIME_ATTACK_START_MS below.
+# "flood" (2026-08-04, user request) is the fifth: Marathon with a floor
+# that rises every FLOOD_INTERVAL_MS - see there.
 GAME_MODE="marathon"
 # Row credit an Ultra run has to reach. Weighted rows ("Rows", see the
 # scoring note below), not physical lines: in this game "cleared rows"
@@ -1020,6 +1028,24 @@ TIME_ATTACK_ROW_MS=1000
 # A global instead of a computed-on-the-spot expression because both the
 # game loop and the HUD need the same number every tick.
 TIME_ATTACK_BUDGET_MS="${TIME_ATTACK_START_MS}"
+# Hochwasser (2026-08-04, user request): every FLOOD_INTERVAL_MS of play
+# time a full row with a single gap is pushed in from below and the whole
+# board moves up by one row (flood_raise, board_flood_row in
+# lib/board.sh). Everything else is Marathon - the round ends when a
+# piece has no room left, and its rows are its score. There is no goal to
+# reach here; the water always wins in the end, and the question is only
+# how long and how well the player keeps up with it.
+# The interval is measured in play time (PLAY_MS) like every other clock
+# in this game, so a pause never lets the water in. Twenty seconds is the
+# starting value the mode was asked for; an adjustable game-feel constant
+# like ULTRA_TARGET_ROWS and SPRINT_TIME_MS, read by the menu entry, the
+# HUD and the manual - but the usage text above spells the twenty seconds
+# out (its heredoc is unexpanded and is printed before this line ever
+# runs), so keep that wording in sync when tuning this.
+FLOOD_INTERVAL_MS=20000
+# Play time the next flood row is due at (round state, reset per round
+# and carried across a suspend/resume like PLAY_MS itself).
+FLOOD_NEXT_MS="${FLOOD_INTERVAL_MS}"
 # Set when a round ended by reaching its mode's goal instead of by
 # topping out: for Ultra that is the row target, for Sprint surviving
 # the full time, for Time Attack running the clock down to zero (the
@@ -1222,14 +1248,15 @@ round_is_ranked() {
 # into the persistent wonder counter (savegame) and its counters into
 # the all-time statistics (lib/stats.sh). Runs right when the
 # game over triggers, so the game over box can show the achieved
-# rank (HS_LAST_RANK / HSU_LAST_RANK / HSS_LAST_RANK / HSA_LAST_RANK),
-# and again as a
+# rank (HS_LAST_RANK / HSU_LAST_RANK / HSS_LAST_RANK / HSA_LAST_RANK /
+# HSF_LAST_RANK), and again as a
 # catch-all when the player quits a running round to the menu.
-# The four lists are separate and a round enters exactly one of them (see
+# The five lists are separate and a round enters exactly one of them (see
 # lib/highscore.sh): an Ultra run is ranked by time and would otherwise
 # push endless rounds out of a top ten it cannot be compared against, and
-# a Sprint or Time Attack run - a fixed three minutes resp. only as much
-# time as it earns itself - ranks by rows like the endless list but
+# a Sprint, Time Attack or Hochwasser run - a fixed three minutes resp.
+# only as much time as it earns itself resp. as long as it holds the
+# water off - ranks by rows like the endless list but
 # against a completely different yardstick.
 # Wonder progress and statistics do not care about the mode - those rows
 # were really cleared, and per the concept even an aborted round counts.
@@ -1321,6 +1348,16 @@ record_round() {
             "${LEVEL}" "${name}" "${GOLD_COUNT}" \
             "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
             "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "${ROUND_HASH}"
+    elif [ "${GAME_MODE}" = "flood" ]; then
+        # Like Time Attack, and for the same reason: every round is
+        # recorded. A Hochwasser round has no ending but the top-out -
+        # sooner or later the water gets there - so there is no
+        # "incomplete" run to keep out of the list, only rounds that
+        # lasted longer or shorter.
+        highscore_flood_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" \
+            "${LEVEL}" "${name}" "${GOLD_COUNT}" \
+            "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
+            "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "${ROUND_HASH}"
     else
         highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
             "${name}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
@@ -1394,6 +1431,65 @@ time_attack_time_up() {
     GAME_OVER=1
     debug_event "time attack clock empty: time=${PLAY_MS}ms/${TIME_ATTACK_BUDGET_MS}ms rows=${ROW_CREDIT} lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
     record_round
+    DIRTY=1
+    return 0
+}
+
+# flood_raise HOLE
+# One rise of the Hochwasser mode: the whole board moves up by a row and
+# a full row with a single gap at column HOLE comes in at the bottom
+# (board_flood_row in lib/board.sh). The column is the caller's: the game
+# loop draws it, a replay hands back the one its recording carries, which
+# is why the event stores it - the rise itself follows the clock, but the
+# column comes from RANDOM and could not be guessed again (lib/demo.sh).
+# The round ends right here when the board is already full to the top: a
+# stack that would be pushed off the board has reached the ceiling, which
+# is this mode's game over just as a blocked spawn is Marathon's.
+flood_raise() {
+    local hole="${1}"
+    # The next rise is scheduled from the moment this one happened, not
+    # from the moment it was due. A tick that arrives late (a resize, the
+    # clear animation, a slow terminal) would otherwise leave two or
+    # three rises outstanding and flood them in one after another - the
+    # same reason gravity restamps LAST_FALL from "now" instead of
+    # counting due intervals.
+    FLOOD_NEXT_MS=$(( PLAY_MS + FLOOD_INTERVAL_MS ))
+    # Recorded before the effect, and recorded even when the rise ends
+    # the round: the replay applies the same event to the same board and
+    # therefore reaches the same ending.
+    demo_record_event "w${hole}"
+    if ! board_flood_row "${hole}"; then
+        GAME_OVER=1
+        debug_event "flood blocked: stack at the ceiling (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} pieces=${PIECE_COUNT})"
+        record_round
+        DIRTY=1
+        return 0
+    fi
+    # The falling piece keeps its place on screen while the stack rises
+    # under it - unless that leaves it inside the risen stack, in which
+    # case it moves up with the board: it was resting on what just moved,
+    # so this puts it back exactly where it sat. If even that position is
+    # blocked (the piece is at the very top), the board has run out of
+    # room and the round is over.
+    if ! can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"; then
+        if can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "$(( CUR_Y - 1 ))"; then
+            CUR_Y=$(( CUR_Y - 1 ))
+        else
+            GAME_OVER=1
+            debug_event "flood row hole=${hole}: no room left for ${CUR_TYPE} at ${CUR_X},${CUR_Y} - game over (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
+            record_round
+            DIRTY=1
+            return 0
+        fi
+    fi
+    # A piece whose lock delay is armed may be airborne again now that it
+    # was pushed up (a rise into a gap can leave room below it); the
+    # usual rule then applies and it falls on normally. A piece that only
+    # now came to rest needs nothing: the next gravity step arms its lock
+    # delay, exactly as if it had landed by falling.
+    lock_delay_recheck
+    debug_event "flood row: hole=${hole} next=${FLOOD_NEXT_MS}ms piece=${CUR_TYPE} at ${CUR_X},${CUR_Y}"
+    debug_board_snapshot
     DIRTY=1
     return 0
 }
@@ -1784,8 +1880,8 @@ handle_key() {
 }
 
 # game_reset [MODE]
-# Start a fresh round in MODE ("marathon", "ultra", "sprint" or
-# "timeattack"); without
+# Start a fresh round in MODE ("marathon", "ultra", "sprint",
+# "timeattack" or "flood"); without
 # an argument the current GAME_MODE is kept, which is what the game over
 # screen's restart key does - a failed Ultra run restarts as an Ultra
 # run, a finished Sprint as a Sprint.
@@ -1815,6 +1911,9 @@ game_reset() {
     # Back to the plain start time: the credit that bought the last
     # round's extra time is gone with ROW_CREDIT above.
     time_attack_budget
+    # The first flood row of a Hochwasser round is due after one full
+    # interval, so the round starts on a clean board like every other.
+    FLOOD_NEXT_MS="${FLOOD_INTERVAL_MS}"
     # Start the recording before the first piece is drawn: spawn_piece
     # below fills the queue, and those pieces belong to the recording
     # (see demo_record_piece in queue_fill, lib/pieces.sh). Replaying a
@@ -1828,7 +1927,7 @@ game_reset() {
 }
 
 # --- Game loop ------------------------------------------------------------
-# game_run [marathon|ultra|sprint|timeattack|resume]
+# game_run [marathon|ultra|sprint|timeattack|flood|resume]
 # One game session; returns to the caller (the menu) when the player
 # leaves via the pause menu or the game over screen. The argument is
 # either the game mode of the new round (see GAME_MODE) or "resume",
@@ -1890,12 +1989,30 @@ game_run() {
             if [ "${GAME_MODE}" = "timeattack" ]; then
                 time_attack_budget
             fi
+            # Hochwasser mode: the play time just accounted may have
+            # brought the next flood row due. Its own "if" rather than a
+            # branch of the chain below, because a rise is not an ending
+            # and must not cost the tick its gravity - the water comes
+            # while the piece keeps falling, that is the whole mode. It
+            # can still end the round (a stack pushed against the
+            # ceiling), which is what the GAME_OVER test in front of the
+            # chain catches: nothing should fall or lock after that.
+            if [ "${GAME_MODE}" = "flood" ] && \
+               (( PLAY_MS >= FLOOD_NEXT_MS )); then
+                # The gap column is drawn where the rise really happens;
+                # a replay feeds the recorded one to the same function.
+                flood_raise "$(( RANDOM % BOARD_W ))"
+            fi
             # Sprint mode: the play time just accounted may have used up
             # the run's three minutes. Checked before gravity so no piece
             # falls or locks on time that is already over - which holds
             # for the Time Attack countdown in the branch below just as
             # much.
-            if [ "${GAME_MODE}" = "sprint" ] && \
+            if [ "${GAME_OVER}" -eq 1 ]; then
+                # The flood above ended the round on this very tick:
+                # nothing falls, locks or times out on a finished round.
+                :
+            elif [ "${GAME_MODE}" = "sprint" ] && \
                (( PLAY_MS >= SPRINT_TIME_MS )); then
                 sprint_time_up
             elif [ "${GAME_MODE}" = "timeattack" ] && \
@@ -1951,15 +2068,17 @@ main() {
     # (unwritable log directory etc.) stay readable.
     debug_init
     # Load the persistent highscore lists once; rounds update them in
-    # memory and rewrite their file when they enter one. Ultra, Sprint
-    # and Time Attack keep separate files with their own rankings
-    # (fastest run first resp. most rows in a fixed time resp. most rows
-    # on a clock the run feeds itself), so runs of different modes never
-    # compete for the same slots.
+    # memory and rewrite their file when they enter one. Ultra, Sprint,
+    # Time Attack and Hochwasser keep separate files with their own
+    # rankings (fastest run first resp. most rows in a fixed time resp.
+    # most rows on a clock the run feeds itself resp. most rows against
+    # the rising water), so runs of different modes never compete for the
+    # same slots.
     highscore_load
     highscore_ultra_load
     highscore_sprint_load
     highscore_timeattack_load
+    highscore_flood_load
     # Load the wonder savegame and derive the wonder state once, so the
     # "Weltwunder" screen and record_round start from a valid state.
     save_load

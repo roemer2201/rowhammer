@@ -1,3 +1,35 @@
+rowhammer (0.49.0) unstable; urgency=medium
+
+  * New game mode "Hochwasser" (user request): Marathon under rising
+    water. Every FLOOD_INTERVAL_MS of play time (20 seconds by default)
+    a full row with a single gap is pushed in from below and the whole
+    board moves up by one row; the round ends when the stack reaches the
+    ceiling, and the row credit is the score. Everything else is
+    Marathon - there is no goal to reach.
+  * A flood row is a cell type of its own (instance id 0), so it can
+    never take part in a gold or silver square, and pieces keep their
+    identity and their square marking while they are lifted. A cell in
+    the top row ends the round instead of being pushed off the board.
+    The falling piece stays where it is unless the risen stack would
+    swallow it, in which case it moves up with the board.
+  * Own highscore list ~/.config/rowhammer/highscore-flood, ranked by
+    rows like the Marathon list; every round is recorded, since this
+    mode has no "did not finish" state. --reset highscore covers it, the
+    "Highscores" and "Statistik" menu entries offer it as a fifth mode,
+    and the statistics keep their per-mode counters for it.
+  * The HUD shows the flood interval and the time until the next row in
+    the two lines the timed modes use for their goal, with a label of
+    their own ("Flut"/"Rest"); flood rows are drawn grey with a "::"
+    glyph, in the color modes too.
+  * Demo recordings gained their first event with a payload (the gap
+    column, which is drawn from RANDOM and could not be replayed
+    otherwise) and therefore format version 2; recordings of version 1
+    are no longer accepted.
+  * The manual's "Spielmodi" page was split in two, so the manual now
+    has nine pages.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 19:30:00 +0200
+
 rowhammer (0.48.0) unstable; urgency=medium
 
   * Multi-language user interface (roadmap item "Mehrsprachige

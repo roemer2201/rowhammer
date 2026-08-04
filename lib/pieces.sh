@@ -6,7 +6,8 @@
 #   Piece definitions for rowhammer: the seven piece types with their
 #   four rotation states, the configurable color schemes (symbolic color
 #   names with a basic 8/16-color ANSI and an extended xterm 256-color
-#   meaning, mapped to pieces and gold/silver squares by the selectable
+#   meaning, mapped to pieces, gold/silver squares and the flood rows of
+#   the "Hochwasser" mode by the selectable
 #   theme), a per-type two-character glyph (PIECE_GLYPH) that keeps pieces
 #   distinguishable in the no-color mode, the 7-bag randomizer (every
 #   piece type appears exactly once per bag of seven) and the
@@ -14,7 +15,7 @@
 #   bag refill is logged with the shuffled piece order.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.8.0  (2026-08-04)
+# Version: 0.9.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -81,27 +82,37 @@ COLOR_THEMES=(guideline classic mono colorblind)
 # stay English; only what the settings menu prints is translated.
 
 # Theme table: for every theme and slot (the seven piece types plus the
-# GOLD and SILVER square looks) the color name to use. Keys are
+# GOLD, SILVER and GARBAGE looks) the color name to use. Keys are
 # "theme:slot"; a flat map keeps it a single associative array (bash has
 # no nested arrays). "guideline" reproduces the pre-0.19.0 default look
 # exactly. "colorblind" avoids the red/green pair (deuteranopia) and
 # leans on the blue-yellow axis plus lightness differences.
+# GARBAGE (0.49.0) is the flood row of the "Hochwasser" mode: grey in
+# every theme, because it is the one thing on the board that is not a
+# piece and should read as dead weight rather than as a color of its own.
+# In the mono theme that is the same grey the pieces have; the glyph the
+# renderer prints on it (GARBAGE_GLYPH in lib/render.sh) is what keeps
+# the two apart there, exactly as it does in the no-color mode.
 declare -A THEME_COLOR=(
     [guideline:I]="cyan"  [guideline:O]="yellow" [guideline:T]="magenta"
     [guideline:S]="green" [guideline:Z]="red"    [guideline:J]="blue"
     [guideline:L]="orange" [guideline:GOLD]="gold" [guideline:SILVER]="silver"
+    [guideline:GARBAGE]="grey"
 
     [classic:I]="cyan"  [classic:O]="yellow" [classic:T]="white"
     [classic:S]="green" [classic:Z]="red"    [classic:J]="blue"
     [classic:L]="magenta" [classic:GOLD]="gold" [classic:SILVER]="silver"
+    [classic:GARBAGE]="grey"
 
     [mono:I]="grey"  [mono:O]="grey" [mono:T]="grey"
     [mono:S]="grey"  [mono:Z]="grey" [mono:J]="grey"
     [mono:L]="grey"  [mono:GOLD]="gold" [mono:SILVER]="silver"
+    [mono:GARBAGE]="grey"
 
     [colorblind:I]="sky"  [colorblind:O]="yellow" [colorblind:T]="purple"
     [colorblind:S]="white" [colorblind:Z]="amber" [colorblind:J]="blue"
     [colorblind:L]="orange" [colorblind:GOLD]="gold" [colorblind:SILVER]="silver"
+    [colorblind:GARBAGE]="grey"
 )
 
 # Two-character fallback glyph per piece type for the no-color mode
