@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.53.0
+Version:        0.54.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.54.0-1
+- The wonders screen pages back through the wonders already finished
+  with the left/right keys; a wonder not started yet is not shown.
+- With nothing finished yet the screen is unchanged: any key closes it.
+- The manual page about the wonders names the keys.
+
 * Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.53.0-1
 - The game mode entries name their goal in brackets starting in one
   common column instead of trailing the mode name.

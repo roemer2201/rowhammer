@@ -13,7 +13,9 @@
 #   assets. wonders_update computes the current wonder, stage and
 #   percentage into WONDER_* globals (read by the HUD in lib/render.sh);
 #   wonder_screen renders the construction site screen shown after every
-#   round and from the wonders main menu entry; its wait loop
+#   round and from the wonders main menu entry and, since 0.5.0, pages
+#   back through the wonders already finished with the left/right keys
+#   (wonder_screen_lines builds one such screen); its wait loop
 #   repaints on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave it blank (since 0.1.1). Like the menus, the screen is
 #   handed to render_menu_frame (lib/render.sh) since 0.2.0, so it appears
@@ -25,7 +27,7 @@
 #   and are, since 0.3.0, in its order of magnitude as well.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-08-04)
+# Version: 0.5.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -129,60 +131,128 @@ wonder_art_load() {
     return 0
 }
 
-# wonder_screen TOTAL
-# Show the construction site of the wonder the given row total is
-# working on: title, the art revealed bottom-up by build progress, the
-# stage/row numbers and the all-time total. Revealed lines grow with
-# WONDER_DONE but the top line only appears at 100 percent, so a wonder
-# never looks finished early; hidden lines stay blank to keep the layout
-# stable. Waits for any key, like menu_message.
-wonder_screen() {
-    local total="${1}"
-    local -a lines
-    local stages reveal i line
-    wonders_update "${total}"
-    wonder_art_load "${WONDER_INDEX}"
+# wonder_screen_lines VIEW TOTAL BROWSABLE
+# Build the screen of one wonder into WONDER_SCREEN_LINES: title, the
+# art revealed bottom-up by build progress, the stage/row numbers and
+# the all-time total. Revealed lines grow with WONDER_DONE but the top
+# line only appears at 100 percent, so a wonder never looks finished
+# early; hidden lines stay blank to keep the layout stable. Requires
+# wonders_update to have run for TOTAL: VIEW below WONDER_INDEX is a
+# wonder already finished and is therefore shown complete and paid in
+# full, VIEW at WONDER_INDEX is the construction site itself. BROWSABLE
+# picks the footer (see wonder_screen).
+WONDER_SCREEN_LINES=()
+wonder_screen_lines() {
+    local view="${1}" total="${2}" browsable="${3}"
+    local stages reveal rows_done cost percent i line
+    wonder_art_load "${view}"
+    wonder_name "${view}"
     stages="${#WONDER_ART[@]}"
-    reveal=$(( WONDER_DONE * stages / WONDER_COST ))
-    wonder_name "${WONDER_INDEX}"
-    if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
-        lines=("  ${I18N[wonder_all_done]}" "")
+    if [ "${view}" -lt "${WONDER_INDEX}" ]; then
+        # A finished wonder: fully revealed, its cost paid off. The
+        # numbers are the cost table's, not the round counters' - the
+        # rows that built it are long spent on the ones after it.
+        reveal="${stages}"
+        rows_done="${WONDER_COSTS[view]}"
+        cost="${rows_done}"
+        percent=100
+    else
+        rows_done="${WONDER_DONE}"
+        cost="${WONDER_COST}"
+        percent="${WONDER_PERCENT}"
+        reveal=$(( rows_done * stages / cost ))
+    fi
+    if [ "${WONDER_ALL_DONE}" -eq 1 ] && [ "${view}" -eq "${WONDER_INDEX}" ]; then
+        WONDER_SCREEN_LINES=("  ${I18N[wonder_all_done]}" "")
     else
         printf -v line "${I18N[wonder_building]}" \
-            "$(( WONDER_INDEX + 1 ))" "${#WONDER_FILES[@]}" "${WONDER_NAME}"
-        lines=("  ${line}" "")
+            "$(( view + 1 ))" "${#WONDER_FILES[@]}" "${WONDER_NAME}"
+        WONDER_SCREEN_LINES=("  ${line}" "")
     fi
     for (( i = 0; i < stages; i++ )); do
         if (( i >= stages - reveal )); then
-            lines+=("  ${WONDER_ART[i]}")
+            WONDER_SCREEN_LINES+=("  ${WONDER_ART[i]}")
         else
-            lines+=("")
+            WONDER_SCREEN_LINES+=("")
         fi
     done
-    lines+=("")
-    if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
+    WONDER_SCREEN_LINES+=("")
+    if [ "${WONDER_ALL_DONE}" -eq 1 ] && [ "${view}" -eq "${WONDER_INDEX}" ]; then
         printf -v line "${I18N[wonder_finished]}" "${WONDER_NAME}"
     else
         printf -v line "${I18N[wonder_stage]}" "${reveal}" "${stages}" \
-            "${WONDER_DONE}" "${WONDER_COST}" "${WONDER_PERCENT}"
+            "${rows_done}" "${cost}" "${percent}"
     fi
-    lines+=("  ${line}")
+    WONDER_SCREEN_LINES+=("  ${line}")
     printf -v line "${I18N[wonder_total]}" "${total}"
-    lines+=("  ${line}" "" "  ${I18N[menu_any_key]}")
-    render_menu_frame "${lines[@]}"
-    screen_write "${RENDER_MENU_FRAME}"
-    debug_event "wonder screen shown: index=${WONDER_INDEX} stage=${reveal}/${stages} done=${WONDER_DONE}/${WONDER_COST} total=${total}"
-    KEY=""
-    while [ -z "${KEY}" ]; do
+    WONDER_SCREEN_LINES+=("  ${line}" "")
+    if [ "${browsable}" -eq 1 ]; then
+        WONDER_SCREEN_LINES+=("  ${I18N[wonder_nav]}")
+    else
+        WONDER_SCREEN_LINES+=("  ${I18N[menu_any_key]}")
+    fi
+    return 0
+}
+
+# wonder_screen TOTAL
+# Show the construction site the given row total is working on and let
+# the left/right keys page back through the wonders already finished
+# (CHANGE 2026-08-04, game 0.54.0, user request). The browsable range
+# is 0..WONDER_INDEX: a wonder not yet started is not shown, it would
+# only be an empty frame and spoil what is still ahead. Paging wraps
+# like every other list of the game.
+# With nothing finished yet there is nothing to page through, so the
+# screen stays what it was before - any key closes it, which is also
+# what the flow after a round expects. Once it is a browser, the keys
+# that close it are the explicit ones of the manual screens
+# (Enter/Space/ESC/x), because the arrows now mean something else.
+wonder_screen() {
+    local total="${1}"
+    local view last browsable dirty=1
+    wonders_update "${total}"
+    view="${WONDER_INDEX}"
+    last="${WONDER_INDEX}"
+    browsable=0
+    if [ "${last}" -gt 0 ]; then
+        browsable=1
+    fi
+    debug_event "wonder screen shown: index=${WONDER_INDEX} done=${WONDER_DONE}/${WONDER_COST} total=${total} browsable=${browsable}"
+    while :; do
+        if [ "${dirty}" -eq 1 ]; then
+            wonder_screen_lines "${view}" "${total}" "${browsable}"
+            render_menu_frame "${WONDER_SCREEN_LINES[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
         read_key
         # Repaint after a terminal resize (read_key cleared the screen).
         # The frame is rebuilt, not re-emitted: it carries absolute cursor
         # positions computed for the terminal size before the resize.
         if [ "${REDRAW_PENDING}" -eq 1 ]; then
             REDRAW_PENDING=0
-            render_menu_frame "${lines[@]}"
-            screen_write "${RENDER_MENU_FRAME}"
+            dirty=1
+            continue
         fi
+        if [ "${browsable}" -eq 0 ]; then
+            if [ -n "${KEY}" ]; then
+                return 0
+            fi
+            continue
+        fi
+        case "${KEY}" in
+            LEFT)
+                view=$(( (view + last) % (last + 1) ))
+                dirty=1
+                debug_event "wonder screen: viewing ${WONDER_FILES[view]}"
+                ;;
+            RIGHT)
+                view=$(( (view + 1) % (last + 1) ))
+                dirty=1
+                debug_event "wonder screen: viewing ${WONDER_FILES[view]}"
+                ;;
+            ENTER|SPACE|ESC|x)
+                return 0
+                ;;
+        esac
     done
-    return 0
 }

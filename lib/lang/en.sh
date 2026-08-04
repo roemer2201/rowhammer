@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.4.0  (2026-08-04)
+# Version: 1.5.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -233,6 +233,7 @@ You can delete it in the demo menu."
     [wonder_finished]="%s is finished."
     [wonder_stage]="Stage %d/%d - %d/%d rows (%d%%)"
     [wonder_total]="Rows in total: %d"
+    [wonder_nav]="Arrow le/ri: wonder   Enter/ESC: back"
     [wonder_mayan_temple]="Mayan Temple (Chichen Itza)"
     [wonder_stonehenge]="Stonehenge"
     [wonder_sphinx]="Great Sphinx of Giza"
@@ -384,10 +385,10 @@ other.
 
 Weighted rows per world wonder:"
     [help_p4_tail]="
-The \"Wonders\" menu entry shows the current
-construction site: the building grows line
-by line from the bottom and stands finished
-at 100 percent - as it does after a round."
+\"Wonders\" shows the construction site: it
+grows from the bottom and stands finished at
+100 percent - as it does after a round. The
+arrow keys page back through finished ones."
     [help_p5_head]="Game modes (\"Singleplayer\" menu entry):
 
 Marathon - the endless round. It ends when

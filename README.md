@@ -174,7 +174,11 @@ Das Startmenue bietet:
   sie in der Liste einnehmen wird** ("Bestenliste: Platz 3 von 10") -
   oder dass sie die Top 10 verfehlt
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
-  und Gesamtfortschritt
+  und Gesamtfortschritt. Mit den **Pfeiltasten links/rechts** laesst
+  sich zu den bereits **fertiggestellten** Weltwundern
+  zurueckblaettern (umlaufend); `Enter`, Leertaste, `x` oder `ESC`
+  schliessen den Bildschirm. Solange noch keines fertig ist, gibt es
+  nichts zu blaettern und jede Taste schliesst ihn wie bisher
 - **Statistik** - fragt zuerst, welche Sicht gezeigt werden soll:
   **Gesamt** oder einer der fuenf Spielmodi.
   **Gesamt** zeigt auf drei Bildschirmen die Zaehler ueber alle
@@ -462,7 +466,9 @@ Umgesetzt:
   hinweg sieben Weltwunder (Maya-Tempel, Stonehenge, Sphinx, Pantheon,
   Chinesische Mauer, Taj Mahal, Basilius-Kathedrale) als ASCII-Art
   Baustufe fuer Baustufe von unten auf; Fortschritt persistent in
-  `~/.config/rowhammer/save`, Anzeige nach jeder Runde und im Menue
+  `~/.config/rowhammer/save`, Anzeige nach jeder Runde und im Menue -
+  dort blaettern die Pfeiltasten links/rechts zu den bereits fertigen
+  Wundern zurueck
 - Konfigurierbare Tastenbelegung und Spielername, gespeichert in
   `~/.config/rowhammer/rowhammer.conf`
 - **Gezielter Reset:** `--reset config|stats|highscore|save|all` setzt
