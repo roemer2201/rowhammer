@@ -1,3 +1,29 @@
+rowhammer (0.45.0) unstable; urgency=medium
+
+  * At the end of a round the game now asks for the name the round is
+    filed under in its highscore list (user request). The player name
+    from the settings is the default and comes preselected the way a
+    graphical text field would be: Enter keeps it, the first character
+    typed replaces it as a whole, an arrow key lifts the marking so it
+    can be edited instead. The entered name applies to that one round;
+    the setting - and with it the default of the next round - stays
+    untouched.
+  * The prompt only appears for a round that really enters a list, i.e.
+    one with cleared rows, and for Ultra and Sprint only for a run that
+    reached its goal. A round that is filed nowhere has no name to ask
+    for; its rows still count toward wonder progress and statistics.
+  * Both name prompts - the new one and the one in the settings menu -
+    share one line editor that draws and reads the input itself. With
+    that, the session-wide raw input mode has no exception left: the
+    settings prompt used to hand line editing back to the terminal,
+    which could not show a preselected default and echoed the typed
+    name outside the centered menu block.
+  * Only characters a name may consist of reach the input line, at most
+    16 of them, so an invalid name can no longer be entered (and needs
+    no error message afterwards).
+
+ -- roemer2201 <r.oliver@web.de>  Mon, 03 Aug 2026 18:00:00 +0000
+
 rowhammer (0.44.0) unstable; urgency=medium
 
   * Retuned the wonder goals (user decision): every entry of WONDER_COSTS
