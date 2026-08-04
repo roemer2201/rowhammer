@@ -50,7 +50,9 @@
 #   "Time Attack", a countdown starting at TIME_ATTACK_START_MS that
 #   every row of credit extends by TIME_ATTACK_ROW_MS. The entry picked
 #   is handed to
-#   game_run as its mode name.
+#   game_run as its mode name. Every entry names its mode and then, in
+#   brackets and starting in one common column, what the mode is up
+#   against (menu_mode_entries, aligned since 0.26.0, user request).
 #   Since 0.15.0 (user request) menu_highscores picks the mode of the
 #   list to show as well: the modes rank by different numbers and
 #   live in separate files (lib/highscore.sh), so the "Highscores" entry
@@ -88,7 +90,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.25.0  (2026-08-04)
+# Version: 0.26.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -685,28 +687,50 @@ menu_pause() {
 
 # menu_mode_entries
 # Fill the global array MENU_MODE_ENTRIES with the five game modes as the
-# three pickers (singleplayer, highscores, statistics) offer them: every
-# mode but Marathon names what it is up against - a goal, a time limit or
-# the flood interval - read from the live constants, so a retuned value
-# cannot leave a menu lying. One builder for all three, so
+# three pickers (singleplayer, highscores, statistics) offer them: the
+# mode's name, then in brackets what it is up against - a goal, a time
+# limit or the flood interval - read from the live constants, so a retuned
+# value cannot leave a menu lying. One builder for all three, so
 # the same mode reads the same way wherever it is picked - which used to
 # be three copies of the same four strings.
+# CHANGE 2026-08-04 (0.26.0, user request): the brackets are a column of
+# their own now. Every name is padded to the longest one, so the
+# descriptions start where the longest name ends instead of ragged behind
+# names of five to eleven characters, and Marathon carries one too - it
+# was the only entry without, which read like a missing text rather than
+# like the mode without a goal that it is. The padding is measured over
+# the names rather than hard-coded because a translation decides how long
+# they are (the flood mode alone is "Hochwasser" or "Flood").
 MENU_MODE_ENTRIES=()
 menu_mode_entries() {
-    local entry
-    MENU_MODE_ENTRIES=("${I18N[mode_marathon]}")
-    printf -v entry "${I18N[entry_ultra]}" "${ULTRA_TARGET_ROWS}"
-    MENU_MODE_ENTRIES+=("${entry}")
+    local -a names descs
+    local name desc width=0 i
+    names=("${I18N[mode_marathon]}" "${I18N[mode_ultra]}"
+        "${I18N[mode_sprint]}" "${I18N[mode_timeattack]}"
+        "${I18N[mode_flood]}")
+    descs=("${I18N[entry_marathon]}")
+    printf -v desc "${I18N[entry_ultra]}" "${ULTRA_TARGET_ROWS}"
+    descs+=("${desc}")
     fmt_duration $(( SPRINT_TIME_MS / 1000 ))
-    printf -v entry "${I18N[entry_sprint]}" "${FMT_DURATION}"
-    MENU_MODE_ENTRIES+=("${entry}")
+    printf -v desc "${I18N[entry_sprint]}" "${FMT_DURATION}"
+    descs+=("${desc}")
     fmt_duration $(( TIME_ATTACK_START_MS / 1000 ))
-    printf -v entry "${I18N[entry_timeattack]}" "${FMT_DURATION}" \
+    printf -v desc "${I18N[entry_timeattack]}" "${FMT_DURATION}" \
         "$(( TIME_ATTACK_ROW_MS / 1000 ))"
-    MENU_MODE_ENTRIES+=("${entry}")
-    printf -v entry "${I18N[entry_flood]}" \
+    descs+=("${desc}")
+    printf -v desc "${I18N[entry_flood]}" \
         "$(( FLOOD_INTERVAL_MS / 1000 ))"
-    MENU_MODE_ENTRIES+=("${entry}")
+    descs+=("${desc}")
+    for name in "${names[@]}"; do
+        if [ "${#name}" -gt "${width}" ]; then
+            width="${#name}"
+        fi
+    done
+    MENU_MODE_ENTRIES=()
+    for (( i = 0; i < ${#names[@]}; i++ )); do
+        printf -v name '%-*s %s' "${width}" "${names[i]}" "${descs[i]}"
+        MENU_MODE_ENTRIES+=("${name}")
+    done
     return 0
 }
 

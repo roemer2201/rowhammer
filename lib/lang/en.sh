@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.3.0  (2026-08-04)
+# Version: 1.4.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -66,10 +66,14 @@ be resumed any more."
     # here - the mode identifier on the command line stays "flood".
     [mode_flood]="Flood"
     [mode_flood_short]="Flood"
-    [entry_ultra]="Ultra (%s rows against the clock)"
-    [entry_sprint]="Sprint (%s minutes for rows)"
-    [entry_timeattack]="Time Attack (%s + %ss per row)"
-    [entry_flood]="Flood (a row every %s sec.)"
+    # The entry_* forms are the bracketed description the three pickers put
+    # behind the name; menu_mode_entries (lib/menu.sh) pads the names so the
+    # descriptions line up in one column (see lib/lang/de.sh).
+    [entry_marathon]="(endless, until game over)"
+    [entry_ultra]="(%s rows against the clock)"
+    [entry_sprint]="(%s minutes for rows)"
+    [entry_timeattack]="(%s + %ss per row)"
+    [entry_flood]="(a row every %s sec.)"
 
     # --- Singleplayer and pause menu --------------------------------------
     [sp_title]="Singleplayer"

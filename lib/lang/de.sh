@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.3.0  (2026-08-04)
+# Version: 1.4.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -65,8 +65,13 @@ nicht mehr fortsetzbar."
 
     # --- Game modes -------------------------------------------------------
     # The bare names are used wherever a mode is named on its own (screen
-    # titles, the statistics tables, the demo list); the entry forms name
-    # the goal as well and are what the three pickers offer.
+    # titles, the statistics tables, the demo list); the entry_* forms are
+    # the bracketed description the three pickers put behind the name.
+    # They carry the brackets but no name and no padding: menu_mode_entries
+    # (lib/menu.sh) pads every name to the longest one of them, so the
+    # descriptions line up in one column whatever a translation calls a
+    # mode. Keep them short - name, one space and description have to stay
+    # within the 42 characters a menu entry has.
     [mode_marathon]="Marathon"
     [mode_ultra]="Ultra"
     [mode_sprint]="Sprint"
@@ -74,10 +79,11 @@ nicht mehr fortsetzbar."
     [mode_timeattack_short]="TimeAtk"
     [mode_flood]="Hochwasser"
     [mode_flood_short]="Flut"
-    [entry_ultra]="Ultra (%s Rows auf Zeit)"
-    [entry_sprint]="Sprint (%s Minuten auf Rows)"
-    [entry_timeattack]="Time Attack (%s + %ss je Row)"
-    [entry_flood]="Hochwasser (Flut alle %s Sek.)"
+    [entry_marathon]="(endlos, bis Game Over)"
+    [entry_ultra]="(%s Rows auf Zeit)"
+    [entry_sprint]="(%s Minuten auf Rows)"
+    [entry_timeattack]="(%s + %ss je Row)"
+    [entry_flood]="(Flut alle %s Sek.)"
 
     # --- Singleplayer and pause menu --------------------------------------
     [sp_title]="Einzelspieler"

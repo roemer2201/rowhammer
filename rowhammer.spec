@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.52.0
+Version:        0.53.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,13 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.53.0-1
+- The game mode entries name their goal in brackets starting in one
+  common column instead of trailing the mode name.
+- Marathon carries a description too, the only entry that had none.
+- Applies to all three mode pickers (singleplayer, highscores,
+  statistics), which share one builder.
+
 * Tue Aug 04 2026 roemer2201 <r.oliver@web.de> - 0.52.0-1
 - The highscore lists are browsable: a cursor walks the entries with
   up/down, left/right turn the pages in both directions.
