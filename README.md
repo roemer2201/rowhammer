@@ -162,7 +162,10 @@ Das Startmenue bietet:
   steht dort vormarkiert - Enter uebernimmt ihn, das erste getippte
   Zeichen ersetzt ihn (eine Pfeiltaste hebt die Markierung auf, wenn
   der Name nur ergaenzt werden soll). Der eingegebene Name gilt fuer
-  diese Runde; die Einstellung bleibt unveraendert
+  diese Runde; die Einstellung bleibt unveraendert. Ueber der
+  Eingabezeile steht neben den Zahlen der Runde auch der **Platz, den
+  sie in der Liste einnehmen wird** ("Bestenliste: Platz 3 von 10") -
+  oder dass sie die Top 10 verfehlt
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt
 - **Statistik** - fragt zuerst, welche Sicht gezeigt werden soll:
@@ -428,7 +431,8 @@ Umgesetzt:
   kommt, fragt vorher nach dem Namen fuer den Eintrag - mit dem
   Spielernamen aus den Einstellungen als vormarkierter Vorgabe, die ein
   einziger Tastendruck ersetzt. Der eingegebene Name gilt nur fuer diese
-  Runde
+  Runde. Der Bildschirm nennt dabei den Platz, den die Runde in der
+  Bestenliste ihres Modus einnehmen wird
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
   Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der

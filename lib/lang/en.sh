@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.1.0  (2026-08-04)
+# Version: 1.2.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -141,6 +141,10 @@ A-Z a-z 0-9 space _ -"
     [round_mode]="Mode: %s"
     [round_rows]="Rows: %d   Lines: %d"
     [round_level]="Level: %d   Time: %s"
+    # Place in the list of the round's mode: 1 = rank, 2 = list length.
+    # round_rank_none names the length only (argument 1).
+    [round_rank]="Highscore list: rank %d of %d"
+    [round_rank_none]="Highscore list: no rank (top %d)"
     [round_ask_name]="Name for the highscore list:"
 
     # --- Demos ------------------------------------------------------------
