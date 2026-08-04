@@ -52,13 +52,22 @@
 #   directory keeps the DEMO_MAX newest recordings; older ones are
 #   removed when a new one arrives.
 #
+#   Failing writes. The free space of neither directory is measured up
+#   front - a check would be a snapshot of a directory shared with every
+#   other program on the machine, while the write itself is the
+#   authoritative answer. Every write is checked instead, and a failing
+#   one drops the recording with a note in the debug log while the round
+#   plays on: a recording that cannot be made is never a reason to spoil
+#   someone's game. Nothing of this module writes to STDERR either, since
+#   the game owns the terminal (see demo_record_start).
+#
 #   The file is parsed and validated line by line, never sourced: it is
 #   plain data, and a corrupted or hand-edited file must be rejected
 #   rather than executed. Every field has its own pattern.
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.2.0  (2026-08-04)
+# Version: 0.2.1  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -229,7 +238,15 @@ demo_record_start() {
         debug_event "demo: no writable temp directory, round is not recorded"
         return 0
     fi
-    if ! DEMO_TMP_FILE="$(mktemp -- "${DEMO_TMP_BASE}/rowhammer-demo.XXXXXX")"; then
+    # STDERR is discarded for every write of this module: the game owns
+    # the terminal (alternate screen, own cursor positioning), and a
+    # message from mktemp or printf would be painted into the middle of
+    # the playfield. In the default render mode only changed lines are
+    # rewritten (see render_flush), so such a line would stay on screen
+    # until something forces a full redraw. The failure itself is not
+    # swallowed - it is caught below and noted in the debug log, which is
+    # where a diagnosis belongs in a full screen program.
+    if ! DEMO_TMP_FILE="$(mktemp -- "${DEMO_TMP_BASE}/rowhammer-demo.XXXXXX" 2>/dev/null)"; then
         DEMO_TMP_FILE=""
         debug_event "demo: could not create a temp file below ${DEMO_TMP_BASE}, round is not recorded"
         return 0
@@ -288,12 +305,18 @@ demo_record_event() {
 # demo_flush
 # Write the buffered events to the RAM disk file. A failing write ends
 # the recording instead of the round: the game keeps running, the demo is
-# dropped with a note in the debug log.
+# dropped with a note in the debug log. This is where a RAM disk running
+# out of space is caught - bash's printf reports a write error and
+# returns non-zero on ENOSPC. The free space is deliberately not measured
+# beforehand: a check would only be a snapshot of a directory shared with
+# every other program on the machine, while the write itself is the
+# authoritative answer, and a round costs about 2 kB per minute anyway.
+# Its STDERR is discarded for the reason given in demo_record_start.
 demo_flush() {
     if [ "${DEMO_RECORDING}" -eq 0 ] || [ "${#DEMO_BUF[@]}" -eq 0 ]; then
         return 0
     fi
-    if ! printf '%s\n' "${DEMO_BUF[@]}" >> "${DEMO_TMP_FILE}"; then
+    if ! printf '%s\n' "${DEMO_BUF[@]}" >> "${DEMO_TMP_FILE}" 2>/dev/null; then
         debug_event "demo: write to ${DEMO_TMP_FILE} failed, recording stopped"
         demo_record_discard
         return 1
@@ -307,8 +330,12 @@ demo_flush() {
 # replaced by a new one, when writing failed and from the exit trap, so a
 # session that ends mid-round leaves no file behind on the RAM disk.
 demo_record_discard() {
-    if [ -n "${DEMO_TMP_FILE}" ]; then
-        rm -f -- "${DEMO_TMP_FILE}"
+    # A failing rm reports into the debug log and nothing else: the game
+    # runs under "set -e", so an unchecked rm would take the whole round
+    # down over a leftover temp file, and its message would land on the
+    # playfield (see demo_record_start).
+    if [ -n "${DEMO_TMP_FILE}" ] && ! rm -f -- "${DEMO_TMP_FILE}" 2>/dev/null; then
+        debug_event "demo: could not remove ${DEMO_TMP_FILE}"
     fi
     DEMO_RECORDING=0
     DEMO_TMP_FILE=""
@@ -333,7 +360,8 @@ demo_record_discard() {
 # A round without a single event is dropped: it was started and left
 # again, and an empty recording is only noise in the list.
 demo_record_finish() {
-    local end="${1}" hash="${2:--}" name path tmp i suffix
+    local end="${1}" hash="${2:--}" name path tmp i suffix written
+    local -a lines
     if [ "${DEMO_RECORDING}" -eq 0 ]; then
         return 0
     fi
@@ -344,7 +372,7 @@ demo_record_finish() {
         return 0
     fi
     demo_dir
-    if ! mkdir -p -- "${DEMO_DIR}"; then
+    if ! mkdir -p -- "${DEMO_DIR}" 2>/dev/null; then
         debug_event "demo: could not create ${DEMO_DIR}, recording dropped"
         demo_record_discard
         return 0
@@ -367,40 +395,65 @@ demo_record_finish() {
         path="${DEMO_DIR}/${suffix}-${GAME_MODE}-${hash}${DEMO_FILE_EXT}"
         i=$(( i + 1 ))
     done
-    if ! tmp="$(mktemp -- "${DEMO_DIR}/.demo.XXXXXX")"; then
+    if ! tmp="$(mktemp -- "${DEMO_DIR}/.demo.XXXXXX" 2>/dev/null)"; then
         debug_event "demo: could not create a temp file in ${DEMO_DIR}, recording dropped"
         demo_record_discard
         return 0
     fi
-    # Header, piece stream, events - written into a temp file and moved
-    # into place, so a crash can never leave a half-written recording.
+    # Header and piece stream, assembled as lines before anything is
+    # written: that way the whole recording leaves the process in exactly
+    # two write commands, both of which can be checked (see below).
+    lines=(
+        '# rowhammer demo recording. Parsed and validated on load, never sourced.'
+        '# pcs = the piece stream, e = <play time delta in ms><action>.'
+        "version=${DEMO_FORMAT_VERSION}"
+        "game=${ROWHAMMER_VERSION}"
+        "mode=${GAME_MODE}"
+        "name=${PLAYER_NAME}"
+        "date=$(date '+%Y-%m-%d %H:%M')"
+        "time=${PLAY_MS}"
+        "lines=${CLEARED_TOTAL}"
+        "rows=${ROW_CREDIT}"
+        "level=${LEVEL}"
+        "gold=${GOLD_COUNT}"
+        "silver=${SILVER_COUNT}"
+        "rowhammers=${ROWHAMMER_COUNT}"
+        "pieces=${PIECE_COUNT}"
+        "goal=${GOAL_REACHED}"
+        "end=${end}"
+    )
+    # The stream is cut into lines of at most 80 letters so no line of
+    # the file grows unbounded (DEMO_PCS_RE caps it at that length).
+    for (( i = 0; i < ${#DEMO_PIECES}; i += 80 )); do
+        lines+=("pcs=${DEMO_PIECES:i:80}")
+    done
+    # Written into a temp file and moved into place, so a crash can never
+    # leave a half-written recording. Both writes are checked through the
+    # "written" flag instead of through the exit status of the group:
+    # that status is the last command's alone, and it must not be the
+    # only thing decided on. A data directory running out of space while
+    # the header goes out would leave a truncated file, and moving that
+    # into place would cost one of the DEMO_MAX slots and push out an
+    # intact recording - demo_load rejects it, but only when someone
+    # tries to watch it. Errexit is no help here either: bash suspends it
+    # inside a command that is part of an if condition, and re-arming it
+    # in a subshell there does not work. STDERR goes nowhere for the
+    # reason given in demo_record_start.
+    written=1
     {
-        printf '# rowhammer demo recording. Parsed and validated on load, never sourced.\n'
-        printf '# pcs = the piece stream, e = <play time delta in ms><action>.\n'
-        printf 'version=%d\n' "${DEMO_FORMAT_VERSION}"
-        printf 'game=%s\n' "${ROWHAMMER_VERSION}"
-        printf 'mode=%s\n' "${GAME_MODE}"
-        printf 'name=%s\n' "${PLAYER_NAME}"
-        printf 'date=%s\n' "$(date '+%Y-%m-%d %H:%M')"
-        printf 'time=%d\n' "${PLAY_MS}"
-        printf 'lines=%d\n' "${CLEARED_TOTAL}"
-        printf 'rows=%d\n' "${ROW_CREDIT}"
-        printf 'level=%d\n' "${LEVEL}"
-        printf 'gold=%d\n' "${GOLD_COUNT}"
-        printf 'silver=%d\n' "${SILVER_COUNT}"
-        printf 'rowhammers=%d\n' "${ROWHAMMER_COUNT}"
-        printf 'pieces=%d\n' "${PIECE_COUNT}"
-        printf 'goal=%d\n' "${GOAL_REACHED}"
-        printf 'end=%s\n' "${end}"
-        # The stream is cut into lines of at most 80 letters so no line of
-        # the file grows unbounded (DEMO_PCS_RE caps it at that length).
-        for (( i = 0; i < ${#DEMO_PIECES}; i += 80 )); do
-            printf 'pcs=%s\n' "${DEMO_PIECES:i:80}"
-        done
-        cat -- "${DEMO_TMP_FILE}"
-    } > "${tmp}"
-    if ! mv -f -- "${tmp}" "${path}"; then
-        rm -f -- "${tmp}"
+        printf '%s\n' "${lines[@]}" || written=0
+        cat -- "${DEMO_TMP_FILE}" || written=0
+    } > "${tmp}" 2>/dev/null
+    if [ "${written}" -ne 1 ]; then
+        # "|| :" for the reason given in demo_record_discard: under
+        # "set -e" a failing cleanup must not end the round.
+        rm -f -- "${tmp}" 2>/dev/null || :
+        debug_event "demo: could not write ${tmp} (out of space?), recording dropped"
+        demo_record_discard
+        return 0
+    fi
+    if ! mv -f -- "${tmp}" "${path}" 2>/dev/null; then
+        rm -f -- "${tmp}" 2>/dev/null || :
         debug_event "demo: could not move the recording to ${path}, dropped"
         demo_record_discard
         return 0
@@ -497,8 +550,13 @@ demo_prune() {
     fi
     over=$(( ${#ordinary[@]} - DEMO_MAX ))
     for (( i = 0; i < over; i++ )); do
-        rm -f -- "${ordinary[i]}"
-        debug_event "demo: pruned ${ordinary[i]} (keeping ${DEMO_MAX} ordinary recordings)"
+        if rm -f -- "${ordinary[i]}" 2>/dev/null; then
+            debug_event "demo: pruned ${ordinary[i]} (keeping ${DEMO_MAX} ordinary recordings)"
+        else
+            # Checked for the same reason as in demo_record_discard: an
+            # undeletable recording must not end the round.
+            debug_event "demo: could not prune ${ordinary[i]}"
+        fi
     done
     return 0
 }
@@ -907,7 +965,7 @@ demo_scan() {
 # every recording here is going to be pruned sooner or later.
 demo_delete() {
     local file="${1}"
-    if rm -f -- "${file}"; then
+    if rm -f -- "${file}" 2>/dev/null; then
         debug_event "demo: deleted ${file}"
         return 0
     fi
