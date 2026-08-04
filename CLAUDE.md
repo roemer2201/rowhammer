@@ -849,7 +849,9 @@ Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
 endlose Modus hiess bis
 0.34.1 "Normales Spiel"), und seit 0.38.0 waehlt der Menuepunkt
 "Highscores" ebenso den Modus der anzuzeigenden Bestenliste
-(`menu_highscores`, seit 0.42.0 mit vier Listen, siehe 4.5); die
+(`menu_highscores`, seit 0.42.0 mit vier Listen, siehe 4.5). Seit
+0.47.0 waehlt auch der Menuepunkt "Statistik" zuerst die Sicht
+(`menu_stats`: Gesamt oder einer der vier Modi, siehe 4.5); die
 Menue-Beschriftung
 ist bewusst Deutsch (ASCII), Code und Code-Ausgaben bleiben Englisch.
 Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
@@ -1299,27 +1301,51 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `record_round`); seit 0.27.0 auch eine Runde ganz ohne Reihenabbau,
   weil sie Teile und Spielzeit beisteuert (frueher fiel sie durch die
   Null-Pruefung).
-  **Runden je Spielmodus (seit 0.42.0, mit dem Time-Attack-Modus):**
-  `rounds_marathon`, `rounds_ultra`, `rounds_sprint` und
-  `rounds_timeattack` zaehlen die verbuchten Runden je Modus, dazu
-  `rounds_ultra_goal`, `rounds_sprint_goal` und
-  `rounds_timeattack_goal` die davon, die im regulaeren Ende des Modus
-  ausgingen statt im Game Over (Ziel erreicht / volle Zeit gespielt /
-  Uhr abgelaufen). `record_round` reicht dafuer `GAME_MODE` und
+  **Statistik je Spielmodus (Runden seit 0.42.0, alle Zaehler seit
+  0.47.0 auf Nutzerwunsch):** jeder Zaehler oben existiert ein zweites
+  Mal je Modus, als Zeile `mode_<modus>_<feld>=N` mit `<modus>` aus
+  `marathon|ultra|sprint|timeattack` und `<feld>` aus
+  `rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|`
+  `pieces|play_time` (`STATS_MODE_RE`, im Code das assoziative Array
+  `STATS_MODE` mit dem Schluessel `<modus>_<feld>`). `rounds` zaehlt die
+  verbuchten Runden des Modus, `goal` die davon, die im regulaeren Ende
+  des Modus ausgingen statt im Game Over (Ziel erreicht / volle Zeit
+  gespielt / Uhr abgelaufen) - Marathon hat kein Ziel und deshalb kein
+  `goal`-Feld in der Datei. `record_round` reicht dafuer `GAME_MODE` und
   `GOAL_REACHED` an `stats_add_round` durch - die einzigen beiden
   Rundenangaben, die sich aus den uebrigen Zaehlern nicht
   rekonstruieren lassen, und die Erfolgsquote der Zeitmodi steht
   nirgends sonst (ein gescheiterter Lauf fehlt in seiner Bestenliste).
+  Ein flacher Schluessel je Feld statt einer Zeile je Modus mit
+  gepackten Feldern: ein fehlender Zaehler faellt so einzeln auf 0
+  zurueck, statt alles zu entwerten, was dieselbe Zeile traegt. Die
+  Schluessel loesen die `rounds_<modus>[_goal]`-Schluessel aus 0.42.0 ab
+  (Arbeitsregel "keine Abwaertskompatibilitaet": eine bestehende Datei
+  verliert ihre Runden je Modus und behaelt alles andere).
   Gezaehlt wird hinter derselben Null-Pruefung wie alles andere: eine
   Runde ohne einen einzigen abgelegten Stein ist keine gespielte Runde,
   und sie hier zu zaehlen, waehrend sie in jedem anderen Zaehler fehlt,
   wuerde die beiden nur widerspruechlich machen. Ein unbekannter
-  Modusname (nur aus einem kuenftigen Modus ohne `case`-Zweig
-  erreichbar) wird nirgends gezaehlt statt Marathon zugeschlagen -
-  lieber eine Luecke als eine falsche Zuordnung.
+  Modusname (nur aus einem kuenftigen Modus ohne Eintrag in
+  `STATS_MODES` erreichbar) wird je Modus nirgends gezaehlt statt
+  Marathon zugeschlagen - lieber eine Luecke als eine falsche
+  Zuordnung.
+  **Die Gesamtzaehler bleiben eigene Zaehler** und werden nicht aus den
+  Modus-Zaehlern summiert (Nutzervorgabe: die Gesamtstatistik soll
+  erhalten bleiben). Sichtbar wird der Unterschied nur im eben genannten
+  Fall - die Runde eines unbekannten Modus steht in den Gesamtzahlen und
+  sonst nirgends -, und genau deshalb bleibt die Gesamtsicht die
+  vollstaendige.
   Anzeige ueber den Hauptmenuepunkt
-  "Statistik", seit 0.27.0 auf **zwei** und seit 0.42.0 auf **drei
-  Bildschirmen**: erst die
+  "Statistik", der seit 0.47.0 wie "Highscores" zuerst nach der Sicht
+  fragt (`menu_stats` in `lib/menu.sh`: Gesamt / Marathon / Ultra /
+  Sprint / Time Attack / Zurueck, wortgleich mit dem Einzelspieler- und
+  dem Highscore-Menue, und in einer Schleife, sodass ein Vergleich nicht
+  durchs Hauptmenue muss). Vier weitere Bildschirme an die vorhandenen
+  anzuhaengen war die Alternative und haette bedeutet, sich durch sieben
+  Bildschirme zu druecken, um den letzten zu sehen.
+  **Gesamt** (`stats_screen`) steht seit 0.27.0 auf **zwei** und seit
+  0.42.0 auf **drei Bildschirmen**: erst die
   Gesamtzaehler (inklusive der gewichteten Gesamtsumme Lines + Bonus,
   des Rowhammer-Zaehlers, der abgelegten Teile, der Gesamtspielzeit als
   H:MM:SS und der daraus berechneten Steine/Minute), dann die letzten
@@ -1334,7 +1360,21 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   zentrierten Bildschirme aus 0.28.0 brauchen keine Zeile mehr fuers
   Freiraeumen der obersten Bildschirmzeile) - deshalb der Schnitt statt
   gestrichener Spalten. Jede Zeile bleibt in den 46 Zeichen, die der
-  Zwei-Zeichen-Einzug vom 48-Spalten-Minimum uebriglaesst.
+  Zwei-Zeichen-Einzug vom 48-Spalten-Minimum uebriglaesst. Der dritte
+  Bildschirm ist seit 0.47.0 zugleich der Ueberblick vor der Auswahl -
+  der eine Bildschirm, der die vier Modi nebeneinander stellt.
+  **Ein Modus** (`stats_mode_screen`, seit 0.47.0) steht dagegen auf
+  **einem** Bildschirm: dieselben Zaehler in derselben Reihenfolge, mit
+  denselben Beschriftungen und derselben Faerbung wie der
+  Gesamtbildschirm (er soll sich lesen wie dieser, nur fuer eine
+  kleinere Menge Runden), dazu die Runden des Modus und - bei den
+  Zeitmodi - die Zahl der erfolgreichen Laeufe. Zwei Zahlen kommen
+  hinzu, beide **abgeleitet statt gespeichert** (wie schon die
+  gewichtete Gesamtsumme und die PCS/min): **Rows je Runde**, die Zahl,
+  die zwei Modi ueberhaupt vergleichbar macht, und bei den Zeitmodi die
+  **Erfolgsquote** in Prozent; ohne eine einzige Runde des Modus steht
+  in beiden ein "-" statt einer Division durch 0. Mit 16 Zeilen im
+  laengsten Fall (Zeitmodus) bleibt der Bildschirm in `MENU_BODY_MAX`.
   **Farbige Darstellung (seit 0.30.0):** wie die Highscore-Liste nutzt
   auch dieser Bildschirm die `TXT_*`-SGR-Farben aus `lib/render.sh`
   (siehe dort): die gewichtete Gesamtsumme in der Akzentfarbe, Gold-

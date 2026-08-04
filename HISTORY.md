@@ -73,6 +73,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.43.0 | "Neustarten" im Pausenmenue | 3.1, 3.3 |
 | 0.45.0 | Namensabfrage am Rundenende (vormarkierte Vorgabe) | 3.7, 4.3, 4.5 |
 | 0.46.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.8, 4.10 |
+| 0.47.0 | Vollstaendige Statistik je Spielmodus | 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -827,6 +828,9 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       gespielte Runde), und ein unbekannter Modusname wird nirgends
       gezaehlt statt Marathon zugeschlagen - lieber eine Luecke als
       eine falsche Zuordnung.
+      _Spaeter ueberholt: 0.47.0 fuehrt **jeden** Zaehler je Modus und
+      loest die `rounds_*`-Schluessel durch das Schema
+      `mode_<modus>_<feld>` ab (siehe dort und 4.5)._
 - [x] **"Neustarten" im Pausenmenue** (Version 0.43.0, Nutzerwunsch):
       Das Pausenmenue (`Esc`/`x`) hatte drei Eintraege, von denen zwei
       die Runde verlassen; wer eine verkorkste Runde einfach noch
@@ -1039,3 +1043,49 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       allein und brauchte deshalb einen Stub fuer die neue
       Demo-Anbindung in `queue_fill` (analog dem bereits vorhandenen
       Stub fuer `debug_event`).
+
+- [x] **Vollstaendige Statistik je Spielmodus** (Version 0.47.0,
+      Nutzerwunsch; aktueller Stand siehe 4.5): 0.42.0 hatte je Modus
+      nur die **Runden** gezaehlt. Seither fuehrt `lib/stats.sh` jeden
+      Zaehler ein zweites Mal je Modus - abgebaute Reihen, Bonusreihen,
+      Gold- und Silberbloecke, Rowhammer, abgelegte Teile und Spielzeit,
+      neben den Runden und den Laeufen, die ihr Modus-Ziel erreicht
+      haben. Die Entscheidungen dahinter:
+      - **Die Gesamtstatistik bleibt, was sie war** (ausdrueckliche
+        Nutzervorgabe) - und zwar als eigene Zaehler, nicht als Summe
+        der Modus-Zaehler. Der Unterschied wird an genau einer Stelle
+        sichtbar: eine Runde in einem unbekannten Modus (nur aus einem
+        kuenftigen Modus ohne Eintrag in `STATS_MODES` erreichbar) geht
+        in die Gesamtzahlen ein und sonst nirgends. Die Gesamtsicht
+        bleibt damit vollstaendig, waehrend die Modus-Bildschirme wie
+        seit 0.42.0 lieber eine Luecke zeigen als eine falsche
+        Zuordnung.
+      - **Ein Menuepunkt mit Auswahl statt weiterer Bildschirme in der
+        Folge.** "Statistik" fragt jetzt wie "Highscores" zuerst nach
+        der Sicht (`menu_stats` in `lib/menu.sh`, Eintraege wortgleich
+        mit dem Einzelspieler- und dem Highscore-Menue): Gesamt oder
+        einer der vier Modi. Vier weitere Bildschirme an die drei
+        vorhandenen anzuhaengen haette bedeutet, sich durch sieben
+        Bildschirme zu druecken, um den letzten zu sehen.
+      - **Ein Bildschirm je Modus, gelesen wie der Gesamtbildschirm**
+        (gleiche Reihenfolge, gleiche Beschriftungen, gleiche
+        Faerbung), plus die beiden Zahlen, die Modi erst vergleichbar
+        machen: **Rows je Runde** und - bei den Zeitmodi - die
+        **Erfolgsquote**. Beide sind abgeleitet und nicht gespeichert,
+        wie die gewichtete Gesamtsumme und die PCS/min es schon waren;
+        ohne eine einzige Runde stehen sie auf "-". Mit 16 Zeilen im
+        laengsten Fall bleibt der Bildschirm in `MENU_BODY_MAX`.
+      - **Die Modus-Uebersicht ("Statistik 3/3") bleibt** und ist jetzt
+        zugleich der Ueberblick vor der Auswahl - der eine Bildschirm,
+        der die vier Modi nebeneinander stellt.
+      - **Ein flacher Schluessel je Modus und Feld**
+        (`mode_<modus>_<feld>=N`) loest die `rounds_<modus>[_goal]`-
+        Schluessel von 0.42.0 ab, deren zwei Zahlen nun Felder desselben
+        Schemas sind: eine Namensregel statt zweier. Im Code liegen die
+        Werte in einem assoziativen Array (`STATS_MODE`) statt in 36
+        Globals; die feste Feldliste hat dabei die Rolle uebernommen,
+        die vorher die Variablennamen hatten - einzige Quelle dessen,
+        was in der Datei stehen darf. Eine bestehende Statistik-Datei
+        verliert damit ihre Runden je Modus (Arbeitsregel "keine
+        Abwaertskompatibilitaet") und behaelt alles andere; ein
+        fehlender Schluessel faellt einzeln auf 0 zurueck.
