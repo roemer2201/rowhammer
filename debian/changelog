@@ -1,3 +1,24 @@
+rowhammer (0.52.0) unstable; urgency=medium
+
+  * The highscore lists are browsable now (user request): a cursor walks
+    the entries with the up/down keys, left/right turn the pages in both
+    directions - the lists used to be read-only screens dealt out one
+    page per key press with no way back - and both wrap around.
+  * An entry whose demo recording still exists is marked with a "*", and
+    Enter watches it. Which entry has one is answered by the round hash
+    the entry and the recording's file name both carry, so the lookup
+    costs one directory glob and no file read. An entry without one says
+    so instead of doing nothing; a replay is refused while a round is
+    suspended in the main menu, as in the demo menu.
+  * Fixed: watching a demo from the "Demos" menu ended the game with
+    "render_menu_dirty: command not found" as soon as the replay was
+    left. The helper had been dropped in 0.45.0 together with its other
+    caller, and under "set -e" the call to the missing function took the
+    whole session down.
+  * The manual's demo page mentions the new way to start a replay.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 04 Aug 2026 23:15:00 +0200
+
 rowhammer (0.51.0) unstable; urgency=medium
 
   * The Marathon highscore list is stored in "highscore-marathon" from
