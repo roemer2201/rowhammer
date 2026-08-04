@@ -336,7 +336,9 @@ layout_update() {
 # centered on its own height, because menus differ in length.
 #
 # MENU_FULL marks that something other than a menu owns the screen (the
-# game block, the resize overlay, an echoed prompt), so the next menu frame
+# game block in render_flush, the resize overlay in term_too_small_screen,
+# a resize in layout_update - each sets the flag where it takes the screen
+# over), so the next menu frame
 # has to clear the terminal first. While one menu follows another, only the
 # rows the previous block used and the new block no longer covers are
 # erased - a full clear per key press would make the menu flicker while
@@ -392,16 +394,13 @@ render_menu_frame() {
     return 0
 }
 
-# render_menu_dirty
-# Declare the screen taken over by something that is not a menu frame, so
-# the next one clears the terminal before drawing. Called wherever such a
-# screen appears: the game block (render_flush), the resize overlay
-# (term_too_small_screen), a resize (layout_update) and the echoed name
-# prompt (lib/menu.sh).
-render_menu_dirty() {
-    MENU_FULL=1
-    return 0
-}
+# CHANGE 2026-08-03: render_menu_dirty, the helper that set MENU_FULL for
+# a caller outside this file, is gone with its last caller. It existed for
+# the player name prompt, which let the terminal echo the typed name onto
+# the screen and had to declare the frame dirty afterwards; the prompt now
+# draws the line itself inside a regular menu frame (menu_text_input,
+# lib/menu.sh). The three places inside this file and lib/input.sh that
+# take the screen over set MENU_FULL directly, as they always did.
 
 # render_board_dirty
 # Invalidate the settled-row cache. Called by every board mutation

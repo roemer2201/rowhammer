@@ -67,7 +67,11 @@
 #   blocks stay tellable apart. All game data (config, persistent top-10 highscore list,
 #   the savegame and the all-time statistics) lives in one data
 #   directory, by default
-#   ~/.config/rowhammer. Finished rounds enter the highscore list of
+#   ~/.config/rowhammer. A round that is about to enter a list asks for
+#   the name it is filed under (since 0.45.0, user request): the name
+#   from the settings comes preselected, so keeping it is one Enter and
+#   changing it is typing over it; what is typed applies to that round
+#   only. Finished rounds enter the highscore list of
 #   their mode, which the
 #   main menu shows (two lines per entry: rows, gold/silver squares,
 #   rowhammers, pieces placed and their rate in pieces per minute, play
@@ -135,7 +139,8 @@
 #   8. Run the main menu loop; "Einzelspieler" picks a game mode and
 #      starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
-#      clearing, rendering), finished rounds are recorded in the
+#      clearing, rendering), finished rounds are recorded - under the
+#      name asked for at the end of the round - in the
 #      highscore list of their mode, their row credit is banked into the wonder
 #      savegame and their counters into the statistics file,
 #      settings changes are written back to the config file. A round
@@ -154,7 +159,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.45.0  (2026-08-04)
+# Version: 0.46.0  (2026-08-04)
 
 set -euo pipefail
 
@@ -169,7 +174,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.45.0"
+ROWHAMMER_VERSION="0.46.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -1314,6 +1319,22 @@ update_speed() {
     FALL_MS="${LEVEL_SPEEDS[idx]}"
 }
 
+# round_is_ranked: does the round that just ended enter a highscore list
+# at all? Mirrors the two rules that decide it - the per-mode rule of
+# record_round below (only a successful Ultra or Sprint run is listed)
+# and the "nothing to rank" check inside the list functions themselves
+# (lib/highscore.sh ignores a round without rows resp. without a measured
+# time). It is the condition for asking for the player's name: a round
+# that is filed nowhere has no name to ask for, and everything else it
+# still feeds - wonder progress and statistics - is nameless.
+round_is_ranked() {
+    case "${GAME_MODE}" in
+        ultra)  [ "${GOAL_REACHED}" -eq 1 ] && [ "${PLAY_MS}" -gt 0 ] ;;
+        sprint) [ "${GOAL_REACHED}" -eq 1 ] && [ "${ROW_CREDIT}" -gt 0 ] ;;
+        *)      [ "${ROW_CREDIT}" -gt 0 ] ;;
+    esac
+}
+
 # record_round: close the books on a finished round, at most once
 # per round: enter it into the highscore list of its mode, bank its row
 # credit
@@ -1345,6 +1366,19 @@ record_round() {
         return 0
     fi
     ROUND_RECORDED=1
+    # Which name this round is filed under (2026-08-03, user request).
+    # The name from the settings is the default and the prompt offers it
+    # preselected, so keeping it costs one Enter; what is typed instead
+    # applies to this round only and does not change the settings (see
+    # prompt_round_name in lib/menu.sh). Asked only for a round that
+    # really enters a list - and asked here, before the entry is written,
+    # because this is where the name goes in and where the rank shown by
+    # the result box is decided.
+    local name="${PLAYER_NAME}"
+    if round_is_ranked; then
+        prompt_round_name
+        name="${ROUND_NAME}"
+    fi
     # The round's identifier, computed once and handed to both books it
     # appears in: the highscore entry stores it as its last field, and
     # the demo recording carries it in its file name, which is what lets
@@ -1352,8 +1386,10 @@ record_round() {
     # highscore place (see round_hash, lib/highscore.sh, lib/demo.sh).
     # The values are the round's own results, including the play time in
     # milliseconds - two different rounds cannot realistically produce
-    # the same ones.
-    round_hash "${GAME_MODE}" "${PLAYER_NAME}" "${PLAY_MS}" "${ROW_CREDIT}" \
+    # the same ones. Computed after the name prompt above and over the
+    # name that is really going to be stored, so the identifier describes
+    # the entry as it ends up on the list.
+    round_hash "${GAME_MODE}" "${name}" "${PLAY_MS}" "${ROW_CREDIT}" \
         "${CLEARED_TOTAL}" "${LEVEL}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
         "${ROWHAMMER_COUNT}" "${PIECE_COUNT}"
     # Round play time in whole seconds, the round's four-row clears and
@@ -1366,7 +1402,7 @@ record_round() {
         # still feed the wonder and the statistics below.
         if [ "${GOAL_REACHED}" -eq 1 ]; then
             highscore_ultra_add "${PLAY_MS}" "${ROW_CREDIT}" \
-                "${CLEARED_TOTAL}" "${LEVEL}" "${PLAYER_NAME}" \
+                "${CLEARED_TOTAL}" "${LEVEL}" "${name}" \
                 "${GOLD_COUNT}" "${SILVER_COUNT}" "${ROWHAMMER_COUNT}" \
                 "${PIECE_COUNT}" "${ROUND_HASH}"
         else
@@ -1382,7 +1418,7 @@ record_round() {
         # and the statistics below, like those of any aborted round.
         if [ "${GOAL_REACHED}" -eq 1 ]; then
             highscore_sprint_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" \
-                "${LEVEL}" "${PLAYER_NAME}" "${GOLD_COUNT}" \
+                "${LEVEL}" "${name}" "${GOLD_COUNT}" \
                 "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
                 "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "${ROUND_HASH}"
         else
@@ -1401,12 +1437,12 @@ record_round() {
         # them. That makes this mode the Marathon case, where the round
         # ends in a top-out and is recorded all the same.
         highscore_timeattack_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" \
-            "${LEVEL}" "${PLAYER_NAME}" "${GOLD_COUNT}" \
+            "${LEVEL}" "${name}" "${GOLD_COUNT}" \
             "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
             "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "${ROUND_HASH}"
     else
         highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
-            "${PLAYER_NAME}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
+            "${name}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
             "$(( PLAY_MS / 1000 ))" "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" \
             "${ROUND_HASH}"
     fi

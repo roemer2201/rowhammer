@@ -302,8 +302,8 @@ Die fuer uns relevanten Merkmale des Originals:
     "Goal" und "Left"; seit 0.39.0 nutzt der Sprint-Modus dieselben
     beiden Zeilen fuer sein Zeitlimit und die Restzeit, seit 0.42.0 der
     Time-Attack-Modus fuer seine mitwachsende Restzeit (die drei Modi
-    laufen nie gleichzeitig). Eine weitere (Zeile 18) nutzt seit 0.45.0
-    die Demo-Wiedergabe fuer das Abspieltempo (Label "Demo", siehe 3.7);
+    laufen nie gleichzeitig). Eine weitere (Zeile 18) nutzt seit 0.46.0
+    die Demo-Wiedergabe fuer das Abspieltempo (Label "Demo", siehe 3.8);
     sie liegt zwei Zeilen unter den Ziel-Zaehlern, damit eine
     wiedergegebene Runde eines Zeitmodus ihre beiden weiter zeigt.
     Alles nur, solange eine Runde des
@@ -365,7 +365,7 @@ in fester Reihenfolge einmal durchzureichen:
    vierte Modus fuellte diese bis auf die letzte ihrer `MENU_BODY_MAX`
    Zeilen, und der Absatz handelt ohnehin von der Wertung statt vom
    Spielablauf.
-8. Demos (seit 0.45.0): dass jede Runde mitgeschnitten wird, dass die
+8. Demos (seit 0.46.0): dass jede Runde mitgeschnitten wird, dass die
    Zuege und nicht der Bildschirm aufgezeichnet werden (und die
    Wiedergabe die Runde deshalb wirklich noch einmal spielt), wie viele
    Aufnahmen aufbewahrt werden, wo sich einzelne loeschen und die
@@ -545,7 +545,62 @@ wo sie passen, und weicht an genau einer Stelle begruendet ab:
 - **`r` im Rundenende-Bild startet im selben Modus neu**, wie bei den
   anderen Modi (`game_reset` ohne Argument).
 
-### 3.7 Demos: Aufzeichnung und Wiedergabe (seit 0.45.0)
+### 3.7 Namensabfrage am Rundenende (seit 0.45.0)
+
+Am Ende einer Runde fragt das Spiel nach dem Namen, unter dem die Runde
+in ihrer Bestenliste steht (Nutzerwunsch). Der **Spielername aus den
+Einstellungen ist die Vorgabe** und steht **vormarkiert** in der
+Eingabezeile - wie in einem grafischen Textfeld: das erste getippte
+Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
+
+- **Wann:** in `record_round` (`rowhammer.sh`), also an jedem echten
+  Rundenende (Game Over, "Runde beenden", "Neustarten", Programmende
+  mit wartender Runde, siehe 3.3) und dank `ROUND_RECORDED` genau
+  einmal je Runde. Und zwar **vor** dem Listeneintrag: dort geht der
+  Name hinein, und dort entsteht der Rang, den der Rundenende-Kasten
+  anschliessend zeigt.
+- **Nur fuer eine Runde, die wirklich in eine Liste kommt**
+  (`round_is_ranked`): Sie spiegelt die Modus-Regeln aus 3.6 (nur ein
+  erfolgreicher Ultra-/Sprint-Lauf wird gelistet) und die
+  Null-Pruefungen der Listenfunktionen selbst (`lib/highscore.sh`
+  verwirft eine Runde ohne Rows bzw. ohne gemessene Zeit). Eine Runde,
+  die nirgends abgelegt wird, hat keinen Namen zu erfragen; alles
+  andere, was sie noch speist - Weltwunder-Fortschritt und Statistik -,
+  ist ohnehin namenlos.
+- **Der eingegebene Name gilt fuer diese eine Runde**, die Einstellung
+  bleibt unveraendert (und damit die Vorgabe der naechsten Runde). Das
+  ist genau der Fall, fuer den die Abfrage da ist - jemand anderes
+  spielt eine Runde mit -, und es laesst den Einstellungs-Eintrag die
+  eine Stelle sein, die die Vorgabe bestimmt. `record_round` haelt den
+  Namen deshalb in einer lokalen Variablen und gibt ihn an die
+  `highscore_*_add`-Funktionen weiter, statt `PLAYER_NAME` zu
+  ueberschreiben.
+- **Bedienung** (`menu_text_input` in `lib/menu.sh`, gemeinsam genutzt
+  mit der Namensabfrage im Einstellungsmenue): Tippen ersetzt die
+  markierte Vorgabe, Backspace auf ihr loescht sie, eine **Pfeiltaste
+  hebt die Markierung auf und behaelt den Text** (die Vorgabe laesst
+  sich also auch bearbeiten statt ersetzen). Danach verhaelt sich die
+  Zeile wie eine gewoehnliche Eingabe: Zeichen haengen an, Backspace
+  loescht das letzte. Enter uebernimmt, `ESC` laesst alles beim Alten,
+  eine leer gemachte Zeile ebenfalls. Es gibt keinen Cursor **im**
+  Text - bei maximal 16 Zeichen wird vom Ende her editiert.
+- **Nur gueltige Zeichen kommen ueberhaupt an** (`MENU_INPUT_RE`,
+  `MENU_INPUT_MAX`: dasselbe Muster, gegen das der Spielername beim
+  Start und beim Laden der Config geprueft wird, max. 16 Zeichen). Der
+  Editor kann damit keinen ungueltigen Namen erzeugen, und die frueher
+  noetige Fehlermeldung nach der Eingabe entfaellt. Eine
+  Buchstabentaste ist hier ein Buchstabe und keine Spielaktion - `x`
+  schliesst den Dialog also nicht, dafuer ist `ESC` da.
+- **Darstellung:** ein regulaerer, zentrierter Menue-Frame
+  (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level und
+  Zeit der Runde ueber der Eingabezeile. Die Markierung ist invertierter
+  Text (`\e[7m`), nach ihrem Aufheben steht ein invertierter Block als
+  Cursor hinter dem Text - der echte Cursor bleibt die ganze Sitzung
+  ueber ausgeblendet. Danach setzt `prompt_round_name` `RENDER_FULL=1`,
+  damit das Spielfeld samt Rundenende-Kasten vollstaendig neu gezeichnet
+  wird.
+
+### 3.8 Demos: Aufzeichnung und Wiedergabe (seit 0.46.0)
 
 Jede gespielte Runde wird mitgeschnitten und laesst sich ueber den
 Hauptmenuepunkt **"Demos"** noch einmal ansehen (`lib/demo.sh`,
@@ -572,7 +627,7 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
   Roadmap offen gelassene Frage nach einer Obergrenze entschieden: eine
   reine **Stueckzahl** (`DEMO_MAX`, 10 wie die Bestenlisten) reicht, ein
   Gesamtgroessen-Budget waere Aufwand ohne Gegenwert. Die Grenze gilt
-  seit 0.45.0 nur fuer die **gewoehnlichen** Aufnahmen; eine, die noch
+  seit 0.46.0 nur fuer die **gewoehnlichen** Aufnahmen; eine, die noch
   einen Highscore-Eintrag haelt, wird nie geloescht (siehe unten).
 - **Unabhaengigkeit vom Terminal.** Die Datei enthaelt kein einziges
   ANSI-Byte. Terminalgroesse, Farbmodus, Farbschema und - ausdruecklich
@@ -609,7 +664,7 @@ Frage - Pause und Vorspulen: beides, plus Zeitlupe):
   den Demo-Kasten, weil dessen Tasten die der Wiedergabe sein muessen.
 
 **Aufnahmen zu Highscore-Eintraegen bleiben erhalten** (Nutzerwunsch,
-seit 0.45.0). Jede beendete Runde bekommt einen kurzen Hash aus ihren
+seit 0.46.0). Jede beendete Runde bekommt einen kurzen Hash aus ihren
 eigenen Ergebnissen (`round_hash` in `rowhammer.sh`); er steht als
 letztes Feld im Highscore-Eintrag (siehe 4.5) und im **Dateinamen** der
 Aufnahme (siehe 4.10). Damit weiss das Aufraeumen, welche Aufnahme zu
@@ -645,7 +700,7 @@ Entscheidungen dahinter:
   Loeschbefehl ist etwas anderes als das automatische Aufraeumen.
 - **Markiert sind sie mit einem `*`** in der Demo-Liste, samt Legende
   im Titel. Weil die Liste damit laenger als der Bildschirm werden kann,
-  blaettert `menu_run` seit 0.45.0 mit der Auswahl durch lange Listen
+  blaettert `menu_run` seit 0.46.0 mit der Auswahl durch lange Listen
   (`MENU_LIST_MAX`, siehe `lib/menu.sh`) - die Demo-Liste ist das erste
   Menue, dessen Laenge nicht von einer Konstanten begrenzt ist.
 - **Der Hash ist FNV-1a (32 Bit) in reinem Bash**, kein Aufruf von
@@ -777,7 +832,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.45.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.46.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
@@ -802,7 +857,10 @@ Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
 "Rows" ist die gewichtete Reihenwertung (1/5/10), die den
 Weltwunder-Fortschritt speist und seit 0.16.0 zugleich der Score der
 Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
-treibt das Level. CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
+treibt das Level. Seit 0.45.0 fragt jede Runde, die in eine
+Bestenliste kommt, an ihrem Ende nach dem Namen fuer den Eintrag
+(vormarkierte Vorgabe aus den Einstellungen, siehe 3.7).
+CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
 fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
 `--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
 `--no-color` (`ROWHAMMER_NO_COLOR`; seit 0.28.0 wird zusaetzlich die
@@ -819,9 +877,9 @@ Einstellungsmenue waehlbar und in der Config gespeichert),
 `--render-mode partial|full` (`ROWHAMMER_RENDER_MODE`, Standard
 `partial`, seit 0.41.0, siehe 4.3),
 `--demo-record on|off` (`ROWHAMMER_DEMO_RECORD`, Standard `on`, seit
-0.45.0; auch im Einstellungsmenue und in der Config, siehe 3.7/4.10),
+0.46.0; auch im Einstellungsmenue und in der Config, siehe 3.8/4.10),
 `--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
-0.35.0, das Ziel `demo` seit 0.45.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
+0.35.0, das Ziel `demo` seit 0.46.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
 beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
 Resets; frei mit anderen Optionen kombinierbar),
 `--debug` (`ROWHAMMER_DEBUG`),
@@ -849,10 +907,24 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   an die Cursorposition, also hinter die zuletzt geschriebene Zeile.
   Seit dem inkrementellen Rendering (0.22.0) wird eine unveraenderte
   Zeile nicht mehr neu geschrieben, sodass das echote `^[[C` stehen
-  blieb (frueher hatte der naechste Voll-Frame es uebermalt). Einzige
-  Ausnahme ist die Namensabfrage (`prompt_player_name`), die fuer ihren
-  zeilenweisen `read` per `term_input_line` in den kanonischen Modus mit
-  Echo zurueckschaltet und danach wieder `term_input_raw` setzt.
+  blieb (frueher hatte der naechste Voll-Frame es uebermalt). **Seit
+  0.45.0 gilt der Rohmodus ausnahmslos:** die einzige Ausnahme war die
+  Namensabfrage, die per `term_input_line` in den kanonischen Modus mit
+  Echo zurueckschaltete; mit dem gemeinsamen Zeileneditor `menu_text_input`
+  (siehe 3.7) zeichnet das Spiel die getippte Zeile selbst, `term_input_line`
+  ist ersatzlos entfallen.
+  Der Editor liest ueber denselben `read_key`, nur im **Textmodus**
+  (`KEY_TEXT`, `lib/input.sh`): eine gesetzte Flagge aendert allein die
+  Behandlung einfacher Bytes in `key_plain` - das Zeichen wird so
+  gemeldet, wie es getippt wurde (statt kleingeschrieben), und die
+  beiden Loeschbytes (0x08/0x7f) werden zur Taste `BACKSPACE`, statt als
+  inert verworfen zu werden. Beides ist fuer das Spiel falsch (`A` und
+  `a` sind dieselbe Bindung, an Backspace haengt nichts) und fuer eine
+  Namenseingabe unverzichtbar. Escape-Sequenzen laufen unveraendert
+  durch den Zustandsautomaten unten, sodass Pfeiltasten, Mausmeldungen,
+  Terminalantworten und Paste im Textmodus genauso behandelt werden wie
+  im Spiel. Die Flagge wird nur um den einzelnen `read_key`-Aufruf herum
+  gesetzt, damit kein Rueckgabepfad sie in den Game-Loop traegt.
   Escape-Sequenzen laufen seit 0.23.0 (Issue #7,
   Analyse in `docs/input-analysis.md`) durch einen **Zustandsautomaten**
   (`key_feed` und die `key_in_*`-Helfer in `lib/input.sh`), dessen
@@ -949,9 +1021,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   der neue nicht mehr abdeckt - ein Voll-Loeschen je Tastendruck wuerde
   beim Blaettern flackern. Das Flag `MENU_FULL` merkt sich dagegen, dass
   ein **anderer** Bildschirm zuletzt dran war (Spielblock ueber
-  `render_flush`, "resize me"-Overlay, Resize ueber `layout_update`, die
-  echoende Namensabfrage ueber `render_menu_dirty`); dann loescht der
-  naechste Menue-Frame zuerst den ganzen Bildschirm. Nach einem Resize
+  `render_flush`, "resize me"-Overlay, Resize ueber `layout_update` -
+  jede dieser Stellen setzt das Flag selbst); dann loescht der
+  naechste Menue-Frame zuerst den ganzen Bildschirm. Der Helfer
+  `render_menu_dirty`, ueber den frueher die echoende Namensabfrage das
+  Flag setzte, ist mit ihr in 0.45.0 entfallen (siehe 3.7): der neue
+  Zeileneditor ist selbst ein regulaerer Menue-Frame. Nach einem Resize
   bauen die Warteschleifen ihren Frame neu auf, statt den gespeicherten
   erneut auszugeben - er traegt absolute Cursor-Positionen der alten
   Terminalgroesse.
@@ -981,7 +1056,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
   (seit 0.39.0), die Time-Attack-Bestenliste `highscore-timeattack`
   (seit 0.42.0), der Spielstand `save`, die
-  Statistik `stats` und - seit 0.45.0 - das Unterverzeichnis `demos`
+  Statistik `stats` und - seit 0.46.0 - das Unterverzeichnis `demos`
   mit den aufgezeichneten Runden (Format und Ablage siehe 4.10; als
   einziger Eintrag ein Verzeichnis statt einer Datei, weil es beliebig
   viele Aufnahmen bis `DEMO_MAX` fasst).
@@ -996,12 +1071,15 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
   (Spielername, Farbschema seit 0.21.0, Tastenbelegung,
-  Demo-Aufzeichnung seit 0.45.0) schreibt
+  Demo-Aufzeichnung seit 0.46.0) schreibt
   `${DATA_DIR}/rowhammer.conf`;
   Werte werden validiert und single-quoted geschrieben, da die Datei
   gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
   und beim Laden gegen die bekannten Schemata validiert (unbekannt =
-  Abbruch mit Meldung).
+  Abbruch mit Meldung). Der Spielername ist die **Vorgabe** der
+  Namensabfrage am Rundenende (siehe 3.7); geaendert wird er nur hier im
+  Einstellungsmenue, seit 0.45.0 mit demselben Zeileneditor
+  (`menu_text_input`) und dem bisherigen Namen vormarkiert.
 - `lib/highscore.sh` (seit 0.7.0): Top 10 abgeschlossener Runden in
   `${DATA_DIR}/highscore`, eine Zeile je Eintrag im Format
   `rows|lines|level|name|date|gold|silver|time|rowhammers|pieces|hash`,
@@ -1013,12 +1091,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   die Spielzeit der Runde in ganzen Sekunden, `rowhammers` (seit
   0.25.0) die Zahl der Vierfach-Abbaeue der Runde und das
   abschliessende Feld `pieces` (seit 0.27.0) die Zahl der abgelegten
-  Teile. Seit 0.45.0 folgt darauf `hash`, der aus den Ergebnissen der
+  Teile. Seit 0.46.0 folgt darauf `hash`, der aus den Ergebnissen der
   Runde berechnete Kennwert (`round_hash` in `rowhammer.sh`, acht
   Hex-Ziffern oder `-` fuer einen aelteren Eintrag ohne). Er verbindet
   den Eintrag mit der Aufzeichnung derselben Runde, die ihn im
   Dateinamen traegt: solange ein Eintrag in einer der Listen steht, wird
-  seine Demo nicht weggeraeumt (siehe 3.7 und 4.10). Alle vier Listen
+  seine Demo nicht weggeraeumt (siehe 3.8 und 4.10). Alle vier Listen
   tragen ihn als **letztes** Feld, sodass `highscore_hash_set` sie mit
   einer einzigen Expansion einsammeln kann.
   Seit 0.29.0 (Nutzerentscheidung, bewusste Ausnahme von der
@@ -1026,7 +1104,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   mehr alle elf Felder tragen. Akzeptiert werden 5, 7, 8, 9, 10 oder 11
   Felder - genau die Laengen, die das Format seit dem Punktesystem-
   Umbau (0.16.0, Rows fuehrend) beim schrittweisen Anhaengen von
-  Gold/Silber, Zeit, Rowhammer, Pieces und - seit 0.45.0 - dem
+  Gold/Silber, Zeit, Rowhammer, Pieces und - seit 0.46.0 - dem
   Runden-Hash tatsaechlich durchlaufen hat
   (`HS_FIELD_COUNTS`, `highscore_parse_line` in `lib/highscore.sh`).
   Fehlende Zaehler werden beim Laden als `0` ergaenzt statt die ganze
@@ -1042,7 +1120,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
   Beenden der Runde, siehe 3.3; 0 Rows zaehlt nicht, gleiche Rows
-  rangieren hinter dem aelteren Eintrag). Der erreichte Rang erscheint im Game-Over-Bild,
+  rangieren hinter dem aelteren Eintrag). Das Feld `name` ist seit
+  0.45.0 nicht mehr zwangslaeufig der Spielername aus den Einstellungen,
+  sondern der am Rundenende abgefragte (siehe 3.7) - fuer alle vier
+  Listen gleichermassen. Der erreichte Rang erscheint im Game-Over-Bild,
   die Liste unter "Highscores" im Hauptmenue. Angezeigt wird je
   Eintrag seit 0.27.0 ein **Zwei-Zeilen-Block** (Nutzerentscheidung:
   die Anzeige darf dafuer mehrzeilig werden): erste Zeile Rang, Name,
@@ -1068,7 +1149,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   wuerden; angezeigt wird das ueber `fmt_duration_ms` als
   MM:SS.mmm. Gespeichert werden nur Laeufe, die das Ziel erreicht haben
   (Entscheidung in 3.6). Es gilt die uebliche Arbeitsregel "keine
-  Abwaertskompatibilitaet": seit 0.45.0 elf Felder, oder zehn fuer eine Zeile
+  Abwaertskompatibilitaet": seit 0.46.0 elf Felder, oder zehn fuer eine Zeile
   ohne den Runden-Hash; jede andere faellt bei der Validierung heraus.
   Die Kulanz um genau diese eine Laenge kam mit dem Hash: das Format hat
   seither doch in einer kuerzeren Fassung existiert, und es gilt derselbe
@@ -1102,7 +1183,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   sind nicht dasselbe - die Rows der endlosen Liste wuerden die kurzen
   Laeufe schlicht verdraengen. Gespeichert werden nur Laeufe, die ihre
   volle Zeit gespielt haben (Entscheidung in 3.6). Wie bei der
-  Ultra-Liste werden seit 0.45.0 elf Felder erwartet, oder zehn fuer
+  Ultra-Liste werden seit 0.46.0 elf Felder erwartet, oder zehn fuer
   eine Zeile ohne den Runden-Hash; jede andere faellt bei der
   Validierung heraus.
   **Anzeige:** `highscore_sprint_screen` zeigt die Liste im Layout der
@@ -1121,7 +1202,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   `${DATA_DIR}/highscore-timeattack`, Zeilenformat und Rangordnung
   wieder wie die Marathon-Liste (absteigend nach Rows, gleiche Rows
   hinter dem aelteren Eintrag), ebenfalls Top 10 (`HSA_*` in
-  `lib/highscore.sh`), seit 0.45.0 ebenfalls elf Felder mit dem
+  `lib/highscore.sh`), seit 0.46.0 ebenfalls elf Felder mit dem
   Runden-Hash am Ende (oder zehn ohne ihn, wie bei den anderen Listen). Dass die Rows und nicht die ueberlebte Zeit die
   Wertung sind, ist in 3.6 begruendet (beide ergeben dieselbe
   Rangfolge). Eine eigene Datei ist noetig, weil ein Lauf auf einer
@@ -1297,8 +1378,8 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
     mit Instanz-IDs, Reihenabbau mit Credit-Aufschluesselung je Reihe,
     Hold, Pause, Bag-Refills, Menuewahl, Config-Speicherungen, fatale
     Fehler sowie ein Board-Snapshot (Typ- und Quadrat-Gitter plus
-    cut/squared-Instanzlisten) nach jedem Lock. Seit 0.45.0 auch Beginn,
-    Ablage und Wiedergabe von Demos (siehe 3.7/4.10) - eine abgespielte
+    cut/squared-Instanzlisten) nach jedem Lock. Seit 0.46.0 auch Beginn,
+    Ablage und Wiedergabe von Demos (siehe 3.8/4.10) - eine abgespielte
     Demo erzeugt dabei dieselben Spielereignisse wie die Runde, die sie
     aufgezeichnet hat, was sie zum Vergleichen zweier Laeufe brauchbar
     macht.
@@ -1416,7 +1497,7 @@ Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
   lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
   einen Reset zu fein.
 - **`demo` ist das einzige Ziel, das ein Verzeichnis bewegt** (seit
-  0.45.0). Verschoben wird `demos` als Ganzes - dieselbe `mv`-Schleife
+  0.46.0). Verschoben wird `demos` als Ganzes - dieselbe `mv`-Schleife
   wie fuer die Dateien, die den Unterschied nicht kennen muss -, sodass
   die Aufnahmen eines Resets zusammen in einem `.bak`-Verzeichnis
   liegen und sich in einem Zug zurueckholen lassen. Ein eigenes Ziel
@@ -1555,9 +1636,9 @@ Entscheidungen zu den Workflows:
   CI-Lauf des Branches zu verlassen: ein Tag darf auf jedem beliebigen
   Commit sitzen.
 
-### 4.10 Demo-Format und Ablage (seit 0.45.0)
+### 4.10 Demo-Format und Ablage (seit 0.46.0)
 
-Das Konzept und die Entscheidungen dahinter stehen in 3.7; hier das
+Das Konzept und die Entscheidungen dahinter stehen in 3.8; hier das
 Dateiformat und der Weg einer Aufnahme.
 
 **Dateiformat** (`lib/demo.sh`). Eine Aufnahme ist eine Textdatei aus
@@ -1567,7 +1648,7 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 
 ```
 version=1            Formatversion (jede andere wird abgelehnt)
-game=0.45.0          Spielversion, die aufgenommen hat (nur Info)
+game=0.46.0          Spielversion, die aufgenommen hat (nur Info)
 mode=marathon        marathon|ultra|sprint|timeattack - die Regeln
 name=Player          Spielername
 date=2026-08-03 21:40
@@ -2419,7 +2500,7 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.45.0
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.46.0
   (Demo-Aufzeichnung und Demo-Player); die
   Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen sind die zwei Punkte unten

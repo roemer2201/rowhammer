@@ -13,8 +13,10 @@
 #   relying on the mode a single "read -rsn1" installs and drops again:
 #   between two reads the terminal used to echo whatever was typed onto
 #   the screen, where the incremental renderer left it standing (issue
-#   #33). Only the player name prompt switches back to line mode
-#   (term_input_line) so the terminal draws the typed name.
+#   #33). Since 0.9.0 that holds without exception: the name prompts draw
+#   the typed text themselves (menu_text_input, lib/menu.sh) and read it
+#   through this layer in text mode (KEY_TEXT), so the terminal never
+#   switches back to line mode with echo.
 #   Escape sequences are parsed by a state machine (key_feed and its
 #   key_in_* helpers) whose state lives in globals and therefore survives
 #   across read_key calls and game ticks. A sequence the terminal delivers
@@ -42,7 +44,7 @@
 #   overlay until it grows back.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.8.0  (2026-07-29)
+# Version: 0.9.0  (2026-08-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -121,6 +123,19 @@ KEY_EXTRA=""
 # Raw bytes collected for the key press currently being assembled, for
 # the debug log. Capped so a large paste cannot grow it without bound.
 RAW_BUF=""
+
+# Text entry mode, switched on by the callers that read typed text rather
+# than game keys (menu_text_input in lib/menu.sh, i.e. both name prompts).
+# It changes nothing about escape sequences - arrow keys, mouse reports,
+# pastes and terminal replies are parsed and discarded exactly as always -
+# and only affects how a plain byte is reported (see key_plain): the byte
+# is passed on as it was typed instead of lower-cased, and the two erase
+# bytes become the key BACKSPACE instead of being dropped as inert.
+# Both are wrong for the game, where "A" and "a" are the same binding and
+# nothing is bound to backspace, and both are indispensable for typing a
+# name. The flag is set around the read that wants it, not for the
+# duration of a prompt, so no path can leak it into the game loop.
+KEY_TEXT=0
 
 SAVED_STTY=""
 TERM_ACTIVE=0
@@ -219,17 +234,16 @@ term_input_raw() {
         die "Cannot switch the terminal into raw input mode"
 }
 
-# term_input_line
-# Hand the line editing back to the terminal (canonical mode with echo)
-# for the one prompt that wants it: the player name input in
-# prompt_player_name, where the terminal draws the typed name and handles
-# backspace. Every other prompt reads single keys through read_key and
-# stays in raw mode. The caller switches back with term_input_raw.
-term_input_line() {
-    stty icanon echo ||
-        die "Cannot switch the terminal into line input mode"
-}
-
+# CHANGE 2026-08-03 (0.9.0): term_input_line, which handed line editing
+# back to the terminal (canonical mode with echo) for the player name
+# prompt, is gone. It was the one exception to the session-wide raw mode
+# above, and it cost the prompt its place in the centered menu layout:
+# the terminal echoed the typed name wherever the cursor happened to be
+# and the frame had to be declared dirty afterwards. The name prompts now
+# draw the text themselves and read it through read_key in text mode
+# (KEY_TEXT), which is also what lets the preselected default be shown as
+# marked text - something a terminal-side line editor cannot do.
+#
 # Enter the alternate screen buffer, clear it and hide the cursor. The
 # current stty state is saved first so term_restore can bring the terminal
 # back exactly as it was, and the terminal is switched into the raw input
@@ -302,6 +316,9 @@ key_drop() {
 # bytes of a UTF-8 character - is discarded instead of becoming a key:
 # nothing in the game is bound to it, and passing it on only invites the
 # kind of misreading issue #7 is about.
+# In text mode (KEY_TEXT, see above) the printable byte is reported as it
+# was typed and the two erase bytes become BACKSPACE; SPACE and ENTER
+# keep their symbolic names in both modes, the prompts map them back.
 key_plain() {
     local b="${1}" ord
     case "${b}" in
@@ -333,8 +350,19 @@ key_plain() {
             ;;
     esac
     printf -v ord '%d' "'${b}"
+    # Backspace (0x08) or DEL (0x7f), whichever the terminal sends: an
+    # erase key while text is being typed, an inert byte for the game.
+    if [ "${KEY_TEXT}" -eq 1 ] && \
+       { [ "${ord}" -eq 8 ] || [ "${ord}" -eq 127 ]; }; then
+        key_emit "BACKSPACE"
+        return 0
+    fi
     if [ "${ord}" -ge 33 ] && [ "${ord}" -le 126 ]; then
-        key_emit "${b,,}"
+        if [ "${KEY_TEXT}" -eq 1 ]; then
+            key_emit "${b}"
+        else
+            key_emit "${b,,}"
+        fi
     else
         key_drop "inert byte"
     fi
@@ -597,7 +625,9 @@ key_drain() {
 # read_key
 # Wait up to TICK_S for a key press and map it to a symbolic name in the
 # global KEY: LEFT RIGHT UP DOWN SPACE ENTER ESC or the lower-cased
-# literal character. KEY is empty when no (usable) key arrived. A closed
+# literal character (in text mode additionally BACKSPACE, and the literal
+# character with its case kept, see KEY_TEXT).
+# KEY is empty when no (usable) key arrived. A closed
 # stdin is treated as a fatal error so the loop cannot spin at full speed.
 read_key() {
     KEY=""
