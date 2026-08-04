@@ -13,7 +13,7 @@
 #   assets. wonders_update computes the current wonder, stage and
 #   percentage into WONDER_* globals (read by the HUD in lib/render.sh);
 #   wonder_screen renders the construction site screen shown after every
-#   round and from the "Weltwunder" main menu entry; its wait loop
+#   round and from the wonders main menu entry; its wait loop
 #   repaints on REDRAW_PENDING so a terminal resize (handled in read_key)
 #   does not leave it blank (since 0.1.1). Like the menus, the screen is
 #   handed to render_menu_frame (lib/render.sh) since 0.2.0, so it appears
@@ -25,7 +25,7 @@
 #   and are, since 0.3.0, in its order of magnitude as well.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.0  (2026-08-03)
+# Version: 0.4.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -33,22 +33,19 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     exit 2
 fi
 
-# The wonder sequence; all four tables share the same index. Structures
+# The wonder sequence; both tables share the same index. Structures
 # verified against the original where sources allowed (Mayan temple,
 # Stonehenge, Sphinx, Pantheon and St Basil's Cathedral appear in The
-# New Tetris); Great Wall and Taj Mahal fill the remaining slots. The
-# German display names are used on the wonder screen (menu language),
-# the shorter English names in the in-game HUD. WONDER_COSTS holds the
-# weighted rows needed to finish each single wonder (not cumulative);
-# adjust here to tune the pacing.
+# New Tetris); Great Wall and Taj Mahal fill the remaining slots.
+# WONDER_COSTS holds the weighted rows needed to finish each single
+# wonder (not cumulative); adjust here to tune the pacing.
+# CHANGE 2026-08-04: the two name tables that used to sit here (a German
+# one for the screen, an English one for the debug log) are gone. A
+# wonder's display name is a translated text like every other one now
+# (wonder_name below); the file name is what identifies a wonder in the
+# code and in the logs, and it is the same in every language.
 WONDER_FILES=(mayan-temple stonehenge sphinx pantheon
               great-wall taj-mahal st-basils)
-WONDER_NAMES_DE=("Maya-Tempel (Chichen Itza)" "Stonehenge"
-                 "Sphinx von Gizeh" "Pantheon (Rom)"
-                 "Chinesische Mauer" "Taj Mahal"
-                 "Basilius-Kathedrale (Moskau)")
-WONDER_NAMES_HUD=("Mayan Temple" "Stonehenge" "Sphinx" "Pantheon"
-                  "Great Wall" "Taj Mahal" "St Basils")
 # CHANGE 2026-08-03 (0.44.0, user decision): every cost multiplied by 100
 # (100..6400 -> 10000..640000, 12.700 -> 1.270.000 weighted rows in
 # total). The old figures were scaled down for single-machine play and
@@ -61,23 +58,18 @@ WONDER_COSTS=(10000 20000 40000 80000 160000 320000 640000)
 # State computed by wonders_update from a row total; only the wonder
 # screen reads these. WONDER_PREV_INDEX tracks completions
 # across calls so finishing a wonder is logged exactly once.
-# The "HUD" in WONDER_NAMES_HUD/WONDER_HUD_NAME is historical: it is
-# the short name, once shown on the HUD status line until 0.25.0 gave
-# that slot to the rowhammer counter, and now the heading of the
-# construction site screen.
 WONDER_INDEX=0
 WONDER_DONE=0
 WONDER_COST=0
 WONDER_PERCENT=0
 WONDER_ALL_DONE=0
-WONDER_HUD_NAME=""
 WONDER_PREV_INDEX=-1
 
 # wonders_update TOTAL
 # Map an all-time row total onto the wonder sequence: walk the cost
 # table, subtracting each finished wonder, until the wonder still under
 # construction is found. Sets WONDER_INDEX (0-based), WONDER_DONE (rows
-# invested into it), WONDER_COST, WONDER_PERCENT and WONDER_HUD_NAME;
+# invested into it), WONDER_COST and WONDER_PERCENT;
 # after the last wonder WONDER_ALL_DONE is 1 and the last wonder stays
 # selected at 100 percent.
 wonders_update() {
@@ -99,13 +91,27 @@ wonders_update() {
     WONDER_DONE="${total}"
     WONDER_COST="${WONDER_COSTS[i]}"
     WONDER_PERCENT=$(( WONDER_DONE * 100 / WONDER_COST ))
-    WONDER_HUD_NAME="${WONDER_NAMES_HUD[i]}"
     # Log the transition to a new construction site once. The very first
-    # call (previous index -1) only initializes the tracking.
+    # call (previous index -1) only initializes the tracking. The file
+    # names go into the log rather than the display names: a log has to
+    # read the same whatever language the session ran in.
     if [ "${WONDER_PREV_INDEX}" -ge 0 ] && [ "${WONDER_INDEX}" -ne "${WONDER_PREV_INDEX}" ]; then
-        debug_event "wonder completed: ${WONDER_NAMES_HUD[WONDER_PREV_INDEX]}, now building ${WONDER_HUD_NAME}"
+        debug_event "wonder completed: ${WONDER_FILES[WONDER_PREV_INDEX]}, now building ${WONDER_FILES[i]}"
     fi
     WONDER_PREV_INDEX="${WONDER_INDEX}"
+    return 0
+}
+
+# wonder_name INDEX
+# The display name of a wonder in the active language, in the global
+# WONDER_NAME. The translation key is built from the art file name
+# (mayan-temple -> wonder_mayan_temple), so a wonder is identified by the
+# one string that is the same in every language and no second table has
+# to be kept in the order of WONDER_FILES.
+WONDER_NAME=""
+wonder_name() {
+    local key="${WONDER_FILES[${1}]//-/_}"
+    WONDER_NAME="${I18N[wonder_${key}]}"
     return 0
 }
 
@@ -133,15 +139,18 @@ wonder_art_load() {
 wonder_screen() {
     local total="${1}"
     local -a lines
-    local stages reveal i
+    local stages reveal i line
     wonders_update "${total}"
     wonder_art_load "${WONDER_INDEX}"
     stages="${#WONDER_ART[@]}"
     reveal=$(( WONDER_DONE * stages / WONDER_COST ))
+    wonder_name "${WONDER_INDEX}"
     if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
-        lines=("  Alle Weltwunder sind errichtet!" "")
+        lines=("  ${I18N[wonder_all_done]}" "")
     else
-        lines=("  Weltwunder $(( WONDER_INDEX + 1 ))/${#WONDER_FILES[@]}: ${WONDER_NAMES_DE[WONDER_INDEX]}" "")
+        printf -v line "${I18N[wonder_building]}" \
+            "$(( WONDER_INDEX + 1 ))" "${#WONDER_FILES[@]}" "${WONDER_NAME}"
+        lines=("  ${line}" "")
     fi
     for (( i = 0; i < stages; i++ )); do
         if (( i >= stages - reveal )); then
@@ -152,11 +161,14 @@ wonder_screen() {
     done
     lines+=("")
     if [ "${WONDER_ALL_DONE}" -eq 1 ]; then
-        lines+=("  ${WONDER_NAMES_DE[WONDER_INDEX]} ist fertig.")
+        printf -v line "${I18N[wonder_finished]}" "${WONDER_NAME}"
     else
-        lines+=("  Baustufe ${reveal}/${stages} - ${WONDER_DONE}/${WONDER_COST} Reihen (${WONDER_PERCENT}%)")
+        printf -v line "${I18N[wonder_stage]}" "${reveal}" "${stages}" \
+            "${WONDER_DONE}" "${WONDER_COST}" "${WONDER_PERCENT}"
     fi
-    lines+=("  Reihen gesamt: ${total}" "" "  Beliebige Taste druecken...")
+    lines+=("  ${line}")
+    printf -v line "${I18N[wonder_total]}" "${total}"
+    lines+=("  ${line}" "" "  ${I18N[menu_any_key]}")
     render_menu_frame "${lines[@]}"
     screen_write "${RENDER_MENU_FRAME}"
     debug_event "wonder screen shown: index=${WONDER_INDEX} stage=${reveal}/${stages} done=${WONDER_DONE}/${WONDER_COST} total=${total}"

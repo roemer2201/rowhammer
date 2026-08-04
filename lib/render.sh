@@ -66,7 +66,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.23.0  (2026-08-03)
+# Version: 0.24.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -468,11 +468,14 @@ screen_write() {
 # drags the border.
 term_too_small_screen() {
     local frame
+    local need now
+    printf -v need "${I18N[resize_need]}" "${MIN_TERM_COLS}" "${MIN_TERM_ROWS}"
+    printf -v now "${I18N[resize_now]}" "${TERM_COLS}" "${TERM_ROWS}"
     printf -v frame '\e[2J\e[H%s\r\n%s\r\n%s\r\n%s' \
         "rowhammer" \
-        "resize:" \
-        "need ${MIN_TERM_COLS}x${MIN_TERM_ROWS}" \
-        "now ${TERM_COLS}x${TERM_ROWS}"
+        "${I18N[resize_head]}" \
+        "${need}" \
+        "${now}"
     # The overlay owns the screen now; the menu that was interrupted has
     # to repaint on a cleared terminal once the resize is over.
     MENU_FULL=1
@@ -597,7 +600,7 @@ render_pane_left() {
     for (( i = 0; i <= BOARD_BOTTOM_ROW; i++ )); do
         PANE_LEFT[i]="${PANE_BLANK}"
     done
-    printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" " Hold"
+    printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" " ${I18N[hud_hold]}"
     PANE_LEFT[0]="${line}"
     render_mini "${HOLD_TYPE}" 0
     PANE_LEFT[1]=" ${RENDER_MINI}   "
@@ -606,22 +609,22 @@ render_pane_left() {
     # "Lines" counts physical rows (drives the level), "Rows" is the
     # weighted credit (gold/silver bonus) that builds the wonders - and,
     # since the scoring rebuild, the round's score.
-    pane_stat 4 "Lines" "${CLEARED_TOTAL}"
-    pane_stat 5 "Rows" "${ROW_CREDIT}"
-    pane_stat 6 "Level" "${LEVEL}"
-    pane_stat 8 "Gold" "${GOLD_COUNT}"
-    pane_stat 9 "Silver" "${SILVER_COUNT}"
+    pane_stat 4 "${I18N[hud_lines]}" "${CLEARED_TOTAL}"
+    pane_stat 5 "${I18N[hud_rows]}" "${ROW_CREDIT}"
+    pane_stat 6 "${I18N[hud_level]}" "${LEVEL}"
+    pane_stat 8 "${I18N[hud_gold]}" "${GOLD_COUNT}"
+    pane_stat 9 "${I18N[hud_silver]}" "${SILVER_COUNT}"
     # The move the game is named after: four rows cleared in one go.
     # "Hammer" is the label that fits the pane's six label columns.
-    pane_stat 10 "Hammer" "${ROWHAMMER_COUNT}"
+    pane_stat 10 "${I18N[hud_hammer]}" "${ROWHAMMER_COUNT}"
     # Elapsed play time of the running round (paused time excluded), fed
     # by the game loop's PLAY_MS and formatted MM:SS (fmt_duration).
     fmt_duration $(( PLAY_MS / 1000 ))
-    pane_stat 12 "Time" "${FMT_DURATION}"
+    pane_stat 12 "${I18N[hud_time]}" "${FMT_DURATION}"
     # Pieces placed this round, right below the play time: the two
     # together are what the statistics and highscore screens turn into a
     # PCS/min rate. "Pieces" fills the pane's six label columns exactly.
-    pane_stat 13 "Pieces" "${PIECE_COUNT}"
+    pane_stat 13 "${I18N[hud_pieces]}" "${PIECE_COUNT}"
     # Ultra mode (2026-07-31): the run's target and how far it still is,
     # so the player never has to do that arithmetic mid-round. Only in
     # that mode - a normal round has no goal, and the free rows below
@@ -634,17 +637,17 @@ render_pane_left() {
     # modes never run at once, so sharing the slots costs nothing and
     # keeps both goal counters in the place a player learns once.
     if [ "${GAME_MODE}" = "ultra" ]; then
-        pane_stat 15 "Goal" "${ULTRA_TARGET_ROWS}"
+        pane_stat 15 "${I18N[hud_goal]}" "${ULTRA_TARGET_ROWS}"
         left=$(( ULTRA_TARGET_ROWS - ROW_CREDIT ))
         if [ "${left}" -lt 0 ]; then
             # The last clear usually overshoots the target; showing a
             # negative remainder would be noise on the finished run.
             left=0
         fi
-        pane_stat 16 "Left" "${left}"
+        pane_stat 16 "${I18N[hud_left]}" "${left}"
     elif [ "${GAME_MODE}" = "sprint" ]; then
         fmt_duration $(( SPRINT_TIME_MS / 1000 ))
-        pane_stat 15 "Goal" "${FMT_DURATION}"
+        pane_stat 15 "${I18N[hud_goal]}" "${FMT_DURATION}"
         left=$(( SPRINT_TIME_MS - PLAY_MS ))
         if [ "${left}" -lt 0 ]; then
             # The loop notices the timeout a tick late at the most, so
@@ -655,7 +658,7 @@ render_pane_left() {
         # display hits 00:00, and truncating would show that for the
         # last second of play.
         fmt_duration $(( (left + 999) / 1000 ))
-        pane_stat 16 "Left" "${FMT_DURATION}"
+        pane_stat 16 "${I18N[hud_left]}" "${FMT_DURATION}"
     elif [ "${GAME_MODE}" = "timeattack" ]; then
         # Time Attack (2026-08-03) reads like Sprint, with one
         # difference that is the whole mode: its "Goal" is not a
@@ -671,13 +674,13 @@ render_pane_left() {
         # player is looking to see what the clear bought.
         time_attack_budget
         fmt_duration $(( TIME_ATTACK_BUDGET_MS / 1000 ))
-        pane_stat 15 "Goal" "${FMT_DURATION}"
+        pane_stat 15 "${I18N[hud_goal]}" "${FMT_DURATION}"
         left=$(( TIME_ATTACK_BUDGET_MS - PLAY_MS ))
         if [ "${left}" -lt 0 ]; then
             left=0
         fi
         fmt_duration $(( (left + 999) / 1000 ))
-        pane_stat 16 "Left" "${FMT_DURATION}"
+        pane_stat 16 "${I18N[hud_left]}" "${FMT_DURATION}"
     fi
     # Demo playback (2026-08-03): the replay speed, on one of the pane's
     # free rows (see CLAUDE.md 3.4). It is the only thing about a replay
@@ -686,7 +689,7 @@ render_pane_left() {
     # box over the board. Row 18, two rows below the goal counters, so a
     # replayed Ultra or Sprint run keeps showing its own two lines.
     if [ "${DEMO_PLAYING}" -eq 1 ]; then
-        pane_stat 18 "Demo" "${DEMO_SPEED_LABEL}"
+        pane_stat 18 "${I18N[hud_demo]}" "${DEMO_SPEED_LABEL}"
     fi
     return 0
 }
@@ -700,7 +703,7 @@ render_pane_right() {
     for (( i = 0; i <= BOARD_BOTTOM_ROW; i++ )); do
         PANE_RIGHT[i]="${PANE_BLANK}"
     done
-    printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" " Next"
+    printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" " ${I18N[hud_next]}"
     PANE_RIGHT[0]="${line}"
     for (( q = 0; q < PREVIEW_COUNT; q++ )); do
         render_mini "${QUEUE[q]:-}" 0
@@ -719,7 +722,7 @@ render_pane_right() {
 # Interior lines are 18 characters wide between the borders, so every
 # entry is exactly the board's 20 visible columns.
 render_status_box() {
-    local i line
+    local i line played
     BOX_LINES=()
     # A finished demo takes the box before anything else, even when the
     # replayed round ended in a real top-out (which sets GAME_OVER while
@@ -729,19 +732,22 @@ render_status_box() {
     # borders sit in the same place either way.
     if [ "${DEMO_PLAYING}" -eq 1 ] && [ "${DEMO_ENDED}" -eq 1 ]; then
         local -a demo_body=("")
-        demo_body+=("    DEMO ENDE")
-        demo_body+=("   Rows ${ROW_CREDIT}")
+        demo_body+=("${I18N[box_demo_end]}")
+        printf -v line "${I18N[box_rows]}" "${ROW_CREDIT}"
+        demo_body+=("${line}")
         fmt_duration $(( PLAY_MS / 1000 ))
-        demo_body+=("   Time ${FMT_DURATION}")
+        printf -v line "${I18N[box_time]}" "${FMT_DURATION}"
+        demo_body+=("${line}")
         # How the recorded round ended, which the counters alone do not
         # say: a top-out, a reached goal or a round left from the menu.
         case "${DEMO_HDR_END}" in
-            over) demo_body+=("  Game Over") ;;
-            goal) demo_body+=("  Ziel erreicht") ;;
-            *)    demo_body+=("  Abgebrochen") ;;
+            over) demo_body+=("${I18N[box_end_over]}") ;;
+            goal) demo_body+=("${I18N[box_end_goal]}") ;;
+            *)    demo_body+=("${I18N[box_end_quit]}") ;;
         esac
-        demo_body+=("  r = nochmal")
-        demo_body+=("  ${KEY_QUIT} = zurueck")
+        demo_body+=("${I18N[box_demo_again]}")
+        printf -v line "${I18N[box_demo_back]}" "${KEY_QUIT}"
+        demo_body+=("${line}")
         demo_body+=("")
         BOX_LINES[6]="${BOX_SGR}+------------------+${RESET_SGR}"
         for (( i = 0; i < ${#demo_body[@]}; i++ )); do
@@ -763,31 +769,39 @@ render_status_box() {
         case "${GAME_MODE}" in
             ultra)
                 if [ "${GOAL_REACHED}" -eq 1 ]; then
-                    body+=("    ULTRA CLEAR")
+                    body+=("${I18N[box_ultra_clear]}")
                     fmt_duration_ms "${PLAY_MS}"
-                    body+=("   Time ${FMT_DURATION_MS}")
+                    printf -v line "${I18N[box_time]}" "${FMT_DURATION_MS}"
+                    body+=("${line}")
                     # The run was recorded when the goal triggered
                     # (record_round), so HSU_LAST_RANK is its rank in the
                     # Ultra list.
                     if [ "${HSU_LAST_RANK}" -gt 0 ]; then
-                        body+=("  Ultra #${HSU_LAST_RANK}")
+                        printf -v line "${I18N[box_rank]}" \
+                            "${I18N[mode_ultra]}" "${HSU_LAST_RANK}"
+                        body+=("${line}")
                     else
                         body+=("")
                     fi
                 else
-                    body+=("    GAME OVER")
+                    body+=("${I18N[box_game_over]}")
                     body+=("")
-                    body+=("  Rows ${ROW_CREDIT}/${ULTRA_TARGET_ROWS}")
+                    printf -v line "${I18N[box_rows_goal]}" \
+                        "${ROW_CREDIT}" "${ULTRA_TARGET_ROWS}"
+                    body+=("${line}")
                 fi
                 ;;
             sprint)
                 if [ "${GOAL_REACHED}" -eq 1 ]; then
                     # Time is up: here the row credit is the result, the
                     # mirror image of the Ultra box above.
-                    body+=("    SPRINT END")
-                    body+=("   Rows ${ROW_CREDIT}")
+                    body+=("${I18N[box_sprint_end]}")
+                    printf -v line "${I18N[box_rows]}" "${ROW_CREDIT}"
+                    body+=("${line}")
                     if [ "${HSS_LAST_RANK}" -gt 0 ]; then
-                        body+=("  Sprint #${HSS_LAST_RANK}")
+                        printf -v line "${I18N[box_rank]}" \
+                            "${I18N[mode_sprint]}" "${HSS_LAST_RANK}"
+                        body+=("${line}")
                     else
                         body+=("")
                     fi
@@ -795,12 +809,14 @@ render_status_box() {
                     # Topped out before the time was up: the rows are on
                     # screen anyway, so the line that matters is how much
                     # of the three minutes the run got to use.
-                    body+=("    GAME OVER")
+                    body+=("${I18N[box_game_over]}")
                     body+=("")
                     fmt_duration $(( PLAY_MS / 1000 ))
-                    line="${FMT_DURATION}"
+                    played="${FMT_DURATION}"
                     fmt_duration $(( SPRINT_TIME_MS / 1000 ))
-                    body+=("  Time ${line}/${FMT_DURATION}")
+                    printf -v line "${I18N[box_time_goal]}" \
+                        "${played}" "${FMT_DURATION}"
+                    body+=("${line}")
                 fi
                 ;;
             timeattack)
@@ -809,33 +825,39 @@ render_status_box() {
                 # what tells them apart - the clock ran out, or the
                 # stack did. The result is the rows in either case.
                 if [ "${GOAL_REACHED}" -eq 1 ]; then
-                    body+=("    TIME UP")
+                    body+=("${I18N[box_time_up]}")
                 else
-                    body+=("    GAME OVER")
+                    body+=("${I18N[box_game_over]}")
                 fi
-                body+=("   Rows ${ROW_CREDIT}")
+                printf -v line "${I18N[box_rows]}" "${ROW_CREDIT}"
+                body+=("${line}")
                 if [ "${HSA_LAST_RANK}" -gt 0 ]; then
-                    body+=("  Time Attack #${HSA_LAST_RANK}")
+                    printf -v line "${I18N[box_rank]}" \
+                        "${I18N[mode_timeattack]}" "${HSA_LAST_RANK}"
+                    body+=("${line}")
                 else
                     body+=("")
                 fi
                 ;;
             *)
-                body+=("    GAME OVER")
+                body+=("${I18N[box_game_over]}")
                 body+=("")
                 # The finished round was recorded when the game over
                 # triggered (record_round), so HS_LAST_RANK is this
                 # round's rank.
                 if [ "${HS_LAST_RANK}" -gt 0 ]; then
-                    body+=("  Highscore #${HS_LAST_RANK}")
+                    printf -v line "${I18N[box_rank_marathon]}" \
+                        "${HS_LAST_RANK}"
+                    body+=("${line}")
                 else
                     body+=("")
                 fi
                 ;;
         esac
         body+=("")
-        body+=("  r = restart")
-        body+=("  ${KEY_QUIT} = menu")
+        body+=("${I18N[box_restart]}")
+        printf -v line "${I18N[box_menu]}" "${KEY_QUIT}"
+        body+=("${line}")
         body+=("")
         # BOX_LINES is an associative array, so its subscripts are plain
         # strings: the row index has to be computed explicitly, otherwise
@@ -848,7 +870,7 @@ render_status_box() {
         BOX_LINES[15]="${BOX_SGR}+------------------+${RESET_SGR}"
     elif [ "${PAUSED}" -eq 1 ]; then
         BOX_LINES[9]="${BOX_SGR}+------------------+${RESET_SGR}"
-        BOX_LINES[10]="${BOX_SGR}|      PAUSED      |${RESET_SGR}"
+        BOX_LINES[10]="${BOX_SGR}|${I18N[box_paused]}|${RESET_SGR}"
         BOX_LINES[11]="${BOX_SGR}+------------------+${RESET_SGR}"
     fi
     return 0

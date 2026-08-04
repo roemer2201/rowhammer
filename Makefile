@@ -9,6 +9,7 @@
 # Layout:
 #   ${PREFIX}/share/rowhammer/rowhammer.sh      main script (real location)
 #   ${PREFIX}/share/rowhammer/lib/*.sh          library modules
+#   ${PREFIX}/share/rowhammer/lib/lang/*.sh     language files (i18n)
 #   ${PREFIX}/share/rowhammer/assets/wonders/   wonder ASCII art
 #   ${PREFIX}/games/rowhammer                   relative symlink to rowhammer.sh
 #
@@ -16,7 +17,7 @@
 #   make install [DESTDIR=/staging] [PREFIX=/usr]
 #   make uninstall [DESTDIR=/staging] [PREFIX=/usr]
 #
-# Version: 1.1.0  (2026-07-21)
+# Version: 1.2.0  (2026-08-04)
 
 PREFIX  ?= /usr/local
 DESTDIR ?=
@@ -29,6 +30,7 @@ INSTALL_DATA = $(INSTALL) -m 0644
 INSTALL_PROG = $(INSTALL) -m 0755
 
 LIB_FILES    = $(wildcard lib/*.sh)
+LANG_FILES   = $(wildcard lib/lang/*.sh)
 WONDER_FILES = $(wildcard assets/wonders/*.txt)
 
 .PHONY: all install uninstall
@@ -40,10 +42,11 @@ all:
 # GAMESDIR. The relative link target assumes both directories share PREFIX,
 # which holds for the layouts used here (/usr and /usr/local).
 install:
-	$(INSTALL) -d "$(DESTDIR)$(DATADIR)/lib"
+	$(INSTALL) -d "$(DESTDIR)$(DATADIR)/lib/lang"
 	$(INSTALL) -d "$(DESTDIR)$(DATADIR)/assets/wonders"
 	$(INSTALL_PROG) rowhammer.sh "$(DESTDIR)$(DATADIR)/rowhammer.sh"
 	$(INSTALL_DATA) $(LIB_FILES) "$(DESTDIR)$(DATADIR)/lib/"
+	$(INSTALL_DATA) $(LANG_FILES) "$(DESTDIR)$(DATADIR)/lib/lang/"
 	$(INSTALL_DATA) $(WONDER_FILES) "$(DESTDIR)$(DATADIR)/assets/wonders/"
 	$(INSTALL) -d "$(DESTDIR)$(GAMESDIR)"
 	ln -sf ../share/rowhammer/rowhammer.sh "$(DESTDIR)$(GAMESDIR)/rowhammer"

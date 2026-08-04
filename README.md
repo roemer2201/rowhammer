@@ -71,7 +71,9 @@ die besten
 aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
 (Marathon/Ultra/Sprint/Time Attack), Anleitung, Lock Delay, der
 gezielte Reset
-gespeicherter Daten und die Demo-Aufzeichnung mit Wiedergabe. Das vollstaendige Konzept
+gespeicherter Daten, die Demo-Aufzeichnung mit Wiedergabe und die
+**mehrsprachige Oberflaeche** (Deutsch und Englisch, umschaltbar im
+Spiel). Das vollstaendige Konzept
 und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
 abgeschlossenen Entwicklungsschritte je Version in
 [HISTORY.md](HISTORY.md).
@@ -171,10 +173,12 @@ Das Startmenue bietet:
   Runden; Aufnahmen, die noch einen Highscore-Eintrag belegen, sind mit
   `*` markiert und bleiben darueber hinaus erhalten (verknuepft ueber
   einen Hash im Dateinamen)
-- **Einstellungen** - Tastenbelegung aendern, Farbschema waehlen
+- **Einstellungen** - Tastenbelegung aendern, **Sprache waehlen**
+  (`Automatisch`, `Deutsch` oder `English`; die Auswahl gilt sofort,
+  ohne Neustart), Farbschema waehlen
   (`guideline`, `classic`, `mono` oder `colorblind`, jeweils mit einer
   Farbvorschau in der Liste), Spielernamen setzen und die
-  Demo-Aufzeichnung an- oder abschalten; alles vier wird in
+  Demo-Aufzeichnung an- oder abschalten; alles fuenf wird in
   der Konfigurationsdatei gespeichert (Standard:
   `~/.config/rowhammer/rowhammer.conf`). Der Spielername ist die
   Vorgabe der Namensabfrage am Rundenende (siehe unten)
@@ -198,6 +202,7 @@ Optionen:
 |------------------|--------------------------|------------------------------------------|
 | `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
 | `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername fuer die Highscore-Liste     |
+| `--lang CODE`    | `ROWHAMMER_LANG`         | Sprache der Oberflaeche: `auto` (Standard, folgt der Locale), `de`, `en` |
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (Config, Scores, Save)  |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen (auch Standard-`NO_COLOR`, s. u.) |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
@@ -265,6 +270,27 @@ projekteigene `ROWHAMMER_NO_COLOR` hat Vorrang - mit
 fuer rowhammer wieder ueberschreiben, und `--no-color` auf der
 Kommandozeile gewinnt in jedem Fall.
 
+**Sprache:** Die gesamte Oberflaeche gibt es auf **Deutsch** und
+**Englisch** - Menues, Anleitung, HUD-Beschriftungen, der Kasten am
+Rundenende, die Highscore- und Statistik-Tabellen, der
+Weltwunder-Bildschirm, die Demo-Liste, der Reset-Dialog und `--help`.
+Gewaehlt wird sie im Einstellungsmenue (wirkt sofort), per
+`--lang de|en|auto` oder per `ROWHAMMER_LANG`; gespeichert wird sie in
+der Konfigurationsdatei. Der Standard `auto` nimmt die Sprache aus den
+Locale-Variablen (`LC_ALL`, `LC_MESSAGES`, `LANG`) und faellt auf
+Deutsch zurueck, wenn dort keine unterstuetzte Sprache steht.
+Fehlermeldungen nach STDERR bleiben englisch (Skript-Konvention) - sie
+muessen auch dann lesbar sein, wenn gerade die Sprache das Problem ist.
+
+```
+rowhammer.sh --lang en
+LANG=en_US.UTF-8 rowhammer.sh      # nimmt automatisch Englisch
+```
+
+Eine weitere Sprache ist eine Datei `lib/lang/<code>.sh` mit der
+Texttabelle plus ein Eintrag in `I18N_LANGS` (`lib/i18n.sh`) - im
+uebrigen Code steht kein einziger anzeigbarer Text mehr.
+
 Die Tastenbelegung laesst sich zusaetzlich per Umgebungsvariablen
 `ROWHAMMER_KEY_*` uebersteuern (siehe `--help`); erlaubt sind `a`-`z`,
 `0`-`9`, `SPACE` und `NONE` (kein Buchstabe fuer diese Aktion).
@@ -308,6 +334,12 @@ Umgesetzt:
   Pause und Game Over erscheinen als Kasten ueber dem Spielfeld.
   Menues, Info-Bildschirme und die Weltwunder-Baustelle sind ebenfalls
   zentriert und buendig zum Spielfeld
+- **Mehrsprachige Oberflaeche:** Deutsch und Englisch, waehlbar im
+  Einstellungsmenue (wirkt sofort, ohne Neustart), per `--lang` oder
+  `ROWHAMMER_LANG` und gespeichert in der Konfigurationsdatei; der
+  Standard `auto` folgt der Locale. Uebersetzt ist alles Sichtbare -
+  Menues, Anleitung, HUD, Rundenende-Kasten, Tabellen,
+  Weltwunder-Bildschirm, Demo-Liste, Reset-Dialog und `--help`
 - Farbige Darstellung ueber ANSI-Sequenzen, flackerfreies Rendering,
   sauberes Terminal-Restore beim Beenden
 - **Inkrementelles Rendering:** je Frame werden nur die tatsaechlich

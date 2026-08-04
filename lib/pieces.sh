@@ -14,7 +14,7 @@
 #   bag refill is logged with the shuffled piece order.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.7.0  (2026-08-03)
+# Version: 0.8.0  (2026-08-04)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -72,16 +72,13 @@ declare -A COLOR_EXT=(
     [grey]="245" [purple]="129" [sky]="39"       [amber]="214"
 )
 
-# Available color schemes, in menu order, plus their German display
-# labels (menu language is German, section 6 of CLAUDE.md). COLOR_THEME
-# (a validated user setting in rowhammer.sh) picks one of these names.
+# Available color schemes, in menu order. COLOR_THEME (a validated user
+# setting in rowhammer.sh) picks one of these names.
 COLOR_THEMES=(guideline classic mono colorblind)
-declare -A COLOR_THEME_LABEL=(
-    [guideline]="Guideline"
-    [classic]="Classic"
-    [mono]="Monochrom"
-    [colorblind]="Farbenblind"
-)
+# CHANGE 2026-08-04: the display names of the themes moved into the
+# translation layer (lib/i18n.sh), keyed "theme_<name>". The theme
+# identifiers below are what the config file and --color-theme use and
+# stay English; only what the settings menu prints is translated.
 
 # Theme table: for every theme and slot (the seven piece types plus the
 # GOLD and SILVER square looks) the color name to use. Keys are

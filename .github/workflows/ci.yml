@@ -58,7 +58,11 @@ jobs:
       # that level, while the remaining warnings are false positives of
       # the module architecture: lib/*.sh is sourced into the main script,
       # so its variables look unused (SC2034) and its arrays look like
-      # scalars (SC2128, SC2178) when a file is checked on its own.
+      # scalars (SC2128, SC2178) when a file is checked on its own. The
+      # SC2059 notes ("no variables in the printf format string") are the
+      # translation layer working as designed: a translated format string
+      # comes out of the text table, which is the whole point of it
+      # (CLAUDE.md 4.11).
       - name: ShellCheck (blocking, error severity)
         run: |
           set -euo pipefail
