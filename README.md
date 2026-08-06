@@ -470,7 +470,8 @@ Umgesetzt:
   einziger Tastendruck ersetzt. Der eingegebene Name gilt nur fuer diese
   Runde. Der Bildschirm nennt dabei den Platz, den die Runde in der
   Bestenliste ihres Modus einnehmen wird; verfehlt sie die Top 10, wird
-  gar nicht erst gefragt
+  gar nicht erst gefragt. Die Spielzeit steht dort in jedem Modus auf
+  die Millisekunde genau (MM:SS.mmm) - im Ultra ist sie die Wertung
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
   Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der

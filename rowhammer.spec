@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.0.2
+Version:        1.0.3
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.3-1
+- The end-of-round name prompt shows the play time to the millisecond
+  (MM:SS.mmm) in every game mode, like the Ultra highscore list (user
+  request): in Ultra the time is the score, so MM:SS cut off the digits
+  that decide the place shown right below it.
+
 * Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.2-1
 - A piece that settles reaching into the hidden spawn rows above the
   field now ends the round (user report): the only top-out the game knew
