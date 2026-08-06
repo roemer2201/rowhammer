@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.0.1
+Version:        1.0.2
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,17 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.2-1
+- A piece that settles reaching into the hidden spawn rows above the
+  field now ends the round (user report): the only top-out the game knew
+  was a blocked spawn position, so a piece could stick out above the
+  topmost row and play went on.
+- Checked after the line clear, so a piece that pokes out but takes rows
+  with it pulls the stack back into the field and the round continues.
+- In the Hochwasser mode a rise that pushes the stack out of the field
+  ends the round by the same rule, one row earlier than before.
+- Working rule in CLAUDE.md: every multiplayer change is version 2.x.x.
+
 * Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.1-1
 - The name prompt at the end of a round only appears for a round that
   really takes a place in the highscore list of its mode; a round that

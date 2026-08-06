@@ -1,3 +1,23 @@
+rowhammer (1.0.2) unstable; urgency=medium
+
+  * A piece that comes to rest reaching into the hidden spawn rows above
+    the field now ends the round (user report). Until now the only
+    top-out the game knew was a blocked spawn position, so a piece could
+    settle on the topmost row sticking out above it and the round simply
+    went on - the field is 20 rows, and nothing that stays above them
+    belongs to it.
+  * The check runs after the line clear: a piece that pokes out but takes
+    rows with it pulls the stack back down into the field, and that
+    clutch move is rewarded rather than punished. An Ultra run that
+    reaches its target with that very piece counts as won as well.
+  * In the Hochwasser mode a rise that pushes the stack out of the field
+    ends the round by the same rule - one row earlier than the previous
+    check, which only refused to shift a cell off the board entirely.
+  * Working rule recorded in CLAUDE.md: every change that concerns the
+    multiplayer mode is work on version 2.x.x.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 06 Aug 2026 13:00:00 +0200
+
 rowhammer (1.0.1) unstable; urgency=medium
 
   * The prompt for the highscore name at the end of a round now only

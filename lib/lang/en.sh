@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.5.1  (2026-08-06)
+# Version: 1.6.0  (2026-08-06)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -324,8 +324,9 @@ seven types exactly once, then the bag is
 shuffled anew.
 
 Every cleared row raises the level and the
-pieces fall faster. Once a new piece has no
-room left, the round is over."
+pieces fall faster. Once a placed piece
+sticks out above the field or a new piece has
+no room left, the round is over."
     [help_p1_head]="Controls during a round (the letter keys
 can be changed in the settings):
 "

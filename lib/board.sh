@@ -15,7 +15,9 @@
 #   counter (ROWHAMMER_COUNT in rowhammer.sh), the move the game is
 #   named after. board_full_rows reports the full rows before they
 #   are removed, so the caller can flash them first (see flash_rows in
-#   rowhammer.sh). The two top rows are hidden spawn rows.
+#   rowhammer.sh). The two top rows are hidden spawn rows; board_top_out
+#   reports whether anything has come to rest in them, which ends the
+#   round wherever it is asked.
 #   board_flood_row lifts the whole board by one row and lets a row with a
 #   single gap in at the bottom, which is what the "Hochwasser" mode is
 #   made of. In debug mode every cleared row is logged with its credit
@@ -25,7 +27,7 @@
 #   next frame.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.8.0  (2026-08-04)
+# Version: 0.9.0  (2026-08-06)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -115,6 +117,31 @@ lock_piece() {
     render_board_dirty
 }
 
+# board_top_out
+# Return 0 when any cell sits in the hidden spawn rows above the visible
+# field, 1 otherwise. Those two rows are where a piece enters the board,
+# they are not part of the 20-row field: whatever comes to rest up there
+# has left the field, and the round is over. The callers in rowhammer.sh
+# are lock_and_next (a piece that settles reaching into them) and
+# flood_raise (a rise that pushes the stack into them).
+# CHANGE 2026-08-06: before this, a round only ended when the spawn
+# position itself was blocked, so a piece could settle sticking out above
+# the field and the round went on (user report).
+# Asked of the board rather than of the piece that just locked, for two
+# reasons: a clear that pulls the stack back down into the field saves
+# the round (the check runs after clear_lines), and the rising water of
+# the Hochwasser mode is then measured by the very same rule as a locked
+# piece instead of one of its own.
+board_top_out() {
+    local i
+    for (( i = 0; i < HIDDEN_ROWS * BOARD_W; i++ )); do
+        if [ "${BOARD[i]}" != "${EMPTY_CELL}" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # board_flood_row HOLE
 # Push the whole board up by one row and let a full row with a single gap
 # at column HOLE in at the bottom: the rising water of the "Hochwasser"
@@ -122,6 +149,12 @@ lock_piece() {
 # gap column). Returns 1 without changing anything when the top row still
 # holds a cell - shifting would drop it off the board, and a stack that
 # high is a topped-out round, which the caller ends.
+# CHANGE 2026-08-06: in a normal round that guard no longer fires, since
+# board_top_out ends the round as soon as the stack reaches the hidden
+# rows at all - one rise earlier than a cell in the topmost one. It stays
+# as the function's own safety net: it is the only thing keeping a cell
+# from being shifted off the board, and the multiplayer garbage of phase
+# 5 (see CLAUDE.md 5.7) will push several rows at once through here.
 # Rows move as a whole across all three arrays, so locked instances keep
 # their ids and their gold/silver marking and only their coordinates
 # change: a square survives being lifted, exactly as it survives a line

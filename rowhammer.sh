@@ -182,7 +182,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.0.1  (2026-08-06)
+# Version: 1.0.2  (2026-08-06)
 
 set -euo pipefail
 
@@ -197,7 +197,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.0.1"
+ROWHAMMER_VERSION="1.0.2"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -1494,9 +1494,12 @@ time_attack_time_up() {
 # loop draws it, a replay hands back the one its recording carries, which
 # is why the event stores it - the rise itself follows the clock, but the
 # column comes from RANDOM and could not be guessed again (lib/demo.sh).
-# The round ends right here when the board is already full to the top: a
-# stack that would be pushed off the board has reached the ceiling, which
-# is this mode's game over just as a blocked spawn is Marathon's.
+# The round ends right here when the rise takes the stack out of the
+# field - it has reached the ceiling, which is this mode's game over just
+# as a blocked spawn is Marathon's.
+# CHANGE 2026-08-06: that is now decided by board_top_out (the hidden rows
+# above the field, the same rule a locked piece is measured by) instead of
+# by board_flood_row refusing to push a cell off the board, one row later.
 flood_raise() {
     local hole="${1}"
     # The next rise is scheduled from the moment this one happened, not
@@ -1513,6 +1516,19 @@ flood_raise() {
     if ! board_flood_row "${hole}"; then
         GAME_OVER=1
         debug_event "flood blocked: stack at the ceiling (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} pieces=${PIECE_COUNT})"
+        record_round
+        DIRTY=1
+        return 0
+    fi
+    # The water pushed the stack out of the field: the same rule that ends
+    # a round whose piece settles up there (board_top_out, lib/board.sh),
+    # applied to the one other thing that can put cells into the hidden
+    # rows. Ending it here rather than at the next lock keeps the two
+    # honest with each other - the field is 20 rows, whichever way its
+    # ceiling is crossed.
+    if board_top_out; then
+        GAME_OVER=1
+        debug_event "flood row hole=${hole}: stack pushed above the field - game over (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} pieces=${PIECE_COUNT})"
         record_round
         DIRTY=1
         return 0
@@ -1672,6 +1688,25 @@ lock_and_next() {
             DIRTY=1
             return 0
         fi
+    fi
+    # Lock out: the piece came to rest reaching into the hidden spawn
+    # rows above the field, so the stack has grown out of the 20 rows it
+    # is played in - the round is over (board_top_out, lib/board.sh).
+    # CHANGE 2026-08-06: added on a user report - a piece could settle on
+    # the topmost row sticking out above it and the round went on, because
+    # the only top-out the game knew was a blocked spawn position.
+    # Checked after the clear on purpose: a piece that pokes out but takes
+    # rows with it pulls the stack back into the field, and that clutch
+    # move should be rewarded, not punished. For the same reason it is
+    # checked after the Ultra goal above - a run that hits its target with
+    # its last piece has won, however high that piece sat.
+    if board_top_out; then
+        GAME_OVER=1
+        debug_event "lock out: piece settled above the field (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} pieces=${PIECE_COUNT})"
+        record_round
+        debug_board_snapshot
+        DIRTY=1
+        return 0
     fi
     debug_board_snapshot
     # The hold slot unlocks again once a piece has locked.

@@ -79,6 +79,11 @@ und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
 abgeschlossenen Entwicklungsschritte je Version in
 [HISTORY.md](HISTORY.md).
 
+Der **Mehrspieler-Modus** und der Server-Betrieb darum herum sind die
+Arbeit an **Version 2.x.x** (siehe Roadmap in [CLAUDE.md](CLAUDE.md),
+Phasen 5 und 6); das Einzelspieler-Spiel laeuft daneben in seiner
+eigenen Versionsreihe weiter.
+
 ## Spielen
 
 Direkt aus dem Repository:
@@ -349,6 +354,14 @@ Umgesetzt:
   Diese Reihenwertung ist zugleich das Punktesystem: nur abgebaute
   Reihen bringen Punkte, Drops und Quadrat-Bildung nicht
 - Soft-/Hard-Drop, Rotation mit einfachen Wall-Kicks, Pause, Neustart
+- **Rundenende am oberen Feldrand:** Das Feld ist 20 Reihen hoch, und
+  was darueber liegen bleibt, gehoert nicht mehr dazu - ein Stein, der
+  in die verdeckten Spawn-Zeilen hineinragend festgesetzt wird, beendet
+  die Runde, ebenso wie ein neuer Stein, der keinen Platz mehr findet.
+  Geprueft wird nach dem Reihenabbau: wer oben heraussteht, aber dabei
+  noch Reihen mitnimmt, holt den Stapel ins Feld zurueck und spielt
+  weiter. Im Hochwasser-Modus gilt dieselbe Grenze fuer den steigenden
+  Stapel
 - **Lock Delay:** ein aufsetzender Stein wird nicht sofort festgesetzt,
   sondern laesst sich noch ein kurzes Gnadenfenster (250 ms) verschieben
   und drehen; der Hard-Drop setzt weiterhin sofort fest
