@@ -4,7 +4,7 @@
 #
 # Description:
 #   Release helper for rowhammer. The repository carries the version
-#   number in three places (rowhammer.sh, debian/changelog and
+#   number in four places (README.md, rowhammer.sh, debian/changelog and
 #   rowhammer.spec); this script is the single tool that knows about all
 #   of them. It verifies that they agree, extracts the release notes for
 #   a version from debian/changelog, and creates the annotated git tag
@@ -17,7 +17,7 @@
 #   2. Verify prerequisites (repository layout, git for mode "tag").
 #   3. Read the version from rowhammer.sh (or take it from --expect).
 #   4. Run the requested mode:
-#      check   - compare the version across all three files and make sure
+#      check   - compare the version across all four files and make sure
 #                debian/changelog and the spec %changelog have an entry
 #      version - print the version
 #      notes   - extract the changelog stanza as markdown release notes
@@ -29,7 +29,7 @@
 #              [-o|--output FILE] [-p|--push] [-r|--remote NAME]
 #              [-v|--verbose] [-s|--silent] [-h|--help]
 #
-# Version: 1.0.0  (2026-08-03)
+# Version: 1.1.0  (2026-08-06)
 
 set -euo pipefail
 
@@ -39,12 +39,16 @@ SCRIPT_NAME="$(basename -- "${0}")"
 # lives in. Symlinks are resolved so a link in ~/bin still finds the tree.
 REPO_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 
-# The three files that carry the version. rowhammer.sh is the reference:
-# it is the version the game reports about itself, the other two label the
-# packages built from it.
+# The four files that carry the version. rowhammer.sh is the reference:
+# it is the version the game reports about itself, two of the others label
+# the packages built from it, and README.md states it for whoever looks at
+# the repository first (added 2026-08-06 on user request - the number is
+# the first thing a reader wants and the last thing anyone remembers to
+# update, so it is checked here rather than left to go stale).
 VERSION_SCRIPT="${REPO_DIR}/rowhammer.sh"
 DEB_CHANGELOG="${REPO_DIR}/debian/changelog"
 RPM_SPEC="${REPO_DIR}/rowhammer.spec"
+README_FILE="${REPO_DIR}/README.md"
 
 # Tags are the version with a leading "v" (v0.39.0). The release workflow
 # triggers on this pattern, so the prefix is part of the interface.
@@ -66,8 +70,9 @@ usage() {
 Usage: release.sh [OPTIONS]
 
 Release helper for rowhammer: checks that the version agrees across
-rowhammer.sh, debian/changelog and rowhammer.spec, extracts the release
-notes for a version from debian/changelog, and creates the release tag.
+README.md, rowhammer.sh, debian/changelog and rowhammer.spec, extracts
+the release notes for a version from debian/changelog, and creates the
+release tag.
 
 Options:
   -m, --mode MODE       What to do. One of:
@@ -254,7 +259,8 @@ esac
 # missing instead of failing later with an empty version.
 check_prerequisites() {
     local file
-    for file in "${VERSION_SCRIPT}" "${DEB_CHANGELOG}" "${RPM_SPEC}"; do
+    for file in "${VERSION_SCRIPT}" "${DEB_CHANGELOG}" "${RPM_SPEC}" \
+                "${README_FILE}"; do
         if [ ! -f "${file}" ]; then
             die "Not a rowhammer packaging tree, missing file: ${file}"
         fi
@@ -268,7 +274,7 @@ is_valid_version() {
     printf '%s' "${1}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
 }
 
-# --- Reading the version from the three files -----------------------------
+# --- Reading the version from the four files ------------------------------
 
 # rowhammer.sh is the reference: ROWHAMMER_VERSION is what the game shows
 # in --help and writes into the debug log header.
@@ -287,6 +293,15 @@ read_deb_version() {
 # tooling (the CI lint job installs neither dpkg-dev nor rpm).
 read_rpm_version() {
     sed -n 's/^Version:[[:space:]]*\([^[:space:]]*\).*$/\1/p' "${RPM_SPEC}" | head -n 1
+}
+
+# README.md states the version in a line of its own right below the title:
+# "**Version:** 1.0.3". A whole line with a fixed prefix rather than a
+# number woven into a sentence - that is what makes it readable by a
+# pattern here, and it is why the line says nothing else.
+read_readme_version() {
+    sed -n 's/^\*\*Version:\*\*[[:space:]]*\([^[:space:]]*\).*$/\1/p' \
+        "${README_FILE}" | head -n 1
 }
 
 # Resolve the version this run works on: --expect wins when given (that is
@@ -308,20 +323,22 @@ resolve_version() {
 }
 
 # --- Mode: check ----------------------------------------------------------
-# Compare the version across all three files and make sure both changelogs
-# actually document it. A package whose label contradicts its contents, or
-# a release without release notes, is caught here rather than after the
-# tag has been pushed.
+# Compare the version across all four files and make sure both changelogs
+# actually document it. A package whose label contradicts its contents, a
+# README that advertises the version before last, or a release without
+# release notes is caught here rather than after the tag has been pushed.
 mode_check() {
     local version="${1}"
-    local script_version deb_version rpm_version
+    local script_version deb_version rpm_version readme_version
     script_version="$(read_script_version)"
     deb_version="$(read_deb_version)"
     rpm_version="$(read_rpm_version)"
+    readme_version="$(read_readme_version)"
 
     log debug "rowhammer.sh:      ${script_version:-<none>}"
     log debug "debian/changelog:  ${deb_version:-<none>}"
     log debug "rowhammer.spec:    ${rpm_version:-<none>}"
+    log debug "README.md:         ${readme_version:-<none>}"
 
     local failures=0
     if [ "${script_version}" != "${version}" ]; then
@@ -334,6 +351,10 @@ mode_check() {
     fi
     if [ "${rpm_version}" != "${version}" ]; then
         log error "Version mismatch: rowhammer.spec has '${rpm_version}', expected '${version}' (update the Version tag)"
+        failures=$((failures + 1))
+    fi
+    if [ "${readme_version}" != "${version}" ]; then
+        log error "Version mismatch: README.md has '${readme_version:-<none>}', expected '${version}' (update the '**Version:**' line below the title)"
         failures=$((failures + 1))
     fi
 
@@ -355,7 +376,7 @@ mode_check() {
     if [ "${failures}" -gt 0 ]; then
         die "Version check failed with ${failures} problem(s); see the messages above"
     fi
-    log info "Version ${version} is consistent across rowhammer.sh, debian/changelog and rowhammer.spec"
+    log info "Version ${version} is consistent across README.md, rowhammer.sh, debian/changelog and rowhammer.spec"
 }
 
 # --- Mode: notes ----------------------------------------------------------

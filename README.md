@@ -1,5 +1,7 @@
 # rowhammer
 
+**Version:** 1.0.3
+
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
 Vorbild ist **"The New Tetris"** (Nintendo 64): Mit jeder abgebauten Reihe
@@ -645,6 +647,7 @@ Debian- und RPM-Paket. Vieles davon laesst sich lokal genauso aufrufen:
 Ein Release ist das Tag `v<version>`; sein Push startet den
 Release-Workflow, der die Pakete baut und das GitHub-Release mit seinen
 Assets anlegt. Die Release-Notes sind die zugehoerige Strophe aus
-`debian/changelog`. Den ganzen Ablauf - inklusive der drei Stellen, an
-denen die Versionsnummer steht - beschreibt
-[docs/release-process.md](docs/release-process.md).
+`debian/changelog`. Den ganzen Ablauf - inklusive der vier Stellen, an
+denen die Versionsnummer steht (die Zeile ganz oben in dieser README,
+`ROWHAMMER_VERSION` in `rowhammer.sh` und die beiden Paketdateien) -
+beschreibt [docs/release-process.md](docs/release-process.md).

@@ -24,24 +24,30 @@ es nur um den Weg vom Commit zum Release.
   `.deb` bauen. Der Release-Workflow weist ein solches Tag deshalb
   gleich zu Beginn ab, statt spaeter in `dpkg-buildpackage` zu scheitern.
 
-## 2. Die drei Stellen mit der Version
+## 2. Die vier Stellen mit der Version
 
-Die Versionsnummer steht an drei Stellen, weil jede davon fuer ein
+Die Versionsnummer steht an vier Stellen, weil jede davon fuer ein
 anderes Publikum die Wahrheit ist:
 
 | Datei | Stelle | Bedeutung |
 | --- | --- | --- |
+| `README.md` | Zeile `**Version:** X.Y.Z` unter der Ueberschrift | Was das Repository seinen Besuchern sagt. Seit 1.0.3 (Nutzerwunsch) eine eigene Zeile - genau deshalb, weil sie sich so maschinell pruefen laesst. |
 | `rowhammer.sh` | `ROWHAMMER_VERSION` | Was das Spiel ueber sich selbst sagt (`--help`, Debug-Log-Kopf). Referenz fuer alles Weitere. |
 | `debian/changelog` | Kopfzeile der obersten Strophe | Version des Debian-Pakets **und** Quelle der Release-Notes. |
 | `rowhammer.spec` | `Version:` plus `%changelog` | Version des RPM-Pakets. |
 
-`tools/release.sh` ist das einzige Werkzeug, das alle drei kennt. Es
+Die Referenz bleibt `rowhammer.sh`: die beiden Paketdateien schreiben
+ihre Version vor (`dpkg-buildpackage` und `rpmbuild` lesen sie nirgendwo
+sonst), und die README-Zeile ist eine Anzeige, die zur Referenz passen
+muss - keine Quelle, aus der jemand liest.
+
+`tools/release.sh` ist das einzige Werkzeug, das alle vier kennt. Es
 prueft nicht nur, ob die Nummern uebereinstimmen, sondern auch, ob beide
 Changelogs die Version wirklich dokumentieren - eine Version ohne
 Changelog-Eintrag ergaebe ein Release ohne Release-Notes.
 
 ```
-./tools/release.sh --mode check          # stimmen alle drei ueberein?
+./tools/release.sh --mode check          # stimmen alle vier ueberein?
 ./tools/release.sh --mode version        # welche Version ist das hier?
 ./tools/release.sh --mode notes          # Release-Notes als Markdown
 ./tools/release.sh --mode tag --push     # Tag anlegen und pushen
@@ -52,10 +58,10 @@ Changelog-Eintrag ergaebe ein Release ohne Release-Notes.
 1. **Aendern und dokumentieren.** Die Aenderung selbst, dazu CLAUDE.md,
    HISTORY.md und README.md gemaess der Arbeitsregeln aus CLAUDE.md
    Abschnitt 6.
-2. **Version hochzaehlen** - an allen drei Stellen aus Abschnitt 2:
+2. **Version hochzaehlen** - an allen vier Stellen aus Abschnitt 2:
    `ROWHAMMER_VERSION` in `rowhammer.sh`, eine neue Strophe in
    `debian/changelog`, `Version:` und ein `%changelog`-Eintrag in
-   `rowhammer.spec`.
+   `rowhammer.spec`, dazu die `**Version:**`-Zeile in `README.md`.
    Die Strophe in `debian/changelog` ist zugleich der Text, den das
    Release spaeter zeigt - sie wird also fuer Leserinnen und Leser
    geschrieben, nicht als Stichwortliste.

@@ -6,6 +6,11 @@ rowhammer (1.0.3) unstable; urgency=medium
     is the score and two attempts routinely land in the same second, so
     MM:SS cut off exactly the digits that decide the place the prompt
     names right below the time.
+  * The README states the version in a line of its own below the title
+    ("**Version:** 1.0.3", user request), and tools/release.sh --mode
+    check verifies it along with the other three places. The reference
+    stays ROWHAMMER_VERSION in rowhammer.sh - the README line is a
+    display that must agree with it, checked so it cannot go stale.
 
  -- roemer2201 <r.oliver@web.de>  Thu, 06 Aug 2026 23:30:00 +0200
 
