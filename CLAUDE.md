@@ -802,6 +802,20 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   `round_is_ranked`, einmal in `prompt_round_name` -, was eine
   Abfrage in einer bereits geladenen Liste ist und beide Stellen
   fuer sich lesbar laesst.
+- **Die Zeit steht auf die Millisekunde genau da (seit 1.0.3,
+  Nutzerwunsch):** `fmt_duration_ms` (MM:SS.mmm) wie in der
+  Ultra-Bestenliste, und zwar **in jedem Modus**, nicht nur im Ultra.
+  Bis 1.0.2 zeigte der Bildschirm `fmt_duration` (MM:SS) - und schnitt
+  damit ausgerechnet die Stellen ab, die im Ultra ueber den Platz
+  entscheiden, den derselbe Bildschirm eine Zeile tiefer nennt (zwei
+  Versuche auf dasselbe Ziel landen oft in derselben Sekunde, deshalb
+  speichert die Ultra-Liste Millisekunden, siehe 4.5). Fuer alle Modi
+  gleich, weil ein Bildschirm eine Zahl nicht in zwei Formen zeigen
+  soll, je nachdem welcher Modus lief; gelesen wird `PLAY_MS`, also
+  genau der Wert, der gleich in den Eintrag geht. Der Rundenende-Kasten
+  bleibt davon unberuehrt: dort ist die Zeit im Ultra ohnehin schon auf
+  die Millisekunde genau (siehe 3.6), und in den anderen Modi ist sie
+  nicht die Wertung, sondern eine Randnotiz.
 - **Darstellung:** ein regulaerer, zentrierter Menue-Frame
   (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level, Zeit
   und Listenplatz der Runde ueber der Eingabezeile. Die Markierung ist invertierter

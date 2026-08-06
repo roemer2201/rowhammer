@@ -1,3 +1,14 @@
+rowhammer (1.0.3) unstable; urgency=medium
+
+  * The prompt that asks for the name at the end of a round now shows the
+    play time to the millisecond (MM:SS.mmm) in every game mode, the way
+    the Ultra highscore list shows it (user request). In Ultra the time
+    is the score and two attempts routinely land in the same second, so
+    MM:SS cut off exactly the digits that decide the place the prompt
+    names right below the time.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 06 Aug 2026 23:30:00 +0200
+
 rowhammer (1.0.2) unstable; urgency=medium
 
   * A piece that comes to rest reaching into the hidden spawn rows above

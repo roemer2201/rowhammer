@@ -73,7 +73,10 @@
 #   only written once the prompt has returned a name. Since 0.27.0 (user
 #   request) that same place decides whether the prompt runs at all: a
 #   round that misses the top ten is not asked for a name any more
-#   (round_is_ranked, rowhammer.sh).
+#   (round_is_ranked, rowhammer.sh). Since 0.27.1 (user request) it shows
+#   the play time to the millisecond in every mode, the way the Ultra
+#   list does: in Ultra the time is the score, and MM:SS cut off exactly
+#   the digits that decide the place it is naming.
 #   Since 0.20.0 menu_demos is the "Demos" main menu entry: the recorded
 #   rounds (lib/demo.sh) newest first, each of them to watch again or to
 #   delete, the ones still backing a highscore entry marked with a "*".
@@ -93,7 +96,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.27.0  (2026-08-06)
+# Version: 0.27.1  (2026-08-06)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1363,12 +1366,21 @@ ROUND_NAME=""
 prompt_round_name() {
     local -a body
     local line
-    fmt_duration "$(( PLAY_MS / 1000 ))"
+    # CHANGE 2026-08-06 (user request): the play time is shown to the
+    # millisecond (fmt_duration_ms, MM:SS.mmm) rather than as MM:SS. In
+    # Ultra the time is the score and two attempts routinely land in the
+    # same second - the digits that decide the place were exactly the
+    # ones cut off here. They are shown in every mode, not only in Ultra:
+    # this screen names the place the round takes, and the number it is
+    # ranked by has to be readable in the same form the list shows it
+    # (see highscore_ultra_screen, lib/highscore.sh). PLAY_MS is what the
+    # entry stores, so the two can never disagree.
+    fmt_duration_ms "${PLAY_MS}"
     printf -v line "${I18N[round_mode]}" "${I18N[mode_${GAME_MODE}]}"
     body=("${line}")
     printf -v line "${I18N[round_rows]}" "${ROW_CREDIT}" "${CLEARED_TOTAL}"
     body+=("${line}")
-    printf -v line "${I18N[round_level]}" "${LEVEL}" "${FMT_DURATION}"
+    printf -v line "${I18N[round_level]}" "${LEVEL}" "${FMT_DURATION_MS}"
     body+=("${line}")
     # The place this round takes in the list of its mode (0.24.0, user
     # request). It is derived from the list rather than read from it
