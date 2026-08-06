@@ -1991,13 +1991,15 @@ als `.deb` bauen und wird deshalb sofort abgewiesen statt spaet in
 Projekts.
 
 **`tools/release.sh`** (Script-Konventionen, `ROWHAMMER_RELEASE_*`) ist
-das einzige Stueck Code, das alle drei Stellen mit der Version kennt:
+das einzige Stueck Code, das alle vier Stellen mit der Version kennt:
 `ROWHAMMER_VERSION` in `rowhammer.sh` (Referenz - was das Spiel ueber
-sich selbst sagt), die oberste Strophe von `debian/changelog` und die
-`Version` samt `%changelog` in `rowhammer.spec`. Vier Modi
+sich selbst sagt), die oberste Strophe von `debian/changelog`, die
+`Version` samt `%changelog` in `rowhammer.spec` und - seit 1.0.3,
+Nutzerwunsch - die Zeile `**Version:** X.Y.Z` unter der Ueberschrift der
+README. Vier Modi
 (`--mode check|version|notes|tag`):
 
-- `check` vergleicht die drei Nummern **und** prueft, ob beide
+- `check` vergleicht die vier Nummern **und** prueft, ob beide
   Changelogs die Version wirklich dokumentieren - eine Version ohne
   Changelog-Eintrag ergaebe ein Release ohne Release-Notes.
   `--expect VERSION` prueft zusaetzlich gegen einen Wert von aussen (im
@@ -2005,6 +2007,29 @@ sich selbst sagt), die oberste Strophe von `debian/changelog` und die
 - `notes` baut die Release-Notes, `tag` legt das annotierte Tag mit
   diesen Notes als Nachricht an (nach `check`, bei sauberem Arbeitsbaum,
   niemals ein vorhandenes Tag verschiebend) und pusht es mit `--push`.
+
+**Die Versionszeile in der README (seit 1.0.3, Nutzerwunsch).** Sie
+steht als eigene Zeile `**Version:** X.Y.Z` direkt unter der
+Ueberschrift und wird von `check` mitgeprueft. Drei Festlegungen dazu:
+
+- **Sie ist eine Anzeige, keine Quelle.** Die Referenz bleibt
+  `ROWHAMMER_VERSION`; die Version dorthin zu verlagern, wo sie zuerst
+  gelesen wird, ginge nicht: `dpkg-buildpackage` und `rpmbuild` lesen
+  ihre Version ausschliesslich aus `debian/changelog` bzw. dem Spec, und
+  das Spiel selbst kaeme an die README zur Laufzeit gar nicht heran -
+  `make install` legt Skript und Module nach `/usr/share/rowhammer`, die
+  README dagegen als Doku nach `/usr/share/doc/rowhammer` (`%doc` bzw.
+  `debian/docs`), von wo `rpm --excludedocs` sie ganz entfernen darf.
+- **Geprueft statt gepflegt.** Genau deshalb steht sie in `check`: eine
+  von Hand gepflegte Nummer in einer Doku-Datei ist die erste, die
+  veraltet, und ein Besucher glaubt ihr. Der CI-Lauf laesst sie nicht
+  mehr veralten, und das Hochzaehlen kostet eine Zeile mehr (Schritt 2
+  in `docs/release-process.md`).
+- **Eine eigene Zeile mit festem Praefix**, keine Zahl in einem Satz:
+  nur so laesst sie sich mit einem `sed`-Muster lesen, ohne dass ein
+  umformulierter Absatz die Pruefung reisst. Fehlt die Zeile, meldet
+  `check` sie als `<none>` und schlaegt fehl - dasselbe wie eine falsche
+  Nummer, denn beides heisst, dass die README ihre Version nicht sagt.
 
 **Die Release-Notes sind die Changelog-Strophe** zur Version, nicht ein
 eigener Text. Die Strophe muss fuers Debian-Paket ohnehin geschrieben

@@ -84,6 +84,9 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
   (MM:SS.mmm) in every game mode, like the Ultra highscore list (user
   request): in Ultra the time is the score, so MM:SS cut off the digits
   that decide the place shown right below it.
+- The README carries the version in a line of its own below the title
+  and tools/release.sh --mode check verifies it along with rowhammer.sh,
+  debian/changelog and this spec (user request).
 
 * Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.2-1
 - A piece that settles reaching into the hidden spawn rows above the
