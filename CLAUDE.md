@@ -105,6 +105,37 @@ Die fuer uns relevanten Merkmale des Originals:
   geben; `NONE` selbst ist nur ueber Config-Datei bzw.
   `ROWHAMMER_KEY_*` setzbar (der Rebind-Dialog nimmt nur echte Tasten
   entgegen).
+- **Rundenende am oberen Feldrand (seit 0.56.0, Nutzerreport):** Die
+  Runde endet, sobald etwas **oberhalb des sichtbaren Feldes** liegen
+  bleibt - also in den beiden verdeckten Spawn-Zeilen. Bis 0.55.0 kannte
+  das Spiel nur einen einzigen Top-Out, die blockierte Spawn-Position;
+  ein Stein liess sich deshalb auf der obersten Reihe festsetzen und
+  durfte darueber hinausragen, ohne dass die Runde verloren war. Das
+  Feld ist 20 Reihen hoch, und was darueber stehen bleibt, gehoert nicht
+  mehr dazu. Umsetzung: `board_top_out` (`lib/board.sh`) meldet, ob eine
+  Zelle in den verdeckten Zeilen liegt; gefragt wird sie an den zwei
+  Stellen, an denen dort etwas hinkommen kann - `lock_and_next` nach dem
+  Festsetzen eines Steins und `flood_raise` nach einem Anstieg im
+  Hochwasser-Modus (beide in `rowhammer.sh`). Die Entscheidungen dazu:
+  - **Gefragt wird das Brett, nicht der Stein.** Eine Pruefung der
+    gerade festgesetzten Zellen muesste den Reihenabbau nachrechnen, der
+    sie verschiebt - und sie liesse die zweite Stelle (das steigende
+    Wasser) mit einer eigenen Regel zurueck. So gilt fuer beide
+    dieselbe.
+  - **Geprueft wird nach dem Reihenabbau.** Ein Stein, der oben
+    heraussteht, aber Reihen mitnimmt, zieht den Stapel wieder ins Feld
+    zurueck; dieser Rettungszug soll belohnt und nicht bestraft werden.
+  - **Das Ultra-Ziel gewinnt.** Die Zielpruefung in `lock_and_next`
+    steht vor dieser hier: ein Lauf, der mit genau diesem Stein sein
+    Ziel erreicht, hat gewonnen, wie hoch der Stein auch sass.
+  - **Im Hochwasser-Modus endet die Runde am Anstieg selbst**, nicht
+    erst beim naechsten Lock. Damit rueckt dieses Rundenende eine Zeile
+    frueher als die alte Pruefung in `board_flood_row` (die eine Zelle
+    erst dann nicht mehr schieben wollte, wenn sie vom Brett gefallen
+    waere). Jene Pruefung bleibt als Eigensicherung der Funktion stehen:
+    sie ist das Einzige, was ueberhaupt verhindert, dass eine Zelle aus
+    dem Brett geschoben wird, und die Mehrspieler-Garbage (5.7) wird
+    dort spaeter mehrere Reihen auf einmal durchschieben.
 - Vorschau: die naechsten 3 Teile. Hold: genau ein Teil, einmal pro Zug tauschbar.
 - Level/Geschwindigkeit: Fallgeschwindigkeit steigt mit der Zahl abgebauter
   Reihen der laufenden Runde.
@@ -639,11 +670,15 @@ haben, folgt er deshalb dem Marathon:
   wie es einen Reihenabbau unter sich ueberlebt. Eine neue Flutreihe
   kann nie eine volle Reihe ergeben (sie hat immer ihr Loch), deshalb
   folgt ihr keine Abbaupruefung.
-- **Ist die oberste Zeile belegt, ist die Runde vorbei.** Verschieben
-  wuerde eine belegte Zelle aus dem Feld druecken; das ist das Game
-  Over dieses Modus, so wie der blockierte Spawn das des Marathons ist.
-  `board_flood_row` meldet den Fall, ohne etwas zu aendern, und
-  `flood_raise` beendet die Runde.
+- **Steht der Stapel nach dem Anstieg ueber dem Feld, ist die Runde
+  vorbei.** Das ist das Game Over dieses Modus, so wie der blockierte
+  Spawn das des Marathons ist. Seit 0.56.0 entscheidet das
+  `board_top_out` (die verdeckten Zeilen oberhalb des Feldes, siehe
+  3.1) - dieselbe Regel, an der auch ein festgesetzter Stein gemessen
+  wird, und eine Zeile frueher als bis 0.55.0, wo `board_flood_row` das
+  Schieben erst verweigerte, wenn eine Zelle vom Brett gefallen waere.
+  Jene Pruefung meldet den Fall weiterhin, ohne etwas zu aendern, und
+  bleibt als Eigensicherung der Funktion bestehen.
 - **Der fallende Stein bleibt, wo er ist** - der Stapel steigt unter
   ihm. Nur wenn er danach im gestiegenen Stapel steckt, rueckt er eine
   Zeile mit hoch: er lag auf dem, was sich bewegt hat, und sitzt damit
@@ -1006,7 +1041,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.52.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 0.56.0): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
@@ -2217,6 +2252,13 @@ eine Zeile der ersten und dritten Anleitungsseite) - sie sind umbrochen.
 
 ## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
 
+**Alles in diesem Abschnitt ist Arbeit an Version 2.x.x** (siehe die
+Arbeitsregel in Abschnitt 6): der erste Schritt hier hinein ist der
+Sprung auf `2.0.0`, waehrend das Einzelspieler-Spiel seine eigene
+Versionsreihe weiterfuehrt. Das gilt auch fuer die Vorarbeit im
+Einzelspieler-Code (Schritt 1 der Roadmap) und fuer die darauf
+aufbauende Phase 6 (5.11-5.19).
+
 Dieser Abschnitt ist die **Spezifikation**; im Code existiert bislang nur
 der Platzhalter-Menuepunkt. Die Umsetzung erfolgt schrittweise nach der
 Reihenfolge in Abschnitt 7, Phase 5. Jeder Schritt dort verweist auf die
@@ -2980,6 +3022,21 @@ gehoert dazu:
    Roadmap-Punkt ("siehe Phase 4 ..."), wird der Verweis auf HISTORY.md
    samt Version umgeschrieben.
 
+Arbeitsregel: **Der Mehrspieler ist Version 2.x.x** (seit 0.56.0,
+Nutzerentscheidung). **Jede Aenderung, die den Mehrspieler-Modus
+betrifft, ist Arbeit an Version 2.x.x** - das ist die ganze Phase 5
+(Abschnitt 5, Schritte 1 bis 11) samt ihrer Vorarbeit im
+Einzelspieler-Code, und ebenso die darauf aufbauende Phase 6
+(Server-Betrieb, Accounts, Web, 5.11-5.19). Das Einzelspieler-Spiel
+laeuft daneben in seiner eigenen Reihe weiter und traegt, was an ihm
+nachgezogen wird (Fehlerbehebungen, Feinjustierung, die restliche
+Politur aus Phase 4). Der erste Schritt in Richtung Mehrspieler ist
+damit der Sprung auf `2.0.0`, nicht die naechste Minor-Version; SemVer
+passt dazu von selbst, denn der Mehrspieler bringt neue Dateiformate und
+Schnittstellen mit (Protokoll, Sitzungsverzeichnis, spaeter die
+Datenbank), und die Arbeitsregel "keine Abwaertskompatibilitaet" unten
+laesst sie brechen.
+
 Arbeitsregel: **Keine Abwaertskompatibilitaet noetig.** Das Projekt wird
 sequenziell entwickelt und war nie anderswo installiert; Migrationslogik
 fuer alte Config-/Savegame-Formate oder alte Schnittstellen ist unnoetig
@@ -3000,6 +3057,12 @@ Archiv der abgeschlossenen Roadmap-Punkte, nach Version geordnet. Der
 sondern in den Abschnitten 1 bis 5 dieser Datei und - soweit
 spielersichtbar - in der README.md (Arbeitsregel in Abschnitt 6).
 
+**Versionszuordnung (seit 0.56.0):** Die beiden Zwischenschritt- und
+Phase-4-Punkte unten gehoeren zum Einzelspieler-Spiel und laufen in
+dessen laufender `0.x.x`-Reihe weiter. **Die Phasen 5 und 6 sind Version
+2.x.x** - jede Aenderung, die den Mehrspieler betrifft, ist Arbeit an
+`2.x.x` (Arbeitsregel in Abschnitt 6).
+
 Erledigt und nach HISTORY.md verschoben:
 
 - **Phase 1 - Spielbarer Kern** (0.1.0), vollstaendig
@@ -3012,12 +3075,12 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.52.0
-  (Bestenlisten mit Cursor und Demo-Wiedergabe); die
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.56.0
+  (Rundenende am oberen Feldrand); die
   Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen ist der Punkt unten
 
-### Zwischenschritt - Paketierung (offene Punkte; deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
+### Zwischenschritt - Paketierung (Version 0.x.x; offene Punkte, deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
 
 - [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
       auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
@@ -3032,7 +3095,7 @@ Erledigt und nach HISTORY.md verschoben:
       Signier-Schritt im Release-Workflow (Schluessel als Secret) waere
       der naechste Schritt, sobald die Lizenzfrage entschieden ist.
 
-### Phase 4 - Politur (offene Punkte; die erledigten stehen in HISTORY.md)
+### Phase 4 - Politur (Version 0.x.x; offene Punkte, die erledigten stehen in HISTORY.md)
 
 - [ ] Weltwunder-Animation (siehe 5.18, Nutzerwunsch): der
       Wunder-Bildschirm deckt die ASCII-Art bislang nur statisch
@@ -3044,7 +3107,7 @@ Erledigt und nach HISTORY.md verschoben:
       serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
       keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
       umsetzbar.
-### Phase 5 - Multiplayer (spezifiziert in Abschnitt 5, noch nicht umgesetzt)
+### Phase 5 - Multiplayer (Version 2.x.x; spezifiziert in Abschnitt 5, noch nicht umgesetzt)
 
 Die Schritte sind so sortiert, dass jeder fuer sich lauffaehig und
 testbar ist und der Mehrspieler-Modus Stueck fuer Stueck waechst. Die
@@ -3128,7 +3191,7 @@ Details stehen jeweils im genannten Unterabschnitt.
       Fuzz-Lauf gegen den fertigen Stand, dazu ein "boeser Client", der
       absichtlich das Protokoll verletzt.
 
-### Phase 6 - Server-Betrieb, Accounts, Web (spezifiziert in 5.11-5.19, noch nicht umgesetzt)
+### Phase 6 - Server-Betrieb, Accounts, Web (Version 2.x.x; spezifiziert in 5.11-5.19, noch nicht umgesetzt)
 
 Setzt auf einem fertigen Phase 5 auf (der Mehrspieler-Kern muss laufen
 und sich per Playtesting bewaehrt haben, bevor Accounts/Web/Liga

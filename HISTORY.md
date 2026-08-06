@@ -82,6 +82,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.53.0 | Modus-Eintraege mit ausgerichteter Beschreibung | 3.6, 4.2 |
 | 0.54.0 | Wunder-Bildschirm blaettert zu den fertigen Wundern | 3.3, 3.5 |
 | 0.55.0 | Verhaeltnis Reihen/Bonus in jeder Statistik | 4.5 |
+| 0.56.0 | Rundenende am oberen Feldrand | 3.1, 3.6 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1210,6 +1211,10 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
         behalten - ein Quadrat ueberlebt die Flut wie einen Reihenabbau
         unter sich. Eine belegte oberste Zeile beendet die Runde, statt
         eine Zelle aus dem Feld zu druecken.
+        _Spaeter ueberholt: seit 0.56.0 endet die Runde eine Zeile
+        frueher - sobald der Anstieg den Stapel in die verdeckten Zeilen
+        ueber dem Feld schiebt (`board_top_out`), dieselbe Regel, an der
+        seither auch ein festgesetzter Stein gemessen wird._
       - **Der fallende Stein bleibt stehen, wo er ist**, und rueckt nur
         mit hoch, wenn er sonst im gestiegenen Stapel steckte: er lag
         auf dem, was sich bewegt hat. Ist auch das blockiert, ist die
@@ -1488,3 +1493,45 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
         bearbeiteten Datei kommen und wuerden bloss die Zeile ueber ihre
         46 Zeichen hinaus schieben - dieselbe Vorsicht, mit der die
         Runden-Zeilen daneben bei Ueberlaenge auf Farbe verzichten.
+
+- [x] **Rundenende am oberen Feldrand** (Version 0.56.0, Nutzerreport;
+      aktueller Stand siehe 3.1): Ein Testspiel zeigte, dass sich auf der
+      obersten Reihe des Feldes noch ein Stein festsetzen liess, der
+      darueber hinausragte, ohne dass die Runde verloren war. Grund war,
+      dass das Spiel nur einen einzigen Top-Out kannte - die blockierte
+      Spawn-Position. Damit endete eine Runde erst, wenn der Stapel dem
+      naechsten Stein den Platz zum Einfallen nahm, und alles, was in den
+      beiden verdeckten Spawn-Zeilen darueber liegen blieb, war
+      unsichtbar geduldet. Das Feld ist 20 Reihen hoch; was darueber
+      stehen bleibt, gehoert nicht mehr dazu. Die Entscheidungen dahinter:
+      - **Gefragt wird das Brett, nicht der Stein** (`board_top_out` in
+        `lib/board.sh`: liegt eine Zelle in den verdeckten Zeilen?). Eine
+        Pruefung der gerade festgesetzten Zellen haette den Reihenabbau
+        nachrechnen muessen, der sie verschiebt, und sie haette die
+        zweite Stelle, an der etwas dort hinkommen kann - das steigende
+        Wasser des Hochwasser-Modus -, mit einer eigenen Regel
+        zurueckgelassen. So misst eine Funktion beide.
+      - **Geprueft wird nach dem Reihenabbau** (`lock_and_next` in
+        `rowhammer.sh`). Ein Stein, der oben heraussteht, aber Reihen
+        mitnimmt, zieht den Stapel wieder ins Feld zurueck; dieser
+        Rettungszug wird belohnt statt bestraft. Aus demselben Grund
+        steht die Pruefung **hinter** der Ultra-Zielpruefung: ein Lauf,
+        der mit genau diesem Stein sein Ziel erreicht, hat gewonnen, wie
+        hoch der Stein auch sass.
+      - **Im Hochwasser-Modus endet die Runde am Anstieg selbst**
+        (`flood_raise`), nicht erst beim naechsten Lock - sonst waeren
+        die beiden Wege ueber die Feldkante verschieden streng. Das
+        Rundenende faellt damit eine Zeile frueher als die bisherige
+        Pruefung in `board_flood_row`, die eine Zelle erst dann nicht
+        mehr schieben wollte, wenn sie vom Brett gefallen waere. Jene
+        Pruefung bleibt als Eigensicherung der Funktion stehen: sie ist
+        das Einzige, was ueberhaupt verhindert, dass eine Zelle aus dem
+        Brett geschoben wird, und die Mehrspieler-Garbage (5.7) wird
+        dort spaeter mehrere Reihen auf einmal durchschieben.
+      - **Die Anleitung sagt es** (Seite 1, beide Sprachen): das
+        Rundenende hat jetzt zwei Ausloeser statt einem.
+      Mit derselben Version kam die Arbeitsregel dazu, dass **jede
+      Aenderung am Mehrspieler-Modus Arbeit an Version 2.x.x** ist
+      (Nutzerentscheidung; CLAUDE.md, Abschnitt 6): das
+      Einzelspieler-Spiel behaelt seine laufende Versionsreihe, und der
+      erste Schritt in die Phasen 5 und 6 ist der Sprung auf `2.0.0`.

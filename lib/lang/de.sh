@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.5.0  (2026-08-04)
+# Version: 1.6.0  (2026-08-06)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -361,9 +361,10 @@ der sieben Sorten genau einmal, dann wird
 neu gemischt.
 
 Mit jeder abgebauten Reihe steigt das Level,
-und die Steine fallen schneller. Ist kein
-Platz mehr fuer einen neuen Stein, ist die
-Runde vorbei."
+und die Steine fallen schneller. Ragt ein
+abgelegter Stein oben aus dem Feld heraus
+oder findet ein neuer Stein keinen Platz
+mehr, ist die Runde vorbei."
     [help_p1_head]="Steuerung im Spiel (die Buchstabentasten
 sind unter Einstellungen aenderbar):
 "
