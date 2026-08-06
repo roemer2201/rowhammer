@@ -1,4 +1,4 @@
-rowhammer (0.56.0) unstable; urgency=medium
+rowhammer (1.0.2) unstable; urgency=medium
 
   * A piece that comes to rest reaching into the hidden spawn rows above
     the field now ends the round (user report). Until now the only
@@ -15,6 +15,23 @@ rowhammer (0.56.0) unstable; urgency=medium
     check, which only refused to shift a cell off the board entirely.
   * Working rule recorded in CLAUDE.md: every change that concerns the
     multiplayer mode is work on version 2.x.x.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 06 Aug 2026 13:00:00 +0200
+
+rowhammer (1.0.1) unstable; urgency=medium
+
+  * The prompt for the highscore name at the end of a round now only
+    appears for a round that really takes a place in the list of its mode
+    (user request). It used to appear for every round that could enter a
+    list at all and then tell the player that the top ten was missed -
+    a name asked for an entry that was never written.
+  * The place was already computed for that screen
+    (highscore_rank_preview), so round_is_ranked (rowhammer.sh) now asks
+    it as well and skips the prompt when there is no place. A round
+    without one keeps the player name from the settings and goes straight
+    to the end-of-round box, which shows the same figures anyway.
+  * With that the "no rank" wording of the prompt has no case left to
+    describe and is gone from both language files.
 
  -- roemer2201 <r.oliver@web.de>  Thu, 06 Aug 2026 12:00:00 +0200
 

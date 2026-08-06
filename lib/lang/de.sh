@@ -162,9 +162,9 @@ A-Z a-z 0-9 Leerzeichen _ -"
     [round_rows]="Rows: %d   Lines: %d"
     [round_level]="Level: %d   Zeit: %s"
     # Platz in der Bestenliste des Modus: 1 = Rang, 2 = Laenge der Liste.
-    # round_rank_none nennt nur die Laenge (Argument 1).
+    # Eine Runde ohne Platz wird seit 1.0.1 gar nicht nach einem Namen
+    # gefragt, deshalb gibt es dafuer keinen Text mehr.
     [round_rank]="Bestenliste: Platz %d von %d"
-    [round_rank_none]="Bestenliste: kein Platz (Top %d)"
     [round_ask_name]="Name fuer die Bestenliste:"
 
     # --- Demos ------------------------------------------------------------

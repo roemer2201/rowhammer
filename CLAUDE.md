@@ -105,7 +105,7 @@ Die fuer uns relevanten Merkmale des Originals:
   geben; `NONE` selbst ist nur ueber Config-Datei bzw.
   `ROWHAMMER_KEY_*` setzbar (der Rebind-Dialog nimmt nur echte Tasten
   entgegen).
-- **Rundenende am oberen Feldrand (seit 0.56.0, Nutzerreport):** Die
+- **Rundenende am oberen Feldrand (seit 1.0.2, Nutzerreport):** Die
   Runde endet, sobald etwas **oberhalb des sichtbaren Feldes** liegen
   bleibt - also in den beiden verdeckten Spawn-Zeilen. Bis 0.55.0 kannte
   das Spiel nur einen einzigen Top-Out, die blockierte Spawn-Position;
@@ -672,7 +672,7 @@ haben, folgt er deshalb dem Marathon:
   folgt ihr keine Abbaupruefung.
 - **Steht der Stapel nach dem Anstieg ueber dem Feld, ist die Runde
   vorbei.** Das ist das Game Over dieses Modus, so wie der blockierte
-  Spawn das des Marathons ist. Seit 0.56.0 entscheidet das
+  Spawn das des Marathons ist. Seit 1.0.2 entscheidet das
   `board_top_out` (die verdeckten Zeilen oberhalb des Feldes, siehe
   3.1) - dieselbe Regel, an der auch ein festgesetzter Stein gemessen
   wird, und eine Zeile frueher als bis 0.55.0, wo `board_flood_row` das
@@ -737,14 +737,26 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   einmal je Runde. Und zwar **vor** dem Listeneintrag: dort geht der
   Name hinein, und dort entsteht der Rang, den der Rundenende-Kasten
   anschliessend zeigt.
-- **Nur fuer eine Runde, die wirklich in eine Liste kommt**
-  (`round_is_ranked`): Sie spiegelt die Modus-Regeln aus 3.6 (nur ein
-  erfolgreicher Ultra-/Sprint-Lauf wird gelistet) und die
+- **Nur fuer eine Runde, die wirklich einen Platz in einer Liste
+  bekommt** (`round_is_ranked`): Sie spiegelt die Modus-Regeln aus 3.6
+  (nur ein
+  erfolgreicher Ultra-/Sprint-Lauf wird gelistet), die
   Null-Pruefungen der Listenfunktionen selbst (`lib/highscore.sh`
-  verwirft eine Runde ohne Rows bzw. ohne gemessene Zeit). Eine Runde,
+  verwirft eine Runde ohne Rows bzw. ohne gemessene Zeit) und - seit
+  1.0.1, Nutzerwunsch - die Top 10 selbst: die Platz-Vorschau
+  (`round_rank_preview`, siehe unten) muss einen Platz melden. Eine
+  Runde,
   die nirgends abgelegt wird, hat keinen Namen zu erfragen; alles
   andere, was sie noch speist - Weltwunder-Fortschritt und Statistik -,
   ist ohnehin namenlos.
+  **Aenderung 1.0.1 (Nutzerwunsch):** bis 0.55.0 entschied die
+  Vorschau nur, *was* auf dem Bildschirm stand ("Platz 3 von 10" bzw.
+  "kein Platz (Top 10)"), nicht *ob* es ihn gab - eine Runde ohne Platz
+  wurde nach einem Namen gefragt, der nirgends hinging. Sie behaelt
+  jetzt den Spielernamen aus den Einstellungen und geht direkt zum
+  Rundenende-Kasten, der dieselben Zahlen ohnehin zeigt. Damit hat die
+  Meldung "kein Platz" keinen Fall mehr und ist aus beiden
+  Sprachdateien entfallen.
 - **Der eingegebene Name gilt fuer diese eine Runde**, die Einstellung
   bleibt unveraendert (und damit die Vorgabe der naechsten Runde). Das
   ist genau der Fall, fuer den die Abfrage da ist - jemand anderes
@@ -772,7 +784,7 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
 - **Der Platz in der Bestenliste steht dabei (seit 0.50.0,
   Nutzerwunsch):** unter den Rundenzahlen nennt der Bildschirm den Rang,
   den die Runde in der Liste ihres Modus einnehmen wird ("Bestenliste:
-  Platz 3 von 10") bzw. dass sie sie verfehlt ("kein Platz (Top 10)").
+  Platz 3 von 10").
   Er wird **vorhergesagt statt abgelesen**: der Eintrag entsteht erst
   hinter dieser Abfrage (der Name geht in ihn hinein, siehe oben), also
   leitet `highscore_rank_preview` (`lib/highscore.sh`, siehe 4.5) den
@@ -782,10 +794,14 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   Fallunterscheidung, die gleich darueber `round_is_ranked` trifft. Die
   Vorschau kann vom spaeteren Eintrag nicht abweichen: sie wendet
   dessen Einfuegeregel an, und zwischen beiden aendert nichts die
-  Liste. Dass auch die **verfehlte** Liste gemeldet wird, ist Absicht -
-  gefragt wird, sobald eine Runde ueberhaupt in eine Liste kommen
-  koennte, und ob sie die Top 10 erreicht, ist genau die Frage, die der
-  Bildschirm sonst offen liesse.
+  Liste. Seit 1.0.1 ist dieselbe Vorschau zugleich die Bedingung fuer
+  die Abfrage (siehe oben), sodass der Bildschirm immer einen Platz
+  nennt: eine **verfehlte** Liste wurde bis 0.55.0 mit "kein Platz
+  (Top 10)" gemeldet, wird jetzt aber gar nicht mehr gefragt. Die
+  Vorschau laeuft damit zweimal je Runde - einmal in
+  `round_is_ranked`, einmal in `prompt_round_name` -, was eine
+  Abfrage in einer bereits geladenen Liste ist und beide Stellen
+  fuer sich lesbar laesst.
 - **Darstellung:** ein regulaerer, zentrierter Menue-Frame
   (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level, Zeit
   und Listenplatz der Runde ueber der Eingabezeile. Die Markierung ist invertierter
@@ -1041,7 +1057,7 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 0.56.0): alle Module aus dem Baum oben existieren mit
+Stand (Version 1.0.2): alle Module aus dem Baum oben existieren mit
 Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
 bislang nur spezifiziert sind (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
@@ -1549,7 +1565,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Platz hinter der Zahl der mindestens gleich guten Eintraege, und kein
   Platz, wenn das ueber `*_MAX` hinausgeht. Gebraucht wird sie von der
   Namensabfrage am Rundenende (siehe 3.7), die vor dem Eintrag laeuft
-  und den Rang der `*_add`-Funktionen deshalb noch nicht kennt.
+  und den Rang der `*_add`-Funktionen deshalb noch nicht kennt - seit
+  1.0.1 entscheidet sie dort zusaetzlich, ob ueberhaupt gefragt wird.
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
@@ -3022,7 +3039,7 @@ gehoert dazu:
    Roadmap-Punkt ("siehe Phase 4 ..."), wird der Verweis auf HISTORY.md
    samt Version umgeschrieben.
 
-Arbeitsregel: **Der Mehrspieler ist Version 2.x.x** (seit 0.56.0,
+Arbeitsregel: **Der Mehrspieler ist Version 2.x.x** (seit 1.0.2,
 Nutzerentscheidung). **Jede Aenderung, die den Mehrspieler-Modus
 betrifft, ist Arbeit an Version 2.x.x** - das ist die ganze Phase 5
 (Abschnitt 5, Schritte 1 bis 11) samt ihrer Vorarbeit im
@@ -3057,9 +3074,9 @@ Archiv der abgeschlossenen Roadmap-Punkte, nach Version geordnet. Der
 sondern in den Abschnitten 1 bis 5 dieser Datei und - soweit
 spielersichtbar - in der README.md (Arbeitsregel in Abschnitt 6).
 
-**Versionszuordnung (seit 0.56.0):** Die beiden Zwischenschritt- und
+**Versionszuordnung (seit 1.0.2):** Die beiden Zwischenschritt- und
 Phase-4-Punkte unten gehoeren zum Einzelspieler-Spiel und laufen in
-dessen laufender `0.x.x`-Reihe weiter. **Die Phasen 5 und 6 sind Version
+dessen laufender `1.x.x`-Reihe weiter. **Die Phasen 5 und 6 sind Version
 2.x.x** - jede Aenderung, die den Mehrspieler betrifft, ist Arbeit an
 `2.x.x` (Arbeitsregel in Abschnitt 6).
 
@@ -3075,12 +3092,12 @@ Erledigt und nach HISTORY.md verschoben:
   `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
   Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
   die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 0.56.0
+- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 1.0.2
   (Rundenende am oberen Feldrand); die
   Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen ist der Punkt unten
 
-### Zwischenschritt - Paketierung (Version 0.x.x; offene Punkte, deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
+### Zwischenschritt - Paketierung (Version 1.x.x; offene Punkte, deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
 
 - [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
       auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
@@ -3095,7 +3112,7 @@ Erledigt und nach HISTORY.md verschoben:
       Signier-Schritt im Release-Workflow (Schluessel als Secret) waere
       der naechste Schritt, sobald die Lizenzfrage entschieden ist.
 
-### Phase 4 - Politur (Version 0.x.x; offene Punkte, die erledigten stehen in HISTORY.md)
+### Phase 4 - Politur (Version 1.x.x; offene Punkte, die erledigten stehen in HISTORY.md)
 
 - [ ] Weltwunder-Animation (siehe 5.18, Nutzerwunsch): der
       Wunder-Bildschirm deckt die ASCII-Art bislang nur statisch

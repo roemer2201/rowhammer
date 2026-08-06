@@ -182,7 +182,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 0.56.0  (2026-08-06)
+# Version: 1.0.2  (2026-08-06)
 
 set -euo pipefail
 
@@ -197,7 +197,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="0.56.0"
+ROWHAMMER_VERSION="1.0.2"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -1238,28 +1238,48 @@ update_speed() {
     FALL_MS="${LEVEL_SPEEDS[idx]}"
 }
 
-# round_is_ranked: does the round that just ended enter a highscore list
-# at all? Mirrors the two rules that decide it - the per-mode rule of
-# record_round below (only a successful Ultra or Sprint run is listed)
-# and the "nothing to rank" check inside the list functions themselves
+# round_is_ranked: does the round that just ended really take a place in
+# the highscore list of its mode? Three rules have to agree, and all
+# three are mirrored rather than owned here: the per-mode rule of
+# record_round below (only a successful Ultra or Sprint run is listed),
+# the "nothing to rank" check inside the list functions themselves
 # (lib/highscore.sh ignores a round without rows resp. without a measured
-# time). It is the condition for asking for the player's name: a round
-# that is filed nowhere has no name to ask for, and everything else it
-# still feeds - wonder progress and statistics - is nameless.
+# time) and - since 1.0.1, user request - the top ten itself, asked from
+# round_rank_preview. It is the condition for asking for the player's
+# name: a round that is filed nowhere has no name to ask for, and
+# everything else it still feeds - wonder progress and statistics - is
+# nameless.
+#
+# CHANGE 2026-08-06 (user request): the place used to be shown in the
+# prompt but not to decide whether there was a prompt at all, so a round
+# that missed the top ten was still asked for a name that then went
+# nowhere. The place is now part of the question: a round that misses the
+# list goes straight to the end-of-round box, which shows the same
+# figures anyway.
 round_is_ranked() {
     case "${GAME_MODE}" in
         ultra)  [ "${GOAL_REACHED}" -eq 1 ] && [ "${PLAY_MS}" -gt 0 ] ;;
         sprint) [ "${GOAL_REACHED}" -eq 1 ] && [ "${ROW_CREDIT}" -gt 0 ] ;;
         *)      [ "${ROW_CREDIT}" -gt 0 ] ;;
-    esac
+    esac || return 1
+    # The preview needs a list its mode's rules accept, which is what the
+    # case above establishes; asking it first would rank a run that is
+    # never entered. It leaves the place in HS_PREVIEW_RANK /
+    # HS_PREVIEW_MAX, where the prompt behind it reads it again through
+    # its own round_rank_preview call - one lookup in an already loaded
+    # list, and neither of the two has to know about the other.
+    round_rank_preview
+    [ "${HS_PREVIEW_RANK}" -gt 0 ]
 }
 
 # round_rank_preview: which place the round that just ended would take in
 # the list of its mode, reported in HS_PREVIEW_RANK / HS_PREVIEW_MAX
 # (highscore_rank_preview, lib/highscore.sh; 0 = misses the list). Asked
-# by the name prompt (prompt_round_name, lib/menu.sh), which runs before
-# the entry is written and so cannot read the rank the insert reports.
-# Only meaningful for a round round_is_ranked accepts.
+# by round_is_ranked above, which since 1.0.1 makes the place part of the
+# decision to ask for a name at all, and by the name prompt itself
+# (prompt_round_name, lib/menu.sh) to show it - both run before the entry
+# is written and so cannot read the rank the insert reports. Only
+# meaningful for a round the per-mode rules of round_is_ranked accept.
 #
 # It sits next to round_is_ranked because it answers with the same piece
 # of knowledge: which number of the round its mode is ranked by - the
@@ -1309,9 +1329,11 @@ record_round() {
     # preselected, so keeping it costs one Enter; what is typed instead
     # applies to this round only and does not change the settings (see
     # prompt_round_name in lib/menu.sh). Asked only for a round that
-    # really enters a list - and asked here, before the entry is written,
-    # because this is where the name goes in and where the rank shown by
-    # the result box is decided.
+    # really takes a place in a list (round_is_ranked; since 1.0.1 that
+    # includes making the top ten) - and asked here, before the entry is
+    # written, because this is where the name goes in and where the rank
+    # shown by the result box is decided. A round without a place keeps
+    # the settings name and goes straight to the end-of-round box.
     local name="${PLAYER_NAME}"
     if round_is_ranked; then
         prompt_round_name

@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.56.0
+Version:        1.0.2
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,7 +79,7 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
-* Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 0.56.0-1
+* Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.2-1
 - A piece that settles reaching into the hidden spawn rows above the
   field now ends the round (user report): the only top-out the game knew
   was a blocked spawn position, so a piece could stick out above the
@@ -89,6 +89,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 - In the Hochwasser mode a rise that pushes the stack out of the field
   ends the round by the same rule, one row earlier than before.
 - Working rule in CLAUDE.md: every multiplayer change is version 2.x.x.
+
+* Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.1-1
+- The name prompt at the end of a round only appears for a round that
+  really takes a place in the highscore list of its mode; a round that
+  misses the top ten goes straight to the end-of-round box.
+- The now unreachable "no rank" wording is gone from both language files.
 
 * Wed Aug 05 2026 roemer2201 <r.oliver@web.de> - 0.55.0-1
 - Every statistics screen states the ratio of cleared rows to bonus rows

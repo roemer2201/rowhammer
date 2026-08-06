@@ -146,9 +146,9 @@ A-Z a-z 0-9 space _ -"
     [round_rows]="Rows: %d   Lines: %d"
     [round_level]="Level: %d   Time: %s"
     # Place in the list of the round's mode: 1 = rank, 2 = list length.
-    # round_rank_none names the length only (argument 1).
+    # A round without a place is never asked for a name (since 1.0.1),
+    # so there is no wording for that case.
     [round_rank]="Highscore list: rank %d of %d"
-    [round_rank_none]="Highscore list: no rank (top %d)"
     [round_ask_name]="Name for the highscore list:"
 
     # --- Demos ------------------------------------------------------------
