@@ -82,6 +82,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.53.0 | Modus-Eintraege mit ausgerichteter Beschreibung | 3.6, 4.2 |
 | 0.54.0 | Wunder-Bildschirm blaettert zu den fertigen Wundern | 3.3, 3.5 |
 | 0.55.0 | Verhaeltnis Reihen/Bonus in jeder Statistik | 4.5 |
+| 1.0.1 | Namensabfrage nur noch bei einem Platz in der Liste | 3.7, 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1488,3 +1489,38 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
         bearbeiteten Datei kommen und wuerden bloss die Zeile ueber ihre
         46 Zeichen hinaus schieben - dieselbe Vorsicht, mit der die
         Runden-Zeilen daneben bei Ueberlaenge auf Farbe verzichten.
+
+- [x] **Namensabfrage nur noch fuer eine Runde mit Platz in der
+      Bestenliste** (Version 1.0.1, Nutzerwunsch; aktueller Stand siehe
+      3.7): Gefragt wurde bis 0.55.0, sobald eine Runde ueberhaupt in
+      eine der fuenf Listen kommen konnte - also auch dann, wenn sie die
+      Top 10 verfehlte. Der Bildschirm sagte das zwar ("kein Platz
+      (Top 10)"), verlangte aber trotzdem einen Namen fuer einen
+      Eintrag, der nie geschrieben wurde. Jetzt entscheidet der Platz
+      selbst, ob gefragt wird; eine Runde ohne Platz behaelt den
+      Spielernamen aus den Einstellungen und geht direkt zum
+      Rundenende-Kasten ihres Modus. Die Entscheidungen dahinter:
+      - **Die Bedingung wandert in `round_is_ranked`** (`rowhammer.sh`),
+        die einzige Stelle, die ueber die Abfrage entscheidet. Sie
+        spiegelte bereits die Modus-Regeln und die Null-Pruefungen der
+        Listenfunktionen; die Top 10 ist die dritte Regel derselben
+        Frage "kommt diese Runde in eine Liste?" und gehoert deshalb
+        dorthin und nicht als zweite Pruefung an die Aufrufstelle.
+      - **Gefragt wird `round_rank_preview`** - dieselbe Vorschau, die
+        der Bildschirm schon fuer seine Rangzeile nutzt (0.50.0). Ein
+        neuer Weg, den Platz zu bestimmen, waere ein zweiter, der vom
+        spaeteren Eintrag abweichen koennte.
+      - **Erst die Modus-Regeln, dann die Vorschau.** Ein gescheiterter
+        Ultra- oder Sprint-Lauf wird nie eingetragen; ihn vorher gegen
+        die Liste zu ranken haette einen Platz gemeldet, den er nie
+        bekommt.
+      - **Die Vorschau laeuft damit zweimal** je gefragter Runde, einmal
+        in `round_is_ranked` und einmal in `prompt_round_name`. Das ist
+        eine Abfrage in einer bereits geladenen Liste und laesst beide
+        Stellen fuer sich lesbar - die Alternative waere ein
+        Vorschau-Ergebnis, das die eine Funktion fuer die andere
+        stehen laesst.
+      - **Die Meldung "kein Platz (Top 10)" ist entfallen**
+        (`round_rank_none` in beiden Sprachdateien): Sie hatte keinen
+        Fall mehr, und ein Text ohne Fall waere genau die Art toter
+        Zweig, die spaeter niemand mehr einordnen kann.

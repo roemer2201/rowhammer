@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        0.55.0
+Version:        1.0.1
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.1-1
+- The name prompt at the end of a round only appears for a round that
+  really takes a place in the highscore list of its mode; a round that
+  misses the top ten goes straight to the end-of-round box.
+- The now unreachable "no rank" wording is gone from both language files.
+
 * Wed Aug 05 2026 roemer2201 <r.oliver@web.de> - 0.55.0-1
 - Every statistics screen states the ratio of cleared rows to bonus rows
   ("1:X.XX"): all-time counters, recent rounds and per-mode screens.

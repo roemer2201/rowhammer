@@ -165,14 +165,16 @@ Das Startmenue bietet:
   gehalten bzw. das Wasser abgehalten hat. Ein Rundenende zeigt den
   erreichten Rang ausserdem direkt an.
   **Wer in der Liste steht, fragt das Spiel am Ende jeder Runde**, die
-  in eine der fuenf Listen kommt: Der Spielername aus den Einstellungen
+  wirklich einen Platz in einer der fuenf Listen bekommt: Der
+  Spielername aus den Einstellungen
   steht dort vormarkiert - Enter uebernimmt ihn, das erste getippte
   Zeichen ersetzt ihn (eine Pfeiltaste hebt die Markierung auf, wenn
   der Name nur ergaenzt werden soll). Der eingegebene Name gilt fuer
   diese Runde; die Einstellung bleibt unveraendert. Ueber der
   Eingabezeile steht neben den Zahlen der Runde auch der **Platz, den
-  sie in der Liste einnehmen wird** ("Bestenliste: Platz 3 von 10") -
-  oder dass sie die Top 10 verfehlt
+  sie in der Liste einnehmen wird** ("Bestenliste: Platz 3 von 10").
+  Eine Runde, die die Top 10 verfehlt, wird nicht gefragt und geht
+  direkt zum Rundenende-Bild
 - **Weltwunder** - die aktuelle Baustelle mit Baustufe, Reihenstand
   und Gesamtfortschritt. Mit den **Pfeiltasten links/rechts** laesst
   sich zu den bereits **fertiggestellten** Weltwundern
@@ -448,12 +450,14 @@ Umgesetzt:
   Hochwasser-Runden in `~/.config/rowhammer/highscore-flood`, im Menue
   ueber eine
   Modus-Auswahl erreichbar, Ranganzeige im Rundenende-Bild
-- **Namensabfrage am Rundenende:** jede Runde, die in eine Bestenliste
-  kommt, fragt vorher nach dem Namen fuer den Eintrag - mit dem
+- **Namensabfrage am Rundenende:** jede Runde, die einen Platz in einer
+  Bestenliste bekommt, fragt vorher nach dem Namen fuer den Eintrag - mit
+  dem
   Spielernamen aus den Einstellungen als vormarkierter Vorgabe, die ein
   einziger Tastendruck ersetzt. Der eingegebene Name gilt nur fuer diese
   Runde. Der Bildschirm nennt dabei den Platz, den die Runde in der
-  Bestenliste ihres Modus einnehmen wird
+  Bestenliste ihres Modus einnehmen wird; verfehlt sie die Top 10, wird
+  gar nicht erst gefragt
 - **Statistik:** persistente Gesamtzaehler in `~/.config/rowhammer/stats` -
   abgebaute Reihen, Bonusreihen (der Gold-/Silber-/Tetris-Anteil der
   Reihenwertung), gebaute Gold-/Silberbloecke, die Zahl der
