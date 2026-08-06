@@ -702,14 +702,26 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   einmal je Runde. Und zwar **vor** dem Listeneintrag: dort geht der
   Name hinein, und dort entsteht der Rang, den der Rundenende-Kasten
   anschliessend zeigt.
-- **Nur fuer eine Runde, die wirklich in eine Liste kommt**
-  (`round_is_ranked`): Sie spiegelt die Modus-Regeln aus 3.6 (nur ein
-  erfolgreicher Ultra-/Sprint-Lauf wird gelistet) und die
+- **Nur fuer eine Runde, die wirklich einen Platz in einer Liste
+  bekommt** (`round_is_ranked`): Sie spiegelt die Modus-Regeln aus 3.6
+  (nur ein
+  erfolgreicher Ultra-/Sprint-Lauf wird gelistet), die
   Null-Pruefungen der Listenfunktionen selbst (`lib/highscore.sh`
-  verwirft eine Runde ohne Rows bzw. ohne gemessene Zeit). Eine Runde,
+  verwirft eine Runde ohne Rows bzw. ohne gemessene Zeit) und - seit
+  1.0.1, Nutzerwunsch - die Top 10 selbst: die Platz-Vorschau
+  (`round_rank_preview`, siehe unten) muss einen Platz melden. Eine
+  Runde,
   die nirgends abgelegt wird, hat keinen Namen zu erfragen; alles
   andere, was sie noch speist - Weltwunder-Fortschritt und Statistik -,
   ist ohnehin namenlos.
+  **Aenderung 1.0.1 (Nutzerwunsch):** bis 0.55.0 entschied die
+  Vorschau nur, *was* auf dem Bildschirm stand ("Platz 3 von 10" bzw.
+  "kein Platz (Top 10)"), nicht *ob* es ihn gab - eine Runde ohne Platz
+  wurde nach einem Namen gefragt, der nirgends hinging. Sie behaelt
+  jetzt den Spielernamen aus den Einstellungen und geht direkt zum
+  Rundenende-Kasten, der dieselben Zahlen ohnehin zeigt. Damit hat die
+  Meldung "kein Platz" keinen Fall mehr und ist aus beiden
+  Sprachdateien entfallen.
 - **Der eingegebene Name gilt fuer diese eine Runde**, die Einstellung
   bleibt unveraendert (und damit die Vorgabe der naechsten Runde). Das
   ist genau der Fall, fuer den die Abfrage da ist - jemand anderes
@@ -737,7 +749,7 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
 - **Der Platz in der Bestenliste steht dabei (seit 0.50.0,
   Nutzerwunsch):** unter den Rundenzahlen nennt der Bildschirm den Rang,
   den die Runde in der Liste ihres Modus einnehmen wird ("Bestenliste:
-  Platz 3 von 10") bzw. dass sie sie verfehlt ("kein Platz (Top 10)").
+  Platz 3 von 10").
   Er wird **vorhergesagt statt abgelesen**: der Eintrag entsteht erst
   hinter dieser Abfrage (der Name geht in ihn hinein, siehe oben), also
   leitet `highscore_rank_preview` (`lib/highscore.sh`, siehe 4.5) den
@@ -747,10 +759,14 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   Fallunterscheidung, die gleich darueber `round_is_ranked` trifft. Die
   Vorschau kann vom spaeteren Eintrag nicht abweichen: sie wendet
   dessen Einfuegeregel an, und zwischen beiden aendert nichts die
-  Liste. Dass auch die **verfehlte** Liste gemeldet wird, ist Absicht -
-  gefragt wird, sobald eine Runde ueberhaupt in eine Liste kommen
-  koennte, und ob sie die Top 10 erreicht, ist genau die Frage, die der
-  Bildschirm sonst offen liesse.
+  Liste. Seit 1.0.1 ist dieselbe Vorschau zugleich die Bedingung fuer
+  die Abfrage (siehe oben), sodass der Bildschirm immer einen Platz
+  nennt: eine **verfehlte** Liste wurde bis 0.55.0 mit "kein Platz
+  (Top 10)" gemeldet, wird jetzt aber gar nicht mehr gefragt. Die
+  Vorschau laeuft damit zweimal je Runde - einmal in
+  `round_is_ranked`, einmal in `prompt_round_name` -, was eine
+  Abfrage in einer bereits geladenen Liste ist und beide Stellen
+  fuer sich lesbar laesst.
 - **Darstellung:** ein regulaerer, zentrierter Menue-Frame
   (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level, Zeit
   und Listenplatz der Runde ueber der Eingabezeile. Die Markierung ist invertierter
@@ -1514,7 +1530,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Platz hinter der Zahl der mindestens gleich guten Eintraege, und kein
   Platz, wenn das ueber `*_MAX` hinausgeht. Gebraucht wird sie von der
   Namensabfrage am Rundenende (siehe 3.7), die vor dem Eintrag laeuft
-  und den Rang der `*_add`-Funktionen deshalb noch nicht kennt.
+  und den Rang der `*_add`-Funktionen deshalb noch nicht kennt - seit
+  1.0.1 entscheidet sie dort zusaetzlich, ob ueberhaupt gefragt wird.
   Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
   die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
   der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
