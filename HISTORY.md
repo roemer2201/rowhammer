@@ -86,6 +86,8 @@ die README.md den neuen Zustand richtig beschreiben.
 | 1.0.2 | Rundenende am oberen Feldrand | 3.1, 3.6 |
 | 1.0.3 | Spielzeit der Namensabfrage auf die Millisekunde; Versionszeile in der README | 3.7, 4.9 |
 | 1.0.4 | Beutel des Randomizers auf 63 Steine (Dynamik der Spezialbloecke) | 3.1 |
+| 1.1.0 | LAN-Mehrspieler: Lobby ueber Broadcast/Multicast (Phase 5, Schritte 2-4) | 5.2-5.5, 5.10 |
+
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1572,3 +1574,142 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       (Nutzerentscheidung; CLAUDE.md, Abschnitt 6): das
       Einzelspieler-Spiel behaelt seine laufende Versionsreihe, und der
       erste Schritt in die Phasen 5 und 6 ist der Sprung auf `2.0.0`.
+
+      _Spaeter ueberholt: 1.1.0 - `2.0.0` erscheint erst, wenn der
+      Mehrspieler fertig ist, und bis dahin waechst er in der
+      `1.x.x`-Reihe._
+
+## Phase 5 - Multiplayer: Lobby (umgesetzt, Version 1.1.0)
+
+Erster Schritt in den Mehrspieler und zugleich der Punkt, an dem die
+Leitentscheidung dazu gewechselt hat. Umgesetzt sind die Roadmap-
+Schritte 2 (Transport), 3 (Protokoll, Lobby-Teil) und 4 (Lobby); der
+aktuelle Stand steht in CLAUDE.md 5.2 bis 5.5 und 5.10, nicht hier.
+
+- [x] **LAN statt gemeinsamer Host** (Nutzerwunsch). Die Spezifikation
+      sah bis dahin einen Mehrspieler auf *einer* Maschine ueber einen
+      **Unix-Domain-Socket** vor, mit drei Prozessrollen: Client, ein
+      headless **Hub** je Sitzung und je Verbindung eine **Bridge**
+      zwischen Socket und den FIFOs des Hubs. Gewuenscht war stattdessen
+      ein Mehrspieler **im lokalen Netz**, dessen Liste der offenen
+      Spiele **ohne zentrale Server-Instanz** zustande kommt - ueber
+      **Broadcast- oder Multicast-Datagramme**.
+      Damit sind Unix-Socket, Sitzungsverzeichnis, Hub und Bridge
+      entfallen. Was blieb, ist der Gedanke einer Autoritaet je
+      Sitzung: sie ist jetzt der **Host**, also der Client, der das
+      Spiel eroeffnet hat - er vergibt die Plaetze und fuehrt die
+      Spielerliste, ohne ein eigener Prozess zu sein. `lib/hub.sh` aus
+      dem geplanten Modulschnitt gibt es folglich nicht.
+- [x] **Der Bus** (`lib/net.sh`): ein UDP-Datagramm-Socket, an den Port
+      gebunden und an dieselbe Adresse sendend, auf der er hoert. Jede
+      Nachricht geht an alle; wen sie nicht angeht, der verwirft sie.
+      Entscheidungen:
+      - **Broadcast ist der Standard, Multicast die Alternative.**
+        Multicast ist der leisere Weg - nur die Maschinen der Gruppe
+        bekommen etwas -, haengt aber an zwei Dingen, die nicht ueberall
+        mitspielen: der Gruppen-Mitgliedschaftsoption des
+        Hilfsprogramms und Switches bzw. Accesspoints, die die Gruppe
+        weiterreichen. Beim Bau fiel dabei ein konkreter Fall auf:
+        **socat 1.8.0.0 liest `ip-add-membership` fehlerhaft aus** (die
+        Fehlermeldung nennt eine Umgebungsvariable statt der
+        angegebenen Schnittstelle) und beendet sich sofort - je nach
+        Groesse der Umgebung, also scheinbar zufaellig. Broadcast
+        braucht vom Socket nichts ausser der Broadcast-Erlaubnis und
+        hat keine dieser Abhaengigkeiten.
+      - **Nur `socat`, kein Rueckfall auf `nc`/`ncat`.** Die
+        urspruengliche Spezifikation suchte in drei Stufen; fuer einen
+        Datagramm-Bus taugt aber keiner der beiden netcats - der
+        OpenBSD-`nc` verbindet sich mit dem ersten Absender und
+        ignoriert alle weiteren, und einer Multicast-Gruppe kann keiner
+        von beiden beitreten. Ein solcher Rueckfall haette eine Lobby
+        gezeigt, in der genau ein Host auftaucht und nie ein zweiter.
+      - **Feste Deskriptoren statt des `coproc`-Arrays.** Bash loescht
+        das Array, sobald der Coprozess abgeraeumt ist; unter `set -u`
+        ist ein verschwundenes Array-Element ein Abbruch mitten im
+        Spiel. Lese- und Schreibende werden deshalb sofort auf 26/27
+        dupliziert.
+      - **`SIGPIPE` wird ignoriert, solange der Bus offen ist.** Ein
+        Schreiben auf ein gestorbenes Hilfsprogramm beendete das Spiel
+        sonst nicht mit einem Fehler, sondern mit Signal 13 - mitten in
+        einer Runde, mit dem Terminal im Rohmodus. Nachgemessen: ohne
+        das stirbt der Prozess beim zweiten Schreibversuch.
+      - **Startpruefung nach dem Oeffnen.** Ein Hilfsprogramm, das den
+        Socket nicht oeffnen konnte, ist Millisekunden spaeter beendet,
+        und ein Lesen meldet dann Dateiende statt Timeout. Ohne diese
+        Pruefung oeffnete sich die Lobby ganz normal und bliebe fuer
+        immer leer - der Fehler, der am schwersten zu deuten ist.
+- [x] **Das Protokoll** (`lib/proto.sh`): zehn Lobby-Nachrichten
+      (`ANNOUNCE`, `CLOSED`, `DISCOVER`, `JOIN`, `WELCOME`, `DENY`,
+      `ROSTER`, `READY`, `ALIVE`, `LEAVE`), eine Zeile je Nachricht,
+      druckbares ASCII, hoechstens 512 Byte. Der Parser kennt nur zwei
+      Ergebnisse - gueltig oder verworfen -, damit kein Aufrufer
+      versehentlich mit einer halb geprueften Nachricht arbeitet.
+      Entscheidungen:
+      - **Die Spielerliste wird ganz geschickt und regelmaessig
+        wiederholt.** Auf einem Datagramm-Bus geht eine Nachricht
+        verloren, ohne dass es jemand merkt; eine verlorene
+        Aenderungsmeldung liesse eine Liste dauerhaft falsch stehen.
+        Jede Zeile traegt ausserdem die Laenge der Liste - nur daran
+        ist zu erkennen, dass jemand gegangen ist. Die Wiederholung kam
+        beim Testen dazu: ohne sie blieb ein Teilnehmer, der genau eine
+        Meldung verpasst hatte, bis zur naechsten Aenderung falsch.
+      - **Ein doppelter Beitritt ist folgenlos.** Aus Sicht des
+        Teilnehmers ist ein verlorenes `WELCOME` von einem langsamen
+        nicht zu unterscheiden, also fragt er weiter; wer schon drin
+        ist, bekommt sein `WELCOME` erneut statt einer Ablehnung.
+      - **Antworten auf `DISCOVER` haben eine Untergrenze** - ein Host,
+        der jede Suchanfrage sofort beantwortet, waere genau der
+        Verstaerker, nach dem jemand suchen wuerde, der den Bus fluten
+        will.
+      - **Kennungen statt Absenderadressen:** acht Hex-Ziffern, lokal
+        gewuerfelt. Sie muessen nicht unratbar sein - wer sie erraten
+        koennte, sieht sie ohnehin auf dem Bus -, nur fuer ein paar
+        Minuten eindeutig.
+- [x] **Die Lobby** (`lib/mp.sh`): "Mehrspieler" -> "Spiel eroeffnen" /
+      "Spiel beitreten". Eroeffnen zeigt sofort die eigene Lobby mit
+      Spielerliste und Bereitschaft; Beitreten zeigt die offenen Spiele
+      als **lebende Liste** (Host, Spielerzahl, Modus), die sich
+      aufbaut und abbaut, waehrend sie auf dem Schirm steht.
+      Entscheidungen:
+      - **Eigene Schleifen statt `menu_run`.** Ein Menue wartet auf
+        eine Taste; diese Bildschirme arbeiten waehrend sie warten -
+        je Tick den Bus leeren, Timer pruefen, ankuendigen - und
+        zeichnen nur neu, wenn sich etwas geaendert hat. Gebaut werden
+        sie wie alle anderen als Liste reiner Inhaltszeilen fuer
+        `render_menu_frame`, sodass sie zentriert stehen wie das
+        Spielfeld.
+      - **Keine Zwischenfrage nach einem Sitzungsnamen.** Die Sitzung
+        heisst nach ihrem Host; ein zweiter Name waere eine
+        Eingabezeile fuer nichts.
+      - **Der Bus wird beim Betreten des Menues geoeffnet und beim
+        Verlassen geschlossen**, nicht je Bildschirm: der Wechsel
+        zwischen den beiden Eintraegen kostet so keinen Neustart des
+        Hilfsprogramms, und eine Sitzung, die nie Mehrspieler spielt,
+        fasst das Netz nie an.
+      - **Der Zaehler der verarbeiteten Nachrichten ersetzt den
+        Verbindungsabbruch.** Die Sicherheitsregeln sahen vor, einen
+        Client zu trennen, der Muell schickt; auf einem Datagramm-Bus
+        gibt es nichts zu trennen, also wird der Rest der Sekunde
+        ignoriert. Die Lobby wird dabei langsamer informiert, nicht
+        handlungsunfaehig.
+      - **Vom Netz kommende Namen werden vor dem Zeichnen auf die
+        Spaltenbreite gekappt** - Verteidigung in der Tiefe, denn die
+        Gegenseite ist nicht zwingend ein rowhammer.
+- [x] **Neue Optionen** `--mp-discovery`, `--mp-group`, `--mp-port` und
+      `--mp-max`, alle mit `ROWHAMMER_MP_*`-Variable und bewusst **kein**
+      Config-Wert: welchen Port und welche Gruppe ein Netz zulaesst, ist
+      eine Eigenschaft dieses Netzes. Sie werden streng validiert, weil
+      alle drei Netz-Werte in der Adresse eines Hilfsprogramms landen,
+      wo ein Komma zu einer weiteren Option wuerde. Dazu ein viertes
+      Debug-Log `net.log` mit dem Verkehr einer Sitzung.
+- [x] **Arbeitsregel geaendert** (Nutzerentscheidung): ab jetzt wird am
+      Mehrspieler gearbeitet, und **`2.0.0` erscheint, wenn er fertig
+      ist**. Das loest die Regel aus 1.0.2 ab, nach der schon der
+      *erste* Schritt in Richtung Mehrspieler der Sprung auf `2.0.0`
+      sein sollte: eine Hauptversion, die mit einer halben Funktion
+      beginnt und ihre eigentliche Neuerung erst zehn Minor-Versionen
+      spaeter hat, sagt einem Aussenstehenden nichts. Bis dahin waechst
+      der Mehrspieler in der `1.x.x`-Reihe, ein Roadmap-Schritt je
+      Minor-Version.
+
+      _Spaeter ueberholt: die Versionsregel aus 1.0.2 (Phase 4)._

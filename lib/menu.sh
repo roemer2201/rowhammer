@@ -77,6 +77,10 @@
 #   the play time to the millisecond in every mode, the way the Ultra
 #   list does: in Ultra the time is the score, and MM:SS cut off exactly
 #   the digits that decide the place it is naming.
+#   The multiplayer entry of the main menu is not built here: its menu
+#   and the lobby screens behind it live in lib/mp.sh (since 0.28.0),
+#   because unlike every screen in this file they keep talking to the
+#   network while they wait for a key.
 #   Since 0.20.0 menu_demos is the "Demos" main menu entry: the recorded
 #   rounds (lib/demo.sh) newest first, each of them to watch again or to
 #   delete, the ones still backing a highscore entry marked with a "*".
@@ -96,7 +100,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.27.1  (2026-08-06)
+# Version: 0.28.0  (2026-08-07)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

@@ -1,3 +1,30 @@
+rowhammer (1.1.0) unstable; urgency=medium
+
+  * The "Mehrspieler" menu entry is no longer a placeholder: it opens a
+    LAN lobby (user request). "Spiel eroeffnen" announces a game onto a
+    shared UDP bus on the local network, "Spiel beitreten" shows the
+    games other people are announcing as a live list, and a joined lobby
+    shows everybody in it with their ready flag. There is deliberately
+    no server in any of this: the list of open games exists as long as
+    somebody is announcing, so nothing has to be installed, configured
+    or started for a game to be found.
+  * Discovery is broadcast by default and multicast on request
+    (--mp-discovery). Broadcast is the default because it works on every
+    network and with every socat version, while multicast is quieter but
+    depends on the helper's group-membership option and on switches
+    passing the group along.
+  * New modules: lib/net.sh (the UDP bus, via socat), lib/proto.sh (the
+    message table and its validating parser) and lib/mp.sh (the lobby
+    itself). Every received message is checked field by field against a
+    whitelist before anything is done with it, non-printable bytes are
+    dropped by the transport, and nothing that arrives is ever evaluated.
+  * New options --mp-discovery, --mp-group, --mp-port and --mp-max, each
+    with its ROWHAMMER_MP_* environment variable, and a fourth debug log
+    net.log carrying the traffic of a session.
+  * The round itself follows in the next multiplayer step; version 2.0.0
+    is the one that ships a playable multiplayer.
+
+ -- roemer2201 <r.oliver@web.de>  Fri, 07 Aug 2026 15:00:00 +0200
 rowhammer (1.0.4) unstable; urgency=medium
 
   * More dynamics for the special blocks (user request): the randomizer
@@ -22,7 +49,6 @@ rowhammer (1.0.4) unstable; urgency=medium
   * The manual (page 1) says what the bag holds, in both languages.
 
  -- roemer2201 <r.oliver@web.de>  Fri, 07 Aug 2026 12:00:00 +0200
-
 rowhammer (1.0.3) unstable; urgency=medium
 
   * The prompt that asks for the name at the end of a round now shows the
