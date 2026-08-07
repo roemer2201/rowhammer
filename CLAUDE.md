@@ -46,8 +46,32 @@ Die fuer uns relevanten Merkmale des Originals:
 
 - Spielfeld: **10 Spalten x 20 Zeilen** (klassisch), plus unsichtbare
   Spawn-Zeilen oberhalb.
-- Die 7 Standard-Bausteine (I, O, T, S, Z, J, L) mit **7-Bag-Randomizer**
-  (jede Sorte genau einmal pro 7er-Beutel, dann neu mischen).
+- Die 7 Standard-Bausteine (I, O, T, S, Z, J, L) mit **Bag-Randomizer**:
+  ein Beutel fasst **63 Steine** - neun vollstaendige Saetze der sieben
+  Sorten, als Ganzes gemischt (`BAG_SETS` in `lib/pieces.sh`, seit
+  1.0.4). **Umstellung von sieben auf 63 (Nutzerentscheidung):** um mehr
+  Dynamik fuer die Bildung der Spezialbloecke (Gold-/Silber-Quadrate,
+  siehe 3.2) zu bekommen. Die Garantie des Beutels bleibt dieselbe -
+  ueber einen vollen Beutel kommt jede Sorte gleich oft -, aber
+  innerhalb des Beutels ist die Reihenfolge deutlich freier: bei einem
+  Beutel aus sieben Steinen liegen zwei gleiche Sorten hoechstens zwoelf
+  Steine auseinander, und diese gleichmaessige Ausgabe ist genau das,
+  was ein Quadrat schwer macht - es braucht vier zueinander passende
+  Teile. Der lange Beutel bringt beides zurueck: die Haeufung gleicher
+  Sorten, aus der ein Gold-Quadrat ueberhaupt erst wird, und die
+  Duerre, die es zu einer Entscheidung macht. Zwei Festlegungen dazu:
+  - **Gemischt wird ueber den ganzen Beutel**, nicht Satz fuer Satz. Ein
+    Mischen je Siebenersatz wuerde nur siebenmal je sieben Steine
+    umsortieren und damit genau die gleichmaessige Verteilung erhalten,
+    die hier geloest werden soll.
+  - **Die Satzzahl ist eine justierbare Konstante** (`BAG_SETS`), wie
+    `ULTRA_TARGET_ROWS` oder `FLOOD_INTERVAL_MS`: sie gehoert zum
+    Spielgefuehl und wird nach Playtesting nachgezogen, nicht je Runde
+    gewaehlt. `BAG_SETS=1` ist wieder der klassische 7er-Beutel.
+  Demos und der geplante Mehrspieler bleiben davon unberuehrt: eine
+  Aufnahme speichert die Steinfolge selbst und keinen Beutel (siehe
+  4.10), und die Mehrspieler-Fairness haengt am gemeinsamen Seed
+  (siehe 5.1), nicht an der Beutelgroesse.
 - Steuerung (Standardbelegung; ueber das Einstellungsmenue aenderbar und
   in der Nutzer-Konfigurationsdatei gespeichert, siehe 4.5):
   - Links/Rechts: Pfeiltasten (seit 0.31.0 ohne Buchstabentaste)
@@ -398,7 +422,8 @@ werden kann, baut `menu_help_body` (ein `case`-Switch je Seite, 0-basiert)
 den Inhalt der angeforderten Seite bei Bedarf neu, statt ihn wie vorher
 in fester Reihenfolge einmal durchzureichen:
 
-1. Spielprinzip: Bausteine, volle Reihen als "Rows", 7-Bag,
+1. Spielprinzip: Bausteine, volle Reihen als "Rows", der 63er-Beutel
+   (seit 1.0.4, siehe 3.1),
    Level/Tempo, Rundenende.
 2. Steuerung: alle Aktionen mit ihren aktuellen Tasten, dazu die
    Menue-Bedienung und die beiden Wege zum Neustart (`r` im
@@ -2342,7 +2367,7 @@ Transport-Schnittstelle ist (siehe 5.3).
   - Mehr als 6 Spieler waeren nur noch als reines Scoreboard sinnvoll;
     das ist bewusst kein Ziel.
 - **Modus:** "Versus" - jeder Spieler hat sein eigenes 10x20-Feld, alle
-  starten mit demselben Seed (identische 7-Bag-Folge, Fairness).
+  starten mit demselben Seed (identische Steinfolge, Fairness).
   Abgebaute Reihen erzeugen Stoerreihen ("Garbage") beim Gegner
   (siehe 5.7). Wer oben rausbaut (Top-Out), scheidet aus und wird
   Zuschauer; wer als Letzter uebrig ist, gewinnt (siehe 5.8).
@@ -2467,7 +2492,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | --- | --- | --- |
   | `WELCOME` | `<slot> <proto> <maxplayers>` | Anmeldung akzeptiert |
   | `ROSTER` | `<slot> <name> <ready> <state>` | eine Zeile je Spieler, bei jeder Aenderung |
-  | `SEED` | `<seed>` | gemeinsamer Seed fuer die 7-Bag-Folge |
+  | `SEED` | `<seed>` | gemeinsamer Seed fuer die Steinfolge |
   | `START` | `<countdown_ms>` | Rundenstart |
   | `PEER` | `<slot> <lines> <rows> <level> <gold> <silver> <height> <pending> <state>` | Zustand eines Mitspielers |
   | `PEERBOARD` | `<slot> <200 Zeichen>` | Feld-Snapshot eines Mitspielers |

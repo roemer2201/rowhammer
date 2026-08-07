@@ -9,13 +9,13 @@
 #   meaning, mapped to pieces, gold/silver squares and the flood rows of
 #   the "Hochwasser" mode by the selectable
 #   theme), a per-type two-character glyph (PIECE_GLYPH) that keeps pieces
-#   distinguishable in the no-color mode, the 7-bag randomizer (every
-#   piece type appears exactly once per bag of seven) and the
-#   upcoming-piece queue that feeds the HUD preview. In debug mode every
-#   bag refill is logged with the shuffled piece order.
+#   distinguishable in the no-color mode, the bag randomizer (nine
+#   complete sets of the seven types per bag, shuffled as a whole) and
+#   the upcoming-piece queue that feeds the HUD preview. In debug mode
+#   every bag refill is logged with the shuffled piece order.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-08-04)
+# Version: 0.10.0  (2026-08-07)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -126,23 +126,42 @@ declare -A PIECE_GLYPH=(
     [I]="II" [O]="OO" [T]="TT" [S]="SS" [Z]="ZZ" [J]="JJ" [L]="LL"
 )
 
-# The bag of upcoming pieces (7-bag randomizer state).
+# The bag of upcoming pieces (bag randomizer state).
 PIECE_TYPES=(I O T S Z J L)
 BAG=()
 
-# Refill the bag with all seven piece types and shuffle it in place
-# (Fisher-Yates). RANDOM drives the shuffle, so seeding RANDOM makes the
-# whole piece sequence reproducible (used by --seed).
+# How many complete sets of the seven types make up one bag. Nine sets,
+# so a bag holds 63 pieces (since 1.0.4): the guarantee stays the same -
+# over a full bag every type comes up equally often - but within the bag
+# the order is far freer than with a single set of seven, where a type
+# that has just been drawn can be twelve pieces away at most. That
+# freedom is what the square system needs: building a 4x4 square takes
+# four pieces that fit each other, and with a bag of seven the sequence
+# hands them out too evenly for a square to ever be a lucky find. The
+# longer bag brings back both the run of same-type pieces that makes a
+# gold square possible and the drought that makes it a decision.
+BAG_SETS=9
+
+# Refill the bag with BAG_SETS complete sets of the seven piece types and
+# shuffle it in place (Fisher-Yates). RANDOM drives the shuffle, so
+# seeding RANDOM makes the whole piece sequence reproducible (used by
+# --seed).
 bag_refill() {
-    BAG=("${PIECE_TYPES[@]}")
     local i j tmp
+    BAG=()
+    for (( i = 0; i < BAG_SETS; i++ )); do
+        BAG+=("${PIECE_TYPES[@]}")
+    done
+    # Shuffled across the whole bag, not set by set: shuffling each set
+    # on its own would only reorder seven pieces at a time and keep
+    # exactly the even distribution this is meant to loosen up.
     for (( i = ${#BAG[@]} - 1; i > 0; i-- )); do
         j=$(( RANDOM % (i + 1) ))
         tmp="${BAG[i]}"
         BAG[i]="${BAG[j]}"
         BAG[j]="${tmp}"
     done
-    debug_event "bag refill: ${BAG[*]}"
+    debug_event "bag refill (${#BAG[@]} pieces): ${BAG[*]}"
 }
 
 # Queue of upcoming pieces drawn from the bag. It always holds at least

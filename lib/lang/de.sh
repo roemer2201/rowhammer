@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.6.0  (2026-08-06)
+# Version: 1.6.1  (2026-08-07)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -356,9 +356,9 @@ sich Reihen komplett fuellen: volle Reihen
 werden abgebaut und als \"Rows\" gewertet -
 das ist zugleich der Punktestand der Runde.
 
-Die Steine kommen aus einem 7er-Beutel: Jede
-der sieben Sorten genau einmal, dann wird
-neu gemischt.
+Die Steine kommen aus einem Beutel mit 63
+Steinen: jede der sieben Sorten neunmal, in
+zufaelliger Reihenfolge gemischt.
 
 Mit jeder abgebauten Reihe steigt das Level,
 und die Steine fallen schneller. Ragt ein

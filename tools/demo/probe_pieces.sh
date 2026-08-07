@@ -3,7 +3,7 @@
 # probe_pieces.sh
 #
 # Description:
-#   Print the first N pieces of rowhammer's 7-bag stream for a given seed
+#   Print the first N pieces of rowhammer's bag stream for a given seed
 #   by sourcing the game's own randomizer (lib/pieces.sh). The bag order
 #   is fully determined by the seed, so this reproduces the exact piece
 #   sequence a run with "--seed SEED" would draw, without playing a single
@@ -14,7 +14,7 @@
 #     SEED   integer seed (as passed to rowhammer.sh --seed)
 #     N      how many pieces to print (default 60)
 #
-# Version: 1.1.0  (2026-08-03)
+# Version: 1.1.1  (2026-08-07)
 set -u
 
 seed="${1:?usage: probe_pieces.sh SEED [N]}"

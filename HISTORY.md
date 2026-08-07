@@ -84,6 +84,8 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.55.0 | Verhaeltnis Reihen/Bonus in jeder Statistik | 4.5 |
 | 1.0.1 | Namensabfrage nur noch bei einem Platz in der Liste | 3.7, 4.5 |
 | 1.0.2 | Rundenende am oberen Feldrand | 3.1, 3.6 |
+| 1.0.3 | Spielzeit der Namensabfrage auf die Millisekunde; Versionszeile in der README | 3.7, 4.9 |
+| 1.0.4 | Beutel des Randomizers auf 63 Steine (Dynamik der Spezialbloecke) | 3.1 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 

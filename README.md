@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.0.3
+**Version:** 1.0.4
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -55,7 +55,7 @@ gegen das Debug-Log verifiziert) lassen sie sich mit der Toolchain unter
 
 **Phasen 1 bis 3 sind umgesetzt** (spielbarer Kern, Startmenue, die
 The-New-Tetris-Mechaniken und der Weltwunder-Modus): Spielfeld,
-7-Bag-Randomizer mit Vorschau auf
+Bag-Randomizer mit Vorschau auf
 3 Teile, Hold, Gravitation mit Levelkurve, Reihenabbau, Soft-/Hard-Drop,
 Pause, Game Over mit Neustart - und das **Quadrat-System**: Wer ein
 4x4-Feld aus genau vier unversehrten Bausteinen baut, erhaelt ein Gold-
@@ -347,7 +347,11 @@ Praezedenz: CLI > Umgebungsvariable > Konfigurationsdatei > Standardwert.
 
 Umgesetzt:
 
-- Klassisches 10x20-Spielfeld, 7 Bausteine, 7-Bag-Randomizer
+- Klassisches 10x20-Spielfeld, 7 Bausteine, Bag-Randomizer mit einem
+  Beutel aus **63 Steinen** (neun Saetze der sieben Sorten, als Ganzes
+  gemischt): ueber einen vollen Beutel kommt jede Sorte gleich oft, die
+  Reihenfolge darin ist aber frei genug fuer Haeufungen und Duerren -
+  das ist es, was die Quadrat-Bildung dynamisch macht
 - Vorschau auf die naechsten 3 Teile und Hold (einmal pro Zug)
 - **Quadrat-System:** Gold- (sortenrein) und Silber-Quadrate (gemischt)
   aus je vier unversehrten Teilen; jede geraeumte Reihe zaehlt 1 plus

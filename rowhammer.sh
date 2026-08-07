@@ -6,7 +6,7 @@
 #   "rowhammer", a terminal Tetris game written in pure bash, modeled
 #   after "The New Tetris" (N64). Starts with a menu (singleplayer,
 #   multiplayer placeholder, settings); the game offers a 10x20 board,
-#   7-bag randomizer with a 3-piece preview, a hold slot, gravity with a
+#   bag randomizer with a 3-piece preview, a hold slot, gravity with a
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
 #   restart. Completed rows blink briefly before they are removed, so
@@ -197,7 +197,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.0.3"
+ROWHAMMER_VERSION="1.0.4"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -918,7 +918,7 @@ for _var in "${KEY_ACTIONS[@]}"; do
 done
 unset _name_re _key_re _var _other _theme _theme_ok
 
-# Seeding RANDOM makes the 7-bag shuffle sequence reproducible.
+# Seeding RANDOM makes the bag shuffle sequence reproducible.
 if [ -n "${SEED}" ]; then
     RANDOM="${SEED}"
 fi

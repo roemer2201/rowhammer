@@ -1,3 +1,28 @@
+rowhammer (1.0.4) unstable; urgency=medium
+
+  * More dynamics for the special blocks (user request): the randomizer
+    now draws from a bag of 63 pieces - nine complete sets of the seven
+    types, shuffled as a whole - instead of a bag of seven. The
+    guarantee stays the same, every type comes up equally often over a
+    full bag, but the order within it is far freer. A bag of seven hands
+    the types out so evenly that two pieces of a kind are never more
+    than twelve pieces apart, and that evenness is what makes a gold or
+    silver square hard to build: a square needs four pieces that fit
+    each other. The longer bag brings back both the run of same-type
+    pieces that makes a square possible and the drought that makes it a
+    decision.
+  * The bag is shuffled across all 63 pieces rather than set by set,
+    which would only reorder seven pieces at a time and keep exactly the
+    even distribution this is meant to loosen up. The number of sets is
+    a tunable constant (BAG_SETS in lib/pieces.sh); one set is the
+    classic bag of seven.
+  * Recorded demos are unaffected: a demo stores the piece sequence
+    itself rather than a bag, so a recording made before this release
+    still replays exactly as it was played.
+  * The manual (page 1) says what the bag holds, in both languages.
+
+ -- roemer2201 <r.oliver@web.de>  Fri, 07 Aug 2026 12:00:00 +0200
+
 rowhammer (1.0.3) unstable; urgency=medium
 
   * The prompt that asks for the name at the end of a round now shows the

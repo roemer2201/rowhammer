@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.0.3
+Version:        1.0.4
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,16 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Fri Aug 07 2026 roemer2201 <r.oliver@web.de> - 1.0.4-1
+- More dynamics for the special blocks (user request): the randomizer
+  draws from a bag of 63 pieces - nine complete sets of the seven types,
+  shuffled as a whole - instead of a bag of seven. Every type still comes
+  up equally often over a full bag, but the order within it is free
+  enough for runs and droughts, which is what building gold and silver
+  squares needs. The number of sets is a tunable constant (BAG_SETS).
+- Recorded demos are unaffected: a demo stores the piece sequence itself,
+  so an older recording still replays as it was played.
+
 * Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.3-1
 - The end-of-round name prompt shows the play time to the millisecond
   (MM:SS.mmm) in every game mode, like the Ultra highscore list (user

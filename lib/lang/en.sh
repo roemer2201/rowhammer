@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.6.0  (2026-08-06)
+# Version: 1.6.1  (2026-08-07)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -319,9 +319,9 @@ up completely: a full row is cleared and
 scored as \"Rows\" - which is at the same
 time the round's score.
 
-The pieces come out of a 7-bag: each of the
-seven types exactly once, then the bag is
-shuffled anew.
+The pieces come out of a bag of 63: each of
+the seven types nine times, shuffled into a
+random order.
 
 Every cleared row raises the level and the
 pieces fall faster. Once a placed piece
