@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.0.4
+Version:        1.1.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -79,6 +79,22 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Fri Aug 07 2026 roemer2201 <r.oliver@web.de> - 1.1.0-1
+- The multiplayer menu is no longer a placeholder: a LAN lobby (user
+  request). A host announces its game onto a shared UDP bus, everybody
+  else on the network sees it in a live list of open games, joins it and
+  waits in a shared lobby with a ready flag. There is no server anywhere
+  in this - discovery is broadcast (default) or multicast, so nothing
+  has to be installed, configured or started for a game to be found.
+- New modules lib/net.sh (the UDP bus, socat), lib/proto.sh (message
+  table and validating parser) and lib/mp.sh (lobby). Everything
+  received is checked field by field against a whitelist before it is
+  used, and non-printable bytes never leave the transport layer.
+- New options --mp-discovery, --mp-group, --mp-port and --mp-max with
+  their ROWHAMMER_MP_* environment variables, and a fourth debug log
+  net.log with the traffic of a session.
+- The round itself follows in the next multiplayer step; this release
+  covers everything up to its start.
 * Fri Aug 07 2026 roemer2201 <r.oliver@web.de> - 1.0.4-1
 - More dynamics for the special blocks (user request): the randomizer
   draws from a bag of 63 pieces - nine complete sets of the seven types,
@@ -88,7 +104,6 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
   squares needs. The number of sets is a tunable constant (BAG_SETS).
 - Recorded demos are unaffected: a demo stores the piece sequence itself,
   so an older recording still replays as it was played.
-
 * Thu Aug 06 2026 roemer2201 <r.oliver@web.de> - 1.0.3-1
 - The end-of-round name prompt shows the play time to the millisecond
   (MM:SS.mmm) in every game mode, like the Ultra highscore list (user

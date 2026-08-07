@@ -44,8 +44,52 @@ I18N=(
     [main_settings]="Settings"
     [main_help]="Manual"
     [main_quit]="Quit"
-    [mp_body]="The multiplayer mode is not available yet.
-It follows in a later phase (see the roadmap)."
+
+    # --- Multiplayer (LAN lobby) ------------------------------------------
+    # The lobby runs over a shared UDP bus on the local network: a host
+    # announces its game, everybody else hears it. There is no server,
+    # which is why nothing here says "connect" or "server" - what is
+    # found is whoever is currently sending.
+    [mp_title]="Multiplayer"
+    [mp_host_entry]="Open a game"
+    [mp_join_entry]="Join a game"
+    [mp_browse_title]="Open games on the local network"
+    [mp_searching]="Searching the network..."
+    [mp_browse_keys]="Arrows: select  Enter: join  ESC: back"
+    [mp_lobby_title]="%s's lobby"
+    [mp_players]="Players %d/%d"
+    [mp_is_host]="host"
+    [mp_ready]="ready"
+    [mp_waiting]="waiting"
+    [mp_joining]="Joining..."
+    [mp_cancel_key]="ESC: cancel"
+    [mp_host_keys]="Enter: start   ESC: close the lobby"
+    [mp_client_keys]="Enter: ready   ESC: leave the lobby"
+    [mp_mode_versus]="Versus"
+    [mp_round_todo]="The lobby is done - the round itself follows
+in the next step of the multiplayer. Until
+then games can be opened, found and joined."
+    [mp_lost]="The network connection broke down.
+The lobby has ended."
+    [mp_host_left]="The host closed the lobby."
+    [mp_no_answer]="No answer from the host. The game may not
+be open any more."
+    [mp_denied]="The host refused the request to join."
+    [mp_denied_full]="That game is already full."
+    [mp_denied_name]="Your player name is already taken in this
+lobby. Change it in the settings and try
+again."
+    [net_no_helper]="Multiplayer needs the socat program, which
+is missing. Bash cannot open a UDP bus on
+its own. Install it (Debian/Ubuntu: apt
+install socat, Fedora: dnf install socat)
+and restart the game."
+    [net_lost]="The network connection broke down."
+    [net_helper_failed]="socat could not open the network bus. The port
+may be in use, or the chosen discovery
+kind is not supported here. --mp-discovery
+switches between broadcast and multicast,
+--mp-port changes the port."
 
     [round_state]="%d lines, %d rows, level %d."
     [quit_title]="Really quit?"
@@ -480,7 +524,7 @@ Usage: rowhammer.sh [OPTIONS]
 Terminal Tetris of the rowhammer project. Starts with a menu:
 singleplayer (endless "Marathon", the timed "Ultra", "Sprint" or
 "Time Attack" mode, or "Flood"),
-multiplayer (placeholder), highscores, wonders, statistics and settings.
+multiplayer (LAN lobby), highscores, wonders, statistics and settings.
 
 Options:
   --seed N      Seed the piece randomizer for a reproducible sequence.
@@ -537,6 +581,32 @@ Options:
                 update incorrectly, or to read whole frames out of the
                 debug frame log.
                 Env: ROWHAMMER_RENDER_MODE  Default: partial
+  --mp-discovery KIND
+                How the multiplayer finds other players on the local
+                network: "broadcast" sends the announcements to the
+                local broadcast address (default - that works on every
+                network and with every socat version); "multicast" sends
+                them to a multicast group and so reaches only the
+                machines that joined it - quieter, but dependent on
+                switch, access point and socat playing along. Neither
+                involves a server: the list of open games is built from
+                whatever is being sent right now. Needs the socat
+                program.
+                Env: ROWHAMMER_MP_DISCOVERY Default: broadcast
+  --mp-group ADDRESS
+                Multicast group used for discovery (224.0.0.0 through
+                239.255.255.255). Only meaningful with --mp-discovery
+                multicast. The default is inside the locally scoped
+                block 239.0.0.0/8.
+                Env: ROWHAMMER_MP_GROUP     Default: 239.255.42.99
+  --mp-port N   UDP port used for discovery (1024 to 65535). Everybody
+                on a network has to use the same port; a different port
+                cleanly separates two groups of players.
+                Env: ROWHAMMER_MP_PORT      Default: 27301
+  --mp-max N    Largest number of players in a lobby opened by this
+                session (2 to 6). Has no effect on games opened by
+                somebody else.
+                Env: ROWHAMMER_MP_MAX       Default: 4
   --reset TARGET
                 Reset persistent data in the data directory and exit
                 without starting the game. TARGET is one of:

@@ -25,16 +25,20 @@
 #                  the render mode, which the session header therefore
 #                  records: only the changed lines in the default
 #                  "partial" mode, the whole block in "full".
+#     net.log    - every line of multiplayer traffic on the LAN bus
+#                  (lib/net.sh): sent, received, and the ones the
+#                  transport filter threw away, each %q-quoted. Empty
+#                  in a session that never opened the multiplayer menu.
 #   Every log line carries the elapsed milliseconds since session start
 #   and the screen update counter ("f N"): an entry tagged f 42 happened
 #   after screen update 42 was drawn and before update 43. That lets the
-#   three files be correlated when analyzing a bug report or a gameplay
+#   four files be correlated when analyzing a bug report or a gameplay
 #   question.
 #   The switch variables DEBUG_OPT and DEBUG_DIR are owned by
 #   rowhammer.sh (defaults/env/CLI blocks); this module only reads them.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-08-03)
+# Version: 0.5.0  (2026-08-07)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -49,10 +53,10 @@ DEBUG_ACTIVE=0
 DEBUG_T0_MS=0
 DEBUG_FRAME_NO=0
 
-# Fixed file descriptors for the three log files. Literal numbers because
+# Fixed file descriptors for the four log files. Literal numbers because
 # bash's exec cannot redirect through a variable fd; kept well above the
 # standard descriptors to avoid collisions.
-#   21 = events.log, 22 = input.log, 23 = frames.log
+#   21 = events.log, 22 = input.log, 23 = frames.log, 24 = net.log
 
 # debug_init
 # Create the session directory, open the log files and write the session
@@ -69,7 +73,8 @@ debug_init() {
     mkdir -p -- "${DEBUG_DIR}"
     exec 21>>"${DEBUG_DIR}/events.log" \
          22>>"${DEBUG_DIR}/input.log" \
-         23>>"${DEBUG_DIR}/frames.log"
+         23>>"${DEBUG_DIR}/frames.log" \
+         24>>"${DEBUG_DIR}/net.log"
     now_ms
     DEBUG_T0_MS="${NOW_MS}"
     DEBUG_ACTIVE=1
@@ -101,6 +106,7 @@ debug_init() {
     } >&21
     printf '# rowhammer key input log. Line format: [elapsed_ms] [f N] raw=<%%q-quoted bytes> key=<mapped symbol>.\n' >&22
     printf '# rowhammer frame log. Each entry: one header line, then the exact bytes written to the terminal.\n' >&23
+    printf '# rowhammer network log. Line format: [elapsed_ms] [f N] <dir> <%%q-quoted line>. dir: out/in/drop/open/close.\n' >&24
     debug_event "session start"
     return 0
 }
@@ -137,6 +143,22 @@ debug_input() {
     fi
     debug_ts
     printf '%s raw=%q key=%s\n' "${DEBUG_TS}" "${1}" "${2}" >&22
+    return 0
+}
+
+# debug_net DIRECTION LINE
+# Append one line of multiplayer traffic to net.log. DIRECTION is "out"
+# (sent), "in" (received and accepted), "drop" (received and rejected by
+# the transport filter) or one of the bus lifecycle words open/close.
+# The line itself is %q-quoted like the raw input log, so a message that
+# arrived with unexpected bytes stays readable - and cannot repaint the
+# screen of whoever reads the log afterwards.
+debug_net() {
+    if [ "${DEBUG_ACTIVE}" -ne 1 ]; then
+        return 0
+    fi
+    debug_ts
+    printf '%s %s %q\n' "${DEBUG_TS}" "${1}" "${2}" >&24
     return 0
 }
 
@@ -204,7 +226,7 @@ debug_close() {
     fi
     debug_event "session end"
     DEBUG_ACTIVE=0
-    exec 21>&- 22>&- 23>&-
+    exec 21>&- 22>&- 23>&- 24>&-
     printf '%s: debug logs written to: %s\n' "${SCRIPT_NAME}" "${DEBUG_DIR}"
     return 0
 }
