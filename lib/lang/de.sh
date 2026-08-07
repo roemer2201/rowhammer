@@ -49,9 +49,58 @@ I18N=(
     [main_settings]="Einstellungen"
     [main_help]="Anleitung"
     [main_quit]="Beenden"
-    [mp_body]="Der Mehrspieler-Modus ist noch nicht
-verfuegbar. Er folgt in einer spaeteren
-Phase (siehe Roadmap)."
+
+    # --- Multiplayer (LAN lobby) ------------------------------------------
+    # Die Lobby laeuft ueber einen gemeinsamen UDP-Bus im lokalen Netz:
+    # ein Host kuendigt sein Spiel an, alle anderen hoeren es. Es gibt
+    # keinen Server, deshalb heisst es hier nirgends "Verbinden" oder
+    # "Server" - gefunden wird, wer gerade sendet.
+    [mp_title]="Mehrspieler"
+    [mp_host_entry]="Spiel eroeffnen"
+    [mp_join_entry]="Spiel beitreten"
+    [mp_browse_title]="Offene Spiele im lokalen Netz"
+    [mp_searching]="Suche im Netz..."
+    [mp_browse_keys]="Pfeile: waehlen  Enter: beitreten  ESC: zurueck"
+    # Argument: Name des Hosts.
+    [mp_lobby_title]="Lobby von %s"
+    # Argumente: aktuelle Spielerzahl, Hoechstzahl.
+    [mp_players]="Spieler %d/%d"
+    [mp_is_host]="Host"
+    [mp_ready]="bereit"
+    [mp_waiting]="wartet"
+    [mp_joining]="Beitritt laeuft..."
+    [mp_cancel_key]="ESC: abbrechen"
+    [mp_host_keys]="Enter: starten   ESC: Lobby schliessen"
+    [mp_client_keys]="Enter: bereit   ESC: Lobby verlassen"
+    [mp_mode_versus]="Versus"
+    # Meldungen. Mehrzeilig, weil sie ueber menu_message als
+    # Info-Bildschirm erscheinen; hoechstens 46 Zeichen je Zeile.
+    [mp_round_todo]="Die Lobby steht - die Runde selbst folgt im
+naechsten Schritt des Mehrspielers.
+Bis dahin lassen sich Spiele eroeffnen,
+finden und betreten."
+    [mp_lost]="Die Netzwerkverbindung ist abgebrochen.
+Die Lobby wurde beendet."
+    [mp_host_left]="Der Host hat die Lobby geschlossen."
+    [mp_no_answer]="Keine Antwort vom Host. Das Spiel ist
+vielleicht nicht mehr offen."
+    [mp_denied]="Der Host hat den Beitritt abgelehnt."
+    [mp_denied_full]="Das Spiel ist bereits voll."
+    [mp_denied_name]="Dein Spielername ist in dieser Lobby schon
+vergeben. Aendere ihn in den
+Einstellungen und versuche es erneut."
+    [net_no_helper]="Fuer den Mehrspieler fehlt das Programm
+socat. Bash kann selbst keinen UDP-Bus
+oeffnen. Installiere es (Debian/Ubuntu:
+apt install socat, Fedora: dnf install
+socat) und starte das Spiel neu."
+    [net_lost]="Die Netzwerkverbindung ist abgebrochen."
+    [net_helper_failed]="socat konnte den Netz-Bus nicht oeffnen. Der
+Port ist vielleicht belegt, oder die
+gewaehlte Suchart wird nicht unterstuetzt.
+Mit --mp-discovery laesst sich zwischen
+broadcast und multicast wechseln, mit
+--mp-port der Port aendern."
 
     # The state of the running round, shown in every question that would
     # throw it away. Arguments: lines, rows, level.
@@ -523,7 +572,7 @@ Aufruf: rowhammer.sh [OPTIONEN]
 
 Terminal-Tetris des rowhammer-Projekts. Startet mit einem Menue:
 Einzelspieler (endloser "Marathon", die Zeitmodi "Ultra", "Sprint" und
-"Time Attack" sowie "Hochwasser"), Mehrspieler (Platzhalter), Highscores,
+"Time Attack" sowie "Hochwasser"), Mehrspieler (LAN-Lobby), Highscores,
 Weltwunder, Statistik, Demos und Einstellungen.
 
 Optionen:
@@ -585,6 +634,32 @@ Optionen:
                 Update falsch darstellen, und fuer ein Frame-Log mit
                 ganzen Bildern.
                 Env: ROWHAMMER_RENDER_MODE  Standard: partial
+  --mp-discovery ART
+                Wie der Mehrspieler andere Spieler im lokalen Netz
+                findet: "broadcast" schickt die Ankuendigungen an die
+                lokale Broadcast-Adresse (Standard - das funktioniert in
+                jedem Netz und mit jeder socat-Version); "multicast"
+                schickt sie an eine Multicast-Gruppe und erreicht damit
+                nur Rechner, die der Gruppe beigetreten sind - leiser,
+                aber abhaengig davon, dass Switch, Accesspoint und socat
+                die Gruppe mitmachen. Einen Server gibt es in beiden
+                Faellen nicht: die Liste der offenen Spiele entsteht aus
+                dem, was gerade gesendet wird. Benoetigt das Programm
+                socat.
+                Env: ROWHAMMER_MP_DISCOVERY Standard: broadcast
+  --mp-group ADRESSE
+                Multicast-Gruppe fuer die Suche (224.0.0.0 bis
+                239.255.255.255). Nur mit --mp-discovery multicast von
+                Bedeutung. Der Standard liegt im lokal reservierten
+                Bereich 239.0.0.0/8.
+                Env: ROWHAMMER_MP_GROUP     Standard: 239.255.42.99
+  --mp-port N   UDP-Port der Suche (1024 bis 65535). Alle Spieler eines
+                Netzes muessen denselben Port benutzen; ein anderer Port
+                trennt zwei Spielergruppen sauber voneinander.
+                Env: ROWHAMMER_MP_PORT      Standard: 27301
+  --mp-max N    Hoechstzahl der Spieler einer eroeffneten Lobby (2 bis
+                6). Gilt nur fuer Spiele, die diese Sitzung eroeffnet.
+                Env: ROWHAMMER_MP_MAX       Standard: 4
   --reset ZIEL  Dauerhafte Daten im Datenverzeichnis zuruecksetzen und
                 beenden, ohne das Spiel zu starten. ZIEL ist eines von:
                   config     die Konfigurationsdatei rowhammer.conf

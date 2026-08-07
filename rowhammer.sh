@@ -5,7 +5,7 @@
 # Description:
 #   "rowhammer", a terminal Tetris game written in pure bash, modeled
 #   after "The New Tetris" (N64). Starts with a menu (singleplayer,
-#   multiplayer placeholder, settings); the game offers a 10x20 board,
+#   multiplayer, settings); the game offers a 10x20 board,
 #   7-bag randomizer with a 3-piece preview, a hold slot, gravity with a
 #   level-based speed curve, soft/hard drop, a short lock delay that lets a
 #   landing piece still be slid or rotated, pause and game over with
@@ -131,14 +131,20 @@
 #   terminal of at least 48x22; a resize during play is caught via
 #   SIGWINCH and redraws cleanly, and shrinking below the minimum pauses
 #   the round behind a "resize me" overlay until the terminal grows back.
-#   A working multiplayer follows in a later phase (see CLAUDE.md).
+#   The "Mehrspieler" menu entry opens the LAN lobby (lib/mp.sh): a host
+#   announces its game onto a shared UDP bus on the local network and
+#   everybody else sees it in a live list of open games, joins it and
+#   waits there with a ready flag. No server is involved - the list
+#   exists as long as somebody is announcing (--mp-discovery picks
+#   broadcast or multicast). The round itself follows in the next
+#   multiplayer step; see CLAUDE.md section 5 for the whole plan.
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify the bash version (>= 4).
 #   3. Source the library modules (debug, config, i18n, demo, pieces,
 #      board, squares, highscore, save, stats, wonders, input, render,
-#      menu).
+#      menu, net, proto, mp).
 #   4. Read the config file and resolve the interface language
 #      (default < config < ROWHAMMER_LANG < --lang), then load its text
 #      table - everything printed from here on is translated, --help
@@ -179,10 +185,12 @@
 #                [--color-mode auto|basic|extended]
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--render-mode partial|full] [--demo-record on|off]
+#                [--mp-discovery broadcast|multicast] [--mp-group ADDR]
+#                [--mp-port N] [--mp-max N]
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.0.3  (2026-08-06)
+# Version: 1.1.0  (2026-08-07)
 
 set -euo pipefail
 
@@ -197,7 +205,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.0.3"
+ROWHAMMER_VERSION="1.1.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -274,6 +282,37 @@ RESET_TARGETS=(config stats highscore save demo all)
 # out of the config file for the same reason as the reset target itself:
 # a stored "never ask me again" would defeat the safety net.
 FORCE_OPT="${ROWHAMMER_FORCE:-0}"
+# --- LAN multiplayer ------------------------------------------------------
+# Where the multiplayer looks for other players: a shared UDP bus on the
+# local network, either an administratively scoped multicast group (the
+# default) or the limited broadcast address. No server is involved in
+# either case - a host announces its lobby onto the bus and everybody
+# listening on the port has it in their list (see lib/net.sh, lib/mp.sh
+# and CLAUDE.md section 5).
+# None of the four is a config file setting: which port and which group
+# a network allows is a property of that network - the kind of thing
+# somebody has to be able to change on the command line on a strange
+# LAN - and the player count is the host's decision for one session.
+# Precedence is therefore default < env < CLI, like the render mode.
+# 239.255.42.99 is in the administratively scoped block (239.0.0.0/8),
+# the range reserved for exactly this: local use, never routed off site.
+MP_GROUP="${ROWHAMMER_MP_GROUP:-239.255.42.99}"
+# A port in the registered range that no common service claims.
+MP_PORT="${ROWHAMMER_MP_PORT:-27301}"
+# broadcast (default) or multicast. Broadcast is the default because it
+# is the one that works everywhere: it asks nothing of the socket but
+# the permission to broadcast, while multicast depends on the helper's
+# group-membership option (socat 1.8.0.0 mis-parses it and exits) and on
+# switches and access points passing the group along. Multicast is the
+# quieter of the two - it only reaches the machines that joined the
+# group instead of the whole segment - and stays available for networks
+# where broadcast is filtered, which is why both are offered.
+MP_DISCOVERY="${ROWHAMMER_MP_DISCOVERY:-broadcast}"
+# Players per session: 2 to MP_MAX_LIMIT, default 4. The upper limit is
+# reasoned out in CLAUDE.md 5.1 (render cost per opponent board, screen
+# width, and garbage targeting that stops making sense in a crowd).
+MP_MAX="${ROWHAMMER_MP_MAX:-4}"
+MP_MAX_LIMIT=6
 PLAYER_NAME="Player"
 # Demo recording on/off ("on"/"off"). Unlike the render or color mode
 # this is a taste, not a property of the terminal, so it is a config file
@@ -468,6 +507,54 @@ while [ "$#" -gt 0 ]; do
             CLI_DEMO_RECORD="${1#*=}"
             shift
             ;;
+        --mp-group)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            MP_GROUP="${2}"
+            shift 2
+            ;;
+        --mp-group=*)
+            MP_GROUP="${1#*=}"
+            shift
+            ;;
+        --mp-port)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            MP_PORT="${2}"
+            shift 2
+            ;;
+        --mp-port=*)
+            MP_PORT="${1#*=}"
+            shift
+            ;;
+        --mp-discovery)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            MP_DISCOVERY="${2}"
+            shift 2
+            ;;
+        --mp-discovery=*)
+            MP_DISCOVERY="${1#*=}"
+            shift
+            ;;
+        --mp-max)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            MP_MAX="${2}"
+            shift 2
+            ;;
+        --mp-max=*)
+            MP_MAX="${1#*=}"
+            shift
+            ;;
         --reset)
             if [ "$#" -lt 2 ]; then
                 printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
@@ -570,6 +657,36 @@ case "${DEBUG_OPT}" in
         exit 2
         ;;
 esac
+# The multiplayer settings are validated here like every other option,
+# but with one extra reason to be strict: all three of them end up in
+# the address of a helper program (lib/net.sh), where a comma or a
+# space would turn into another socat option. The patterns below leave
+# no room for one.
+case "${MP_DISCOVERY}" in
+    multicast|broadcast) : ;;
+    *)
+        printf '%s: --mp-discovery expects multicast or broadcast, got: %s\n' \
+            "${SCRIPT_NAME}" "${MP_DISCOVERY}" >&2
+        exit 2
+        ;;
+esac
+if ! [[ "${MP_GROUP}" =~ ^((22[4-9]|23[0-9])\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})$ ]]; then
+    printf '%s: --mp-group expects an IPv4 multicast address (224.0.0.0-239.255.255.255), got: %s\n' \
+        "${SCRIPT_NAME}" "${MP_GROUP}" >&2
+    exit 2
+fi
+if ! [[ "${MP_PORT}" =~ ^[0-9]{1,5}$ ]] || \
+   [ "${MP_PORT}" -lt 1024 ] || [ "${MP_PORT}" -gt 65535 ]; then
+    printf '%s: --mp-port expects a port from 1024 to 65535, got: %s\n' \
+        "${SCRIPT_NAME}" "${MP_PORT}" >&2
+    exit 2
+fi
+if ! [[ "${MP_MAX}" =~ ^[0-9]{1,2}$ ]] || \
+   [ "${MP_MAX}" -lt 2 ] || [ "${MP_MAX}" -gt "${MP_MAX_LIMIT}" ]; then
+    printf '%s: --mp-max expects a player count from 2 to %s, got: %s\n' \
+        "${SCRIPT_NAME}" "${MP_MAX_LIMIT}" "${MP_MAX}" >&2
+    exit 2
+fi
 if [ -n "${RESET_OPT}" ]; then
     _reset_ok=0
     for _target in "${RESET_TARGETS[@]}"; do
@@ -632,7 +749,10 @@ TERM_RESIZED=0
 # take the piece stream from a recording during playback, and the
 # renderer reads it as well, so the flags have to exist before either
 # module runs.
-for _lib in debug config i18n demo pieces board squares highscore save stats wonders input render menu; do
+# net/proto/mp come after render and menu: the lobby screens are drawn
+# with render_menu_frame and the multiplayer menu is a menu_run like any
+# other, so both modules have to exist by the time lib/mp.sh is read.
+for _lib in debug config i18n demo pieces board squares highscore save stats wonders input render menu net proto mp; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -2149,7 +2269,10 @@ main() {
     # demo_record_discard removes the RAM disk file of a round that never
     # finished (Ctrl-C, a killed session); a finished round has already
     # moved its recording into the data directory and left nothing here.
-    trap 'term_restore; demo_record_discard; debug_close' EXIT
+    # net_close ends the multiplayer bus helper of a lobby left by a
+    # signal rather than by its own menu; it is a no-op when no lobby was
+    # ever opened, which is the normal case.
+    trap 'term_restore; demo_record_discard; net_close; debug_close' EXIT
     trap 'exit 130' INT TERM
     # Debug logging starts before the alternate screen, so init errors
     # (unwritable log directory etc.) stay readable.
@@ -2213,9 +2336,12 @@ main() {
                 menu_singleplayer
                 ;;
             1)
-                # Placeholder until the multiplayer phase (see CLAUDE.md).
-                i18n_lines mp_body
-                menu_message "${I18N[main_multi]}" "${I18N_LINES[@]}"
+                # LAN multiplayer: open a game or join one of the games
+                # announced on the local network (lib/mp.sh). The bus is
+                # opened when this entry is picked and closed on the way
+                # out, so a session that never plays multiplayer never
+                # touches the network.
+                mp_menu
                 ;;
             2)
                 # Picks the mode first (Marathon or Ultra): the two

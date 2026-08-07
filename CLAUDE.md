@@ -1045,10 +1045,9 @@ rowhammer/
     wonders.sh         # Weltwunder-Logik, Baustufen, Fortschritt
     save.sh            # Laden/Speichern des Spielstands
     stats.sh           # Persistente Spielstatistik (Reihen, Bonusreihen, Bloecke)
-    net.sh             # (Phase 5) Transport: Unix-Socket, Zeilenrahmung, Limits
-    proto.sh           # (Phase 5) Nachrichtentabelle, Parser mit Validierung
-    hub.sh             # (Phase 5) Sitzungslogik des Hubs (Lobby, Garbage, KO)
-    mp.sh              # (Phase 5) Client-Seite: Lobby, Peer-Zustaende, Anbindung
+    net.sh             # LAN-Bus (UDP per socat), Zeilenrahmung, Limits
+    proto.sh           # Nachrichtentabelle, Parser mit Validierung
+    mp.sh              # Mehrspieler: Lobby, Spielerliste, spaeter die Runde
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
   tools/
@@ -1071,13 +1070,14 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 1.0.2): alle Module aus dem Baum oben existieren mit
-Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
-bislang nur spezifiziert sind (siehe Abschnitt 5)
+Stand (Version 1.1.0): alle Module aus dem Baum oben existieren
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
-`stats.sh`, `demo.sh` und `i18n.sh` mit `lib/lang/` sowie
-`assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
-startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
+`stats.sh`, `demo.sh`, `i18n.sh` mit `lib/lang/` und seit 1.1.0 den
+drei Mehrspieler-Modulen `net.sh`, `proto.sh` und `mp.sh`, sowie
+`assets/wonders/` mit einer Art-Datei je Wunder). Vom Mehrspieler ist
+die **Lobby** umgesetzt, die Runde noch nicht (siehe Abschnitt 5). Die
+Anwendung
+startet in einem Menue (Einzelspieler / Mehrspieler /
 Highscores / Weltwunder / Statistik / Demos / Einstellungen /
 Anleitung / Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
@@ -1128,6 +1128,12 @@ Einstellungsmenue waehlbar und in der Config gespeichert),
 `partial`, seit 0.41.0, siehe 4.3),
 `--demo-record on|off` (`ROWHAMMER_DEMO_RECORD`, Standard `on`, seit
 0.46.0; auch im Einstellungsmenue und in der Config, siehe 3.8/4.10),
+`--mp-discovery broadcast|multicast` (`ROWHAMMER_MP_DISCOVERY`,
+Standard `broadcast`), `--mp-group ADRESSE`
+(`ROWHAMMER_MP_GROUP`, Standard `239.255.42.99`), `--mp-port N`
+(`ROWHAMMER_MP_PORT`, Standard `27301`) und `--mp-max N`
+(`ROWHAMMER_MP_MAX`, Standard 4) fuer den LAN-Mehrspieler (alle vier
+seit 1.1.0, kein Config-Wert, siehe 5.10),
 `--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
 0.35.0, das Ziel `demo` seit 0.46.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
 beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
@@ -1775,7 +1781,7 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   `--debug-dir DIR` bzw. `ROWHAMMER_DEBUG_DIR` (Standard:
   `${XDG_STATE_HOME:-~/.local/state}/rowhammer/debug/<Zeitstempel>.<PID>`,
   ein Verzeichnis pro Lauf; der Pfad wird beim Beenden ausgegeben).
-- Drei korrelierte Log-Dateien (`lib/debug.sh`); jede Zeile traegt die
+- Vier korrelierte Log-Dateien (`lib/debug.sh`); jede Zeile traegt die
   Millisekunden seit Sessionstart und den Bildschirm-Update-Zaehler
   ("f N" = nach Update N, vor N+1):
   - `frames.log`: jede Terminal-Ausgabe 1:1 (Byte fuer Byte, inklusive
@@ -1793,6 +1799,11 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
     `--render-mode full` laufen.
   - `input.log`: jeder Tastendruck mit Rohbytes (`printf %q`-quotiert)
     und gemapptem Symbol; auch nicht zuordenbare Escape-Sequenzen.
+  - `net.log` (seit 1.1.0): jede Zeile Mehrspieler-Verkehr auf dem
+    LAN-Bus (`lib/net.sh`), mit Richtung (`out`/`in`/`drop`) und
+    `printf %q`-quotiert wie `input.log` - eine boesartige Zeile soll
+    auch beim Lesen des Logs nichts anrichten koennen. In einer
+    Sitzung, die den Mehrspieler nie oeffnet, bleibt die Datei leer.
   - `events.log`: Session-Header (Version, Bash, Terminal, Seed,
     Spieler, Tastenbelegung, geladene Config-Dateien) und alle
     Aktionen: Spawns samt Queue, Bewegungen/Rotationen (inklusive
@@ -2306,27 +2317,51 @@ abgeschnitten wurden (Mehrspieler-Platzhalter, die drei Meldungen des
 Rebind-Dialogs, die Abbrechen-Fusszeile einer Sicherheitsabfrage und je
 eine Zeile der ersten und dritten Anleitungsseite) - sie sind umbrochen.
 
-## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
+## 5. Multiplayer (Phase 5, Lobby umgesetzt in 1.1.0)
 
-**Alles in diesem Abschnitt ist Arbeit an Version 2.x.x** (siehe die
-Arbeitsregel in Abschnitt 6): der erste Schritt hier hinein ist der
-Sprung auf `2.0.0`, waehrend das Einzelspieler-Spiel seine eigene
-Versionsreihe weiterfuehrt. Das gilt auch fuer die Vorarbeit im
-Einzelspieler-Code (Schritt 1 der Roadmap) und fuer die darauf
-aufbauende Phase 6 (5.11-5.19).
+**Der Mehrspieler ist die laufende Arbeit** (siehe die Arbeitsregel in
+Abschnitt 6): er waechst Schritt fuer Schritt in der `1.x.x`-Reihe, und
+`2.0.0` erscheint, wenn er fertig ist.
 
-Dieser Abschnitt ist die **Spezifikation**; im Code existiert bislang nur
-der Platzhalter-Menuepunkt. Die Umsetzung erfolgt schrittweise nach der
-Reihenfolge in Abschnitt 7, Phase 5. Jeder Schritt dort verweist auf die
-hier festgelegten Regeln.
+Stand 1.1.0: die **Lobby** ist umgesetzt (5.2 bis 5.5 und der
+Lobby-Teil von 5.10) - Spiele eroeffnen, im Netz finden, beitreten und
+gemeinsam warten. Die **Runde** selbst ist weiterhin Spezifikation
+(5.6 bis 5.9); die Umsetzung folgt der Reihenfolge in Abschnitt 7,
+Phase 5, und jeder Schritt dort verweist auf die hier festgelegten
+Regeln.
 
-Leitentscheidung: **lokales Mehrspieler-Spiel auf einem gemeinsamen Host**
-ueber einen **Unix-Domain-Socket** (Nutzerwunsch). Typisches Szenario:
-mehrere Leute sind per SSH auf derselben Maschine angemeldet und spielen
-gegeneinander. Ein Netzwerk-Transport (TCP) ist damit ausdruecklich **nicht**
-Teil von Phase 5; das Protokoll wird aber so entworfen, dass ein
-TCP-Transport spaeter nur eine weitere Implementierung derselben
-Transport-Schnittstelle ist (siehe 5.3).
+Leitentscheidung: **Mehrspieler im lokalen Netz (LAN) ohne zentrale
+Server-Instanz** (Nutzerwunsch, seit 1.1.0). Die Spieler finden sich
+ueber **Broadcast- bzw. Multicast-Datagramme**: wer ein Spiel eroeffnet,
+kuendigt es etwa einmal je Sekunde ins Netz an, und jedes rowhammer, das
+auf demselben Port lauscht, baut daraus seine Liste der offenen Spiele.
+Es gibt damit nichts einzurichten, nichts zu starten und keine Maschine,
+die anders ist als die anderen: die Liste existiert, solange jemand
+sendet.
+
+**Das loest die urspruengliche Festlegung ab**, ein Mehrspieler auf
+*einem* gemeinsamen Host ueber einen **Unix-Domain-Socket** (mehrere
+Leute per SSH auf derselben Maschine). Was davon bleibt und was faellt:
+
+- **Es faellt:** der Unix-Socket, das Sitzungsverzeichnis mit seinen
+  Rechte- und Symlink-Pruefungen, und die drei Prozessrollen Hub /
+  Bridge / Client. Ein Hub-Prozess ist ein Server; ihn zu behalten
+  hiesse, auf einer der Maschinen doch wieder eine zentrale Instanz
+  laufen zu lassen - genau das, was hier nicht sein soll.
+- **Es bleibt:** der Gedanke, dass eine Sitzung **eine** Autoritaet
+  hat. Sie ist jetzt der **Host** der Sitzung, also der Client, der das
+  Spiel eroeffnet hat: er vergibt die Plaetze, fuehrt die Spielerliste
+  und wird spaeter Garbage-Mengen, Lochspalten und das Rundenende
+  bestimmen (5.7, 5.8). Autoritaet ohne eigenen Prozess.
+- **Es bleibt unveraendert:** alles zur Sicherheit (5.5). Eine
+  Zeile, die aus dem Netz kommt, ist genauso wenig vertrauenswuerdig
+  wie eine, die aus einem lokalen Socket kam - eher weniger, denn
+  jetzt kann sie von jeder Maschine im Netz stammen.
+
+Ein Betrieb ueber SSH auf einer gemeinsamen Maschine bleibt damit
+moeglich (mehrere Sitzungen auf einem Rechner finden sich ueber
+denselben Bus, siehe 5.2), ist aber nicht mehr der Normalfall, auf den
+hin entworfen wird.
 
 ### 5.1 Spielerzahl und Spielmodus
 
@@ -2351,157 +2386,253 @@ Transport-Schnittstelle ist (siehe 5.3).
 - Ein spaeterer kooperativer Modus oder ein reiner "Race"-Modus (wer
   zuerst N Reihen hat) ist denkbar, aber nicht Teil dieser Spezifikation.
 
-### 5.2 Transport: Unix-Domain-Socket
+### 5.2 Transport: LAN-Bus per Broadcast/Multicast (umgesetzt, 1.1.0)
 
-- **Socket-Pfad:** `${MP_DIR}/<sitzung>.sock`. `MP_DIR` ist
-  standardmaessig `${XDG_RUNTIME_DIR:-/tmp/rowhammer-${UID}}/rowhammer`,
-  umstellbar per `--mp-dir DIR` / `ROWHAMMER_MP_DIR`.
-  - **Privat (Standard):** Verzeichnis mit `mkdir -m 0700`, nur eigene
-    Sitzungen (mehrere Terminals/SSH-Sessions desselben Kontos).
-  - **Geteilt (mehrere Konten auf einem Host):** ein Verzeichnis mit
-    gemeinsamer Gruppe, `0770`, Socket `mode=0660`. Der Pfad muss vom
-    Administrator angelegt werden (z. B. `/var/games/rowhammer`); das
-    Spiel legt ein solches Verzeichnis **nicht** selbst an und weigert
-    sich, ein world-writable Verzeichnis ohne Sticky-Bit zu benutzen
-    (siehe 5.5).
-- **Bash kann kein AF_UNIX.** `/dev/tcp` deckt nur TCP ab, es gibt kein
-  eingebautes Socket-Primitiv. Deshalb braucht der Mehrspieler-Modus
-  **genau ein** externes Hilfsprogramm, in dieser Reihenfolge gesucht:
-  1. `socat` (bevorzugt: `UNIX-LISTEN:...,fork` und `UNIX-CONNECT:...`)
-  2. `ncat --unixsock` (nmap)
-  3. `nc -U` (OpenBSD-netcat; BusyBox-nc kann es nicht)
-  Fehlt alles drei, bleibt der Menuepunkt sichtbar, zeigt aber einen
-  Hinweis mit den Paketnamen und kehrt zurueck. Der Einzelspieler bleibt
-  ohne jede neue Abhaengigkeit lauffaehig; im Debian-Paket wird `socat`
-  als `Recommends` eingetragen (kein `Depends`).
-- **Alternative ohne Fremdprogramm (dokumentiert, nicht Standard):**
-  benannte Pipes (`mkfifo`, Coreutils) - ein Inbox-FIFO fuer den Hub
-  plus ein Downstream-FIFO je Client. Funktioniert lokal genauso, ist
-  aber fragiler (mehrere Schreiber auf einem FIFO sind nur bis
-  `PIPE_BUF` = 4096 Byte atomar, kein sauberes EOF beim Absturz eines
-  Clients). Wird nur aufgegriffen, falls sich die Hilfsprogramm-
-  Abhaengigkeit als Problem herausstellt. Die Nachrichtenlaenge wird
-  trotzdem auf 512 Byte begrenzt (siehe 5.4), damit dieser Fallback
-  ohne Protokollaenderung moeglich bleibt.
+Alle Teilnehmer teilen sich **einen** UDP-Datagramm-Bus: jede Nachricht
+geht an alle, jeder liest mit und nimmt sich heraus, was ihn angeht.
+Es gibt keine Verbindung, keinen Verbindungsaufbau und keine
+Gegenstelle, die vorher da sein muesste - genau deshalb kommt die
+Liste der offenen Spiele ohne zentrale Instanz zustande.
 
-### 5.3 Prozessmodell
+- **Adresse.** Zwei Sucharten, umschaltbar per `--mp-discovery`
+  (`ROWHAMMER_MP_DISCOVERY`):
+  - **`broadcast` (Standard):** die begrenzte Broadcast-Adresse
+    `255.255.255.255`, die kein Router weiterleitet. Sie braucht vom
+    Socket nichts ausser der Broadcast-Erlaubnis und funktioniert
+    deshalb ueberall.
+  - **`multicast`:** eine administrativ begrenzte Gruppe
+    (Standard `239.255.42.99`, `--mp-group`), also aus `239.0.0.0/8` -
+    dem Bereich, der genau dafuer reserviert ist und das Netz nie
+    verlaesst. Leiser als Broadcast, weil nur die Maschinen etwas
+    bekommen, die der Gruppe beigetreten sind.
+  - **Warum Broadcast der Standard ist** (Entscheidung 1.1.0):
+    Multicast haengt an zwei Dingen, die nicht ueberall mitspielen -
+    der Gruppen-Mitgliedschaftsoption des Hilfsprogramms (socat 1.8.0.0
+    liest sie fehlerhaft aus und beendet sich sofort; nachgemessen) und
+    Switches bzw. Accesspoints, die die Gruppe weiterreichen. Broadcast
+    hat keine dieser Abhaengigkeiten. Umgekehrt gibt es Netze, die
+    Broadcast filtern; deshalb bleiben beide waehlbar, statt eines von
+    beiden festzuschreiben.
+  - **Port** `27301` (`--mp-port`), fuer alle Teilnehmer derselbe. Ein
+    anderer Port trennt zwei Spielergruppen im selben Netz sauber
+    voneinander - das ist zugleich die einfachste Art, parallel zu
+    testen.
+- **Der Bus ist symmetrisch.** Ein und derselbe Socket ist an den Port
+  gebunden und sendet an genau die Adresse, auf der er hoert. Es gibt
+  keine Server- und keine Client-Seite des Transports, nur Teilnehmer.
+  Die eigenen Datagramme kommen dabei zurueck (Multicast-Loopback ist
+  eingeschaltet, Broadcast liefert ohnehin an jeden gebundenen Socket
+  der Maschine) - das ist erwuenscht: **zwei rowhammer auf derselben
+  Maschine finden sich damit genauso wie zwei auf verschiedenen**, und
+  die Handler ignorieren, was sie selbst gesagt haben.
+- **Bash kann kein UDP-Empfangen.** `/dev/udp` sendet nur, auf einem
+  verbundenen Socket; binden, einer Gruppe beitreten oder `SO_BROADCAST`
+  setzen kann es nicht. Der Bus ist deshalb ein **Coprocess** mit
+  **`socat`**:
+  `coproc NET_LINK { socat UDP4-DATAGRAM:...,bind=:PORT,... -; }`,
+  dessen STDIN/STDOUT die Datagramme sind. Lese- und Schreibende werden
+  sofort auf feste Deskriptoren (26/27) dupliziert, weil Bash das
+  `coproc`-Array in dem Moment loescht, in dem der Coprozess abgeraeumt
+  wird - und ein verschwundenes Array-Element ist unter `set -u` ein
+  Abbruch mitten im Spiel.
+- **Nur `socat`, kein Rueckfall auf `nc`/`ncat`** (Entscheidung 1.1.0,
+  loest die dreistufige Suche der urspruenglichen Spezifikation ab): ein
+  Datagramm-Socket, der gebunden bleibt, waehrend Datagramme mehrerer
+  Absender eintreffen, geht mit beiden netcats nicht - der
+  OpenBSD-`nc` verbindet sich mit dem ersten Absender und ignoriert den
+  Rest, und einer Multicast-Gruppe kann keiner von beiden beitreten.
+  Ein solcher Rueckfall zeigte eine Lobby, in der genau ein Host
+  auftaucht und nie ein zweiter; das ist schlechter als klar zu sagen,
+  was fehlt. Fehlt `socat`, nennt der Menuepunkt das Programm und die
+  Installationsbefehle und kehrt zurueck. Der Einzelspieler bleibt ohne
+  jede neue Abhaengigkeit lauffaehig; im Debian-Paket wird `socat` als
+  `Recommends` eingetragen (kein `Depends`).
+- **Startpruefung.** Direkt nach dem Start des Hilfsprogramms wird
+  einmal mit kurzem Timeout gelesen. Ein `socat`, das den Socket nicht
+  oeffnen konnte (Port belegt, Option der Version unbekannt, keine
+  Broadcast-Erlaubnis), ist dann schon beendet, und das Lesen meldet
+  Dateiende statt Timeout. Ohne diese Pruefung oeffnete sich die Lobby
+  ganz normal und bliebe einfach fuer immer leer - der Fehler, der am
+  schwersten zu deuten ist. Faengt das Lesen statt des Timeouts eine
+  echte Zeile ein (jemand sendet gerade), wird sie aufgehoben und beim
+  naechsten Abholen als erste ausgeliefert.
+- **Nachrichtenlaenge 512 Byte** (siehe 5.4), deutlich unter jeder
+  gebraeuchlichen MTU: eine Nachricht wird damit nie fragmentiert, und
+  ein Datagramm ist immer genau eine Nachricht.
 
-Drei Rollen, strikt getrennt:
+### 5.3 Prozessmodell (umgesetzt, 1.1.0)
 
-- **Client** (`rowhammer.sh`, ein Prozess je Spieler und Terminal):
-  spielt die eigene Runde, rendert, sendet den eigenen Zustand, empfaengt
-  Gegnerzustand und Garbage. Der Client haelt die Verbindung als
-  **Coprocess**: `coproc MP_LINK { socat UNIX-CONNECT:"${sock}" -; }`.
-  Damit sind Lese- und Schreib-FD normale Bash-FDs; Lesen erfolgt
-  nicht-blockierend mit `read -t 0` (Datenpruefung) plus `read -r -t 0.01`
-  (Zeile holen) einmal pro Tick. Die Taktung des Game-Loops bleibt
-  unveraendert beim `read`-Timeout auf STDIN - Bash kann nicht auf zwei
-  FDs gleichzeitig warten, deshalb bleibt die Tastatur der Taktgeber und
-  der Socket wird pro Tick nur geleert (max. N Zeilen pro Tick, damit ein
-  fluteter Socket den Frame nicht anhaelt, siehe 5.5).
-- **Hub** (`rowhammer.sh --mp-hub`, ein Prozess je Sitzung, headless):
-  autoritative Sitzungslogik. Kein Terminal, kein Rendering, kein
-  `stty`, keine Signal-Handler des Spiels. Er haelt die Spielerliste,
-  verteilt Seed und Startsignal, verrechnet Garbage, verteilt
-  Zustandsupdates und erkennt Timeouts. Der Host-Client startet ihn im
-  Hintergrund (`setsid`-artig entkoppelt), damit ein haengender Client
-  nie den Hub blockiert und umgekehrt.
-- **Bridge** (`rowhammer.sh --mp-bridge`, ein kurzlebiger Prozess je
-  Verbindung): wird von `socat UNIX-LISTEN:...,fork` gestartet, hat die
-  Socket-Enden auf STDIN/STDOUT und uebersetzt zwischen Socket und den
-  FIFOs des Hubs (Client -> `inbox`-FIFO mit vorangestellter Client-ID,
-  Hub -> privates `down.<id>`-FIFO -> Socket). So spricht der Hub nur
-  mit FIFOs (Bash-nativ) und `socat` nur mit dem Socket; ein Wechsel des
-  Transports (TCP, FIFO-Only) tauscht ausschliesslich die Bridge aus.
+**Ein Prozess je Spieler, sonst nichts.** Kein Hub, keine Bridge, kein
+Hintergrundprozess - die drei Rollen der urspruenglichen Spezifikation
+sind mit dem Unix-Socket entfallen (siehe die Einleitung zu Abschnitt 5).
+Jeder Client ist gleichrangig; was eine Sitzung zusammenhaelt, ist nicht
+ein Prozess, sondern eine **Rolle**:
 
-Modulschnitt (neue Dateien, siehe auch 4.2):
+- **Host** ist der Client, der das Spiel eroeffnet hat. Er ist die
+  Autoritaet seiner Sitzung: er vergibt die Plaetze, fuehrt die
+  Spielerliste, kuendigt die Sitzung an und wird spaeter Garbage-Mengen,
+  Lochspalten und das Rundenende bestimmen (5.7, 5.8). Er spielt dabei
+  ganz normal mit - Autoritaet, aber kein Server.
+- **Teilnehmer** sind alle anderen. Sie melden Ereignisse und zeigen
+  die Liste, die der Host fuehrt; sie rechnen nie selbst aus, was ein
+  anderer bekommt.
 
-- `lib/net.sh` - Transport und Rahmung: Hilfsprogramm-Erkennung,
-  Verbindungsauf-/abbau, Zeilen senden/empfangen, Laengen- und
-  Zeichensatzpruefung, Debug-Mitschnitt. Kennt **keine** Spielregeln.
-- `lib/proto.sh` - Nachrichtentabelle, Serialisierung und
-  **Validierung** (Whitelist der Verben, Feldtypen, Wertebereiche).
-  Kennt keine Sockets und keinen Bildschirm.
-- `lib/hub.sh` - Sitzungs- und Rundenlogik des Hubs (Lobby, Start,
-  Garbage-Verrechnung, KO-Reihenfolge, Timeouts).
-- `lib/mp.sh` - Client-Seite: Lobby-Menue, Sitzungssuche, Anbindung des
-  Game-Loops, Puffer fuer Gegnerzustaende.
-- Gegner-Darstellung kommt in `lib/render.sh` dazu (`render_peer`,
-  `draw_frame`-Erweiterung), damit alles Zeichnen an einer Stelle bleibt.
+Beendet der Host seine Lobby, ist die Sitzung vorbei - das ist der
+Preis dafuer, dass niemand sonst sie halten kann. Angekuendigt wird das
+mit einer eigenen Nachricht (`CLOSED`), damit es auf den anderen
+Bildschirmen sofort sichtbar ist statt erst nach dem Timeout.
 
-Voraussetzung im bestehenden Code: die Rundenlogik muss ohne Rendering
-und ohne Tastatur laufen koennen (Roadmap-Punkt "Spiellogik entkoppeln").
+**Getaktet wird ueber die Tastatur.** Bash kann nicht auf zwei
+Deskriptoren gleichzeitig warten, deshalb bleibt `read_key` mit seinem
+`TICK_S`-Timeout der Taktgeber (wie im Spiel, siehe 4.3) und der Bus
+wird einmal je Tick geleert - hoechstens `NET_MAX_PER_POLL` (16) Zeilen,
+damit ein geflutetes Netz den Bildschirm nicht anhaelt. Was liegen
+bleibt, kommt im naechsten Tick.
+
+Modulschnitt (siehe auch 4.2):
+
+- `lib/net.sh` - Transport: Hilfsprogramm-Erkennung, Bus auf- und
+  abbauen, eine Zeile senden, angekommene Zeilen einsammeln, Laengen-
+  und Zeichensatzpruefung, Debug-Mitschnitt `net.log`. Kennt **keine**
+  Nachrichten und **keine** Spielregeln.
+- `lib/proto.sh` - Nachrichtentabelle, Bauer je Nachricht und
+  **validierender Parser** (Whitelist der Verben, Feldzahl, Feldmuster).
+  Kennt keinen Socket und keinen Bildschirm.
+- `lib/mp.sh` - die Lobby: Menue, Sitzungssuche, Spielerliste, die
+  Rolle des Hosts und die des Teilnehmers, die Bildschirme dazu.
+- `lib/hub.sh` ist **entfallen** - es gibt keinen Hub. Die
+  Sitzungslogik, die dort haette liegen sollen, ist die Host-Rolle in
+  `lib/mp.sh`.
+- Gegner-Darstellung kommt spaeter in `lib/render.sh` dazu
+  (`render_peer`, `draw_frame`-Erweiterung), damit alles Zeichnen an
+  einer Stelle bleibt.
+
+Warum die Lobby-Bildschirme trotzdem in `lib/mp.sh` stehen und nicht in
+`lib/menu.sh`: sie sehen aus wie Menues, sind aber keine. Ein Menue
+wartet auf eine Taste; diese Schleifen arbeiten waehrend sie warten -
+je Tick einmal Bus leeren, Timer pruefen, ankuendigen - und zeichnen
+nur neu, wenn sich etwas geaendert hat. Gebaut werden ihre Bildschirme
+wie alle anderen, als Liste reiner Inhaltszeilen fuer
+`render_menu_frame` (4.3), sodass sie zentriert stehen wie das
+Spielfeld.
+
+Voraussetzung im bestehenden Code, weiterhin offen: die Rundenlogik
+muss ohne Rendering und ohne Tastatur laufen koennen (Roadmap-Schritt 1).
 Konkret: `game_reset`, `step_down`, `lock_and_next`, `hold_piece`,
 `try_move`, `try_rotate` duerfen weder zeichnen noch lesen; `DIRTY`
 markiert nur. Das ist ohnehin fast erreicht - offen sind die Stellen, an
 denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
 
-### 5.4 Protokoll v1
+### 5.4 Protokoll v1 (Lobby umgesetzt 1.1.0, Rundenteil spezifiziert)
 
 - **Rahmen:** eine Nachricht = eine Zeile, `\n`-terminiert, reines
-  druckbares ASCII (0x20-0x7E), maximal **512 Byte** inklusive Zeilenende.
-  Felder durch **ein Leerzeichen** getrennt, erstes Feld ist das Verb in
-  Grossbuchstaben. Unbekannte Verben werden ignoriert (Vorwaerts-
-  kompatibilitaet), fehlerhafte Zeilen fuehren zum Verbindungsabbruch
-  (siehe 5.5).
-- **Versionierung:** `PROTO_VERSION=1`. Der Hub lehnt abweichende
-  Versionen im `HELLO` mit `ERR proto ...` ab. Gemaess der Arbeitsregel
-  "keine Abwaertskompatibilitaet" wird das Protokoll bei Bedarf
-  hochgezaehlt statt kompatibel erweitert.
-- **Client -> Hub**
+  druckbares ASCII (0x20-0x7E), maximal **512 Byte** inklusive
+  Zeilenende. Felder durch **ein Leerzeichen** getrennt, erstes Feld
+  das Verb in Grossbuchstaben, zweites in **jeder** Nachricht die
+  Protokollversion.
+- **Versionierung:** `PROTO_VERSION=1` (`lib/proto.sh`). Eine Nachricht
+  mit einer anderen Version wird **wortlos verworfen** - nicht
+  beantwortet: zwei unvertraegliche Versionen auf einem Bus sind nichts,
+  was eine Seite zur Laufzeit beheben koennte, und eine Fehlermeldung
+  waere nur eine weitere Nachricht ins Leere. Gemaess der Arbeitsregel
+  "keine Abwaertskompatibilitaet" wird die Zahl bei Bedarf hochgezaehlt,
+  statt die Tabelle kompatibel zu erweitern.
+- **Adressiert wird ueber Kennungen, nicht ueber Absender.** Jede
+  Nachricht traegt die Sitzungs-Kennung, zu der sie gehoert; jede
+  Nachricht an oder von einem einzelnen Spieler zusaetzlich dessen
+  Kennung. Beides sind acht Hex-Ziffern, lokal gewuerfelt
+  (`proto_new_id`). Sie muessen nicht unratbar sein - wer sie erraten
+  koennte, sieht sie ohnehin auf dem Bus -, nur auf einem Netz fuer ein
+  paar Minuten eindeutig; dafuer reichen 32 Bit.
 
-  | Nachricht | Felder | Bedeutung |
-  | --- | --- | --- |
-  | `HELLO` | `<proto> <name> <caps>` | Anmeldung; `caps` = Komma-Liste (z. B. `board`) |
-  | `READY` | `<0 oder 1>` | Bereitschaft in der Lobby |
-  | `STATE` | `<lines> <rows> <level> <gold> <silver> <height> <pending>` | eigener Zaehlerstand, bei Aenderung, max. 10/s |
-  | `BOARD` | `<200 Zeichen>` | Feld-Snapshot, nur wenn der Hub `NEEDBOARD 1` gesetzt hat, max. 5/s |
-  | `CLEAR` | `<lines> <silver> <gold>` | ein Reihenabbau als Angriffs-Meldung (Hub rechnet daraus die Garbage aus) |
-  | `TOPOUT` | - | eigenes Game Over |
-  | `PONG` | `<token>` | Antwort auf `PING` |
-  | `BYE` | - | geordnetes Verlassen |
+**Lobby-Nachrichten (umgesetzt).** Alles geht an alle; wen es nicht
+angeht, der verwirft es.
 
-- **Hub -> Client**
+| Nachricht | Felder (nach `<proto>`) | Bedeutung |
+| --- | --- | --- |
+| `ANNOUNCE` | `<sitzung> <host> <spieler> <max> <modus> <status>` | Der Host bietet eine Lobby an, etwa einmal je Sekunde. **Das ist die gesamte Suche.** |
+| `CLOSED` | `<sitzung>` | Der Host hat die Lobby geschlossen. |
+| `DISCOVER` | - | Jemand hat die Spieleliste geoeffnet und moechte nicht bis zur naechsten Ankuendigungsrunde warten; Hosts antworten sofort. |
+| `JOIN` | `<sitzung> <spieler> <name>` | Bitte um Aufnahme. |
+| `WELCOME` | `<sitzung> <spieler> <platz>` | Der Host nimmt auf, auf diesem Platz. |
+| `DENY` | `<sitzung> <spieler> <grund>` | Der Host lehnt ab (`full`, `name`). |
+| `ROSTER` | `<sitzung> <anzahl> <platz> <spieler> <name> <bereit>` | Eine Zeile je Platz; der Host schickt die Liste bei jeder Aenderung und alle 2 s erneut. |
+| `READY` | `<sitzung> <spieler> <0\|1>` | Ein Teilnehmer aendert seine Bereitschaft. |
+| `ALIVE` | `<sitzung> <spieler>` | "Ich bin noch da", einmal je Sekunde. |
+| `LEAVE` | `<sitzung> <spieler>` | Ein Teilnehmer verlaesst die Lobby. |
 
-  | Nachricht | Felder | Bedeutung |
-  | --- | --- | --- |
-  | `WELCOME` | `<slot> <proto> <maxplayers>` | Anmeldung akzeptiert |
-  | `ROSTER` | `<slot> <name> <ready> <state>` | eine Zeile je Spieler, bei jeder Aenderung |
-  | `SEED` | `<seed>` | gemeinsamer Seed fuer die 7-Bag-Folge |
-  | `START` | `<countdown_ms>` | Rundenstart |
-  | `PEER` | `<slot> <lines> <rows> <level> <gold> <silver> <height> <pending> <state>` | Zustand eines Mitspielers |
-  | `PEERBOARD` | `<slot> <200 Zeichen>` | Feld-Snapshot eines Mitspielers |
-  | `NEEDBOARD` | `<0 oder 1>` | ob dieser Client Snapshots senden soll (spart Last, wenn niemand Stufe 2 anzeigt) |
-  | `GARBAGE` | `<count> <hole>` | eingehende Stoerreihen, Lochspalte 0-9 |
-  | `KO` | `<slot> <platz>` | Spieler ausgeschieden |
-  | `END` | `<siegerslot>` | Runde vorbei |
-  | `PING` | `<token>` | Lebendpruefung, alle 2 s |
-  | `ERR` | `<code> <text>` | Ablehnung/Fehler, danach ggf. Abbruch |
+Entscheidungen dazu:
 
-- **Feld-Snapshot (`BOARD`/`PEERBOARD`):** genau **200 Zeichen**, Zeile
-  fuer Zeile von oben (y=HIDDEN_ROWS) nach unten, je Zelle ein Zeichen
-  aus `.IOTSZJLgsx`: `.` leer, Grossbuchstabe = Baustein-Sorte,
-  `g` Gold-Quadrat, `s` Silber-Quadrat, `x` Garbage. Feste Laenge statt
+- **Die Spielerliste wird ganz geschickt, nicht als Aenderung.** Auf
+  einem Datagramm-Bus geht eine Nachricht verloren, ohne dass es jemand
+  merkt; eine Aenderungsmeldung, die verlorengeht, laesst eine Liste
+  dauerhaft falsch stehen, eine ganze Liste nur bis zur naechsten.
+  Deshalb traegt auch **jede Zeile die Laenge der Liste**: nur daran
+  ist zu erkennen, dass jemand gegangen ist - die Plaetze oberhalb
+  dieser Zahl sind veraltet und werden nicht mehr gezeigt.
+- **Wiederholt wird sie trotzdem** (alle `MP_ROSTER_MS` = 2 s), obwohl
+  jede Aenderung sie sofort schickt. Ohne das bliebe ein Teilnehmer,
+  der genau die eine Aenderungsmeldung verpasst hat, bis zur naechsten
+  Aenderung falsch - unter Umstaenden die ganze Lobby lang. Der Preis
+  sind bei sechs Spielern drei Datagramme je Sekunde.
+- **Der Beitritt darf doppelt passieren.** Wer schon drin ist und
+  wieder `JOIN` schickt, bekommt sein `WELCOME` erneut, statt eine
+  Ablehnung zu sehen: aus Sicht des Teilnehmers ist ein verlorenes
+  `WELCOME` von einem langsamen nicht zu unterscheiden, also fragt er
+  weiter (alle `MP_JOIN_RETRY_MS` = 500 ms, bis zu
+  `MP_JOIN_TIMEOUT_MS` = 5 s). Eine wiederholte Aufnahme muss deshalb
+  folgenlos sein.
+- **Antworten auf `DISCOVER` haben eine Untergrenze**
+  (`MP_DISCOVER_MIN_MS` = 250 ms). Ein Host, der jede Suchanfrage
+  sofort beantwortet, ist genau der Verstaerker, nach dem jemand suchen
+  wuerde, der den Bus fluten will.
+- **Zwei gleiche Namen in einer Lobby werden abgelehnt** (`DENY name`).
+  Die Liste waere sonst nicht zu lesen, und in der Runde waere nicht zu
+  sagen, wer gerade angegriffen wird.
+- **Zeitverhalten:** Ankuendigung und `ALIVE` je einmal pro Sekunde;
+  eine Sitzung faellt nach `MP_SESSION_TIMEOUT_MS` (5 s) ohne
+  Ankuendigung aus der Liste, ein Teilnehmer nach
+  `MP_PEER_TIMEOUT_MS` (6 s) ohne Lebenszeichen aus der Spielerliste.
+  Beides mehrere Intervalle, damit ein einzelnes verlorenes Datagramm -
+  auf UDP der Normalfall, kein Fehler - keinen Eintrag flackern laesst.
+
+**Rundennachrichten (spezifiziert, noch nicht umgesetzt).** Sie kommen
+mit den Roadmap-Schritten 5 bis 8 dazu; die Felder sind noch nicht
+festgeschrieben, die Rollen aber schon: der **Host** ist die einzige
+Quelle fuer Garbage-Mengen, Lochspalten, KO-Reihenfolge und Rundenende,
+die Teilnehmer melden nur Ereignisse.
+
+| Nachricht | Richtung | Bedeutung |
+| --- | --- | --- |
+| `SEED` | Host -> alle | gemeinsamer Startwert der 7-Bag-Folge |
+| `START` | Host -> alle | Rundenstart samt Countdown |
+| `STATE` | Teilnehmer -> alle | eigener Zaehlerstand, bei Aenderung, max. 10/s |
+| `BOARD` | Teilnehmer -> alle | Feld-Schnappschuss, nur wenn jemand Stufe 2 anzeigt, max. 5/s |
+| `CLEAR` | Teilnehmer -> Host | ein Reihenabbau als Angriffsmeldung |
+| `GARBAGE` | Host -> Teilnehmer | eingehende Stoerreihen samt Lochspalte |
+| `TOPOUT` | Teilnehmer -> alle | eigenes Game Over |
+| `KO` / `END` | Host -> alle | Spieler ausgeschieden / Runde vorbei |
+
+- **Feld-Schnappschuss (`BOARD`):** genau **200 Zeichen**, Zeile fuer
+  Zeile von oben nach unten, je Zelle ein Zeichen aus `.IOTSZJLgsx`:
+  `.` leer, Grossbuchstabe = Baustein-Sorte, `g` Gold-Quadrat,
+  `s` Silber-Quadrat, `x` Garbage. Feste Laenge statt
   Lauflaengenkodierung, weil die Validierung dadurch trivial und
   lueckenlos ist (Laenge + Zeichensatz); 200 Byte bei max. 5 Hz und 6
   Spielern sind lokal unkritisch (~6 kB/s). Der aktive, noch fallende
-  Stein wird **nicht** mitgesendet (er waere veraltet, sobald er ankommt);
-  optional spaeter als eigenes `PIECE`-Verb.
-- **Autoritaet:** der Hub ist die einzige Quelle fuer Garbage-Mengen,
-  Lochspalten, KO-Reihenfolge und Rundenende. Clients melden nur
-  Ereignisse (`CLEAR`, `TOPOUT`); sie berechnen nie selbst, wie viel
-  Garbage der Gegner bekommt. Damit ist der offensichtlichste Cheat
-  ("ich sende einfach 20 Reihen") ausgeschlossen. Ein manipulierter
-  Client kann weiterhin falsche `CLEAR`-Meldungen abgeben - vollstaendige
-  Cheat-Sicherheit ist ohne serverseitige Simulation nicht erreichbar und
-  ist **kein** Ziel (siehe Vertrauensmodell in 5.5).
-- **Zeitverhalten:** `PING` alle 2 s, Timeout nach 6 s ohne Lebenszeichen
-  -> Spieler gilt als abgestuerzt (siehe 5.8). Der Hub laeuft mit einem
-  eigenen Tick von 50 ms (`read -t` auf dem Inbox-FIFO, kein `sleep`).
+  Stein wird **nicht** mitgesendet (er waere veraltet, sobald er
+  ankommt); optional spaeter als eigenes `PIECE`-Verb. Ein Schnappschuss
+  sprengt die 512-Byte-Grenze nicht: 200 Zeichen plus Kopf bleiben
+  darunter.
+- **Autoritaet:** ein manipulierter Client kann falsche `CLEAR`s
+  melden; vollstaendige Cheat-Sicherheit ist ohne Vollsimulation beim
+  Host nicht erreichbar und **kein** Ziel (siehe Vertrauensmodell in
+  5.5). Ausgeschlossen ist damit nur der offensichtlichste Betrug
+  ("ich schicke einfach 20 Reihen").
 
-### 5.5 Sicherheit
+### 5.5 Sicherheit (Lobby-Teil umgesetzt 1.1.0)
 
-Bedrohungsmodell: Mitspieler auf demselben Host sind **halb
+Bedrohungsmodell: Mitspieler im selben Netz sind **halb
 vertrauenswuerdig**. Sie duerfen im Spiel schummeln koennen (das ist
 hinnehmbar), aber unter keinen Umstaenden
 
@@ -2509,70 +2640,95 @@ hinnehmbar), aber unter keinen Umstaenden
 2. dessen Terminal uebernehmen oder Dateien beschaedigen,
 3. den fremden Prozess zum Absturz oder Haengen bringen.
 
-Regeln, verbindlich fuer `lib/net.sh`, `lib/proto.sh`, `lib/hub.sh` und
-jede Stelle, die Empfangenes anfasst:
+**Mit dem LAN-Bus ist das Modell strenger geworden**, nicht milder: eine
+Zeile kommt jetzt von irgendeiner Maschine im Netz und nicht mehr von
+einem angemeldeten Konto derselben Maschine. Es gibt keine Verbindung,
+die man einem Stoerer kuendigen koennte, und keinen Absender, dem zu
+trauen waere - jede Kennung in einer Nachricht ist eine Behauptung.
+Die Regeln unten gelten deshalb unveraendert weiter; wo der Wegfall des
+Sockets etwas geaendert hat, steht es dabei.
+
+Verbindlich fuer `lib/net.sh`, `lib/proto.sh`, `lib/mp.sh` und jede
+Stelle, die Empfangenes anfasst:
 
 - **Kein `eval`, kein `source`, keine Kommandosubstitution auf
   Empfangenem.** Nie einen Befehlsstring aus Netzdaten bauen. Empfangene
   Werte landen ausschliesslich in Variablen und werden ausschliesslich
-  als `"${var}"` benutzt.
+  als `"${var}"` benutzt. Das gilt auch fuer den Namen einer Funktion:
+  `mp_pump` ruft ihren Handler ueber einen Namen auf, der aus einer
+  festen Menge eigener Funktionen stammt, nie aus einer Nachricht.
 - **Arithmetik ist ein Injektionsziel.** `$(( ))` und `((  ))` werten
   ihren Inhalt rekursiv aus: `$(( x ))` mit `x='a[$(rm -rf ~)]'` fuehrt
   den Befehl aus. Deshalb: jedes Zahlenfeld **vor** der ersten Rechnung
   gegen `^[0-9]{1,9}$` pruefen und auf den erlaubten Bereich begrenzen.
   Dasselbe gilt fuer alles, was als Array-Index oder als Schluessel eines
-  assoziativen Arrays benutzt wird.
+  assoziativen Arrays benutzt wird - auch fuer das Verb selbst, das erst
+  gegen die Verbtabelle geprueft wird, bevor es als deren Schluessel
+  benutzt wird.
 - **Zeichensatzfilter vor allem anderen.** Jede empfangene Zeile wird
   verworfen, wenn sie ein Byte ausserhalb 0x20-0x7E enthaelt. Das ist die
   wichtigste Einzelmassnahme: ein Spielername mit ANSI-Escapes koennte
   sonst den Bildschirm des Gegners umschreiben, den Fenstertitel setzen
   oder - je nach Terminal - ueber Antwort-Sequenzen Text in dessen
   Eingabepuffer schreiben. Der Filter greift im Empfangspfad, also
-  einmal zentral, nicht erst beim Zeichnen.
-- **Whitelist statt Blacklist.** Zerlegen mit `read -r verb rest`,
-  danach `case "${verb}"` mit genau den Verben aus 5.4; jedes Feld hat
-  ein eigenes Muster (`^[A-Za-z0-9_-]{1,16}$` fuer Namen,
-  `^[0-9]{1,9}$` fuer Zahlen, `^[.IOTSZJLgsx]{200}$` fuer Snapshots,
-  `^[0-9]$` fuer die Lochspalte). Ein Feld, das nicht passt, macht die
-  ganze Nachricht ungueltig.
-- **Harte Grenzen gegen Ressourcen-Angriffe:** Zeilenlaenge 512 Byte
-  (Lesen mit `read -r -N` bzw. Laengenpruefung, ueberlange Zeilen werden
-  bis zum naechsten `\n` verworfen), max. 64 Nachrichten pro Sekunde und
-  Client (danach Verbindungsabbruch), max. `--mp-max` Verbindungen, max.
-  16 Nachrichten pro Tick aus dem Socketpuffer, damit ein Fluter den
-  Frame nicht anhaelt. Ein Client, der dreimal in Folge Muell schickt,
-  wird getrennt (`ERR proto`), nicht toleriert.
-- **Kein Absturz durch Fremddaten:** Der Empfangspfad laeuft nicht unter
-  `set -e`-Annahmen; jede Pruefung endet in einem definierten "Nachricht
-  verwerfen"-Zweig. Ein Verbindungsabbruch (EOF, `EPIPE`) beendet die
-  Runde geordnet, nie das Terminal-Setup (der bestehende `trap` bleibt
-  zustaendig).
-- **Dateisystem:** `umask 0077` fuer alle Sitzungsdateien; das
-  Sitzungsverzeichnis muss dem Aufrufer oder root gehoeren und darf nicht
-  world-writable ohne Sticky-Bit sein - sonst Abbruch mit Meldung
-  (Schutz gegen Socket-Squatting und Symlink-Fallen in `/tmp`). Vor dem
-  Anlegen: vorhandenen Pfad pruefen (kein Symlink, kein fremder
-  Eigentuemer), `unlink-early` beim Listener, Aufraeumen des Sockets im
-  bestehenden EXIT-`trap`. Sitzungsnamen werden gegen
-  `^[A-Za-z0-9_-]{1,16}$` geprueft, bevor sie in einen Pfad eingehen
-  (kein `..`, kein `/`).
+  einmal zentral in `net_line_ok`, nicht erst beim Zeichnen. Die
+  Pruefung setzt `LC_ALL=C` lokal: in einer UTF-8-Locale waere `[ -~]`
+  ein Bereich der Sortierordnung und liesse genau die
+  Mehrbyte-Zeichen durch, gegen die der Filter da ist.
+- **Whitelist statt Blacklist.** Zerlegen in Felder, dann Verb gegen die
+  Tabelle aus 5.4, dann Feldzahl gegen dieselbe Tabelle, dann jedes Feld
+  gegen das Muster seiner Art (`^[A-Za-z0-9_-]{1,16}$` fuer Namen,
+  `^[0-9]{1,9}$` fuer Zahlen, `^[0-9a-f]{8}$` fuer Kennungen,
+  `^[.IOTSZJLgsx]{200}$` fuer Snapshots, `^[0-9]$` fuer die Lochspalte).
+  Ein Feld, das nicht passt, macht die ganze Nachricht ungueltig.
+  `proto_parse` kennt **nur zwei** Ergebnisse - gueltig oder verworfen -,
+  damit kein Aufrufer versehentlich mit einer halb geprueften Nachricht
+  arbeitet.
+- **Harte Grenzen gegen Ressourcen-Angriffe:** Zeilenlaenge 512 Byte,
+  hoechstens `NET_MAX_PER_POLL` (16) Nachrichten je Tick aus dem
+  Socketpuffer, damit ein Fluter den Bildschirm nicht anhaelt,
+  hoechstens `MP_MSG_PER_SEC` (200) verarbeitete Nachrichten je Sekunde,
+  hoechstens `MP_SEEN_LIMIT` (32) Sitzungen in der Liste und
+  hoechstens `MP_MAX` Plaetze in einer Spielerliste. **Neu gegenueber
+  der Socket-Fassung:** dort wurde ein Client getrennt, der Muell
+  schickt; auf einem Datagramm-Bus gibt es nichts zu trennen, also wird
+  stattdessen der Rest der Sekunde ignoriert. Die Lobby laeuft dabei
+  weiter - sie wird langsamer informiert, nicht handlungsunfaehig.
+- **Kein Absturz durch Fremddaten:** jede Pruefung endet in einem
+  definierten "Nachricht verwerfen"-Zweig. Bricht der Bus weg (EOF,
+  `EPIPE`), wird die Lobby geordnet verlassen, nie das Terminal-Setup
+  angetastet (der bestehende `trap` bleibt zustaendig). Dazu wird
+  `SIGPIPE` ignoriert, solange der Bus offen ist: ein Schreiben auf ein
+  gestorbenes Hilfsprogramm wuerde das Spiel sonst nicht mit einem
+  Fehler, sondern mit Signal 13 beenden - mitten in einer Runde, mit dem
+  Terminal im Rohmodus.
+- **Dateisystem:** entfaellt. Der Mehrspieler legt keine Dateien mehr an
+  - kein Sitzungsverzeichnis, kein Socket, keine FIFOs -, und damit auch
+  keine Rechte-, Symlink- und Squatting-Fragen. Das ist der zweite
+  Gewinn des Bus-Entwurfs neben dem fehlenden Server.
 - **Ausgehende Daten sind ebenfalls zu pruefen:** der eigene Spielername
   stammt aus der Config und kann exotisch sein; er wird beim Senden auf
-  das Namensmuster reduziert, damit ein Client nicht unbeabsichtigt
-  Muell erzeugt, den der Hub dann verwerfen muss.
+  das Namensmuster reduziert (`proto_name_sanitize`), damit man nicht
+  unbeabsichtigt Muell erzeugt, den alle anderen verwerfen muessen.
+  Auch die eigene Zeile geht durch denselben Zeichensatzfilter wie eine
+  empfangene.
 - **Gegenprobe beim Rendern:** Namen und Zahlen werden vor der Ausgabe
-  ein zweites Mal auf Laenge und Zeichensatz geprueft und hart
-  abgeschnitten (Verteidigung in der Tiefe - auch der Hub gilt nicht als
-  vertrauenswuerdig, er koennte ein fremdes Programm sein).
+  ein zweites Mal auf Laenge geprueft und hart abgeschnitten
+  (`mp_pad`) - Verteidigung in der Tiefe, denn die Gegenseite ist nicht
+  zwingend ein rowhammer.
 - **Debug-Modus:** der komplette Verkehr wird in `net.log`
   (`printf %q`-quotiert, wie `input.log`) mitgeschnitten, damit
-  Protokollfehler und Angriffsversuche nachvollziehbar sind.
-- **Testbarkeit:** ein Fuzz-Skript (`tools/net-fuzz.sh`) speist zufaellige
-  und gezielt boesartige Zeilen (ANSI-Escapes, `$(...)`, Backticks,
-  `../`-Pfade, 100-kB-Zeilen, Nullbytes, halbe Zeilen ohne `\n`) in
-  Hub- und Client-Parser. Abnahmekriterium: kein Prozess stirbt, kein
-  Befehl wird ausgefuehrt, kein Byte ausserhalb 0x20-0x7E erreicht das
-  Terminal.
+  Protokollfehler und Angriffsversuche nachvollziehbar sind - und damit
+  eine boesartige Zeile auch beim *Lesen des Logs* nichts anrichtet.
+- **Testbarkeit:** ein Fuzz-Skript (`tools/net-fuzz.sh`, Roadmap-Schritt
+  3) speist zufaellige und gezielt boesartige Zeilen (ANSI-Escapes,
+  `$(...)`, Backticks, `../`-Pfade, ueberlange Zeilen, Nullbytes, halbe
+  Zeilen ohne `\n`) in den Parser. Abnahmekriterium: kein Prozess
+  stirbt, kein Befehl wird ausgefuehrt, kein Byte ausserhalb 0x20-0x7E
+  erreicht das Terminal. Fuer die Lobby ist das bereits punktuell
+  geprueft (Parser-Faelle samt Injektionsversuchen, und zwei laufende
+  Instanzen, denen boesartige Zeilen untergeschoben wurden); das Skript
+  selbst steht noch aus.
 
 ### 5.6 Darstellung der Mitspieler
 
@@ -2616,8 +2772,8 @@ SIGWINCH-Pfad aus 0.19.0 ruft sie mit auf):
 3. Sonst -> Stufe 0. Unter 48x22 greift weiterhin die bestehende
    "resize me"-Overlay.
 
-Nur in Stufe 2 sendet ein Client Feld-Snapshots; der Hub schaltet das je
-Client per `NEEDBOARD` (siehe 5.4), sodass kleine Terminals keine
+Nur in Stufe 2 sendet ein Client Feld-Snapshots; der Host schaltet das je
+Spieler um (siehe 5.4), sodass kleine Terminals keine
 Snapshot-Last erzeugen. Genau das ist die Antwort auf "bei vielen
 Spielern und kleinem Terminal nur Reihen und Bloecke": die Stufen 1 und 0
 uebertragen und zeigen nur noch Zaehler.
@@ -2628,7 +2784,7 @@ Name, Rows (gewichtete Reihen = Score), Lines, Stapelhoehe,
 eingehende/ausstehende Garbage, Level, Gold- und Silberzaehler,
 Status (`lobby`/`play`/`ko`/`gone`). Bewusst **nicht** uebertragen:
 Next-Queue und Hold des Gegners (waere im Original nicht sichtbar und
-kostet Bandbreite), die Spielzeit (der Hub kennt die Rundenzeit selbst),
+kostet Bandbreite), die Spielzeit (der Host kennt die Rundenzeit selbst),
 Tastendruecke.
 
 Jeder Slot bekommt eine feste Akzentfarbe fuer Name und Rahmen, damit
@@ -2636,13 +2792,13 @@ Zuordnung auch ohne Namenslesen funktioniert.
 
 ### 5.7 Garbage-Regeln
 
-- **Angriffswert eines Reihenabbaus** (Hub-Berechnung aus `CLEAR`):
+- **Angriffswert eines Reihenabbaus** (der Host rechnet ihn aus `CLEAR`):
   - 1/2/3/4 Reihen -> 0/1/2/4 Garbage-Reihen (Tetris lohnt sich),
   - je **Silber-Quadrat** in den abgebauten Reihen: **+2**,
   - je **Gold-Quadrat**: **+4**,
   - Deckel: **10** Reihen pro Lock.
   Die Werte spiegeln die Reihenwertung aus 3.2 (1/+5/+10) in halbierter
-  Form und sind justierbar (`GARBAGE_*` in `lib/hub.sh`). Nach
+  Form und sind justierbar (`GARBAGE_*` in `lib/mp.sh`). Nach
   Playtesting nachziehen.
 - **Verrechnung (Cancel):** eingehende Garbage wird zunaechst in einer
   Warteschlange gehalten. Ein eigener Abbau reduziert erst die eigene
@@ -2653,9 +2809,9 @@ Zuordnung auch ohne Namenslesen funktioniert.
   Damit bleibt der laufende Zug planbar; die Warteschlange ist im HUD
   als Balken neben dem Feld sichtbar (Vorwarnung).
 - **Form der Garbage-Reihe:** volle Reihe mit **genau einem Loch**; die
-  Lochspalte kommt vom Hub (`GARBAGE <count> <hole>`) und bleibt fuer
-  alle Reihen eines Angriffs gleich. Der Hub zieht sie aus seinem
-  eigenen RNG, damit kein Client sie beeinflussen kann.
+  Lochspalte kommt vom Host (`GARBAGE <count> <hole>`) und bleibt fuer
+  alle Reihen eines Angriffs gleich. Der Host zieht sie aus seinem
+  eigenen RNG, damit kein Mitspieler sie beeinflussen kann.
 - **Auswirkung auf das Quadrat-System:** Garbage-Zellen bekommen die
   eigene Sorte `x`, Instanz-ID 0 und gelten als "zerschnitten"; sie
   koennen also nie Teil eines Quadrats werden. Das Hochschieben
@@ -2670,13 +2826,13 @@ Zuordnung auch ohne Namenslesen funktioniert.
   Top-Out-Pruefung mitgebracht. Der Mehrspieler-Modus wird beides
   benutzen, statt eine zweite Sorte Stoerreihe einzufuehren; offen
   bleibt fuer ihn nur, mehrere Reihen auf einmal einzuschieben und die
-  Lochspalte vom Hub statt aus `RANDOM` zu nehmen.
+  Lochspalte vom Host statt aus dem eigenen `RANDOM` zu nehmen.
 - **Zielwahl:**
   - 2 Spieler: der Gegner, trivial.
-  - 3+ Spieler: Standard `random` (der Hub waehlt je Angriff einen
+  - 3+ Spieler: Standard `random` (der Host waehlt je Angriff einen
     lebenden Gegner), Alternativen `all` (jeder Gegner bekommt die volle
     Menge, sehr aggressiv) und `even` (gleichmaessig aufgeteilt, Rest an
-    einen zufaelligen). Umschaltbar in der Lobby, vom Hub entschieden
+    einen zufaelligen). Umschaltbar in der Lobby, vom Host entschieden
     und in `KO`/`GARBAGE` nachvollziehbar geloggt. Eine manuelle
     Zielauswahl per Taste ist bewusst ausgeklammert (Tastenbelegung ist
     voll, und sie skaliert schlecht).
@@ -2685,7 +2841,7 @@ Zuordnung auch ohne Namenslesen funktioniert.
 
 - **Top-Out:** Der Client sendet `TOPOUT`, spielt nicht weiter und wird
   **Zuschauer** - er sieht die verbleibenden Felder bis zum Rundenende.
-  Der Hub vergibt den Platz von hinten (erster Ausgeschiedener = letzter
+  Der Host vergibt den Platz von hinten (erster Ausgeschiedener = letzter
   Platz) und meldet `KO <slot> <platz>`.
 - **Sieg:** letzter lebender Spieler. Steigen alle bis auf einen aus, ist
   die Runde vorbei (`END <slot>`). Bei gleichzeitigem KO entscheidet die
@@ -2694,10 +2850,13 @@ Zuordnung auch ohne Namenslesen funktioniert.
   Status `gone`, gilt wie ein KO, die Runde laeuft weiter. Kein
   Reconnect in v1 (Zustandsuebertragung waere aufwendig; die Runde
   dauert wenige Minuten).
-- **Ausfall des Hubs:** alle Clients bekommen EOF, zeigen "Verbindung
-  verloren" und kehren ins Hauptmenue zurueck. Die Runde wird wie ein
-  abgebrochenes Spiel behandelt und gemaess 3.3 gewertet (abgebrochene
-  Runden zaehlen).
+- **Ausfall des Hosts:** seine Ankuendigungen bleiben aus, alle anderen
+  melden nach `MP_SESSION_TIMEOUT_MS` "Der Host hat die Lobby
+  geschlossen" bzw. - in der Runde - "Verbindung verloren" und kehren
+  ins Hauptmenue zurueck. Die Runde wird wie ein abgebrochenes Spiel
+  behandelt und gemaess 3.3 gewertet (abgebrochene Runden zaehlen). Dass
+  der Host eine Sitzung mitnimmt, wenn er geht, ist der Preis dafuer,
+  dass niemand sonst sie halten kann (siehe 5.3).
 - **Verlassen ueber das Menue:** wie im Einzelspieler beendet "Runde
   beenden" die Runde; zusaetzlich geht ein `BYE` raus. Eine
   Mehrspieler-Runde kann **nicht** ins Hauptmenue gelegt und spaeter
@@ -2723,57 +2882,101 @@ Zuordnung auch ohne Namenslesen funktioniert.
   geaenderte Zellen zeichnen" war damit Voraussetzung und ist mit 0.22.0
   erledigt (Zeilen-Diff plus Cache der liegenden Feldreihen, siehe 4.3);
   fuer die Mini-Felder der Mitspieler ist der Diff genauso zu nutzen.
-- **Game-Loop:** pro Tick zusaetzlich Socket leeren, Peer-Puffer
+- **Game-Loop:** pro Tick zusaetzlich den Bus leeren, Peer-Puffer
   aktualisieren, eigenen Zustand senden (nur bei Aenderung). Der
   Sendepfad darf nie blockieren (voller Socketpuffer -> Nachricht
   verwerfen, ausser bei `CLEAR`/`TOPOUT`, die zuverlaessig zugestellt
   werden muessen).
 - **`flash_rows`** haelt den Loop heute ~280 ms an. Im Mehrspieler darf
   das die Verbindung nicht verhungern lassen: waehrend der Animation
-  wird der Socket weiter geleert (Tastendruecke bleiben wie bisher
+  wird der Bus weiter geleert (Tastendruecke bleiben wie bisher
   verworfen).
-- **Seed:** `--seed` wird im Mehrspieler vom Hub-Seed uebersteuert; ein
-  gesetzter `--seed` beim Host wird zum Sitzungs-Seed.
+- **Seed:** `--seed` wird im Mehrspieler vom Sitzungs-Seed uebersteuert,
+  den der Host verteilt; ein gesetzter `--seed` beim Host wird dieser
+  Sitzungs-Seed.
 - **Terminalgroesse:** der SIGWINCH-Pfad waehlt zusaetzlich die
   Detailstufe neu (siehe 5.6).
 - **Debug-Modus:** neue Datei `net.log`; `events.log` bekommt
-  Mehrspieler-Ereignisse (Join/Leave, Garbage rein/raus, KO, Hub-Start).
+  Mehrspieler-Ereignisse (Join/Leave, Garbage rein/raus, KO).
 - **Paketierung:** `socat` als `Recommends`; `make install` unveraendert.
+  Der Eintrag steht noch aus (Roadmap-Schritt 10).
 
-### 5.10 CLI und Konfiguration
+### 5.10 CLI und Konfiguration (Lobby-Teil umgesetzt 1.1.0)
 
-Neue Optionen (jeweils auch als Umgebungsvariable, Praezedenz
-Standard < Config < Env < CLI, wie in Abschnitt 6 gefordert):
+Optionen, jeweils auch als Umgebungsvariable. **Keine davon steht in
+der Config-Datei** (Praezedenz also Standard < Env < CLI, wie beim
+Render-Modus): welchen Port und welche Gruppe ein Netz zulaesst, ist
+eine Eigenschaft dieses Netzes - etwas, das man in einem fremden LAN auf
+der Kommandozeile aendern koennen muss -, und die Spielerzahl ist die
+Entscheidung des Hosts fuer eine Sitzung.
 
-| Option | Umgebung | Bedeutung |
-| --- | --- | --- |
-| `--mp-host [NAME]` | `ROWHAMMER_MP_HOST` | Sitzung eroeffnen (Standardname = Benutzername) |
-| `--mp-join NAME` | `ROWHAMMER_MP_JOIN` | Sitzung beitreten |
-| `--mp-dir DIR` | `ROWHAMMER_MP_DIR` | Sitzungsverzeichnis (siehe 5.2) |
-| `--mp-max N` | `ROWHAMMER_MP_MAX` | Spielerzahl 2..6, Standard 4 |
-| `--mp-view MODE` | `ROWHAMMER_MP_VIEW` | `auto`, `full`, `compact`, `score` |
-| `--mp-target MODE` | `ROWHAMMER_MP_TARGET` | `random`, `all`, `even` (nur Host) |
-| `--mp-hub` | - | interner Modus: Hub-Prozess (nicht dokumentiert im Menue) |
-| `--mp-bridge` | - | interner Modus: Socket-Bridge |
-| `--mp-bot` | `ROWHAMMER_MP_BOT` | Testclient ohne Terminal, spielt zufaellig |
+| Option | Umgebung | Bedeutung | Stand |
+| --- | --- | --- | --- |
+| `--mp-discovery ART` | `ROWHAMMER_MP_DISCOVERY` | `broadcast` (Standard) oder `multicast` (siehe 5.2) | 1.1.0 |
+| `--mp-group ADRESSE` | `ROWHAMMER_MP_GROUP` | Multicast-Gruppe, Standard `239.255.42.99` | 1.1.0 |
+| `--mp-port N` | `ROWHAMMER_MP_PORT` | Port des Busses, Standard `27301` | 1.1.0 |
+| `--mp-max N` | `ROWHAMMER_MP_MAX` | Spielerzahl 2..6, Standard 4 | 1.1.0 |
+| `--mp-view MODUS` | `ROWHAMMER_MP_VIEW` | `auto`, `full`, `compact`, `score` (siehe 5.6) | offen |
+| `--mp-target MODUS` | `ROWHAMMER_MP_TARGET` | `random`, `all`, `even` (nur Host, siehe 5.7) | offen |
+| `--mp-bot` | `ROWHAMMER_MP_BOT` | Testclient ohne Terminal, spielt zufaellig | offen |
 
-Menuefuehrung: "Mehrspieler" -> "Spiel eroeffnen" / "Spiel beitreten"
-(Liste der gefundenen Sitzungen im `MP_DIR`, Name + Spielerzahl aus
-einer `INFO`-Abfrage) / "Zurueck". Danach eine Lobby mit Spielerliste,
-Bereitschaftsstatus und - fuer den Host - Zielwahl-Modus und Start.
+**Entfallen sind `--mp-host`, `--mp-join`, `--mp-dir`, `--mp-hub` und
+`--mp-bridge`.** Die ersten beiden waren Abkuerzungen an der
+Menuefuehrung vorbei; sie sind ueberfluessig, seit ein Spiel in zwei
+Tastendruecken eroeffnet und in dreien beigetreten ist, und eine
+Sitzung laesst sich ohnehin nicht mehr beim Namen nennen (sie hat eine
+gewuerfelte Kennung, keinen Namen). `--mp-dir` gibt es nicht mehr, weil
+es kein Sitzungsverzeichnis mehr gibt, und die beiden internen Modi
+nicht, weil es die Prozesse nicht mehr gibt, die sie gestartet haetten
+(siehe 5.3).
+
+Die drei Netz-Werte werden beim Start validiert wie jede andere Option,
+mit einem zusaetzlichen Grund zur Strenge: sie landen alle drei in der
+Adresse eines Hilfsprogramms, wo ein Komma oder ein Leerzeichen zu einer
+weiteren socat-Option wuerde. Die Muster lassen dafuer keinen Raum
+(Gruppe nur aus `224.0.0.0`-`239.255.255.255`, Port 1024-65535,
+Spielerzahl 2 bis `MP_MAX_LIMIT`).
+
+**Menuefuehrung (umgesetzt):** "Mehrspieler" -> "Spiel eroeffnen" /
+"Spiel beitreten" / "Zurueck".
+
+- **"Spiel eroeffnen"** oeffnet sofort die eigene Lobby - ohne
+  Zwischenfrage nach einem Namen: die Sitzung heisst nach ihrem Host,
+  und ein zweiter Name waere eine Eingabezeile fuer nichts. Der
+  Bildschirm zeigt die Spielerliste mit Bereitschaft, `Enter` startet
+  (die Runde folgt im naechsten Schritt), `ESC` schliesst die Lobby.
+- **"Spiel beitreten"** zeigt die offenen Spiele als **lebende Liste**:
+  Host, Spielerzahl und Modus, aufgebaut aus den Ankuendigungen auf dem
+  Bus, mit einem Cursor darauf. Eintraege kommen und gehen, waehrend die
+  Liste auf dem Schirm steht - deshalb ist das eine eigene Schleife und
+  kein `menu_run` ueber eine feste Auswahl. Beim Oeffnen geht einmal ein
+  `DISCOVER` hinaus, damit der erste Eintrag nicht bis zur naechsten
+  Ankuendigungsrunde auf sich warten laesst.
+- **In der beigetretenen Lobby** schaltet `Enter` die eigene
+  Bereitschaft um und `ESC` verlaesst sie. Wer den Bus verliert, wessen
+  Host geht oder wer abgelehnt wird, bekommt eine Meldung mit dem Grund
+  und landet wieder in der Liste bzw. im Menue.
+- **Der Bus wird beim Betreten des Mehrspieler-Menues geoeffnet und
+  beim Verlassen geschlossen**, nicht je Bildschirm: so kostet der
+  Wechsel zwischen den beiden Eintraegen keinen Neustart des
+  Hilfsprogramms, und eine Sitzung, die nie Mehrspieler spielt, fasst
+  das Netz nie an.
 
 ### 5.11 Deployment: dedizierter Server mit SSH-ForceCommand
 
 - **Zielbild (Nutzerentscheidung):** rowhammer laeuft nicht nur
   gelegentlich auf einer Maschine mit, auf der ohnehin mehrere Leute
-  eingeloggt sind (das urspruengliche Szenario aus 5.2), sondern es gibt
+  eingeloggt sind (das urspruengliche Szenario, siehe die Einleitung zu
+  Abschnitt 5), sondern es gibt
   einen **dedizierten Spiel-Server**. Spieler verbinden sich per SSH; ein
   `ForceCommand` in `sshd_config` (bzw. `command="..."` vor dem Key in
   `authorized_keys`, praeziser pro Nutzer) startet direkt `rowhammer.sh`
   statt einer freien Shell. Die Transport- und Prozessarchitektur aus
-  5.2/5.3 (Unix-Socket, Hub/Bridge/Client) bleibt dabei unveraendert
-  gueltig - ForceCommand entscheidet nur, *wie* ein Client-Prozess
-  gestartet wird, nicht *wie* er mit dem Hub redet.
+  5.2/5.3 (LAN-Bus, Host-Rolle) bleibt dabei unveraendert gueltig -
+  ForceCommand entscheidet nur, *wie* ein Spieler-Prozess gestartet
+  wird, nicht *wie* er mit den anderen redet. Auf einem dedizierten
+  Server spielen alle auf derselben Maschine, wo der Bus sie ueber die
+  Loopback-Zustellung genauso zusammenbringt (siehe 5.2).
 - **Sicherheitsgewinn und -grenzen:** Eine per ForceCommand erzwungene
   Sitzung ist kein Ersatz fuer die Regeln aus 5.5, aber eine zusaetzliche
   Huerde: ein Spieler bekommt gar keine Shell, sondern landet direkt im
@@ -2782,7 +2985,7 @@ Bereitschaftsstatus und - fuer den Host - Zielwahl-Modus und Start.
   `no-port-forwarding,no-X11-forwarding,no-agent-forwarding` (PTY bleibt
   noetig, das Spiel braucht ein Terminal), eigener Systembenutzer ohne
   Zugriff auf fremde Daten, restriktive Dateisystemrechte auf
-  `${DATA_DIR}`/`${MP_DIR}` (siehe 4.5, 5.2). Ein ausbrechender Spieler
+  `${DATA_DIR}` (siehe 4.5). Ein ausbrechender Spieler
   darf ueber `rowhammer.sh` und seine Module (siehe 5.5) so wenig
   erreichen wie ueber die Shell, die ihm fehlt - das ist keine neue Regel,
   sondern die bestehende Regel aus 5.5 unter schaerferen Vorzeichen.
@@ -2884,7 +3087,7 @@ stehen.
   Mehrspieler-Kerns (Phase 5) - ein Liga-System ohne stabile
   Mehrspieler-Wertung waere verfrueht.
 - **Multi-Server-Faehigkeit:** mehrere Spiel-Server (je eigener
-  Hub-Pool, eigenes `MP_DIR`, siehe 5.2), die gegen ein gemeinsames
+  Bus, eigener Port bzw. eigene Gruppe, siehe 5.2), die gegen ein gemeinsames
   Backend fuer Accounts und Highscores sprechen. Setzt voraus, dass
   Accounts (5.12) und Persistenz (5.13) bereits serverunabhaengig sind -
   sonst muesste ein Spieler auf jedem Server ein eigenes Konto fuehren.
@@ -2896,11 +3099,10 @@ stehen.
   Bash mit einem in einer anderen Sprache geschriebenen Dienst?
 - **Empfehlung (zu bestaetigen, siehe Abschnitt 8):** kein Bruch, sondern
   eine klare Grenze entlang dessen, was Bash gut kann und was nicht:
-  - **Spiel-Engine und lokale Mehrspieler-Sitzung bleiben Bash** - Hub,
-    Bridge, Client, Protokoll (`lib/net.sh`, `lib/proto.sh`,
-    `lib/hub.sh`, `lib/mp.sh`, siehe 5.3) sind bereits so entworfen und
-    funktionieren lokal ueber Unix-Sockets gut; ein Sprachwechsel hier
-    waere ein Neubau ohne Not.
+  - **Spiel-Engine und LAN-Mehrspieler bleiben Bash** - Transport,
+    Protokoll und Lobby (`lib/net.sh`, `lib/proto.sh`, `lib/mp.sh`,
+    siehe 5.3) sind so entworfen und laufen seit 1.1.0 ueber den
+    UDP-Bus; ein Sprachwechsel hier waere ein Neubau ohne Not.
   - **SSH/ForceCommand-Login und Konto-Bindung (5.12) bleiben Bash** -
     das ist im Kern derselbe Umgang mit Fremdeingaben wie das bestehende
     Protokoll und profitiert von denselben Regeln aus 5.5
@@ -2913,8 +3115,8 @@ stehen.
     Sprache mit vernuenftiger HTTP-/JSON-/DB-Unterstuetzung (Sprache
     selbst noch offen) - er liest/schreibt dieselbe Datenbank (5.13)
     bzw. bekommt Rundenergebnisse ueber einen schmalen, validierten
-    Kanal vom Bash-Server zugestellt (analog der Bridge-Rolle in 5.3:
-    ein kleiner Uebersetzer statt eines Sprachwechsels im Kern).
+    Kanal vom Bash-Server zugestellt - ein kleiner Uebersetzer statt
+    eines Sprachwechsels im Kern.
   - Damit bleibt die in 5.5 verbindliche Regel unangetastet, egal welche
     Sprache spaeter dazukommt: kein `eval`, keine Kommandosubstitution
     und keine Interpolation von Fremddaten in auszufuehrenden Code -
@@ -3078,20 +3280,35 @@ gehoert dazu:
    Roadmap-Punkt ("siehe Phase 4 ..."), wird der Verweis auf HISTORY.md
    samt Version umgeschrieben.
 
-Arbeitsregel: **Der Mehrspieler ist Version 2.x.x** (seit 1.0.2,
-Nutzerentscheidung). **Jede Aenderung, die den Mehrspieler-Modus
-betrifft, ist Arbeit an Version 2.x.x** - das ist die ganze Phase 5
-(Abschnitt 5, Schritte 1 bis 11) samt ihrer Vorarbeit im
-Einzelspieler-Code, und ebenso die darauf aufbauende Phase 6
-(Server-Betrieb, Accounts, Web, 5.11-5.19). Das Einzelspieler-Spiel
-laeuft daneben in seiner eigenen Reihe weiter und traegt, was an ihm
-nachgezogen wird (Fehlerbehebungen, Feinjustierung, die restliche
-Politur aus Phase 4). Der erste Schritt in Richtung Mehrspieler ist
-damit der Sprung auf `2.0.0`, nicht die naechste Minor-Version; SemVer
-passt dazu von selbst, denn der Mehrspieler bringt neue Dateiformate und
-Schnittstellen mit (Protokoll, Sitzungsverzeichnis, spaeter die
-Datenbank), und die Arbeitsregel "keine Abwaertskompatibilitaet" unten
-laesst sie brechen.
+Arbeitsregel: **Ab jetzt wird am Mehrspieler gearbeitet** (seit 1.1.0,
+Nutzerentscheidung). Der Einzelspieler ist mit 1.0.3 fertig; die
+laufende Arbeit ist der Mehrspieler-Modus - Phase 5 (Abschnitt 5,
+Schritte 1 bis 11) und die darauf aufbauende Phase 6 (Server-Betrieb,
+Accounts, Web, 5.11-5.19). Was noch offen an Einzelspieler-Politur
+dasteht (Abschnitt 7), laeuft nebenher weiter, hat aber keinen Vorrang
+mehr.
+
+**Version 2.0.0 erscheint, wenn der Mehrspieler fertig ist** - nicht
+vorher (Nutzerentscheidung, loest die Regel aus 1.0.2 ab, nach der
+schon der *erste* Schritt in Richtung Mehrspieler der Sprung auf 2.0.0
+sein sollte). Bis dahin waechst der Mehrspieler in der laufenden
+`1.x.x`-Reihe Stueck fuer Stueck: jeder Schritt der Roadmap ist eine
+Minor-Version (die LAN-Lobby ist 1.1.0), und was dabei entsteht, ist
+benutzbar, aber noch nicht das fertige Spiel. Zwei Gruende fuer diese
+Reihenfolge:
+
+- **`2.0.0` soll etwas bedeuten.** Eine Hauptversion, die mit einer
+  halben Funktion beginnt und ihre eigentliche Neuerung erst zehn
+  Minor-Versionen spaeter hat, sagt einem Aussenstehenden nichts. Die
+  2 ist der fertige Mehrspieler.
+- **SemVer verlangt es nicht andersherum.** Der Mehrspieler bricht
+  nichts, was es vorher gab - er kommt neben dem Einzelspieler dazu,
+  und Protokoll, Sitzungsformate und spaeter die Datenbank sind mit
+  ihm neu. Neue Funktion ohne Bruch ist eine Minor-Version; erst der
+  Schnitt, an dem der Mehrspieler das Spiel praegt, ist die Major.
+  Die Arbeitsregel "keine Abwaertskompatibilitaet" unten gilt fuer die
+  Mehrspieler-Formate untereinander weiter: das Protokoll zaehlt
+  hoch (`PROTO_VERSION`), statt kompatible Varianten zu tragen.
 
 Arbeitsregel: **Keine Abwaertskompatibilitaet noetig.** Das Projekt wird
 sequenziell entwickelt und war nie anderswo installiert; Migrationslogik
@@ -3113,11 +3330,12 @@ Archiv der abgeschlossenen Roadmap-Punkte, nach Version geordnet. Der
 sondern in den Abschnitten 1 bis 5 dieser Datei und - soweit
 spielersichtbar - in der README.md (Arbeitsregel in Abschnitt 6).
 
-**Versionszuordnung (seit 1.0.2):** Die beiden Zwischenschritt- und
-Phase-4-Punkte unten gehoeren zum Einzelspieler-Spiel und laufen in
-dessen laufender `1.x.x`-Reihe weiter. **Die Phasen 5 und 6 sind Version
-2.x.x** - jede Aenderung, die den Mehrspieler betrifft, ist Arbeit an
-`2.x.x` (Arbeitsregel in Abschnitt 6).
+**Versionszuordnung (seit 1.1.0):** Alles unten laeuft in der `1.x.x`-
+Reihe weiter - die Phasen 5 und 6 ebenso wie die restlichen
+Einzelspieler-Punkte. **`2.0.0` erscheint, wenn der Mehrspieler fertig
+ist**, nicht bei seinem ersten Schritt (Arbeitsregel in Abschnitt 6,
+loest die Regel aus 1.0.2 ab). Die laufende Arbeit ist Phase 5; die
+beiden Einzelspieler-Punkte darueber haben keinen Vorrang mehr.
 
 Erledigt und nach HISTORY.md verschoben:
 
@@ -3163,7 +3381,7 @@ Erledigt und nach HISTORY.md verschoben:
       serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
       keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
       umsetzbar.
-### Phase 5 - Multiplayer (Version 2.x.x; spezifiziert in Abschnitt 5, noch nicht umgesetzt)
+### Phase 5 - Multiplayer (laufende Arbeit; Lobby umgesetzt in 1.1.0, Rest spezifiziert in Abschnitt 5)
 
 Die Schritte sind so sortiert, dass jeder fuer sich lauffaehig und
 testbar ist und der Mehrspieler-Modus Stueck fuer Stueck waechst. Die
@@ -3180,28 +3398,34 @@ Details stehen jeweils im genannten Unterabschnitt.
       Entkopplung der Rundenlogik.
       Abnahme: Einzelspieler unveraendert spielbar, Frame-Kosten messbar
       gesunken.
-- [ ] **Schritt 2 - Transportschicht `lib/net.sh`** (siehe 5.2, 5.3).
-      Hilfsprogramm-Erkennung (`socat` > `ncat --unixsock` > `nc -U`) mit
-      klarer Meldung, wenn nichts vorhanden ist; Verbindung als Coprocess,
-      nicht-blockierendes Leeren des Sockets pro Tick, Zeilenrahmung mit
-      512-Byte-Grenze, Aufraeumen im bestehenden EXIT-`trap`,
-      Debug-Mitschnitt `net.log`. Abnahme: zwei Testprozesse tauschen
-      ueber einen Socket Zeilen aus, ohne dass der Game-Loop stockt.
-- [ ] **Schritt 3 - Protokoll v1 und Validierung `lib/proto.sh`** (siehe 5.4, 5.5).
-      Nachrichtentabelle, Serialisierung, Whitelist-Parser mit
-      Feldmustern, Zeichensatzfilter 0x20-0x7E, Ratenbegrenzung.
-      Zusammen mit `tools/net-fuzz.sh` (boesartige Zeilen: ANSI-Escapes,
-      `$(...)`, Backticks, `../`, Ueberlaenge, Nullbytes, halbe Zeilen).
-      Abnahme: kein Prozess stirbt, kein Befehl laeuft, kein
-      Steuerzeichen erreicht das Terminal.
-- [ ] **Schritt 4 - Hub-Prozess und Lobby** (siehe 5.3, 5.10).
-      `--mp-hub` headless, `--mp-bridge`, Sitzungsverzeichnis mit den
-      Rechte- und Symlink-Pruefungen aus 5.5, Menue "Spiel eroeffnen /
-      Spiel beitreten", Spielerliste, Bereitschaft, Seed-Verteilung,
-      Countdown, Ping/Timeout, geordnetes Beenden. Noch **ohne**
-      Interaktion im Spiel: alle spielen parallel ihre eigene Runde.
-      Abnahme: vier Terminals treten bei, starten gemeinsam, ein
-      `kill -9` auf einen Client stoert die anderen nicht.
+- [x] **Schritt 2 - Transportschicht `lib/net.sh`** (siehe 5.2, 5.3) -
+      erledigt in 1.1.0, siehe HISTORY.md.
+- [x] **Schritt 3 - Protokoll v1 und Validierung `lib/proto.sh`**
+      (siehe 5.4, 5.5) - erledigt in 1.1.0 fuer die Lobby-Nachrichten,
+      siehe HISTORY.md. Offen daraus: `tools/net-fuzz.sh`, das
+      systematische Fuzzing des Parsers (bisher nur punktuell geprueft),
+      und die Rundennachrichten aus 5.4, die mit den Schritten 5 bis 8
+      dazukommen.
+- [x] **Schritt 4 - Lobby** (siehe 5.3, 5.10) - erledigt in 1.1.0,
+      siehe HISTORY.md: Menue "Spiel eroeffnen / Spiel beitreten",
+      lebende Liste der offenen Spiele, Beitritt, Spielerliste,
+      Bereitschaft, Timeouts, geordnetes Beenden. Der Schritt hiess
+      urspruenglich "Hub-Prozess und Lobby" und verlangte `--mp-hub`,
+      `--mp-bridge` und ein Sitzungsverzeichnis; mit dem LAN-Bus gibt
+      es weder Hub noch Bridge noch Verzeichnis (siehe 5.2, 5.3).
+      **Offen daraus:** Seed-Verteilung und Countdown - beides gehoert
+      zum Start einer Runde und steht deshalb im neuen Schritt 4b.
+- [ ] **Schritt 4b - Vom Lobby-Start zur Runde** (siehe 5.3, 5.4).
+      Was der urspruengliche Schritt 4 an Rundenstart enthielt und was
+      die Lobby heute noch nicht kann: `SEED` verteilen, `START` mit
+      Countdown, und alle Teilnehmer gleichzeitig in eine Runde
+      schicken, die sie zunaechst **nebeneinander** spielen - ohne
+      Garbage, ohne Anzeige der anderen. Setzt Schritt 1 voraus (die
+      Rundenlogik muss sich starten lassen, ohne dass `game_run` die
+      Kontrolle behaelt).
+      Abnahme: vier Terminals treten bei, starten gemeinsam mit
+      derselben Steinfolge, ein `kill -9` auf einen davon stoert die
+      anderen nicht.
 - [ ] **Schritt 5 - Mitspieler-Anzeige Stufe 0 und 1** (siehe 5.6).
       `PEER`-Zustaende puffern, Scoreboard- und Kompaktansicht in der
       Seitenleiste, Detailstufen-Auswahl inklusive Neuberechnung beim
@@ -3216,14 +3440,14 @@ Details stehen jeweils im genannten Unterabschnitt.
 - [ ] **Schritt 7 - Garbage-Mechanik** (siehe 5.7).
       Zellsorte `x`, zeilenweises Hochschieben von `BOARD`/`BOARD_ID`/
       `BOARD_SQ`, Top-Out-Erkennung beim Schieben, Warteschlange mit
-      Verrechnung, Hub-seitige Angriffsberechnung und Lochspalte,
+      Verrechnung, Angriffsberechnung und Lochspalte beim Host,
       Vorwarn-Balken im HUD. Zuerst nur fuer 2 Spieler. Abnahme:
       Tetris und Gold-Quadrat erzeugen die spezifizierten Mengen,
       Quadrate ueberleben das Hochschieben.
       **Vorarbeit erledigt:** Zellsorte, Hochschieben, Top-Out-Pruefung
       und die Darstellung stehen seit 0.49.0 mit dem Hochwasser-Modus
       (`GARBAGE_CELL`/`board_flood_row` in `lib/board.sh`, siehe 3.6);
-      offen bleiben Warteschlange, Verrechnung und die Hub-Seite.
+      offen bleiben Warteschlange, Verrechnung und die Host-Seite.
 - [ ] **Schritt 8 - Rundenende, KO-Reihenfolge, Zuschauermodus,
       Verbindungsabbruch** (siehe 5.8).
       `TOPOUT`/`KO`/`END`, Platzierung, Endbildschirm mit Rangliste,
@@ -3247,7 +3471,7 @@ Details stehen jeweils im genannten Unterabschnitt.
       Fuzz-Lauf gegen den fertigen Stand, dazu ein "boeser Client", der
       absichtlich das Protokoll verletzt.
 
-### Phase 6 - Server-Betrieb, Accounts, Web (Version 2.x.x; spezifiziert in 5.11-5.19, noch nicht umgesetzt)
+### Phase 6 - Server-Betrieb, Accounts, Web (spezifiziert in 5.11-5.19, noch nicht umgesetzt)
 
 Setzt auf einem fertigen Phase 5 auf (der Mehrspieler-Kern muss laufen
 und sich per Playtesting bewaehrt haben, bevor Accounts/Web/Liga
@@ -3263,7 +3487,7 @@ Multi-Server zuletzt.
 - [ ] **Schritt 1 - SSH-ForceCommand-Deployment** (siehe 5.11).
       `sshd_config`/`authorized_keys`-Vorlage mit `ForceCommand` bzw.
       `command=`, Haertung (`no-port-forwarding` usw.), eigener
-      Systembenutzer, Rechte auf `${DATA_DIR}`/`${MP_DIR}` geprueft.
+      Systembenutzer, Rechte auf `${DATA_DIR}` geprueft.
       Laeuft zunaechst weiter mit freiem Login (siehe 5.12).
       Abnahme: mehrere SSH-Sitzungen landen direkt im Spiel, keine Shell
       erreichbar.
@@ -3405,9 +3629,20 @@ Multi-Server zuletzt.
 Offene Punkte zum Mehrspieler (Spezifikation siehe Abschnitt 5; alles
 Uebrige dort ist entschieden):
 
-- **Fremdabhaengigkeit `socat`/`ncat`/`nc -U`:** Bash kann kein AF_UNIX.
-  Zu bestaetigen ist, dass ein `Recommends`-Paket akzeptabel ist - sonst
-  bleibt nur die FIFO-Variante aus 5.2 mit ihren Nachteilen.
+- **Fremdabhaengigkeit `socat`:** entschieden mit 1.1.0. Bash kann UDP
+  nicht empfangen, und `socat` ist das einzige der ueblichen Programme,
+  das einen gebundenen Datagramm-Socket mit mehreren Absendern
+  bereitstellt (Begruendung in 5.2). Es wird als `Recommends` gefuehrt,
+  nicht als `Depends`: der Einzelspieler laeuft ohne es. Fehlt es,
+  nennt der Menuepunkt Programm und Installationsbefehl. Der
+  `Recommends`-Eintrag im Paket steht noch aus (Roadmap-Schritt 10).
+- **Broadcast oder Multicast als Standard:** entschieden mit 1.1.0 -
+  Broadcast, weil es keine Abhaengigkeit von Gruppen-Weiterleitung und
+  von der Mitgliedschaftsoption des Hilfsprogramms hat (siehe 5.2).
+  Offen bleibt allein die Erfahrung aus dem Alltag: zeigt sich, dass in
+  echten Netzen eher Broadcast gefiltert wird als Multicast, ist das
+  ein Tausch der Standardeinstellung und keine Aenderung am Entwurf -
+  beide Wege sind umgesetzt.
 - **Wertung von Mehrspieler-Runden:** Vorschlag in 5.8 ist
   Weltwunder-Fortschritt und Statistik ja, Highscore-Liste nein (dafuer
   eigene Mehrspieler-Zaehler). Bestaetigung ausstehend; die Alternative
@@ -3425,7 +3660,7 @@ Uebrige dort ist entschieden):
 - **Kein Reconnect in v1** (5.8). Falls sich Abbrueche im Alltag haeufen,
   waere ein Wiedereinstieg mit vollstaendiger Zustandsuebertragung ein
   eigener spaeterer Punkt.
-- **Anti-Cheat:** bewusst nur Hub-Autoritaet ueber Garbage-Mengen und
+- **Anti-Cheat:** bewusst nur Host-Autoritaet ueber Garbage-Mengen und
   Rundenende (5.4). Ein manipulierter Client kann falsche `CLEAR`s
   melden; eine serverseitige Vollsimulation ist kein Ziel. Die
   Sicherheitsregeln in 5.5 schuetzen dagegen die Prozesse und Terminals

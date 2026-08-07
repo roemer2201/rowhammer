@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.0.3
+**Version:** 1.1.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -66,7 +66,7 @@ sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
 unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
 und nach jeder Runde sowie im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
-Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik, Demos,
+Mehrspieler, Highscores, Weltwunder, Statistik, Demos,
 Einstellungen und einer kurzen Anleitung;
 die besten
 10 Runden werden dauerhaft gespeichert. Dazu kommen die Politur-Schritte
@@ -81,10 +81,17 @@ und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
 abgeschlossenen Entwicklungsschritte je Version in
 [HISTORY.md](HISTORY.md).
 
-Der **Mehrspieler-Modus** und der Server-Betrieb darum herum sind die
-Arbeit an **Version 2.x.x** (siehe Roadmap in [CLAUDE.md](CLAUDE.md),
-Phasen 5 und 6); das Einzelspieler-Spiel laeuft daneben in seiner
-eigenen Versionsreihe weiter.
+**Seit 1.1.0 wird am Mehrspieler gearbeitet.** Die **LAN-Lobby** steht:
+Wer ein Spiel eroeffnet, kuendigt es ins lokale Netz an, und jedes
+andere rowhammer im selben Netz sieht es in einer lebenden Liste der
+offenen Spiele, tritt bei und wartet dort mit den anderen. Dafuer gibt
+es **keinen Server** - gefunden wird ueber Broadcast- bzw.
+Multicast-Datagramme, es ist also nichts einzurichten und nichts zu
+starten (noetig ist nur das Programm `socat`, siehe Voraussetzungen).
+Die **Runde** selbst folgt im naechsten Schritt; **Version 2.0.0
+erscheint, wenn der Mehrspieler fertig ist**. Bis dahin waechst er in
+der laufenden `1.x.x`-Reihe, ein Roadmap-Schritt je Minor-Version
+(siehe [CLAUDE.md](CLAUDE.md), Phasen 5 und 6).
 
 ## Spielen
 
@@ -143,7 +150,15 @@ Das Startmenue bietet:
   oder so dieselbe
   Leistung, und wer vorzeitig oben rausbaut, hat schlicht weniger
   davon
-- **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
+- **Mehrspieler** - die LAN-Lobby (seit 1.1.0). **"Spiel eroeffnen"**
+  kuendigt ein Spiel ins lokale Netz an und zeigt die Lobby mit allen,
+  die beigetreten sind; **"Spiel beitreten"** zeigt die offenen Spiele
+  des Netzes als lebende Liste (Host, Spielerzahl, Modus) - Enter tritt
+  bei, `Enter` schaltet in der Lobby die eigene Bereitschaft um und
+  `ESC` verlaesst sie wieder. Es gibt dabei keinen Server: die Liste
+  entsteht aus den Ankuendigungen selbst, und wer sein Spiel schliesst,
+  verschwindet daraus. Die Runde selbst folgt im naechsten
+  Entwicklungsschritt
 - **Highscores** - fragt zuerst den Modus ab (**Marathon**, **Ultra**,
   **Sprint**, **Time Attack** oder **Hochwasser**) und zeigt danach
   dessen
@@ -253,6 +268,10 @@ Optionen:
 | `--color-theme N`| `ROWHAMMER_COLOR_THEME`  | Farbschema: `guideline` (Standard), `classic`, `mono`, `colorblind` |
 | `--render-mode M`| `ROWHAMMER_RENDER_MODE`  | Bildaufbau: `partial` (Standard, nur geaenderte Zeilen), `full` (ganzer Block je Frame) |
 | `--demo-record on\|off` | `ROWHAMMER_DEMO_RECORD` | Runden als Demo mitschneiden (Standard: `on`) |
+| `--mp-discovery ART` | `ROWHAMMER_MP_DISCOVERY` | Wie der Mehrspieler im Netz sucht: `broadcast` (Standard), `multicast` |
+| `--mp-group ADR` | `ROWHAMMER_MP_GROUP`     | Multicast-Gruppe (Standard `239.255.42.99`, nur bei `multicast`) |
+| `--mp-port N`    | `ROWHAMMER_MP_PORT`      | Port des Netz-Busses (Standard `27301`); alle Spieler brauchen denselben |
+| `--mp-max N`     | `ROWHAMMER_MP_MAX`       | Spielerzahl einer eroeffneten Lobby, 2 bis 6 (Standard 4) |
 | `--reset ZIEL`   | `ROWHAMMER_RESET`        | Persistente Daten zuruecksetzen und beenden (s. unten) |
 | `--force`        | `ROWHAMMER_FORCE`        | Sicherheitsabfragen automatisch mit "ja" beantworten |
 | `--debug`        | `ROWHAMMER_DEBUG`        | Session-Trace in Log-Dateien (s. unten)  |
@@ -292,11 +311,12 @@ rowhammer.sh --reset highscore
 rowhammer.sh --reset all --force
 ```
 
-Der Debug-Modus zeichnet die komplette Session in drei korrelierte
+Der Debug-Modus zeichnet die komplette Session in vier korrelierte
 Log-Dateien auf (Standardziel:
 `~/.local/state/rowhammer/debug/<Zeitstempel>.<PID>`): `frames.log`
-(jede Bildschirmausgabe 1:1), `input.log` (jeder Tastendruck) und
-`events.log` (alle Spielaktionen samt Board-Snapshots). Das hilft,
+(jede Bildschirmausgabe 1:1), `input.log` (jeder Tastendruck),
+`events.log` (alle Spielaktionen samt Board-Snapshots) und `net.log`
+(der Mehrspieler-Verkehr, leer ohne Mehrspieler). Das hilft,
 Fehlverhalten oder Spielsituationen im Nachhinein exakt
 nachzuvollziehen - z. B. fuer einen Bug-Report.
 
@@ -420,8 +440,16 @@ Umgesetzt:
   Konfiguration gespeichert; jedes Schema gilt in beiden Farbmodi.
   Highscore- und Statistik-Bildschirm nutzen dieselben Themenfarben
   (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
-- Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
+- Startmenue mit Einzelspieler, Mehrspieler, Highscores,
   Weltwunder, Statistik, Demos, Einstellungen und Anleitung
+- **LAN-Mehrspieler ohne Server (Lobby, seit 1.1.0):** Spiele eroeffnen,
+  im lokalen Netz finden und betreten. Die Suche laeuft ueber
+  Broadcast-Datagramme (`--mp-discovery multicast` schaltet auf eine
+  Multicast-Gruppe um, `--mp-port` und `--mp-group` aendern Port und
+  Gruppe, `--mp-max` die Spielerzahl einer eroeffneten Lobby). Was aus
+  dem Netz kommt, wird Feld fuer Feld gegen feste Muster geprueft, bevor
+  irgendetwas damit geschieht; Zeichen ausserhalb des druckbaren ASCII
+  erreichen den Bildschirm nie
 - **Anleitung im Spiel:** neun Bildschirme zu Spielprinzip,
   Steuerung,
   Vorschau/Hold, Gold- und Silberbloecken, Weltwunderbau, den
@@ -574,6 +602,11 @@ falsch beschriftetes Paket zu bauen.
   (kleiner wird nicht gestartet; eine Verkleinerung waehrend des Spiels
   pausiert bis wieder genug Platz da ist)
 - Keine weiteren Abhaengigkeiten ausser Coreutils
+- **Nur fuer den Mehrspieler:** `socat` (Debian/Ubuntu:
+  `apt install socat`, Fedora: `dnf install socat`). Bash kann selbst
+  keine UDP-Datagramme empfangen, deshalb liegt der Netz-Bus in diesem
+  einen Hilfsprogramm. Der Einzelspieler laeuft ohne es; fehlt es, sagt
+  der Menuepunkt "Mehrspieler" das und nennt den Installationsbefehl
 
 ## Steuerung
 
