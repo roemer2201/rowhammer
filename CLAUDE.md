@@ -2349,7 +2349,8 @@ Leitentscheidung (ueberarbeitet mit dem Beginn der Lobby-Arbeit,
 Nutzerentscheidung): **serverfreier Mehrspieler im LAN**. Es gibt keinen
 zentralen Dienst, bei dem man sich anmeldet - ein Spieler eroeffnet eine
 Sitzung, sein Rechner traegt den Hub, und die anderen **finden ihn ueber
-einen UDP-Broadcast** im selben Netz (siehe 5.2). Damit ist `socat`
+einen UDP-Broadcast** im selben Netz oder **verbinden sich mit seiner
+Adresse**, wo Broadcasts nicht durchkommen (beides siehe 5.2). Damit ist `socat`
 gesetzt statt eine von drei moeglichen Abhaengigkeiten, und es ist
 zugleich das Programm, ueber das die eigentliche Sitzungsverbindung
 laeuft.
@@ -2455,12 +2456,56 @@ kein `Depends` (siehe 4.7).
   es eine Multicast-Gruppe und damit ein zweiter Discovery-Pfad. Der
   Beitritt per Adresse (naechster Punkt) funktioniert unterdessen mit
   jeder Adresse, die `socat` versteht.
-- **Beitritt ohne Broadcast:** `--mp-join HOST[:PORT]` bzw. der
-  Menuepunkt "Direkt verbinden" nimmt eine Adresse von Hand entgegen.
-  Das ist kein Notnagel, sondern Pflichtprogramm: WLANs mit
-  Client-Isolation, getrennte VLANs und so mancher Hypervisor-Switch
-  lassen Broadcasts nicht durch, und ohne diesen Weg waere das Spiel
-  dort ohne erkennbaren Grund kaputt.
+- **Beitritt per Adresse ist ein gleichrangiger zweiter Weg, kein
+  Notnagel** (Nutzerentscheidung). `--mp-join HOST[:PORT]` und der
+  Menuepunkt "Direkt verbinden" nehmen eine IP-Adresse (oder einen
+  Hostnamen) von Hand entgegen und verbinden ohne jede Discovery.
+  WLANs mit Client-Isolation, getrennte VLANs, so mancher
+  Hypervisor-Switch und mancher Container-Netzstack lassen Broadcasts
+  nicht durch; ohne diesen Weg waere das Spiel dort ohne erkennbaren
+  Grund kaputt. Der Host sieht seine eigene Adresse und den Port
+  deshalb **in der Lobby stehen**, damit er sie durchsagen kann - eine
+  Adresse, die man erst mit `ip addr` suchen muss, ist keine Loesung
+  fuer jemanden, der gerade nicht weiterkommt. Die eingegebene Adresse
+  wird wie jede aus dem Netz stammende geprueft und zerlegt, bevor
+  daraus eine socat-Adresse gebaut wird (siehe 5.5); dass sie diesmal
+  von der eigenen Tastatur kommt, aendert daran nichts.
+
+**Waehrend der Runde braucht es keinen Broadcast** - und auch keinen
+Multicast. Der Broadcast dient ausschliesslich dem Finden einer
+Sitzung; sobald ein Client verbunden ist, laeuft der gesamte Verkehr
+ueber die stehende **TCP-Verbindung zwischen ihm und dem Hub**, also
+Punkt zu Punkt. Ein Netz, das Broadcasts verwirft, kostet damit nur
+die Sitzungsliste, nicht das Spiel: wer sich per Adresse verbunden hat,
+spielt voellig gleichwertig mit. Vier Gruende, warum die Verteilung an
+alle nicht ueber Multicast laeuft, obwohl der Hub dieselbe Nachricht
+oft an mehrere schickt:
+
+- **Die Nachrichten sind gar nicht dieselben.** `GARBAGE` geht an ein
+  Ziel, `NEEDBOARD` haengt am Terminal des einzelnen Clients, und ein
+  `PEER` geht an alle **ausser** dem Absender. Multicast lohnt erst,
+  wo wirklich alle dasselbe bekommen.
+- **TCP bringt mit, was sonst nachzubauen waere.** Reihenfolge,
+  Zustellung, Flusskontrolle und ein sauberes EOF beim Absturz eines
+  Clients (an dem 5.8 den Verbindungsabbruch erkennt). Ueber UDP
+  muesste die Wiederholung ausgerechnet fuer `CLEAR` und `TOPOUT` in
+  Bash nachgebaut werden - die beiden Nachrichten, die zuverlaessig
+  ankommen muessen (5.9).
+- **Multicast ist im WLAN eher unzuverlaessiger als Broadcast**, nicht
+  weniger: es braucht IGMP-Snooping, wird von Access Points gern auf
+  die niedrigste Basisrate gelegt oder ganz verworfen. Es wuerde also
+  genau die Netze treffen, fuer die die Adresseingabe oben da ist.
+- **Die Menge rechtfertigt es nicht.** Schlimmstenfalls - sechs
+  Spieler, Detailstufe 2 - schickt der Hub rund 6 kB/s je Empfaenger
+  (5.4), also gut 30 kB/s ausgehend. Das ist in jedem LAN nichts.
+
+Damit ist der Beacon das **einzige** Datagramm im ganzen
+Mehrspieler-Betrieb. Er laeuft waehrend der Runde weiter (mit
+`play` statt `lobby`, die Sitzung erscheint in der Liste als nicht
+beitretbar), damit ein Suchender sieht, dass hier gerade gespielt wird,
+statt gar nichts zu finden - notwendig fuer den Ablauf ist er dann
+aber nicht mehr, und ein Netz, das ihn schluckt, stoert die laufende
+Partie an keiner Stelle.
 
 **Transport `unix`: Domain-Socket auf einem gemeinsamen Host.**
 
@@ -2952,7 +2997,8 @@ Menuefuehrung: "Mehrspieler" -> "Spiel eroeffnen" / "Spiel beitreten"
 im Transport `unix` aus dem Glob ueber `MP_DIR`, je mit Name und
 Spielerzahl) / "Direkt verbinden" (Adresse von Hand, siehe 5.2) /
 "Zurueck". Danach eine Lobby mit Spielerliste, Bereitschaftsstatus
-und - fuer den Host - Zielwahl-Modus und Start. **Der Start gehoert
+und - fuer den Host - Zielwahl-Modus, Start und die **eigene Adresse
+samt Port** zum Durchsagen (siehe 5.2). **Der Start gehoert
 allein dem Host** (5.1): er sieht den Eintrag, sobald ein zweiter
 Spieler da ist, und niemand wartet auf eine vorher festgelegte Zahl.
 
@@ -3463,15 +3509,18 @@ Details stehen jeweils im genannten Unterabschnitt.
       Im selben Modul die **Discovery**: Beacon senden (Hub) und
       einsammeln (`--mp-discover` als socat-Kindprozess,
       Absenderadresse aus `SOCAT_PEERADDR`), Sitzungsliste mit
-      Verfallszeit, Ratenbegrenzung und Deckel, Beitritt per Adresse
-      als Ausweichweg. Sie gehoert hierher und nicht in die Lobby
+      Verfallszeit, Ratenbegrenzung und Deckel, dazu der gleichrangige
+      **Beitritt per eingegebener Adresse**, der ohne Discovery
+      auskommt. Sie gehoert hierher und nicht in die Lobby
       (Schritt 4), weil sie derselbe Transport ist und weil sie ohne
       Hub schon mit zwei Testprozessen pruefbar ist - zugleich ist sie
       die erste Stelle, an der das Spiel Daten von einem voellig
       Fremden annimmt. Abnahme dafuer: ein Beacon von einem zweiten
       Rechner erscheint in der Liste, verschwindet nach dem Ende des
-      Senders wieder, und ein boesartiger Beacon landet weder in einer
-      Kommandozeile noch auf dem Bildschirm.
+      Senders wieder, ein boesartiger Beacon landet weder in einer
+      Kommandozeile noch auf dem Bildschirm, und bei blockiertem
+      Broadcast (Test mit einer Firewall-Regel auf den UDP-Port) kommt
+      die Verbindung ueber die eingegebene Adresse trotzdem zustande.
 - [ ] **Schritt 3 - Protokoll v1 und Validierung `lib/proto.sh`** (siehe 5.4, 5.5).
       Nachrichtentabelle, Serialisierung, Whitelist-Parser mit
       Feldmustern, Zeichensatzfilter 0x20-0x7E, Ratenbegrenzung.
