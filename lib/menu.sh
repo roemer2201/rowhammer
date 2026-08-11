@@ -96,7 +96,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.27.1  (2026-08-06)
+# Version: 0.28.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -268,7 +268,7 @@ MENU_BODY_MAX=$(( MIN_TERM_ROWS - 4 ))
 # Number of screens menu_help walks through; used both to number the
 # titles ("Anleitung (2/9)") and to wrap the left/right paging
 # (menu_help below), so the pages stay self-describing.
-MENU_HELP_PAGES=9
+MENU_HELP_PAGES=10
 
 # menu_help_keys FIXED VAR
 # Build the key list for one action as the help screen shows it:
@@ -492,13 +492,25 @@ menu_help_body() {
             printf -v line '%-17s %s' "${I18N[help_demo_back]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
             ;;
+        9)
+            # The multiplayer (2.0.0). Like the mode pages it reads the
+            # live constants rather than spelling the numbers out: the
+            # player range and the port are settings, and a retuned one
+            # must not leave the manual lying.
+            i18n_lines help_p9_head
+            HELP_BODY=("${I18N_LINES[@]}")
+            printf -v line "${I18N[help_p9_players]}" "${MP_MAX}" "${MP_PORT}"
+            mapfile -t -O "${#HELP_BODY[@]}" HELP_BODY <<< "${line}"
+            i18n_lines help_p9_tail
+            HELP_BODY+=("${I18N_LINES[@]}")
+            ;;
     esac
     return 0
 }
 
 # menu_help
 # The "Anleitung" main menu entry (added 0.12.0, user request): a short
-# tour through the game on nine info screens - what the game is about,
+# tour through the game on ten info screens - what the game is about,
 # the controls, hold and preview, the gold/silver squares, the wonder
 # construction, the game modes (two pages since the fifth one), how
 # their highscore lists are kept and
@@ -709,6 +721,7 @@ menu_pause() {
 # they are (the flood mode alone is "Hochwasser" or "Flood").
 MENU_MODE_ENTRIES=()
 menu_mode_entries() {
+    local with_versus="${1:-}"
     local -a names descs
     local name desc width=0 i
     names=("${I18N[mode_marathon]}" "${I18N[mode_ultra]}"
@@ -727,6 +740,17 @@ menu_mode_entries() {
     printf -v desc "${I18N[entry_flood]}" \
         "$(( FLOOD_INTERVAL_MS / 1000 ))"
     descs+=("${desc}")
+    # The multiplayer is a sixth mode with results and counters of its
+    # own, but not a sixth entry of the singleplayer menu - it is not
+    # started from there. Only the two pickers that look back at rounds
+    # already played (highscores, statistics) ask for it, which is what
+    # the argument says. Its description names the player count rather
+    # than a goal, because that is what a versus round is up against.
+    if [ "${with_versus}" = "versus" ]; then
+        names+=("${I18N[mode_versus]}")
+        printf -v desc "${I18N[entry_versus]}" "${MP_MAX}"
+        descs+=("${desc}")
+    fi
     for name in "${names[@]}"; do
         if [ "${#name}" -gt "${width}" ]; then
             width="${#name}"
@@ -813,7 +837,7 @@ menu_singleplayer() {
 # no walk back through the main menu; ESC or "Zurueck" leaves.
 menu_highscores() {
     while :; do
-        menu_mode_entries
+        menu_mode_entries versus
         menu_run "${I18N[hs_title]}" "${MENU_MODE_ENTRIES[@]}" \
             "${I18N[menu_back]}"
         case "${MENU_CHOICE}" in
@@ -822,6 +846,7 @@ menu_highscores() {
             2) highscore_sprint_screen ;;
             3) highscore_timeattack_screen ;;
             4) highscore_flood_screen ;;
+            5) highscore_versus_screen ;;
             *) return 0 ;;
         esac
     done
@@ -843,7 +868,7 @@ menu_highscores() {
 # leaves.
 menu_stats() {
     while :; do
-        menu_mode_entries
+        menu_mode_entries versus
         menu_run "${I18N[stats_title]}" "${I18N[stats_all]}" \
             "${MENU_MODE_ENTRIES[@]}" "${I18N[menu_back]}"
         case "${MENU_CHOICE}" in
@@ -853,6 +878,7 @@ menu_stats() {
             3) stats_mode_screen "sprint" ;;
             4) stats_mode_screen "timeattack" ;;
             5) stats_mode_screen "flood" ;;
+            6) stats_mode_screen "versus" ;;
             *) return 0 ;;
         esac
     done
@@ -1202,6 +1228,16 @@ MENU_INPUT_RE='^[A-Za-z0-9_ -]$'
 MENU_INPUT_MAX=16
 MENU_INPUT=""
 
+# What the *next* call of menu_text_input accepts. Both default to the
+# name rules above and are reset to them by menu_text_input itself when
+# it returns, so a caller that wants another character set (the
+# multiplayer address prompt, which needs dots and a colon) sets these
+# two right before its call and cannot leak them into the next one.
+# Added 2026-08-11 with the multiplayer: a second editor for one more
+# prompt would have been the same code with one pattern changed.
+MENU_INPUT_RE_CUR="${MENU_INPUT_RE}"
+MENU_INPUT_MAX_CUR="${MENU_INPUT_MAX}"
+
 # menu_text_input TITLE DEFAULT LINE...
 # Ask for a short text with DEFAULT preselected. TITLE and the LINEs are
 # shown above the input line; the result lands in MENU_INPUT. Returns 0
@@ -1224,6 +1260,17 @@ MENU_INPUT=""
 # the cursor is instead of inside the centered menu block. The keys come
 # from read_key in text mode (KEY_TEXT), which is what keeps upper case
 # and reports backspace.
+
+# menu_input_rules_reset
+# Put the accepted character set back to the name rules. Called on both
+# ways out of menu_text_input, so a prompt with its own rules can never
+# hand them to the next one.
+menu_input_rules_reset() {
+    MENU_INPUT_RE_CUR="${MENU_INPUT_RE}"
+    MENU_INPUT_MAX_CUR="${MENU_INPUT_MAX}"
+    return 0
+}
+
 menu_text_input() {
     local title="${1}" value="${2}"
     shift 2
@@ -1268,11 +1315,13 @@ menu_text_input() {
             ENTER)
                 MENU_INPUT="${value}"
                 debug_event "text input '${title}': '${value}'"
+                menu_input_rules_reset
                 return 0
                 ;;
             ESC)
                 MENU_INPUT=""
                 debug_event "text input '${title}': cancelled"
+                menu_input_rules_reset
                 return 1
                 ;;
             BACKSPACE)
@@ -1300,12 +1349,12 @@ menu_text_input() {
             # game binds elsewhere: in this prompt "x" is an x.
             ?) ins="${KEY}" ;;
         esac
-        if [ -n "${ins}" ] && [[ "${ins}" =~ ${MENU_INPUT_RE} ]]; then
+        if [ -n "${ins}" ] && [[ "${ins}" =~ ${MENU_INPUT_RE_CUR} ]]; then
             if [ "${marked}" -eq 1 ]; then
                 value="${ins}"
                 marked=0
                 dirty=1
-            elif [ "${#value}" -lt "${MENU_INPUT_MAX}" ]; then
+            elif [ "${#value}" -lt "${MENU_INPUT_MAX_CUR}" ]; then
                 value="${value}${ins}"
                 dirty=1
             fi

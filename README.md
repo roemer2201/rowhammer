@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.0.4
+**Version:** 2.0.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -66,10 +66,12 @@ sieben **Weltwunder** aus ASCII-Art auf, die Stueck fuer Stueck von
 unten nach oben entstehen; der Fortschritt wird dauerhaft gespeichert
 und nach jeder Runde sowie im Hauptmenue angezeigt. Die
 Anwendung startet in einem Menue mit Einzelspieler,
-Mehrspieler (Platzhalter), Highscores, Weltwunder, Statistik, Demos,
+Mehrspieler, Highscores, Weltwunder, Statistik, Demos,
 Einstellungen und einer kurzen Anleitung;
 die besten
-10 Runden werden dauerhaft gespeichert. Dazu kommen die Politur-Schritte
+10 Runden werden dauerhaft gespeichert. Seit 2.0.0 ist der
+**Mehrspieler** kein Platzhalter mehr, sondern eine Runde gegen zwei bis
+sechs Leute im lokalen Netz (siehe unten). Dazu kommen die Politur-Schritte
 aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
 (Marathon/Ultra/Sprint/Time Attack/Hochwasser), Anleitung, Lock Delay,
 der
@@ -81,10 +83,12 @@ und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
 abgeschlossenen Entwicklungsschritte je Version in
 [HISTORY.md](HISTORY.md).
 
-Der **Mehrspieler-Modus** und der Server-Betrieb darum herum sind die
-Arbeit an **Version 2.x.x** (siehe Roadmap in [CLAUDE.md](CLAUDE.md),
-Phasen 5 und 6); das Einzelspieler-Spiel laeuft daneben in seiner
-eigenen Versionsreihe weiter.
+Der **Mehrspieler-Modus** ist die Arbeit an **Version 2.x.x**: der
+Kern - Sitzung eroeffnen und beitreten, gemeinsame Steinfolge,
+Stoerreihen, Ausscheiden und Sieger - laeuft seit 2.0.0. Offen bleiben
+die Demo-Aufzeichnung einer Mehrspieler-Runde und der Server-Betrieb
+darum herum (Phase 6: Accounts, Web-Highscore, Liga; siehe Roadmap in
+[CLAUDE.md](CLAUDE.md)).
 
 ## Spielen
 
@@ -143,7 +147,9 @@ Das Startmenue bietet:
   oder so dieselbe
   Leistung, und wer vorzeitig oben rausbaut, hat schlicht weniger
   davon
-- **Mehrspieler** - Platzhalter, folgt in einer spaeteren Phase
+- **Mehrspieler** - eine Runde im lokalen Netz gegen zwei bis sechs
+  Leute: Sitzung eroeffnen, einer gefundenen beitreten oder eine Adresse
+  von Hand eingeben (siehe [unten](#mehrspieler-im-lokalen-netz))
 - **Highscores** - fragt zuerst den Modus ab (**Marathon**, **Ultra**,
   **Sprint**, **Time Attack** oder **Hochwasser**) und zeigt danach
   dessen
@@ -424,9 +430,16 @@ Umgesetzt:
   Konfiguration gespeichert; jedes Schema gilt in beiden Farbmodi.
   Highscore- und Statistik-Bildschirm nutzen dieselben Themenfarben
   (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
-- Startmenue mit Einzelspieler, Mehrspieler-Platzhalter, Highscores,
+- Startmenue mit Einzelspieler, Mehrspieler, Highscores,
   Weltwunder, Statistik, Demos, Einstellungen und Anleitung
-- **Anleitung im Spiel:** neun Bildschirme zu Spielprinzip,
+- **Mehrspieler im lokalen Netz** (seit 2.0.0): zwei bis sechs Spieler,
+  gemeinsame Steinfolge, Stoerreihen durch abgebaute Reihen, Ausscheiden
+  bei vollem Feld, letzter im Feld gewinnt; Sitzungssuche per
+  UDP-Broadcast oder Verbindung ueber eine eingegebene Adresse, Anzeige
+  der Mitspieler als Mini-Felder oder - bei schmalem Terminal - als
+  Kurzzeilen; eigene Bestenliste und eigener Statistik-Modus. Braucht
+  `socat`
+- **Anleitung im Spiel:** zehn Bildschirme zu Spielprinzip,
   Steuerung,
   Vorschau/Hold, Gold- und Silberbloecken, Weltwunderbau, den
   Spielmodi (zwei Seiten), den Bestenlisten und den Demos; die
@@ -511,6 +524,66 @@ Geplant:
 
 - Spaeter: **Multiplayer** ueber das Netzwerk mit Garbage-Reihen
 
+## Mehrspieler im lokalen Netz
+
+Seit 2.0.0. **Zwei bis sechs Leute**, jeder an seinem eigenen Feld, alle
+mit **derselben Steinfolge** - wer gewinnt, entscheidet das Spiel und
+nicht das Glueck. Abgebaute Reihen schicken dem Gegner **Stoerreihen**
+(eine volle Reihe mit genau einem Loch, die den Stapel nach oben
+drueckt); wer oben aus dem Feld baut, scheidet aus und schaut den
+anderen zu, und der letzte im Feld gewinnt.
+
+**Eine Runde spielen:**
+
+1. Einer eroeffnet die Sitzung: Hauptmenue -> *Mehrspieler* -> *Spiel
+   eroeffnen*. Die Lobby zeigt die eigene Adresse samt Port.
+2. Die anderen gehen auf *Mehrspieler* -> *Spiel beitreten*: die
+   Sitzung erscheint in der Liste, sobald ihr Beacon ankommt. Kommen im
+   Netz keine Broadcasts durch (WLAN mit Client-Isolation, getrennte
+   VLANs, manche Container-Netze), nimmt man *Direkt verbinden* und
+   tippt die Adresse aus der Lobby ein - ein gleichwertiger zweiter Weg,
+   kein Notnagel.
+3. Der Gastgeber startet, sobald genug Leute da sind. Ab dem zweiten
+   Spieler ist der Eintrag frei; auf eine vorher verabredete Zahl wartet
+   niemand.
+
+Ohne Menue geht es auch direkt:
+
+```
+# Gastgeber
+rowhammer --mp-host
+
+# Beitreten
+rowhammer --mp-join 192.168.1.23
+```
+
+**Was waehrend der Runde anders ist:** Es gibt **keine Pause** - die
+anderen warten nicht. `Esc`/`x` oeffnet ein kleines Menue mit
+*Fortsetzen* und *Runde verlassen*; die Verbindung laeuft dabei weiter.
+Im HUD stehen links die wartenden Stoerreihen ("Muell") und die Zahl der
+Spieler, die noch im Rennen sind ("Gegner"). Die Mitspieler zeigt das
+Spiel rechts neben dem Feld als **Mini-Felder**; ist das Terminal dafuer
+zu schmal, werden daraus zwei Zeilen bzw. eine Zeile je Gegner, sodass
+eine Runde auch im 48x22-Minimum laeuft (`--mp-view`).
+
+**Gewertet wird nur die eigene Leistung:** die eigenen Rows kommen in
+eine eigene Bestenliste (*Highscores -> Mehrspieler*), zaehlen als
+eigener Modus in der Statistik (mit den Siegen als Erfolgsquote) und
+bauen am Weltwunder mit wie in jeder anderen Runde. Von den Mitspielern
+fliesst nichts ein, und der Sieg selbst bringt keine Reihen.
+
+**Auf einem gemeinsamen Rechner** (alle per SSH auf derselben Maschine)
+spart `--mp-transport unix` die Netzwerkschicht: die Sitzung laeuft dann
+ueber einen Unix-Socket im Sitzungsverzeichnis, und die Dateirechte sind
+eine zusaetzliche Schranke.
+
+**Testen ohne mehrere Terminals:** `--mp-bot` ist ein Client ohne
+Bildschirm, der einer Sitzung beitritt und zufaellig spielt:
+
+```
+rowhammer --mp-bot --mp-join 127.0.0.1
+```
+
 ## Installation aus einem Release
 
 Der schnellste Weg: unter
@@ -578,6 +651,10 @@ falsch beschriftetes Paket zu bauen.
   (kleiner wird nicht gestartet; eine Verkleinerung waehrend des Spiels
   pausiert bis wieder genug Platz da ist)
 - Keine weiteren Abhaengigkeiten ausser Coreutils
+- Fuer den **Mehrspieler** zusaetzlich `socat` (Debian/Ubuntu:
+  `apt install socat`, Fedora/RHEL: `dnf install socat`). Es ist in
+  beiden Paketen nur *empfohlen*: ohne socat laeuft das Einzelspieler-
+  Spiel unveraendert, und der Menuepunkt sagt, welches Paket fehlt
 
 ## Steuerung
 
@@ -598,6 +675,10 @@ stehen jetzt die Rundenzaehler:
 | `c` / `w`                 | Hold / Tauschen             |
 | `p`                       | Pause                       |
 | `Esc` / `x`               | Pausenmenue (Fortsetzen / Neustarten / Ins Hauptmenue / Runde beenden) |
+
+Im Mehrspieler gibt es keine Pause: `p` bleibt wirkungslos, und
+`Esc`/`x` oeffnet ein Menue mit nur zwei Eintraegen (Fortsetzen, Runde
+verlassen), waehrend die Verbindung weiterlaeuft.
 | `r`                       | Neustart (im Game-Over-Bild)|
 
 Waehrend der Wiedergabe einer Demo (Menuepunkt "Demos"):

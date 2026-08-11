@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.6.1  (2026-08-07)
+# Version: 1.7.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -44,8 +44,76 @@ I18N=(
     [main_settings]="Settings"
     [main_help]="Manual"
     [main_quit]="Quit"
-    [mp_body]="The multiplayer mode is not available yet.
-It follows in a later phase (see the roadmap)."
+
+    # --- Multiplayer (2.0.0) ----------------------------------------------
+    # Menu, session search, lobby and their messages. Every line stays
+    # within the 46 characters a 48-column terminal leaves beside the
+    # menu indent.
+    [mp_host]="Open a session"
+    [mp_join]="Join a session"
+    [mp_direct]="Connect directly"
+    [mp_no_socat]="The multiplayer needs socat, and it is not
+installed on this machine.
+
+Debian/Ubuntu:  apt install socat
+Fedora/RHEL:    dnf install socat
+
+The singleplayer runs on without it."
+    [mp_host_failed]="The session could not be opened.
+
+The port may be taken, or the session
+directory may not be writable."
+    [mp_search_failed]="The search could not be started.
+
+The port may be taken."
+    [mp_searching]="Looking for sessions (UDP port %s)..."
+    # Order: name, address, players, maximum, state.
+    [mp_session_entry]="%s @ %s  %s/%s  %s"
+    [mp_state_lobby]="lobby"
+    [mp_state_play]="running"
+    [mp_none]="No session found"
+    [mp_search_again]="Search again"
+    [mp_direct_body]="Address of the machine that opened the
+session - with a port when it differs from
+the default:
+
+  192.168.1.23   or   192.168.1.23:27301"
+    [mp_bad_address]="That is not a valid address.
+
+Allowed is an IPv4 address or a host name,
+optionally followed by :port."
+    [mp_join_failed]="The connection was not established.
+
+Is the session still running, and are both
+machines on the same network?"
+    [mp_reason]="Reason:"
+    [mp_lobby_title]="Multiplayer - lobby"
+    [mp_lobby_session]="Session: %s"
+    [mp_lobby_addr]="Address to pass on: %s:%s"
+    [mp_lobby_alone]="Waiting for a second player..."
+    [mp_start]="Start the round"
+    [mp_ready]="Ready"
+    [mp_unready]="Not ready after all"
+    [mp_leave]="Leave the lobby"
+    [mp_you]="(you)"
+    [mp_is_host]="host"
+    [mp_is_ready]="ready"
+    [mp_is_waiting]="waiting"
+    [mp_countdown]="Starting in %s..."
+    [mp_lost_body]="The connection to the session is gone.
+
+The host ended it, or the network was away
+for a moment."
+    [mp_pause_note]="The others play on - only your own board
+stops here. So make up your mind quickly."
+    [mp_end_tail]="The round is recorded and over afterwards;
+the others play it to the end."
+    [mp_suspended]="A suspended round is still waiting in the
+main menu.
+
+A multiplayer round runs through that very
+state, so finish the suspended round first
+(Resume)."
 
     [round_state]="%d lines, %d rows, level %d."
     [quit_title]="Really quit?"
@@ -66,6 +134,11 @@ be resumed any more."
     # here - the mode identifier on the command line stays "flood".
     [mode_flood]="Flood"
     [mode_flood_short]="Flood"
+    # The multiplayer mode (2.0.0). It is not an entry of the
+    # singleplayer menu, but it is one of the two pickers that look back
+    # (highscores, statistics) and it names itself wherever a round names
+    # its mode.
+    [mode_versus]="Multiplayer"
     # The entry_* forms are the bracketed description the three pickers put
     # behind the name; menu_mode_entries (lib/menu.sh) pads the names so the
     # descriptions line up in one column (see lib/lang/de.sh).
@@ -74,6 +147,7 @@ be resumed any more."
     [entry_sprint]="(%s minutes for rows)"
     [entry_timeattack]="(%s + %ss per row)"
     [entry_flood]="(a row every %s sec.)"
+    [entry_versus]="(2 to %s players)"
 
     # --- Singleplayer and pause menu --------------------------------------
     [sp_title]="Singleplayer"
@@ -200,6 +274,14 @@ You can delete it in the demo menu."
     [hud_left]="Left"
     [hud_flood]="Flood"
     [hud_demo]="Demo"
+    # Multiplayer: the garbage rows waiting and the number of players
+    # still in the round. Six characters, like every HUD label.
+    [hud_garbage]="Garb"
+    [hud_alive]="Alive"
+    # One character per marker, which is all there is room for next to a
+    # mini board: garbage incoming, and a player who is out.
+    [hud_peer_warn]="!"
+    [hud_peer_ko]="K.O."
 
     # --- Result box over the board ----------------------------------------
     [box_paused]="      PAUSED      "
@@ -221,6 +303,11 @@ You can delete it in the demo menu."
     [box_menu]="  %s = menu"
     [box_demo_again]="  r = again"
     [box_demo_back]="  %s = back"
+    [box_mp_win]="       YOU WIN"
+    [box_mp_over]="    ROUND OVER"
+    [box_mp_ko]="      K. O."
+    [box_mp_place]="   Place %d"
+    [box_mp_watch]="  You are watching"
 
     # --- Too-small terminal overlay ---------------------------------------
     [resize_head]="resize:"
@@ -279,6 +366,10 @@ a top-out before the time is up as well."
 row rises from below. Every round is
 recorded - it ends in a game over either
 way."
+    [hs_empty_versus]="Play a multiplayer round. What is ranked
+are your own rows, won or lost; how many
+played along and who won is deliberately
+not part of this list."
 
     # --- Statistics -------------------------------------------------------
     [stats_title]="Statistics"
@@ -307,6 +398,7 @@ way."
     [stats_goal_ultra]="of those goal reached:"
     [stats_goal_sprint]="of those full time:"
     [stats_goal_timeattack]="of those clock run down:"
+    [stats_goal_versus]="of those won:"
 
     # --- Manual -----------------------------------------------------------
     [help_title]="Manual"
@@ -458,6 +550,26 @@ During a replay:"
     # Arguments: old path, new path.
     [highscore_renamed]="Highscore list renamed: %s -> %s"
 
+
+    # Page 10: the multiplayer (2.0.0). The player count and the port
+    # come from the live constants, so a retuned value cannot leave the
+    # page lying.
+    [help_p9_head]="Multiplayer (on the local network)
+
+Everybody plays their own board, all of them
+with the same piece sequence. Cleared rows
+send garbage to the opponent; a clear of your
+own empties your own queue first."
+    [help_p9_players]="From %s to 6 people play; one opens the
+session, the others find it on the network
+(UDP port %s) or type in its address."
+    [help_p9_tail]="Whoever builds out of the field drops out and
+watches; the last one standing wins. There is
+no pause - the others do not wait. Only your
+own achievement is recorded: rows, wonder
+progress and statistics as ever.
+Needs socat."
+
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" affects these files in %s:"
     [reset_absent]="(not present)"
@@ -480,7 +592,8 @@ Usage: rowhammer.sh [OPTIONS]
 Terminal Tetris of the rowhammer project. Starts with a menu:
 singleplayer (endless "Marathon", the timed "Ultra", "Sprint" or
 "Time Attack" mode, or "Flood"),
-multiplayer (placeholder), highscores, wonders, statistics and settings.
+multiplayer on the local network, highscores, wonders, statistics,
+demos and settings.
 
 Options:
   --seed N      Seed the piece randomizer for a reproducible sequence.
@@ -537,6 +650,42 @@ Options:
                 update incorrectly, or to read whole frames out of the
                 debug frame log.
                 Env: ROWHAMMER_RENDER_MODE  Default: partial
+  --mp-transport MODE
+                How a multiplayer session is connected: "lan" over TCP
+                on the local network (the default), or "unix" over a
+                domain socket when everybody is logged into the same
+                machine anyway.
+                Env: ROWHAMMER_MP_TRANSPORT Default: lan
+  --mp-port N   TCP and broadcast port of the multiplayer. A port that
+                is taken is not an error: the host uses the next free
+                one and announces that one.
+                Env: ROWHAMMER_MP_PORT      Default: 27301
+  --mp-dir DIR  Directory for the session files (in the "unix"
+                transport also for the socket).
+                Env: ROWHAMMER_MP_DIR
+                Default: ${XDG_RUNTIME_DIR}/rowhammer
+  --mp-max N    Upper bound on the players of a session, 2 to 6.
+                Env: ROWHAMMER_MP_MAX       Default: 6
+  --mp-session NAME
+                Name of the session (1-16 characters of A-Z a-z 0-9
+                _ -), the way the others see it in their list.
+                Env: ROWHAMMER_MP_SESSION   Default: the user name
+  --mp-view MODE
+                How much of the opponents is drawn: "auto" (the
+                default) takes the most detailed view the terminal has
+                room for, "full" the mini boards, "compact" two lines
+                per opponent, "score" one.
+                Env: ROWHAMMER_MP_VIEW      Default: auto
+  --mp-target MODE
+                Who receives the garbage with three or more players:
+                "random" (one opponent at random), "all" (every one of
+                them the full amount) or "even" (split evenly). Only
+                meaningful for the host - the hub decides.
+                Env: ROWHAMMER_MP_TARGET    Default: random
+  --mp-bot      Test client without a terminal: joins a session and
+                plays random moves, so a round with several players can
+                be tested without several terminals.
+                Env: ROWHAMMER_MP_BOT       Default: 0
   --reset TARGET
                 Reset persistent data in the data directory and exit
                 without starting the game. TARGET is one of:
@@ -544,7 +693,8 @@ Options:
                   stats      the statistics file stats
                   highscore  all highscore lists (highscore-marathon,
                              highscore-ultra, highscore-sprint,
-                             highscore-timeattack and highscore-flood)
+                             highscore-timeattack, highscore-flood and
+                             highscore-versus)
                   save       the savegame save (the wonder progress)
                   demo       the demo recordings (the demos directory)
                   all        all of the above

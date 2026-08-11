@@ -27,7 +27,7 @@
 #   next frame.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-08-06)
+# Version: 0.10.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -233,6 +233,14 @@ board_full_rows() {
 clear_lines() {
     CLEARED=0
     CLEARED_CREDIT=0
+    # How many gold and silver squares the cleared rows ran through, as
+    # whole squares rather than cells. The row credit above needs the
+    # figure per row, but the multiplayer needs it for the whole clear:
+    # it is what a clear is worth as an attack, and the hub computes that
+    # from the three numbers the client reports (CLAUDE.md 5.7). Summed
+    # here because this is the one place that already counts them.
+    CLEARED_GOLD=0
+    CLEARED_SILVER=0
     local -a nb nid nsq
     local y x idx write_y row_full gold_cells silver_cells id credit
     write_y=$(( BOARD_H - 1 ))
@@ -260,6 +268,8 @@ clear_lines() {
                     INSTANCE_CUT["${id}"]=1
                 fi
             done
+            CLEARED_GOLD=$(( CLEARED_GOLD + gold_cells / 4 ))
+            CLEARED_SILVER=$(( CLEARED_SILVER + silver_cells / 4 ))
             credit=$(( ROWS_NORMAL \
                 + ROWS_GOLD * (gold_cells / 4) \
                 + ROWS_SILVER * (silver_cells / 4) ))

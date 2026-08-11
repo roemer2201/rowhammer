@@ -409,7 +409,7 @@ Die fuer uns relevanten Merkmale des Originals:
 ### 3.5 Anleitung (seit 0.32.0)
 
 Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
-"Beenden" und erklaert das Spiel auf neun Info-Bildschirmen
+"Beenden" und erklaert das Spiel auf zehn Info-Bildschirmen
 (`menu_help` in `lib/menu.sh`, ueber `render_menu_frame` zentriert wie
 der Spielblock). **Seit Version 0.33.0 (Nutzerwunsch)** blaettert man mit
 den **Pfeiltasten links/rechts** durch die Seiten (umlaufend: von der
@@ -468,6 +468,16 @@ in fester Reihenfolge einmal durchzureichen:
    Zeile fuer den neuen Weg hat der Einleitungsabsatz bezahlt: die Seite
    sass mit 18 Zeilen schon auf `MENU_BODY_MAX`, und der Absatz sagte in
    fuenf Zeilen, was in vieren steht.
+
+10. Mehrspieler (seit 2.0.0): dass jeder sein eigenes Feld mit
+   derselben Steinfolge spielt, dass abgebaute Reihen dem Gegner
+   Stoerreihen schicken und ein eigener Abbau zuerst die eigene
+   Warteschlange raeumt, wie eine Sitzung eroeffnet und gefunden wird
+   (Beacon oder eingegebene Adresse), dass der Letzte im Feld gewinnt,
+   dass es keine Pause gibt, dass nur die eigene Leistung gewertet wird
+   und dass socat gebraucht wird. Spielerzahl und Port kommen aus
+   `MP_MAX`/`MP_PORT`, damit ein nachjustierter Wert die Seite nicht zur
+   Luege macht - dieselbe Regel wie bei den Modus- und Wunder-Seiten.
 
 Fuenf Teile werden bewusst aus dem laufenden Zustand gelesen statt
 ausgeschrieben, damit die Anleitung nicht luegen kann: die
@@ -1070,14 +1080,15 @@ rowhammer/
     wonders.sh         # Weltwunder-Logik, Baustufen, Fortschritt
     save.sh            # Laden/Speichern des Spielstands
     stats.sh           # Persistente Spielstatistik (Reihen, Bonusreihen, Bloecke)
-    net.sh             # (Phase 5) Transport: socat (TCP/Unix), Discovery, Limits
-    proto.sh           # (Phase 5) Nachrichtentabelle, Parser mit Validierung
-    hub.sh             # (Phase 5) Sitzungslogik des Hubs (Lobby, Garbage, KO)
-    mp.sh              # (Phase 5) Client-Seite: Lobby, Peer-Zustaende, Anbindung
+    net.sh             # Transport: socat (TCP/Unix), Discovery, Limits
+    proto.sh           # Nachrichtentabelle, Parser mit Validierung
+    hub.sh             # Sitzungslogik des Hubs (Lobby, Garbage, KO)
+    mp.sh              # Client-Seite: Lobby, Peer-Zustaende, Anbindung
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
   tools/
     key-scan.sh        # Regressionstest der Eingabeschicht (Issue #7)
+    net-fuzz.sh        # Fuzz-Test der Mehrspieler-Parser (siehe 5.5)
     release.sh         # Versions-Abgleich, Release-Notes, Release-Tag
     demo/              # Werkzeuge fuer die asciinema-Democlips
   .github/workflows/
@@ -1096,13 +1107,13 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 1.0.2): alle Module aus dem Baum oben existieren mit
-Ausnahme der vier mit "(Phase 5)" markierten Mehrspieler-Module, die
-bislang nur spezifiziert sind (siehe Abschnitt 5)
+Stand (Version 2.0.0): alle Module aus dem Baum oben existieren; die
+vier Mehrspieler-Module (`net`, `proto`, `hub`, `mp`) sind mit 2.0.0
+dazugekommen (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
 `stats.sh`, `demo.sh` und `i18n.sh` mit `lib/lang/` sowie
 `assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
-startet in einem Menue (Einzelspieler / Mehrspieler-Platzhalter /
+startet in einem Menue (Einzelspieler / Mehrspieler /
 Highscores / Weltwunder / Statistik / Demos / Einstellungen /
 Anleitung / Beenden;
 solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
@@ -1115,9 +1126,12 @@ endlose Modus hiess bis
 "Highscores" ebenso den Modus der anzuzeigenden Bestenliste
 (`menu_highscores`, seit 0.49.0 mit fuenf Listen, siehe 4.5). Seit
 0.47.0 waehlt auch der Menuepunkt "Statistik" zuerst die Sicht
-(`menu_stats`: Gesamt oder einer der fuenf Modi, siehe 4.5). Die
+(`menu_stats`: Gesamt oder einer der Modi, siehe 4.5). Die
 Modus-Eintraege dieser drei Auswahlen baut seit 0.48.0 ein gemeinsamer
-Helfer (`menu_mode_entries`); seit 0.53.0 nennt jeder Eintrag hinter dem
+Helfer (`menu_mode_entries`); seit 2.0.0 haengt er auf Wunsch einen
+sechsten Modus an - den Mehrspieler, den nur die beiden
+Rueckblick-Auswahlen (Highscores, Statistik) fuehren, weil er im
+Einzelspieler-Menue nicht gestartet wird; seit 0.53.0 nennt jeder Eintrag hinter dem
 Namen in einer eigenen, ausgerichteten Spalte, wogegen der Modus laeuft
 (siehe 3.6). Die
 Menue-Beschriftung
@@ -1153,6 +1167,12 @@ Einstellungsmenue waehlbar und in der Config gespeichert),
 `partial`, seit 0.41.0, siehe 4.3),
 `--demo-record on|off` (`ROWHAMMER_DEMO_RECORD`, Standard `on`, seit
 0.46.0; auch im Einstellungsmenue und in der Config, siehe 3.8/4.10),
+die Mehrspieler-Optionen `--mp-transport lan|unix`, `--mp-port N`,
+`--mp-dir DIR`, `--mp-max N`, `--mp-session NAME`,
+`--mp-view auto|full|compact|score`, `--mp-target random|all|even`,
+`--mp-host`, `--mp-join HOST[:PORT]` und `--mp-bot` (je mit
+`ROWHAMMER_MP_*`-Variable, seit 2.0.0, siehe 5.10) sowie die drei
+internen Prozessmodi `--mp-hub`, `--mp-bridge` und `--mp-discover`,
 `--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
 0.35.0, das Ziel `demo` seit 0.46.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
 beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
@@ -1332,7 +1352,8 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
   (seit 0.39.0), die Time-Attack-Bestenliste `highscore-timeattack`
   (seit 0.42.0), die Hochwasser-Bestenliste `highscore-flood`
-  (seit 0.49.0), der Spielstand `save`, die
+  (seit 0.49.0), die Mehrspieler-Bestenliste `highscore-versus`
+  (seit 2.0.0, siehe unten), der Spielstand `save`, die
   Statistik `stats` und - seit 0.46.0 - das Unterverzeichnis `demos`
   mit den aufgezeichneten Runden (Format und Ablage siehe 4.10; als
   einziger Eintrag ein Verzeichnis statt einer Datei, weil es beliebig
@@ -1517,6 +1538,29 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Wasser steigt nach der Uhr, die ueberlebte Zeit sagt also, gegen wie
   viele Flutreihen ein Eintrag angespielt hat, und trennt zwei Runden
   mit gleichen Rows.
+  **Mehrspieler-Bestenliste (seit 2.0.0, siehe 5.8):** die Ergebnisse
+  einer Mehrspieler-Runde liegen in einer sechsten Datei
+  `${DATA_DIR}/highscore-versus`, Zeilenformat und Rangordnung wieder
+  wie die Marathon-Liste (elf Felder, absteigend nach Rows, gleiche Rows
+  hinter dem aelteren Eintrag), ebenfalls Top 10 (`HSV_*` in
+  `lib/highscore.sh`). Damit ist die in Abschnitt 8 offen gelassene
+  Frage entschieden, und zwar mit der Empfehlung, die dort stand: eine
+  **eigene Liste** statt eines Eintrags in der Marathon-Liste. Garbage
+  kuerzt eine Runde ab und schenkt ihr zugleich zusaetzliche Reihen zum
+  Abbauen - die Zahlen haben schlicht nicht dieselbe Groesse, und genau
+  dagegen wurde die Liste fuenfmal aufgeteilt. **Jede** Runde wird
+  gewertet, gewonnen wie verloren (wie bei Time Attack und Hochwasser:
+  es gibt keinen Zustand "unvollstaendig"). **Der erreichte Platz wird
+  bewusst nicht gespeichert:** die Liste rangiert, was ein Spieler
+  getan hat, und das ist ueber Abende zu zweit und zu sechst
+  vergleichbar - wer an einem bestimmten Abend gewonnen hat, nicht. Wie
+  oft jemand gewonnen hat, steht dafuer in der Statistik (das
+  `goal`-Feld des Modus, siehe unten).
+  **Anzeige:** `highscore_versus_screen` zeigt die Liste im Layout der
+  fuenf anderen, mit den Spalten der Marathon-Liste samt Spielzeit: ein
+  Lauf, der frueh ausgeschieden ist, ist genau der kurze, sodass die
+  Zeit einen K.O. von einer durchgespielten Runde trennt.
+
   **Umbenennung der Marathon-Datei (seit 0.51.0, Nutzerwunsch):** die
   Marathon-Liste hiess bis 0.50.0 schlicht `highscore` - als einzige
   ohne ihren Modus im Namen, ein Rest aus der Zeit, in der sie die
@@ -1674,14 +1718,16 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   **Statistik je Spielmodus (Runden seit 0.42.0, alle Zaehler seit
   0.47.0 auf Nutzerwunsch):** jeder Zaehler oben existiert ein zweites
   Mal je Modus, als Zeile `mode_<modus>_<feld>=N` mit `<modus>` aus
-  `marathon|ultra|sprint|timeattack|flood` und `<feld>` aus
+  `marathon|ultra|sprint|timeattack|flood|versus` und `<feld>` aus
   `rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|`
   `pieces|play_time` (`STATS_MODE_RE`, im Code das assoziative Array
   `STATS_MODE` mit dem Schluessel `<modus>_<feld>`). `rounds` zaehlt die
   verbuchten Runden des Modus, `goal` die davon, die im regulaeren Ende
   des Modus ausgingen statt im Game Over (Ziel erreicht / volle Zeit
-  gespielt / Uhr abgelaufen) - Marathon und Hochwasser haben kein Ziel
-  und deshalb kein `goal`-Feld in der Datei; welche Modi das sind, sagt
+  gespielt / Uhr abgelaufen / die Mehrspieler-Runde gewonnen) -
+  Marathon und Hochwasser haben kein Ziel und deshalb kein `goal`-Feld
+  in der Datei; beim Mehrspieler ist es die Siegquote, also genau die
+  Zahl, die die Bestenliste bewusst nicht traegt (siehe 4.5); welche Modi das sind, sagt
   `stats_mode_has_goal` (`lib/stats.sh`), damit der Dateiinhalt nicht
   daran haengt, ob eine Sprachdatei die passende Beschriftung kennt. `record_round` reicht dafuer `GAME_MODE` und
   `GOAL_REACHED` an `stats_add_round` durch - die einzigen beiden
@@ -1910,10 +1956,10 @@ ins Menue zu starten. Ziele:
 | --- | --- |
 | `config` | `rowhammer.conf` |
 | `stats` | `stats` |
-| `highscore` | `highscore-marathon`, `highscore-ultra`, `highscore-sprint`, `highscore-timeattack` **und** `highscore-flood` |
+| `highscore` | `highscore-marathon`, `highscore-ultra`, `highscore-sprint`, `highscore-timeattack`, `highscore-flood` **und** `highscore-versus` |
 | `save` | `save` (Weltwunder-Fortschritt) |
 | `demo` | das Verzeichnis `demos` (alle Aufzeichnungen) |
-| `all` | alle acht Dateien und das Verzeichnis `demos` |
+| `all` | alle neun Dateien und das Verzeichnis `demos` |
 
 **Reset heisst verschieben, nicht loeschen (seit 0.36.0,
 Nutzerentscheidung).** Jede betroffene Datei wandert nach
@@ -1938,8 +1984,8 @@ Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
   `save` (der in der Roadmap angedachte Wert), das die uebrigen Dateien
   unangetastet laesst.
 - **`highscore` trifft alle Bestenlisten.** Endlos-, Ultra-, Sprint-,
-  Time-Attack- und Hochwasser-Liste (seit 0.34.0, 0.39.0, 0.42.0 bzw.
-  0.49.0, siehe 4.5)
+  Time-Attack-, Hochwasser- und Mehrspieler-Liste (seit 0.34.0, 0.39.0,
+  0.42.0, 0.49.0 bzw. 2.0.0, siehe 4.5)
   sind dieselbe Art
   Daten; eine davon stehen zu
   lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
@@ -1962,7 +2008,7 @@ Ablauf und Einordnung:
   kommen aus den Modulen, die sie besitzen: `CONFIG_NAME`,
   `STATS_FILE_NAME`,
   `HS_FILE_NAME`/`HSU_FILE_NAME`/`HSS_FILE_NAME`/`HSA_FILE_NAME`/
-  `HSF_FILE_NAME`, `SAVE_FILE_NAME`, `DEMO_DIR_NAME`)
+  `HSF_FILE_NAME`/`HSV_FILE_NAME`, `SAVE_FILE_NAME`, `DEMO_DIR_NAME`)
   und **vor** der TTY-Pruefung. Die TTY-Pruefung ist dafuer aus dem
   Prerequisites-Block nach unten gewandert: ein Reset loescht nur
   Dateien und darf deshalb auch aus einem Skript oder einer CI-Umgebung
@@ -2331,19 +2377,42 @@ abgeschnitten wurden (Mehrspieler-Platzhalter, die drei Meldungen des
 Rebind-Dialogs, die Abbrechen-Fusszeile einer Sicherheitsabfrage und je
 eine Zeile der ersten und dritten Anleitungsseite) - sie sind umbrochen.
 
-## 5. Multiplayer (Phase 5, spezifiziert - noch nicht umgesetzt)
+## 5. Multiplayer (Phase 5, umgesetzt seit 2.0.0)
 
 **Alles in diesem Abschnitt ist Arbeit an Version 2.x.x** (siehe die
-Arbeitsregel in Abschnitt 6): der erste Schritt hier hinein ist der
+Arbeitsregel in Abschnitt 6): der erste Schritt hier hinein war der
 Sprung auf `2.0.0`, waehrend das Einzelspieler-Spiel seine eigene
-Versionsreihe weiterfuehrt. Das gilt auch fuer die Vorarbeit im
-Einzelspieler-Code (Schritt 1 der Roadmap) und fuer die darauf
-aufbauende Phase 6 (5.11-5.19).
+Versionsreihe weiterfuehrt. Das gilt auch fuer die darauf aufbauende
+Phase 6 (5.11-5.19).
 
-Dieser Abschnitt ist die **Spezifikation**; im Code existiert bislang nur
-der Platzhalter-Menuepunkt. Die Umsetzung erfolgt schrittweise nach der
-Reihenfolge in Abschnitt 7, Phase 5. Jeder Schritt dort verweist auf die
-hier festgelegten Regeln.
+**Stand:** Der Mehrspieler laeuft seit 2.0.0 - Sitzung eroeffnen und
+beitreten, gemeinsame Steinfolge, Stoerreihen, Ausscheiden, Sieger,
+eigene Bestenliste und eigener Statistik-Modus (Roadmap-Schritte 1 bis 8
+und 10 bis 12, siehe HISTORY.md). Dieser Abschnitt beschreibt damit
+nicht mehr eine Absicht, sondern den gebauten Zustand; wo die Umsetzung
+von der urspruenglichen Spezifikation abweicht, steht es an Ort und
+Stelle. **Offen ist ein Punkt:** die Demo-Aufzeichnung einer
+Mehrspieler-Runde (5.20, Schritt 9). Sie braucht die Formatversion 3 mit
+den Peer-Ereignissen; bis dahin wird eine Mehrspieler-Runde bewusst
+**nicht** aufgezeichnet (`demo_record_start` lehnt einen Modus ab, den
+das Format nicht kennt) - eine Aufnahme im heutigen Format wuerde als
+Runde ablaufen, in der aus dem Nichts Stoerreihen erscheinen.
+
+Drei Nachrichten kamen beim Bauen hinzu, die die Nachrichtentabelle in
+5.4 so nicht hatte; sie sind dort mit aufgefuehrt und hier zusammen
+begruendet, weil sie alle drei dieselbe Luecke schliessen - die
+Spezifikation nannte eine Wirkung, ohne zu sagen, woher der Absender
+weiss, dass sie noetig ist:
+
+- **`VIEW <0|1>`** (Client -> Hub): "ich zeichne die Gegnerfelder".
+  `NEEDBOARD` war vorgesehen, aber der Hub kann nicht wissen, welche
+  Detailstufe ein Terminal gerade zeigt.
+- **`QUEUE <n>`** (Hub -> Client): die verbindliche Laenge der eigenen
+  Garbage-Warteschlange, nachdem ein Abbau sie gekuerzt hat.
+- **`APPLIED <n>`** (Client -> Hub): "diese Reihen stehen jetzt in
+  meinem Stapel". Zusammen halten die beiden die Warteschlange an genau
+  einer Stelle - beim Hub, dem die Verrechnung gehoert; zwei Kopien
+  derselben Zahl koennten nur auseinanderlaufen.
 
 Leitentscheidung (ueberarbeitet mit dem Beginn der Lobby-Arbeit,
 Nutzerentscheidung): **serverfreier Mehrspieler im LAN**. Es gibt keinen
@@ -2373,6 +2442,10 @@ im Code nur eine andere socat-Adresse: Prozessmodell (5.3), Protokoll
   erwartete Spielerzahl vorher festzulegen waere eine Zahl, die
   niemanden bindet: wer zu spaet kommt, findet die Sitzung ohnehin
   nicht mehr, und wer fehlt, haelt sonst alle auf.
+  Umgesetzt ohne eigene Nachricht: der Host ist Slot 0 (die erste
+  Verbindung), und sein `READY 1` **ist** der Start - fuer ihn ist der
+  Lobby-Eintrag ohnehin der Startknopf, und solange er allein sitzt,
+  antwortet der Hub mit `ERR alone`.
   `--mp-max N` bleibt als **Obergrenze**, die der Host enger setzen
   kann (2..6, Standard 6 = das technische Maximum) - etwa um eine
   Sitzung fuer genau drei Leute zuzumachen, statt den vierten von Hand
@@ -2627,6 +2700,8 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `STATE` | `<lines> <rows> <level> <gold> <silver> <height> <pending>` | eigener Zaehlerstand, bei Aenderung, max. 10/s |
   | `BOARD` | `<200 Zeichen>` | Feld-Snapshot, nur wenn der Hub `NEEDBOARD 1` gesetzt hat, max. 5/s |
   | `CLEAR` | `<lines> <silver> <gold>` | ein Reihenabbau als Angriffs-Meldung (Hub rechnet daraus die Garbage aus) |
+  | `APPLIED` | `<count>` | eingeschobene Stoerreihen (seit 2.0.0, siehe unten) |
+  | `VIEW` | `<0 oder 1>` | ob dieser Client die Gegnerfelder zeichnet (seit 2.0.0) |
   | `TOPOUT` | - | eigenes Game Over |
   | `PONG` | `<token>` | Antwort auf `PING` |
   | `BYE` | - | geordnetes Verlassen |
@@ -2643,6 +2718,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `PEERBOARD` | `<slot> <200 Zeichen>` | Feld-Snapshot eines Mitspielers |
   | `NEEDBOARD` | `<0 oder 1>` | ob dieser Client Snapshots senden soll (spart Last, wenn niemand Stufe 2 anzeigt) |
   | `GARBAGE` | `<count> <hole>` | eingehende Stoerreihen, Lochspalte 0-9 |
+  | `QUEUE` | `<count>` | verbindliche Laenge der eigenen Warteschlange (seit 2.0.0) |
   | `KO` | `<slot> <platz>` | Spieler ausgeschieden |
   | `END` | `<siegerslot>` | Runde vorbei |
   | `PING` | `<token>` | Lebendpruefung, alle 2 s |
@@ -2909,10 +2985,15 @@ Zuordnung auch ohne Namenslesen funktioniert.
   Mehrspieler-Runde kann **nicht** ins Hauptmenue gelegt und spaeter
   fortgesetzt werden (die anderen warten nicht) - der Eintrag "Ins
   Hauptmenue" fehlt im Mehrspieler-Pausenmenue.
-- **Pause:** eine echte Pause gibt es im Mehrspieler nicht. `p` zeigt nur
-  eine lokale Einblendung, das Spiel laeuft weiter; das Pausenmenue
-  (`Esc`/`x`) bietet "Fortsetzen" und "Runde verlassen". Das muss im HUD
-  deutlich stehen, sonst ist es eine Falle.
+- **Pause:** eine echte Pause gibt es im Mehrspieler nicht. Umgesetzt
+  seit 2.0.0: `p` tut schlicht nichts (eine Einblendung, die nichts
+  anhaelt, waere die verwirrendere Antwort), und `Esc`/`x` oeffnet ein
+  eigenes Menue mit "Fortsetzen" und "Runde verlassen"
+  (`mp_pause_menu`, `lib/mp.sh`). Es **leert die Leitung weiter**,
+  waehrend es offen ist - ein Menue, das nicht mehr liest, liefe in den
+  Ping-Timeout und flaege aus einer Runde, die niemand verlassen
+  wollte. Das eigene Feld steht solange still; genau das sagt der Text
+  des Menues, damit niemand es fuer eine Pause haelt.
 - **Wertung und Persistenz (Nutzerentscheidung):** in Statistik und
   Weltwunder-Fortschritt fliesst **allein die eigene Leistung** ein.
   Was das im Einzelnen heisst:
@@ -3430,11 +3511,13 @@ Archiv der abgeschlossenen Roadmap-Punkte, nach Version geordnet. Der
 sondern in den Abschnitten 1 bis 5 dieser Datei und - soweit
 spielersichtbar - in der README.md (Arbeitsregel in Abschnitt 6).
 
-**Versionszuordnung (seit 1.0.2):** Die beiden Zwischenschritt- und
-Phase-4-Punkte unten gehoeren zum Einzelspieler-Spiel und laufen in
-dessen laufender `1.x.x`-Reihe weiter. **Die Phasen 5 und 6 sind Version
-2.x.x** - jede Aenderung, die den Mehrspieler betrifft, ist Arbeit an
-`2.x.x` (Arbeitsregel in Abschnitt 6).
+**Versionszuordnung (seit 1.0.2):** Die Zwischenschritt- und
+Phase-4-Punkte unten gehoeren zum Einzelspieler-Spiel. **Die Phasen 5
+und 6 sind Version 2.x.x** - jede Aenderung, die den Mehrspieler
+betrifft, ist Arbeit an `2.x.x` (Arbeitsregel in Abschnitt 6). Mit dem
+Sprung auf `2.0.0` laeuft die Hauptreihe des Spiels dort weiter; die
+offenen Einzelspieler-Punkte werden in ihr mitgenommen, statt eine
+zweite Reihe zu fuehren.
 
 Erledigt und nach HISTORY.md verschoben:
 
@@ -3452,6 +3535,10 @@ Erledigt und nach HISTORY.md verschoben:
   (Rundenende am oberen Feldrand); die
   Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen ist der Punkt unten
+- **Phase 5 - Mehrspieler** (2.0.0): die Schritte 1 bis 8 und 10 bis 12
+  (Transport, Protokoll, Hub und Lobby, Mitspieler-Anzeige in drei
+  Stufen, Garbage, Rundenende, mehrere Spieler, Test-Bot und
+  Fuzz-Review). Offen bleiben die zwei Punkte unten
 
 ### Zwischenschritt - Paketierung (Version 1.x.x; offene Punkte, deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
 
@@ -3480,122 +3567,31 @@ Erledigt und nach HISTORY.md verschoben:
       serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
       keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
       umsetzbar.
-### Phase 5 - Multiplayer (Version 2.x.x; spezifiziert in Abschnitt 5, noch nicht umgesetzt)
+### Phase 5 - Multiplayer (Version 2.x.x; umgesetzt mit 2.0.0, offener Rest unten)
 
-Die Schritte sind so sortiert, dass jeder fuer sich lauffaehig und
-testbar ist und der Mehrspieler-Modus Stueck fuer Stueck waechst. Die
-Details stehen jeweils im genannten Unterabschnitt.
+Die Schritte 1 bis 8 sowie 10 bis 12 sind mit `2.0.0` umgesetzt und samt
+ihrer Begruendung nach [HISTORY.md](HISTORY.md) gewandert; der aktuelle
+Zustand steht in Abschnitt 5. Offen ist ein Schritt:
 
-- [ ] **Schritt 1 - Vorarbeit: Entkopplung und Render-Performance** (siehe 5.3, 5.9).
-      Rundenlogik ohne Rendering/Input lauffaehig machen (`game_reset`,
-      `step_down`, `lock_and_next`, `try_move`, `try_rotate`, `hold_piece`
-      zeichnen nicht mehr selbst; `record_round` trennt Verbuchen und
-      Anzeigen). Der Render-Teil dieses Schritts ist mit 0.22.0 erledigt
-      (Zeilen-Diff `FRAME_LINES`/`PREV_LINES` in `render_flush` plus
-      Cache der liegenden Feldreihen, siehe 4.3); `screen_write` bleibt
-      der einzige Ausgabekanal (Debug-Log!). Offen bleibt die
-      Entkopplung der Rundenlogik.
-      Abnahme: Einzelspieler unveraendert spielbar, Frame-Kosten messbar
-      gesunken.
-- [ ] **Schritt 2 - Transportschicht `lib/net.sh`** (siehe 5.2, 5.3).
-      `socat`-Erkennung mit klarer Meldung, wenn es fehlt; beide
-      Transporte (`lan` ueber TCP, `unix` ueber Domain-Socket) hinter
-      einer Adressfunktion, die die Adresse aus geprueften Einzelteilen
-      baut; Verbindung als Coprocess,
-      nicht-blockierendes Leeren des Sockets pro Tick, Zeilenrahmung mit
-      512-Byte-Grenze, Aufraeumen im bestehenden EXIT-`trap`,
-      Debug-Mitschnitt `net.log`. Abnahme: zwei Testprozesse tauschen
-      ueber beide Transporte Zeilen aus, ohne dass der Game-Loop stockt.
-      Im selben Modul die **Discovery**: Beacon senden (Hub) und
-      einsammeln (`--mp-discover` als socat-Kindprozess,
-      Absenderadresse aus `SOCAT_PEERADDR`), Sitzungsliste mit
-      Verfallszeit, Ratenbegrenzung und Deckel, dazu der gleichrangige
-      **Beitritt per eingegebener Adresse**, der ohne Discovery
-      auskommt. Sie gehoert hierher und nicht in die Lobby
-      (Schritt 4), weil sie derselbe Transport ist und weil sie ohne
-      Hub schon mit zwei Testprozessen pruefbar ist - zugleich ist sie
-      die erste Stelle, an der das Spiel Daten von einem voellig
-      Fremden annimmt. Abnahme dafuer: ein Beacon von einem zweiten
-      Rechner erscheint in der Liste, verschwindet nach dem Ende des
-      Senders wieder, ein boesartiger Beacon landet weder in einer
-      Kommandozeile noch auf dem Bildschirm, und bei blockiertem
-      Broadcast (Test mit einer Firewall-Regel auf den UDP-Port) kommt
-      die Verbindung ueber die eingegebene Adresse trotzdem zustande.
-- [ ] **Schritt 3 - Protokoll v1 und Validierung `lib/proto.sh`** (siehe 5.4, 5.5).
-      Nachrichtentabelle, Serialisierung, Whitelist-Parser mit
-      Feldmustern, Zeichensatzfilter 0x20-0x7E, Ratenbegrenzung.
-      Zusammen mit `tools/net-fuzz.sh` (boesartige Zeilen: ANSI-Escapes,
-      `$(...)`, Backticks, `../`, Ueberlaenge, Nullbytes, halbe Zeilen).
-      Abnahme: kein Prozess stirbt, kein Befehl laeuft, kein
-      Steuerzeichen erreicht das Terminal.
-- [ ] **Schritt 4 - Hub-Prozess und Lobby** (siehe 5.1, 5.3, 5.10).
-      `--mp-hub` headless, `--mp-bridge`, Sitzungsverzeichnis mit den
-      Rechte- und Symlink-Pruefungen aus 5.5 (Transport `unix`) bzw.
-      `HELLO`-Frist und Verbindungsdeckel (Transport `lan`), Menue
-      "Spiel eroeffnen / Spiel beitreten / Direkt verbinden",
-      Spielerliste, Bereitschaft, **Start allein durch den Host, ab
-      dem zweiten Spieler und bis zum sechsten** (5.1),
-      Seed-Verteilung,
-      Countdown, Ping/Timeout, geordnetes Beenden. Noch **ohne**
-      Interaktion im Spiel: alle spielen parallel ihre eigene Runde.
-      Abnahme: vier Terminals treten bei, starten gemeinsam, ein
-      `kill -9` auf einen Client stoert die anderen nicht.
-- [ ] **Schritt 5 - Mitspieler-Anzeige Stufe 0 und 1** (siehe 5.6).
-      `PEER`-Zustaende puffern, Scoreboard- und Kompaktansicht in der
-      Seitenleiste, Detailstufen-Auswahl inklusive Neuberechnung beim
-      Resize, `--mp-view`. Erstes sichtbares Mehrspieler-Erlebnis, laeuft
-      im 48x22-Minimum. Abnahme: vier Spieler sehen gegenseitig ihre
-      Rows/Lines live.
-- [ ] **Schritt 6 - Mitspieler-Anzeige Stufe 2 (Mini-Felder)** (siehe 5.4, 5.6).
-      Feld-Snapshot in 200 Zeichen kodieren/dekodieren, `NEEDBOARD`-
-      Steuerung, Drosselung auf 5 Hz und "nur bei Aenderung", Layout
-      rechts neben der Seitenleiste, Akzentfarbe je Slot. Abnahme: bei
-      4 Spielern in einem 90x24-Terminal bleibt die Framerate stabil.
-- [ ] **Schritt 7 - Garbage-Mechanik** (siehe 5.7).
-      Zellsorte `x`, zeilenweises Hochschieben von `BOARD`/`BOARD_ID`/
-      `BOARD_SQ`, Top-Out-Erkennung beim Schieben, Warteschlange mit
-      Verrechnung, Hub-seitige Angriffsberechnung und Lochspalte,
-      Vorwarn-Balken im HUD. Zuerst nur fuer 2 Spieler. Abnahme:
-      Tetris und Gold-Quadrat erzeugen die spezifizierten Mengen,
-      Quadrate ueberleben das Hochschieben.
-      **Vorarbeit erledigt:** Zellsorte, Hochschieben, Top-Out-Pruefung
-      und die Darstellung stehen seit 0.49.0 mit dem Hochwasser-Modus
-      (`GARBAGE_CELL`/`board_flood_row` in `lib/board.sh`, siehe 3.6);
-      offen bleiben Warteschlange, Verrechnung und die Hub-Seite.
-- [ ] **Schritt 8 - Rundenende, KO-Reihenfolge, Zuschauermodus,
-      Verbindungsabbruch** (siehe 5.8).
-      `TOPOUT`/`KO`/`END`, Platzierung, Endbildschirm mit Rangliste,
-      Timeout- und EOF-Behandlung, Mehrspieler-Pausenmenue ohne
-      "Ins Hauptmenue", Verbuchung von Wunder-Fortschritt und Statistik.
-      Abnahme: eine Runde laeuft sauber bis zum Sieger, ein abgestuerzter
-      Client beendet sie nicht.
 - [ ] **Schritt 9 - Demo-Aufzeichnung der Mehrspieler-Runde** (siehe 5.20).
       Formatversion 3, Kopf mit Slots und Namen, Peer-Zaehler und
       zeilenweise Peer-Schnappschuesse als Ereignisse, eingehende
       Garbage als eigenes Ereignis, Wiedergabe mit nachgespieltem
-      eigenem Feld und gesetzten Gegnerfeldern. Steht hinter Schritt 8,
-      weil erst dort alles existiert, was aufzuzeichnen ist. Abnahme:
-      die Wiedergabe einer Vier-Spieler-Runde zeigt denselben Verlauf,
-      den der aufzeichnende Client gesehen hat, und eine Aufnahme aus
-      Detailstufe 0/1 laeuft ohne Gegnerfelder sauber durch.
-- [ ] **Schritt 10 - Drei bis sechs Spieler** (siehe 5.1, 5.6, 5.7).
-      Zielwahl-Modi `random|all|even`, Layout-Raster fuer mehrere
-      Mini-Felder, `--mp-max` als Obergrenze, Lasttests. Abnahme: sechs
-      Bots spielen eine Runde ohne Verbindungs- oder Renderprobleme
-      durch.
-- [ ] **Schritt 11 - Test-Bot, Dokumentation, Paketierung** (siehe 5.10, 5.9).
-      `--mp-bot` (Client ohne Terminal, zufaellige Zuege) fuer
-      reproduzierbare Mehrspieler-Tests ohne N Terminals; README-Kapitel
-      mit Beispiel-Ablauf im LAN und ueber SSH; asciinema-Clip mit zwei
-      Feldern; `socat` als `Recommends` im Debian-Paket und im RPM.
-- [ ] **Schritt 12 - Sicherheits-Review vor der Freigabe** (siehe 5.5).
-      Kompletter Durchgang durch alle Stellen, die Empfangenes anfassen:
-      kein `eval`/`source`, keine ungeprueften Werte in `$(( ))` oder in
-      Array-Indizes, **keine Fremddaten in einer socat-Adresse**,
-      Zeichensatzfilter, Pfadpruefungen, Grenzen. Erneuter
-      Fuzz-Lauf gegen den fertigen Stand, dazu ein "boeser Client", der
-      absichtlich das Protokoll verletzt, und ein "boeser Beacon" aus
-      dem Netz.
+      eigenem Feld und gesetzten Gegnerfeldern. Bis dahin wird eine
+      Mehrspieler-Runde **nicht** aufgezeichnet: `demo_record_start`
+      lehnt einen Modus ab, den `DEMO_MODE_RE` nicht kennt, denn eine
+      Aufnahme im Format 2 liefe als Runde ab, in der aus dem Nichts
+      Stoerreihen erscheinen. Abnahme: die Wiedergabe einer
+      Vier-Spieler-Runde zeigt denselben Verlauf, den der aufzeichnende
+      Client gesehen hat, und eine Aufnahme aus Detailstufe 0/1 laeuft
+      ohne Gegnerfelder sauber durch.
+- [ ] **Rest aus Schritt 1 - Entkopplung der Rundenlogik** (siehe 5.3).
+      Der Mehrspieler brauchte davon nur, was er benutzt, und laeuft
+      damit; vollstaendig entkoppelt ist die Rundenlogik aber nicht:
+      `flash_rows` haelt den Loop weiterhin an (es leert im Mehrspieler
+      immerhin die Leitung mit) und `record_round` verbucht und zeigt
+      noch in einem. Das ist Aufraeumarbeit ohne sichtbare Wirkung und
+      steht deshalb hinter allem anderen.
 
 ### Phase 6 - Server-Betrieb, Accounts, Web (Version 2.x.x; spezifiziert in 5.11-5.19, noch nicht umgesetzt)
 
@@ -3755,33 +3751,34 @@ Multi-Server zuletzt.
 Offene Punkte zum Mehrspieler (Spezifikation siehe Abschnitt 5; alles
 Uebrige dort ist entschieden):
 
-- **Siegbedingung im Versus-Modus** (stand bis hierher faelschlich
-  unter den Server-Punkten, gehoert aber zu Phase 5)**:** 5.1/5.8
-  legen "letzter Ueberlebender" (KO ueber Garbage/Top-Out) als Sieger
-  fest. Die neuere Nutzerbeschreibung ("man spielt die Runde, der
-  Spieler mit den meisten Reihen gewinnt") klingt dagegen nach einer
-  reinen Reihen-Wertung ohne Elimination. Beides zusammen ist moeglich
-  (Rows als Tiebreaker, wie in 5.8 bereits fuer den Gleichstand-Fall
-  vorgesehen), aber als alleinige Regel schliessen sie sich aus:
-  Bestaetigung noetig, ob der Garbage-/KO-Versus-Modus aus 5.7/5.8
-  bleibt, durch einen reinen Rows-Wettkampf ohne Garbage ersetzt wird,
-  oder beide als waehlbare Modi nebeneinander bestehen. Dieser Punkt
-  ist der einzige offene, der die Roadmap-Reihenfolge veraendern kann -
-  Schritt 7 (Garbage) haengt vollstaendig an ihm.
-- **Fremdabhaengigkeit:** entschieden mit dem Beginn der Lobby-Arbeit
+- **Siegbedingung im Versus-Modus:** gebaut ist mit 2.0.0 der
+  spezifizierte Modus aus 5.1/5.7/5.8 - **letzter Ueberlebender**, mit
+  Garbage und Ausscheiden, und den Rows als Tiebreaker, wenn zwei im
+  selben Moment ausscheiden. Das war die Fassung, die in der
+  Spezifikation stand und an der die Roadmap-Schritte haengen; die
+  Runde bleibt trotzdem an den Rows messbar, denn sie sind es, was in
+  die Bestenliste, die Statistik und den Weltwunderbau eingeht.
+  **Offen bleibt allein die Bestaetigung**, ob es dabei bleibt oder ob
+  zusaetzlich ein reiner Rows-Wettkampf ohne Garbage als zweiter
+  waehlbarer Modus dazukommen soll. Umbauen liesse sich das ohne
+  Bruch: der Hub entscheidet ueber Angriff, Ausscheiden und Rundenende
+  ohnehin allein, ein zweiter Modus waere eine Fallunterscheidung in
+  `hub_attack`/`hub_eliminate` und ein Eintrag in der Lobby.
+- **Fremdabhaengigkeit:** entschieden und seit 2.0.0 in Gebrauch
   (Nutzerentscheidung). **`socat` ist gesetzt**, weil die Discovery
   UDP-Broadcast braucht und `socat` als einziges der frueher
   erwogenen Programme Broadcast, TCP und Unix-Socket zugleich kann; die
   Suchreihenfolge ueber `ncat`/`nc -U` und die FIFO-Variante sind damit
   entfallen (siehe 5.2). Es bleibt ein `Recommends` - der Einzelspieler
   laeuft ohne.
-- **Wertung von Mehrspieler-Runden:** teilweise entschieden
-  (Nutzerentscheidung, siehe 5.8). **Weltwunder-Fortschritt und
-  Statistik: ja, aber nur die eigene Leistung** - keine Reihe eines
-  Mitspielers, kein Bonus fuer den Sieg. Offen bleibt allein die
-  **Bestenliste** (Nutzer unentschieden, Tendenz "ja, auch lokal
-  werten"). Drei Wege, mit dem Muster des Projekts bewertet:
-  - **Eigene Liste `highscore-versus`** (Empfehlung): dasselbe
+- **Wertung von Mehrspieler-Runden:** entschieden und umgesetzt.
+  **Weltwunder-Fortschritt und Statistik: ja, aber nur die eigene
+  Leistung** - keine Reihe eines Mitspielers, kein Bonus fuer den Sieg
+  (Nutzerentscheidung, siehe 5.8). Die zuletzt offene Frage nach der
+  **Bestenliste** ist mit 2.0.0 im Sinne der Empfehlung entschieden:
+  eine **eigene Liste `highscore-versus`** (siehe 4.5). Die drei Wege
+  und warum es dieser wurde:
+  - **Eigene Liste `highscore-versus`** (gebaut): dasselbe
     Zeilenformat und dieselbe Rangordnung nach Rows wie Marathon, eine
     sechste Datei neben den fuenf vorhandenen (4.5), jede Runde
     gewertet wie bei Time Attack und Hochwasser - eine
@@ -3801,21 +3798,25 @@ Uebrige dort ist entschieden):
     Verliert die Motivation, die eine Bestenliste stiftet, und passt
     schlecht dazu, dass Statistik und Weltwunder die Runde sehr wohl
     zaehlen.
-- **Garbage-Werte** (0/1/2/4 Reihen, +2 Silber, +4 Gold, Deckel 10) sind
-  aus der Reihenwertung abgeleitet, nicht aus dem Original - "The New
-  Tetris" hat keinen vergleichbaren Versus-Modus. Nach Playtesting
-  nachjustieren.
+- **Garbage-Werte** (0/1/2/4 Reihen, +2 Silber, +4 Gold, Deckel 10,
+  `GARBAGE_*` in `lib/hub.sh`) sind aus der Reihenwertung abgeleitet,
+  nicht aus dem Original - "The New Tetris" hat keinen vergleichbaren
+  Versus-Modus. Sie stehen seit 2.0.0 im Code und sind bislang nur
+  gerechnet, nicht gespielt: nach Playtesting nachjustieren.
 - **Zielwahl ab 3 Spielern:** Standard `random`. Ob eine manuelle
   Zielauswahl (Taste) gewuenscht ist, bleibt offen; die Tastenbelegung
   ist voll und die Bedienung skaliert schlecht.
 - **Spielerzahl:** entschieden (Nutzerentscheidung, siehe 5.1) -
   **minimal 2, maximal 6, keine Vorgabe dazwischen**, der Host
-  entscheidet ueber den Start. Offen bleibt nur, ob 6 in der Praxis
-  noch fluessig laeuft; das entscheidet der Lasttest im
-  Roadmap-Schritt 10 (Phase 5).
+  entscheidet ueber den Start. Offen bleibt nur, ob 6 in der Praxis auf
+  schwacher Hardware fluessig laeuft - gemessen wurde bisher gegen
+  Test-Bots auf einem Rechner, nicht in einem echten Raum voller
+  Terminals.
 - **Demo-Aufzeichnung im Mehrspieler:** entschieden
   (Nutzerentscheidung, siehe 5.20) - **jeder Client zeichnet alle
-  Teilnehmer auf**. Offen bleibt eine Folgefrage, die erst das
+  Teilnehmer auf** -, aber noch nicht gebaut: es ist der eine offene
+  Schritt der Phase 5, und bis dahin wird eine Mehrspieler-Runde
+  bewusst gar nicht aufgezeichnet. Offen bleibt eine Folgefrage, die erst das
   Playtesting beantworten kann: die Mitspieler koennen nur so
   aufgenommen werden, wie sie ankamen (Zaehler, und Feld-Schnappschuesse
   nur in Detailstufe 2), weil ihre **Zuege nie uebertragen werden**.

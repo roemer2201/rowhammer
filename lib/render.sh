@@ -70,7 +70,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.25.0  (2026-08-04)
+# Version: 0.26.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -329,8 +329,15 @@ render_colors_init() {
 # resize; a terminal exactly at the minimum simply gets offset 1/1.
 layout_update() {
     local row col
+    # In a multiplayer round with the mini boards of the opponents shown
+    # (detail level 2, see render_peer_level) the block is wider by their
+    # columns, so the whole thing stays centered rather than the own board
+    # sitting in the middle with the opponents hanging off to the right.
+    # The menu screens keep centering on the bare LAYOUT_W: they are the
+    # same screens the singleplayer shows and they have no peers.
+    render_peer_level
     row=$(( (TERM_ROWS - LAYOUT_H) / 2 + 1 ))
-    col=$(( (TERM_COLS - LAYOUT_W) / 2 + 1 ))
+    col=$(( (TERM_COLS - LAYOUT_W - MP_PEER_COLS) / 2 + 1 ))
     if [ "${row}" -lt 1 ]; then
         row=1
     fi
@@ -713,6 +720,14 @@ render_pane_left() {
         fi
         fmt_duration $(( (left + 999) / 1000 ))
         pane_stat 16 "${I18N[hud_left]}" "${FMT_DURATION}"
+    elif [ "${GAME_MODE}" = "versus" ]; then
+        # The multiplayer round takes the same two rows the timed modes
+        # use (they never run at once): the garbage rows waiting to come
+        # in - the one number a player has to plan around, which is why
+        # it is the upper, and the players still standing.
+        pane_stat 15 "${I18N[hud_garbage]}" "${MP_PENDING}"
+        mp_alive_count
+        pane_stat 16 "${I18N[hud_alive]}" "${MP_ALIVE}"
     elif [ "${GAME_MODE}" = "flood" ]; then
         # Hochwasser (2026-08-04): the same two lines once more, this
         # time about the water. The upper one is the interval between two
@@ -760,6 +775,13 @@ render_pane_right() {
         render_mini "${QUEUE[q]:-}" 1
         PANE_RIGHT[2 + q * 3]=" ${RENDER_MINI}   "
     done
+    # In a multiplayer round without room for the mini boards the
+    # opponents live in the free rows below the previews (detail level 1
+    # and 0, see render_pane_peers). That is what lets a duel run in the
+    # bare 48x22 the singleplayer needs.
+    if [ "${MP_ACTIVE:-0}" -eq 1 ] && [ "${MP_VIEW_LEVEL}" -lt 2 ]; then
+        render_pane_peers
+    fi
     return 0
 }
 
@@ -801,6 +823,54 @@ render_status_box() {
         BOX_LINES[6]="${BOX_SGR}+------------------+${RESET_SGR}"
         for (( i = 0; i < ${#demo_body[@]}; i++ )); do
             printf -v line '|%-18.18s|' "${demo_body[i]}"
+            BOX_LINES["$(( 7 + i ))"]="${BOX_SGR}${line}${RESET_SGR}"
+        done
+        BOX_LINES[15]="${BOX_SGR}+------------------+${RESET_SGR}"
+        return 0
+    fi
+    # A multiplayer round has two endings of its own and they come one
+    # after the other: this player is knocked out and watches on, and then
+    # the round is decided for everybody. Both take the box before the
+    # singleplayer endings below, because the round is not over when this
+    # player's board is full - it is over when the hub says so.
+    if [ "${MP_ACTIVE:-0}" -eq 1 ] \
+        && { [ "${MP_ENDED}" -eq 1 ] || [ "${GAME_OVER}" -eq 1 ]; }; then
+        local -a mp_body=("")
+        if [ "${MP_ENDED}" -eq 1 ]; then
+            if [ "${MP_PLACE}" -eq 1 ]; then
+                mp_body+=("${I18N[box_mp_win]}")
+            else
+                mp_body+=("${I18N[box_mp_over]}")
+            fi
+            printf -v line "${I18N[box_mp_place]}" "${MP_PLACE}"
+            mp_body+=("${line}")
+            printf -v line "${I18N[box_rows]}" "${ROW_CREDIT}"
+            mp_body+=("${line}")
+            if [ "${HSV_LAST_RANK}" -gt 0 ]; then
+                printf -v line "${I18N[box_rank]}" \
+                    "${I18N[mode_versus]}" "${HSV_LAST_RANK}"
+                mp_body+=("${line}")
+            else
+                mp_body+=("")
+            fi
+        else
+            # Knocked out while the others play on: a spectator, not a
+            # finished round. No restart key here - a new round means a
+            # new session (see mp_round in lib/mp.sh).
+            mp_body+=("${I18N[box_mp_ko]}")
+            printf -v line "${I18N[box_mp_place]}" "${MP_PLACE}"
+            mp_body+=("${line}")
+            printf -v line "${I18N[box_rows]}" "${ROW_CREDIT}"
+            mp_body+=("${line}")
+            mp_body+=("${I18N[box_mp_watch]}")
+        fi
+        mp_body+=("")
+        printf -v line "${I18N[box_menu]}" "${KEY_QUIT}"
+        mp_body+=("${line}")
+        mp_body+=("")
+        BOX_LINES[6]="${BOX_SGR}+------------------+${RESET_SGR}"
+        for (( i = 0; i < ${#mp_body[@]}; i++ )); do
+            printf -v line '|%-18.18s|' "${mp_body[i]}"
             BOX_LINES["$(( 7 + i ))"]="${BOX_SGR}${line}${RESET_SGR}"
         done
         BOX_LINES[15]="${BOX_SGR}+------------------+${RESET_SGR}"
@@ -945,6 +1015,250 @@ render_status_box() {
     return 0
 }
 
+# --- Multiplayer: the opponents -------------------------------------------
+# Three detail levels (CLAUDE.md 5.6), picked from the terminal size and
+# the number of opponents and recomputed on every resize:
+#   2 "full"    - a mini board per opponent, one character per cell, in
+#                 columns to the right of the play screen.
+#   1 "compact" - two lines per opponent in the right pane: name and rows,
+#                 and a bar for the height of their stack.
+#   0 "score"   - one line per opponent: place, name, rows.
+# Levels 1 and 0 cost no width at all - they use the rows the right pane
+# has free below the three previews - which is what makes them the answer
+# for a 48x22 terminal with five opponents.
+# A mini board is 10 cells wide plus its two borders plus one column of
+# air, i.e. 13 columns per opponent; MP_PEER_COLS is what that adds up to
+# and is 0 in every other case, including the whole singleplayer.
+MP_PEER_COL_W=13
+MP_PEER_COLS=0
+MP_VIEW_LEVEL=0
+declare -a PEER_LINES=()
+# The first pane row the opponents may use: below the three previews of
+# the "Next" pane, with one blank row between.
+PEER_PANE_ROW=11
+
+# render_peer_level
+# Decide the detail level for the current terminal and opponent count and
+# leave it in MP_VIEW_LEVEL, with the extra width in MP_PEER_COLS. Called
+# from layout_update (i.e. at every resize) and once per frame, so the
+# level follows the terminal while the round runs.
+# --mp-view forces a level; "auto" takes the widest one that fits.
+render_peer_level() {
+    local want
+    MP_PEER_COLS=0
+    MP_VIEW_LEVEL=0
+    if [ "${MP_ACTIVE:-0}" -ne 1 ]; then
+        return 0
+    fi
+    mp_peer_count
+    if [ "${MP_PEER_COUNT}" -eq 0 ]; then
+        return 0
+    fi
+    case "${MP_VIEW}" in
+        full)    want=2 ;;
+        compact) want=1 ;;
+        score)   want=0 ;;
+        *)
+            want=0
+            if (( TERM_COLS >= LAYOUT_W + MP_PEER_COUNT * MP_PEER_COL_W )); then
+                want=2
+            elif (( PEER_PANE_ROW + 2 * MP_PEER_COUNT <= BOARD_BOTTOM_ROW + 1 )); then
+                want=1
+            fi
+            ;;
+    esac
+    # A forced level that does not fit is not honored: a mini board that
+    # runs off the screen would tear the frame diff apart, which is the
+    # one thing the fixed line width may never do.
+    if [ "${want}" -eq 2 ] \
+        && (( TERM_COLS < LAYOUT_W + MP_PEER_COUNT * MP_PEER_COL_W )); then
+        want=1
+    fi
+    if [ "${want}" -eq 1 ] \
+        && (( PEER_PANE_ROW + 2 * MP_PEER_COUNT > BOARD_BOTTOM_ROW + 1 )); then
+        want=0
+    fi
+    MP_VIEW_LEVEL="${want}"
+    if [ "${want}" -eq 2 ]; then
+        MP_PEER_COLS=$(( MP_PEER_COUNT * MP_PEER_COL_W ))
+    fi
+    # The hub has to know whether anybody is looking at the boards: it
+    # only asks for snapshots while somebody is (CLAUDE.md 5.6). Reported
+    # from here because this is where the answer is decided, and only
+    # when it changed - mp_send_view keeps that check.
+    mp_send_view "${want}"
+    return 0
+}
+
+# render_peer_cell CHAR
+# One cell of an opponent's board as a single character, into
+# RENDER_PEER_CELL. The snapshot alphabet is the protocol's (lib/proto.sh):
+# "." empty, a piece type letter, "g"/"s" for a gold/silver square cell,
+# "x" for garbage. With color a square keeps its own glyph as well, so the
+# two square kinds stay apart at a glance on a board this small.
+RENDER_PEER_CELL=" "
+render_peer_cell() {
+    local c="${1}"
+    case "${c}" in
+        g)
+            if [ "${USE_COLOR}" -eq 1 ]; then
+                RENDER_PEER_CELL="${SQ_GOLD_SGR}#${RESET_SGR}"
+            else
+                RENDER_PEER_CELL="#"
+            fi
+            ;;
+        s)
+            if [ "${USE_COLOR}" -eq 1 ]; then
+                RENDER_PEER_CELL="${SQ_SILVER_SGR}%${RESET_SGR}"
+            else
+                RENDER_PEER_CELL="%"
+            fi
+            ;;
+        x)
+            if [ "${USE_COLOR}" -eq 1 ]; then
+                RENDER_PEER_CELL="${GARBAGE_SGR}:${RESET_SGR}"
+            else
+                RENDER_PEER_CELL=":"
+            fi
+            ;;
+        I|O|T|S|Z|J|L)
+            if [ "${USE_COLOR}" -eq 1 ]; then
+                RENDER_PEER_CELL="${PIECE_SGR[${c}]} ${RESET_SGR}"
+            else
+                RENDER_PEER_CELL="${c}"
+            fi
+            ;;
+        *)
+            RENDER_PEER_CELL=" "
+            ;;
+    esac
+    return 0
+}
+
+# render_peers
+# Build the mini board columns of detail level 2 into PEER_LINES, one
+# entry per row of the block (0..LAYOUT_H-1), each exactly MP_PEER_COLS
+# visible columns wide. Row 0 carries the name, rows 1..20 the board,
+# row 21 the rows scored and the garbage on its way in.
+# Every value is clamped here a second time although it came through the
+# protocol parser: the hub is not trusted either - it could be a program
+# somebody else wrote (CLAUDE.md 5.5).
+render_peers() {
+    local i r slot board line cell name row_line head foot
+    for (( r = 0; r < LAYOUT_H; r++ )); do
+        PEER_LINES[r]=""
+    done
+    for (( i = 0; i < MP_PEER_COUNT; i++ )); do
+        slot="${MP_PEER_SLOTS[i]}"
+        board="${MP_PEER_BOARD[slot]}"
+        name="${MP_PEER_NAME[slot]:0:12}"
+        printf -v head '%-12.12s' "${name}"
+        PEER_LINES[0]+=" ${TXT_ACCENT_SGR}${head}${TXT_RESET_SGR}"
+        for (( r = 0; r < 20; r++ )); do
+            line=""
+            for (( cell = 0; cell < BOARD_W; cell++ )); do
+                if [ "${#board}" -eq 200 ]; then
+                    render_peer_cell "${board:r * BOARD_W + cell:1}"
+                else
+                    RENDER_PEER_CELL=" "
+                fi
+                line+="${RENDER_PEER_CELL}"
+            done
+            PEER_LINES[r + 1]+=" |${line}|"
+        done
+        # A player who is out is named by their place instead of by the
+        # garbage on its way to them: that is what became of them, and it
+        # is what the final screen ranks them by.
+        case "${MP_PEER_STATE[slot]}" in
+            ko|gone)
+                printf -v foot '%s %d' "${I18N[hud_peer_ko]}" \
+                    "${MP_PEER_PLACE[slot]:-0}"
+                ;;
+            *)
+                if [ "${MP_PEER_PENDING[slot]}" -gt 0 ]; then
+                    printf -v foot 'R%-4s %s%d' "${MP_PEER_ROWS[slot]}" \
+                        "${I18N[hud_peer_warn]}" "${MP_PEER_PENDING[slot]}"
+                else
+                    printf -v foot 'R%-4s' "${MP_PEER_ROWS[slot]}"
+                fi
+                ;;
+        esac
+        # Hard clamp: the frame diff relies on every line being exactly
+        # as wide as it says it is.
+        printf -v foot '%-12.12s' "${foot}"
+        PEER_LINES[BOARD_BOTTOM_ROW]+=" ${foot}"
+    done
+    # Rows the loop above did not touch (there are none in level 2, since
+    # every row of the block carries something) still have to exist as
+    # blanks of the right width.
+    for (( r = 0; r < LAYOUT_H; r++ )); do
+        if [ -z "${PEER_LINES[r]}" ]; then
+            printf -v row_line '%*s' "${MP_PEER_COLS}" ""
+            PEER_LINES[r]="${row_line}"
+        fi
+    done
+    return 0
+}
+
+# render_pane_peers
+# Detail levels 1 and 0: the opponents in the free rows of the right pane,
+# which costs no width at all. Level 1 gives each of them two lines - name
+# with rows, and a bar for the height of their stack with the garbage on
+# its way in - level 0 one line with place, name and rows.
+render_pane_peers() {
+    local i slot row line name bar filled b
+    row="${PEER_PANE_ROW}"
+    for (( i = 0; i < MP_PEER_COUNT; i++ )); do
+        slot="${MP_PEER_SLOTS[i]}"
+        name="${MP_PEER_NAME[slot]:0:7}"
+        if [ "${MP_VIEW_LEVEL}" -eq 0 ]; then
+            printf -v line '%d.%-7s%3s' "${MP_PEER_PLACE[slot]:-0}" \
+                "${name}" "${MP_PEER_ROWS[slot]}"
+            printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
+            PANE_RIGHT[row]="${line}"
+            row=$(( row + 1 ))
+            continue
+        fi
+        printf -v line '%-8s%4s' "${name}" "${MP_PEER_ROWS[slot]}"
+        printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
+        PANE_RIGHT[row]="${line}"
+        case "${MP_PEER_STATE[slot]}" in
+            ko|gone)
+                printf -v line ' %-11s' "${I18N[hud_peer_ko]}"
+                ;;
+            *)
+                # Ten characters of bar for twenty rows of board, so one
+                # character is two rows of stack - rounded up, so a stack
+                # that exists at all is visible.
+                filled=$(( ( ${MP_PEER_HEIGHT[slot]} + 1 ) / 2 ))
+                if [ "${filled}" -gt 10 ]; then
+                    filled=10
+                fi
+                bar=""
+                for (( b = 0; b < 10; b++ )); do
+                    if [ "${b}" -lt "${filled}" ]; then
+                        bar+="#"
+                    else
+                        bar+="."
+                    fi
+                done
+                if [ "${MP_PEER_PENDING[slot]}" -gt 0 ]; then
+                    # The warning that matters most on an opponent line:
+                    # rows are on their way to them.
+                    printf -v line ' %s%s' "${bar}" \
+                        "${I18N[hud_peer_warn]}"
+                else
+                    printf -v line ' %s ' "${bar}"
+                fi
+                ;;
+        esac
+        printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
+        PANE_RIGHT[row + 1]="${line}"
+        row=$(( row + 2 ))
+    done
+    return 0
+}
+
 # render_flush
 # Push FRAME_LINES to the terminal: on a full repaint clear the screen and
 # write every line, otherwise only the lines that differ from the previous
@@ -1024,6 +1338,15 @@ draw_frame() {
         BOARD_CACHE_VALID=1
     fi
 
+    # The detail level of the opponents follows the terminal, so it is
+    # decided per frame and not only on a resize; it also decides how wide
+    # every line of this frame is going to be, which is why it comes
+    # before the panes are built.
+    render_peer_level
+    if [ "${MP_ACTIVE:-0}" -eq 1 ] && [ "${MP_VIEW_LEVEL}" -eq 2 ]; then
+        render_peers
+    fi
+
     render_pane_left
     render_pane_right
     render_status_box
@@ -1051,6 +1374,15 @@ draw_frame() {
         FRAME_LINES[i]="${PANE_LEFT[i]} ${line} ${PANE_RIGHT[i]}"
     done
     FRAME_LINES[BOARD_BOTTOM_ROW]="${PANE_LEFT[BOARD_BOTTOM_ROW]} ${BOARD_BORDER} ${PANE_RIGHT[BOARD_BOTTOM_ROW]}"
+
+    # The opponents' mini boards are appended to every line of the block,
+    # each of them exactly MP_PEER_COLS visible columns wide - which is
+    # what keeps the line diff in render_flush safe.
+    if [ "${MP_PEER_COLS}" -gt 0 ]; then
+        for (( i = 0; i < LAYOUT_H; i++ )); do
+            FRAME_LINES[i]+="${PEER_LINES[i]}"
+        done
+    fi
 
     render_flush
     return 0
