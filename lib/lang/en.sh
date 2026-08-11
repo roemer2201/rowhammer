@@ -45,7 +45,7 @@ I18N=(
     [main_help]="Manual"
     [main_quit]="Quit"
 
-    # --- Multiplayer (2.0.0) ----------------------------------------------
+    # --- Multiplayer (1.1.0) ----------------------------------------------
     # Menu, session search, lobby and their messages. Every line stays
     # within the 46 characters a 48-column terminal leaves beside the
     # menu indent.
@@ -68,7 +68,7 @@ directory may not be writable."
 The port may be taken."
     [mp_searching]="Looking for sessions (UDP port %s)..."
     # Order: name, address, players, maximum, state.
-    [mp_session_entry]="%s @ %s  %s/%s  %s"
+    [mp_session_entry]="%-12.12s %-15.15s %s/%s %s"
     [mp_state_lobby]="lobby"
     [mp_state_play]="running"
     [mp_none]="No session found"
@@ -87,6 +87,31 @@ optionally followed by :port."
 Is the session still running, and are both
 machines on the same network?"
     [mp_reason]="Reason:"
+    # --- The host's session settings (1.1.0) ------------------------------
+    # The mode decides the win condition, garbage is a switch beside it.
+    # Both are shown in every player's lobby and not only in the host's -
+    # they decide what the round is played for.
+    [mp_settings]="Settings"
+    [mp_settings_title]="Multiplayer - settings"
+    [mp_settings_body]="Only you as the host change them;
+everybody sees them in their lobby."
+    [mp_settings_nav]="Enter/arrows: change   ESC: back"
+    [mp_setup_mode]="Mode: %s (%s)"
+    [mp_setup_garbage]="Garbage rows: %s"
+    [mp_setup_limit_sprint]="Time limit: %s minutes"
+    [mp_setup_limit_ultra]="Target: %s rows"
+    [mp_on]="on"
+    [mp_off]="off"
+    # The names of the three multiplayer modes and, separately, who wins
+    # in them. The name says how a round runs, the win condition says what
+    # it is played for - and in a lobby the second is the more important
+    # question.
+    [mpmode_survival]="Survival"
+    [mpmode_sprint]="Sprint"
+    [mpmode_ultra]="Ultra"
+    [mpwin_survival]="last one standing"
+    [mpwin_sprint]="most rows"
+    [mpwin_ultra]="first to the target"
     [mp_lobby_title]="Multiplayer - lobby"
     [mp_lobby_session]="Session: %s"
     [mp_lobby_addr]="Address to pass on: %s:%s"
@@ -134,7 +159,7 @@ be resumed any more."
     # here - the mode identifier on the command line stays "flood".
     [mode_flood]="Flood"
     [mode_flood_short]="Flood"
-    # The multiplayer mode (2.0.0). It is not an entry of the
+    # The multiplayer mode (1.1.0). It is not an entry of the
     # singleplayer menu, but it is one of the two pickers that look back
     # (highscores, statistics) and it names itself wherever a round names
     # its mode.
@@ -551,24 +576,24 @@ During a replay:"
     [highscore_renamed]="Highscore list renamed: %s -> %s"
 
 
-    # Page 10: the multiplayer (2.0.0). The player count and the port
+    # Page 10: the multiplayer (1.1.0). The player count and the port
     # come from the live constants, so a retuned value cannot leave the
     # page lying.
     [help_p9_head]="Multiplayer (on the local network)
 
 Everybody plays their own board, all of them
-with the same piece sequence. Cleared rows
-send garbage to the opponent; a clear of your
-own empties your own queue first."
-    [help_p9_players]="From %s to 6 people play; one opens the
+with the same piece sequence. Whoever builds
+out of the field drops out and watches on."
+    [help_p9_players]="From 2 to %s people play; one opens the
 session, the others find it on the network
 (UDP port %s) or type in its address."
-    [help_p9_tail]="Whoever builds out of the field drops out and
-watches; the last one standing wins. There is
-no pause - the others do not wait. Only your
-own achievement is recorded: rows, wonder
-progress and statistics as ever.
-Needs socat."
+    [help_p9_tail]="In the lobby the host settles how the round
+is won - last one standing, most rows in the
+time (Sprint) or first to the target (Ultra) -
+and whether cleared rows send garbage to the
+opponents (off to begin with). Everybody sees
+it. There is no pause. Only your own
+achievement is recorded. Needs socat."
 
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" affects these files in %s:"
@@ -682,6 +707,21 @@ Options:
                 them the full amount) or "even" (split evenly). Only
                 meaningful for the host - the hub decides.
                 Env: ROWHAMMER_MP_TARGET    Default: random
+  --mp-mode MODE
+                What an opened session starts out with: "survival" (the
+                last player in the field wins), "sprint" (most rows when
+                the time limit is up) or "ultra" (first to the row
+                target). The mode decides the win condition; the host can
+                change it in the lobby at any time, where every player
+                sees it.
+                Env: ROWHAMMER_MP_MODE      Default: survival
+  --mp-garbage on|off
+                Whether cleared rows send garbage rows to the opponents -
+                again only what the lobby starts out with. Off, because a
+                round in which somebody else fills your board is the more
+                demanding game: it should be switched on rather than
+                happen unasked.
+                Env: ROWHAMMER_MP_GARBAGE   Default: off
   --mp-bot      Test client without a terminal: joins a session and
                 plays random moves, so a round with several players can
                 be tested without several terminals.

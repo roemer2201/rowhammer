@@ -50,7 +50,7 @@ I18N=(
     [main_help]="Anleitung"
     [main_quit]="Beenden"
 
-    # --- Mehrspieler (2.0.0) ----------------------------------------------
+    # --- Mehrspieler (1.1.0) ----------------------------------------------
     # Menue, Sitzungssuche, Lobby und die Meldungen dazu. Die Zeilen
     # bleiben in den 46 Zeichen, die ein 48-Spalten-Terminal neben dem
     # Menue-Einzug laesst.
@@ -73,7 +73,7 @@ Sitzungsverzeichnis nicht beschreibbar."
 Moeglicherweise ist der Port belegt."
     [mp_searching]="Suche Sitzungen im Netz (UDP-Port %s)..."
     # Reihenfolge: Name, Adresse, Spieler, Maximum, Zustand.
-    [mp_session_entry]="%s @ %s  %s/%s  %s"
+    [mp_session_entry]="%-12.12s %-15.15s %s/%s %s"
     [mp_state_lobby]="Lobby"
     [mp_state_play]="laeuft"
     [mp_none]="Keine Sitzung gefunden"
@@ -92,6 +92,31 @@ Rechnername, wahlweise mit :Port dahinter."
 Laeuft die Sitzung noch, und sind beide
 Rechner im selben Netz?"
     [mp_reason]="Grund:"
+    # --- Sitzungseinstellungen des Gastgebers (1.1.0) ---------------------
+    # Der Modus entscheidet die Siegbedingung, die Stoerreihen sind ein
+    # Schalter daneben. Beides steht in der Lobby jedes Spielers, nicht
+    # nur beim Gastgeber - es entscheidet, wofuer gespielt wird.
+    [mp_settings]="Einstellungen"
+    [mp_settings_title]="Mehrspieler - Einstellungen"
+    [mp_settings_body]="Nur du als Gastgeber aenderst sie;
+alle sehen sie in ihrer Lobby."
+    [mp_settings_nav]="Enter/Pfeile: aendern   ESC: zurueck"
+    [mp_setup_mode]="Modus: %s (%s)"
+    [mp_setup_garbage]="Stoerreihen: %s"
+    [mp_setup_limit_sprint]="Zeitlimit: %s Minuten"
+    [mp_setup_limit_ultra]="Ziel: %s Rows"
+    [mp_on]="an"
+    [mp_off]="aus"
+    # Die Namen der drei Mehrspieler-Modi und - getrennt davon - wer in
+    # ihnen gewinnt. Der Name sagt, wie eine Runde laeuft, die
+    # Siegbedingung, wofuer man spielt; in der Lobby ist die zweite Frage
+    # die wichtigere.
+    [mpmode_survival]="Ueberleben"
+    [mpmode_sprint]="Sprint"
+    [mpmode_ultra]="Ultra"
+    [mpwin_survival]="wer uebrig bleibt"
+    [mpwin_sprint]="meiste Rows"
+    [mpwin_ultra]="wer zuerst am Ziel ist"
     [mp_lobby_title]="Mehrspieler - Lobby"
     [mp_lobby_session]="Sitzung: %s"
     [mp_lobby_addr]="Adresse zum Weitersagen: %s:%s"
@@ -147,7 +172,7 @@ nicht mehr fortsetzbar."
     [mode_timeattack_short]="TimeAtk"
     [mode_flood]="Hochwasser"
     [mode_flood_short]="Flut"
-    # Der Mehrspieler-Modus (2.0.0). Er steht nicht im
+    # Der Mehrspieler-Modus (1.1.0). Er steht nicht im
     # Einzelspieler-Menue, aber in den beiden Ruecksichten (Highscores,
     # Statistik) und ueberall dort, wo eine Runde ihren Modus nennt.
     [mode_versus]="Mehrspieler"
@@ -592,24 +617,25 @@ Waehrend der Wiedergabe:"
     [highscore_renamed]="Bestenliste umbenannt: %s -> %s"
 
 
-    # Page 10: der Mehrspieler (2.0.0). Spielerzahl und Port kommen aus
+    # Page 10: der Mehrspieler (1.1.0). Spielerzahl und Port kommen aus
     # den laufenden Konstanten, damit ein nachjustierter Wert die Seite
     # nicht zur Luege macht.
     [help_p9_head]="Mehrspieler (im lokalen Netz)
 
 Jeder spielt sein eigenes Feld, alle mit
-derselben Steinfolge. Abgebaute Reihen
-schicken dem Gegner Stoerreihen; ein eigener
-Abbau raeumt zuerst die eigene Warteschlange."
-    [help_p9_players]="Es spielen %s bis 6 Leute; einer eroeffnet die
-Sitzung, die anderen finden sie im Netz
-(UDP-Port %s) oder geben seine Adresse ein."
-    [help_p9_tail]="Wer oben rausbaut, scheidet aus und schaut
-zu; der letzte im Feld gewinnt. Es gibt
-keine Pause - die anderen warten nicht.
-Gewertet wird nur die eigene Leistung:
-Rows, Weltwunder und Statistik wie sonst.
-Benoetigt socat."
+derselben Steinfolge. Wer oben rausbaut,
+scheidet aus und schaut den anderen zu."
+    [help_p9_players]="Es spielen 2 bis %s Leute; einer eroeffnet
+die Sitzung, die anderen finden sie im Netz
+(UDP-Port %s) oder geben die Adresse ein."
+    [help_p9_tail]="Der Gastgeber legt in der Lobby fest, wie
+gewonnen wird - wer uebrig bleibt, die
+meisten Rows in der Zeit (Sprint) oder wer
+zuerst am Ziel ist (Ultra) - und ob
+abgebaute Reihen dem Gegner Stoerreihen
+schicken (anfangs aus). Alle sehen das.
+Eine Pause gibt es nicht. Gewertet wird nur
+die eigene Leistung. Benoetigt socat."
 
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" betrifft diese Dateien in %s:"
@@ -729,6 +755,21 @@ Optionen:
                 oder "even" (gleichmaessig aufgeteilt). Gilt nur fuer
                 den Gastgeber, der Hub entscheidet.
                 Env: ROWHAMMER_MP_TARGET    Standard: random
+  --mp-mode MODUS
+                Womit eine eroeffnete Sitzung startet: "survival" (wer
+                als Letzter im Feld ist, gewinnt), "sprint" (wer nach
+                dem Zeitlimit die meisten Rows hat) oder "ultra" (wer
+                zuerst das Rows-Ziel erreicht). Der Modus bestimmt die
+                Siegbedingung; der Gastgeber kann ihn jederzeit in der
+                Lobby aendern, wo ihn alle Spieler sehen.
+                Env: ROWHAMMER_MP_MODE      Standard: survival
+  --mp-garbage on|off
+                Ob abgebaute Reihen den Gegnern Stoerreihen schicken -
+                ebenfalls nur die Vorbelegung der Lobby. Aus, weil eine
+                Runde, in der ein anderer das eigene Feld fuellt, das
+                anspruchsvollere Spiel ist: sie soll eingeschaltet
+                werden und nicht ungefragt passieren.
+                Env: ROWHAMMER_MP_GARBAGE   Standard: off
   --mp-bot      Testclient ohne Terminal: verbindet sich mit einer
                 Sitzung und spielt zufaellige Zuege, damit eine Runde
                 mit mehreren Spielern ohne mehrere Terminals getestet

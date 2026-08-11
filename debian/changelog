@@ -1,4 +1,4 @@
-rowhammer (2.0.0) unstable; urgency=medium
+rowhammer (1.1.0) unstable; urgency=medium
 
   * Multiplayer on the local network (phase 5 of the roadmap, user
     request). Two to six people play their own board with the same piece
@@ -26,6 +26,25 @@ rowhammer (2.0.0) unstable; urgency=medium
     that is rebuilt from checked numbers rather than carried over as a
     string. tools/net-fuzz.sh fuzzes all three parsers, including the
     beacon collector a stranger reaches without a connection.
+  * The host settles the rules of the session in the lobby, and every
+    player sees them there (user request): the mode, which decides how
+    the round is won - "survival" (last one standing, the default),
+    "sprint" (most rows when the time limit is up) or "ultra" (first to
+    the row target) - and a switch for the garbage rows, which is off to
+    begin with. A round in which somebody else fills your board is the
+    more demanding game and should be something the host switches on
+    rather than something a first-time player is handed unasked. With
+    garbage off a clear still counts for the rows every mode is scored
+    by, it just does not travel, which is why it is a switch beside the
+    mode and not a fourth mode.
+  * In sprint and ultra the round no longer ends when only one player is
+    left: the rows decide there, and somebody who already topped out may
+    still be ahead. The places are recomputed by rows at the end of
+    those rounds, because the order of dropping out is not the order of
+    the result.
+  * The two settings can be preset with --mp-mode and --mp-garbage, for
+    a host who always plays the same way; what applies in a session is
+    decided in the lobby.
   * The opponents appear as mini boards next to the board, or - when the
     terminal is too narrow - as two lines resp. one line each in the
     right pane, so a duel still runs in the 48x22 minimum (--mp-view).
@@ -38,6 +57,13 @@ rowhammer (2.0.0) unstable; urgency=medium
     can be tested without several terminals.
   * The manual has a tenth page about the multiplayer, and --help lists
     the new options; both in German and English.
+  * Working rule changed (user decision): the multiplayer is not
+    finished, so it keeps growing in the 1.x series. Version 2.0.0 is
+    reserved for the state at which phase 5 is really complete - which
+    still needs the demo recording of a multiplayer round. The first
+    version of the multiplayer carried the number 2.0.0 for a while
+    before any release; a version number is a statement about the state
+    of a thing, not about the amount of work in it.
   * Fixed on the way: the line filter of the transport used a character
     range, which follows the locale's collation order - in a UTF-8 locale
     it rejected ordinary characters. It pins the locale for the check

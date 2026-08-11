@@ -70,7 +70,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.26.0  (2026-08-11)
+# Version: 0.27.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -721,13 +721,43 @@ render_pane_left() {
         fmt_duration $(( (left + 999) / 1000 ))
         pane_stat 16 "${I18N[hud_left]}" "${FMT_DURATION}"
     elif [ "${GAME_MODE}" = "versus" ]; then
-        # The multiplayer round takes the same two rows the timed modes
-        # use (they never run at once): the garbage rows waiting to come
-        # in - the one number a player has to plan around, which is why
-        # it is the upper, and the players still standing.
-        pane_stat 15 "${I18N[hud_garbage]}" "${MP_PENDING}"
+        # A multiplayer round shows what its mode is played for, in the
+        # same two rows every timed mode uses (they never run at once):
+        # the Sprint variant its time limit and the time left, the Ultra
+        # variant its row target and the rows still missing. The survival
+        # variant has no goal and leaves them empty, exactly as Marathon
+        # does.
+        if [ "${MP_MODE}" = "sprint" ]; then
+            fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+            pane_stat 15 "${I18N[hud_goal]}" "${FMT_DURATION}"
+            left=$(( SPRINT_TIME_MS - PLAY_MS ))
+            if [ "${left}" -lt 0 ]; then
+                # The hub's clock is the one that ends the round, and it
+                # may be a tick behind this display; a negative rest would
+                # only look broken.
+                left=0
+            fi
+            fmt_duration $(( (left + 999) / 1000 ))
+            pane_stat 16 "${I18N[hud_left]}" "${FMT_DURATION}"
+        elif [ "${MP_MODE}" = "ultra" ]; then
+            pane_stat 15 "${I18N[hud_goal]}" "${ULTRA_TARGET_ROWS}"
+            left=$(( ULTRA_TARGET_ROWS - ROW_CREDIT ))
+            if [ "${left}" -lt 0 ]; then
+                left=0
+            fi
+            pane_stat 16 "${I18N[hud_left]}" "${left}"
+        fi
+        # The garbage rows on their way in - the one number a player has
+        # to plan around - and the players still standing. The garbage row
+        # only exists while garbage is switched on: a counter that is
+        # permanently zero teaches a player to ignore the place it stands
+        # in, which is the place they have to look at in a round where it
+        # is on.
+        if [ "${MP_GARBAGE}" -eq 1 ]; then
+            pane_stat 17 "${I18N[hud_garbage]}" "${MP_PENDING}"
+        fi
         mp_alive_count
-        pane_stat 16 "${I18N[hud_alive]}" "${MP_ALIVE}"
+        pane_stat 18 "${I18N[hud_alive]}" "${MP_ALIVE}"
     elif [ "${GAME_MODE}" = "flood" ]; then
         # Hochwasser (2026-08-04): the same two lines once more, this
         # time about the water. The upper one is the interval between two

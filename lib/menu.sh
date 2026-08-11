@@ -493,7 +493,7 @@ menu_help_body() {
             HELP_BODY+=("${line}")
             ;;
         9)
-            # The multiplayer (2.0.0). Like the mode pages it reads the
+            # The multiplayer (1.1.0). Like the mode pages it reads the
             # live constants rather than spelling the numbers out: the
             # player range and the port are settings, and a retuned one
             # must not leave the manual lying.

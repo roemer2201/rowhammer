@@ -131,12 +131,16 @@
 #   terminal of at least 48x22; a resize during play is caught via
 #   SIGWINCH and redraws cleanly, and shrinking below the minimum pauses
 #   the round behind a "resize me" overlay until the terminal grows back.
-#   Since 2.0.0 the "Mehrspieler" menu entry is a working multiplayer on
+#   Since 1.1.0 the "Mehrspieler" menu entry is a working multiplayer on
 #   the local network: one player opens a session, the others find it via
 #   a UDP broadcast beacon or connect to its address by hand, and
 #   everybody then plays their own board with the same piece sequence.
-#   Cleared rows send garbage rows to the opponents, whoever builds out of
-#   the field drops out and watches, and the last one standing wins. The
+#   Whoever builds out of the field drops out and watches. How the round
+#   is won and whether cleared rows send garbage rows to the opponents is
+#   the host's to decide in the lobby, where every player sees it: the
+#   mode is survival (last one standing, the default), sprint (most rows
+#   in the time limit) or ultra (first to the row target), and the
+#   garbage switch starts out off. The
 #   session is carried by socat (a Recommends, not a Depends - without it
 #   the singleplayer is untouched and the menu entry says which package is
 #   missing) over TCP in the local network or over a Unix domain socket on
@@ -201,12 +205,14 @@
 #                [--render-mode partial|full] [--demo-record on|off]
 #                [--mp-transport lan|unix] [--mp-port N] [--mp-dir DIR]
 #                [--mp-max N] [--mp-session NAME] [--mp-view MODE]
-#                [--mp-target random|all|even] [--mp-host]
+#                [--mp-target random|all|even]
+#                [--mp-mode survival|sprint|ultra] [--mp-garbage on|off]
+#                [--mp-host]
 #                [--mp-join HOST[:PORT]] [--mp-bot]
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 2.0.0  (2026-08-11)
+# Version: 1.1.0  (2026-08-11)
 
 set -euo pipefail
 
@@ -221,7 +227,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="2.0.0"
+ROWHAMMER_VERSION="1.1.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -376,6 +382,15 @@ MP_SESSION="${ROWHAMMER_MP_SESSION:-}"
 MP_VIEW="${ROWHAMMER_MP_VIEW:-auto}"
 # Who receives the garbage of an attack with three or more players.
 MP_TARGET="${ROWHAMMER_MP_TARGET:-random}"
+# The session settings a host opens its session with: the mode of the
+# round and whether cleared rows send garbage. Both are what the lobby's
+# settings menu changes (see mp_settings_menu in lib/mp.sh) - these two
+# only decide what it starts out showing, which is worth an option for
+# somebody who always plays the same way and for a scripted test.
+# "survival" and garbage off are the defaults for the reason given in
+# lib/hub.sh: they are the round that needs no explaining.
+MP_MODE_OPT="${ROWHAMMER_MP_MODE:-survival}"
+MP_GARBAGE_OPT="${ROWHAMMER_MP_GARBAGE:-off}"
 # The internal process modes. They are not menu entries and not
 # documented in --help beyond a line: the hub is started by the host's own
 # client, the bridge by socat for every connection and the discover
@@ -556,7 +571,7 @@ while [ "$#" -gt 0 ]; do
             FORCE_OPT=1
             shift
             ;;
-        --mp-transport|--mp-port|--mp-dir|--mp-max|--mp-session|--mp-view|--mp-target)
+        --mp-transport|--mp-port|--mp-dir|--mp-max|--mp-session|--mp-view|--mp-target|--mp-mode|--mp-garbage)
             if [ "$#" -lt 2 ]; then
                 printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
                 exit 2
@@ -569,6 +584,8 @@ while [ "$#" -gt 0 ]; do
                 --mp-session)   MP_SESSION="${2}" ;;
                 --mp-view)      MP_VIEW="${2}" ;;
                 --mp-target)    MP_TARGET="${2}" ;;
+                --mp-mode)      MP_MODE_OPT="${2}" ;;
+                --mp-garbage)   MP_GARBAGE_OPT="${2}" ;;
             esac
             shift 2
             ;;
@@ -579,6 +596,8 @@ while [ "$#" -gt 0 ]; do
         --mp-session=*)   MP_SESSION="${1#*=}"; shift ;;
         --mp-view=*)      MP_VIEW="${1#*=}"; shift ;;
         --mp-target=*)    MP_TARGET="${1#*=}"; shift ;;
+        --mp-mode=*)      MP_MODE_OPT="${1#*=}"; shift ;;
+        --mp-garbage=*)   MP_GARBAGE_OPT="${1#*=}"; shift ;;
         --mp-hub|--mp-bridge|--mp-discover)
             # Internal process modes. They never touch the terminal and
             # never enter the menu; each of them runs its own loop and
@@ -752,6 +771,22 @@ case "${MP_TARGET}" in
     *)
         printf '%s: --mp-target expects random, all or even, got: %s\n' \
             "${SCRIPT_NAME}" "${MP_TARGET}" >&2
+        exit 2
+        ;;
+esac
+case "${MP_MODE_OPT}" in
+    survival|sprint|ultra) : ;;
+    *)
+        printf '%s: --mp-mode expects survival, sprint or ultra, got: %s\n' \
+            "${SCRIPT_NAME}" "${MP_MODE_OPT}" >&2
+        exit 2
+        ;;
+esac
+case "${MP_GARBAGE_OPT}" in
+    on|off) : ;;
+    *)
+        printf '%s: --mp-garbage expects on or off, got: %s\n' \
+            "${SCRIPT_NAME}" "${MP_GARBAGE_OPT}" >&2
         exit 2
         ;;
 esac
@@ -1006,7 +1041,7 @@ fi
 
 # The game itself needs a terminal (the reset above does not, see the
 # prerequisites section). Neither do the headless multiplayer processes
-# (2.0.0): the hub, the socket bridge, the beacon collector and the test
+# (1.1.0): the hub, the socket bridge, the beacon collector and the test
 # bot never draw anything and are started by socat, by the host's client
 # or from a script - each of them runs its own loop further down and ends
 # the program instead of entering the menu.

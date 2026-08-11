@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        2.0.0
+Version:        1.1.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -36,7 +36,7 @@ BuildRequires:  make
 Requires:       bash >= 4.0
 # tput is optional: the game falls back to fixed ANSI sequences without it.
 Recommends:     ncurses
-# socat carries the multiplayer sessions (since 2.0.0). A Recommends and
+# socat carries the multiplayer sessions (since 1.1.0). A Recommends and
 # not a Requires: the game is fully playable on its own without it, and a
 # singleplayer installation should not be made to pull in a package it
 # never uses.
@@ -84,12 +84,15 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
-* Tue Aug 11 2026 roemer2201 <r.oliver@web.de> - 2.0.0-1
+* Tue Aug 11 2026 roemer2201 <r.oliver@web.de> - 1.1.0-1
 - Multiplayer on the local network (phase 5): open or join a session,
   play against two to six people with the same piece sequence, send
   garbage rows by clearing rows and win by being the last one standing.
 - Carried by socat (Recommends) over TCP or a Unix domain socket; the
   singleplayer runs unchanged without it.
+- The host settles the rules in the lobby, visible to every player: the
+  mode that decides the win condition (survival, sprint or ultra) and a
+  switch for the garbage rows, off by default.
 - Results in a list of their own (highscore-versus) and per-mode
   statistics; the wonder progress counts the player's own rows.
 

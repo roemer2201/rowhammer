@@ -104,7 +104,7 @@
 #   its name like the other four: "highscore" became
 #   "highscore-marathon", and highscore_migrate_legacy renames an
 #   existing file once at startup so no top ten is lost over it.
-#   Since 2.0.0 there is a sixth list, highscore-versus, for the
+#   Since 1.1.0 there is a sixth list, highscore-versus, for the
 #   multiplayer rounds: the Marathon layout and the Marathon ranking
 #   (rows, descending), every round recorded whether it was won or lost,
 #   and deliberately without the place achieved - the list ranks what one
@@ -1591,7 +1591,7 @@ highscore_flood_screen() {
 }
 
 # --- Versus mode list -----------------------------------------------------
-# The multiplayer (added 2.0.0) is the sixth mode with results of its own.
+# The multiplayer (added 1.1.0) is the sixth mode with results of its own.
 # A list rather than an entry in the Marathon one, which is the decision
 # this project has now taken six times for the same reason: a round under
 # different rules belongs in a different list. Garbage cuts a round short

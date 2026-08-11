@@ -28,7 +28,7 @@
 #   then a length and a character class and has no gaps.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.0.0  (2026-08-11)
+# Version: 1.1.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -39,7 +39,12 @@ fi
 # Protocol version. A hub rejects a client that announces a different one
 # (ERR proto). Per the project's no-backward-compatibility rule this
 # number is raised rather than the protocol extended compatibly.
-PROTO_VERSION=1
+# Version 2 (1.1.0) added SETUP, the session settings the host decides on
+# and everybody sees. A version 1 client would in fact still play, but it
+# would never learn the mode of the round it is in and would take a
+# missing garbage flag for the old "garbage always on" - which is exactly
+# the kind of guessing this number exists to prevent.
+PROTO_VERSION=2
 
 # --- Field patterns -------------------------------------------------------
 # Every field of every message is checked against exactly one of these.
@@ -55,6 +60,13 @@ PROTO_STATE_RE='^(lobby|play|ko|gone)$'
 PROTO_CAPS_RE='^[a-z,]{0,32}$'
 PROTO_TOKEN_RE='^[0-9]{1,9}$'
 PROTO_CODE_RE='^[a-z]{1,12}$'
+# The rules a multiplayer round runs under, decided by the host in the
+# lobby (see hub_msg_setup). One name per win condition - which is what
+# makes them different modes rather than settings:
+#   survival - last one standing wins (the classic duel)
+#   sprint   - most rows when the time limit is up
+#   ultra    - first to the row target wins
+PROTO_MPMODE_RE='^(survival|sprint|ultra)$'
 PROTO_TEXT_RE='^[A-Za-z0-9 ._-]{0,64}$'
 # One board cell per character, 200 of them (10 columns x 20 visible
 # rows): "." empty, a piece type letter, "g"/"s" for a gold/silver square
@@ -68,7 +80,7 @@ PROTO_BOARD_RE='^[.IOTSZJLgsx]{200}$'
 # to add one means the message is ignored rather than trusted.
 # Classes: n = number, f = 0/1 flag, s = slot, N = name, S = peer state,
 # c = caps list, b = board snapshot, h = hole column, k = token,
-# e = error code, t = free text.
+# e = error code, t = free text, m = multiplayer mode.
 declare -A PROTO_MSG=(
     # Client to hub.
     [HELLO]="n N c"
@@ -88,6 +100,12 @@ declare -A PROTO_MSG=(
     # a session of small terminals then produces no snapshot traffic at
     # all (CLAUDE.md 5.6).
     [VIEW]="f"
+    # The session settings: the mode of the round and whether garbage is
+    # on. Sent by the host to change them (the hub refuses it from anybody
+    # else and while a round runs) and by the hub to everybody whenever
+    # they change - one verb in both directions, like ROSTER, because it
+    # carries the same thing either way.
+    [SETUP]="m f"
     [PONG]="k"
     [BYE]=""
     # Hub to client.
@@ -133,6 +151,7 @@ proto_field_ok() {
         h) [[ "${2}" =~ ${PROTO_HOLE_RE} ]] ;;
         k) [[ "${2}" =~ ${PROTO_TOKEN_RE} ]] ;;
         e) [[ "${2}" =~ ${PROTO_CODE_RE} ]] ;;
+        m) [[ "${2}" =~ ${PROTO_MPMODE_RE} ]] ;;
         t) [[ "${2}" =~ ${PROTO_TEXT_RE} ]] ;;
         *) return 1 ;;
     esac

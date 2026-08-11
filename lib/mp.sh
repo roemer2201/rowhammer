@@ -16,6 +16,10 @@
 #   reason a player could see. That is also why the lobby shows the host
 #   its own address and port - an address one has to look up with "ip
 #   addr" first is no help to somebody who is stuck.
+#   The lobby also carries the session settings the host decides on - the
+#   mode, which decides how the round is won, and whether garbage flies -
+#   and shows them to every player, not only to the one who set them
+#   (mp_settings_menu, CLAUDE.md 5.1).
 #   During the round mp_poll drains the link once per tick and applies
 #   what arrived; nothing here ever blocks, and nothing here draws - the
 #   peers are painted by lib/render.sh from the arrays this module keeps.
@@ -24,7 +28,7 @@
 #   are worth (see lib/hub.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.0.0  (2026-08-11)
+# Version: 1.1.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -67,6 +71,18 @@ MP_NEXT_BOARD_MS=0
 MP_BOARD_MS=200
 # Start of the round, counted down from the hub's START.
 MP_START_MS=0
+# The session settings as the hub last sent them (SETUP): the mode of the
+# round and whether cleared rows send garbage. Every client keeps them,
+# not only the host - the lobby of every player shows them, and during the
+# round they decide what the HUD has to show and what the result means.
+# The defaults here are the hub's; they are overwritten by the first SETUP
+# the moment a client is let in.
+MP_MODE="survival"
+MP_GARBAGE=0
+# The modes the host can pick, in the order the settings menu offers them.
+# One entry per win condition - which is what makes them modes rather than
+# options (see CLAUDE.md 5.1).
+MP_MODES=(survival sprint ultra)
 
 # Peer tables, indexed by slot. Every one of them is filled from validated
 # protocol fields only (lib/proto.sh), and the renderer clamps them again
@@ -104,6 +120,8 @@ mp_reset() {
     MP_NEXT_BOARD_MS=0
     MP_START_MS=0
     MP_VIEW_SENT=-1
+    MP_MODE="survival"
+    MP_GARBAGE=0
     for (( i = 0; i < MP_MAX; i++ )); do
         MP_PEER_NAME[i]=""
         MP_PEER_READY[i]=0
@@ -229,6 +247,15 @@ mp_handle() {
             ;;
         NEEDBOARD)
             MP_NEEDBOARD="${PROTO_ARG[0]}"
+            ;;
+        SETUP)
+            # What the host settled on. Taken as it comes: the hub is the
+            # one that decides, and a client that argued with it would
+            # only be playing a different round from everybody else.
+            MP_MODE="${PROTO_ARG[0]}"
+            MP_GARBAGE="${PROTO_ARG[1]}"
+            debug_event "mp: session settings mode=${MP_MODE} garbage=${MP_GARBAGE}"
+            DIRTY=1
             ;;
         GARBAGE)
             # Queued, not applied: garbage comes in at the next lock, never
@@ -523,7 +550,8 @@ mp_hub_start() {
     local args=()
     args=(--mp-hub --mp-transport "${MP_TRANSPORT}" --mp-port "${MP_PORT}"
           --mp-max "${MP_MAX}" --mp-target "${MP_TARGET}"
-          --mp-session "${MP_SESSION}" --mp-dir "${MP_DIR}")
+          --mp-session "${MP_SESSION}" --mp-dir "${MP_DIR}"
+          --mp-mode "${MP_MODE_OPT}" --mp-garbage "${MP_GARBAGE_OPT}")
     if [ -n "${SEED}" ]; then
         args+=(--seed "${SEED}")
     fi
@@ -806,7 +834,7 @@ mp_connect_failed() {
 # The host's entry is "start the round" (which the hub reads as its READY
 # and answers with SEED and START), everybody else's is "ready".
 mp_lobby() {
-    local -a lines entries
+    local -a lines entries actions
     local sel=0 dirty=1 i n line ready=0 left=0
     net_local_addr
     while :; do
@@ -825,15 +853,25 @@ mp_lobby() {
             fi
             return 0
         fi
+        # The entries and what they do, built together: the host has one
+        # more than everybody else, and hanging the dispatch below off a
+        # position would break the moment that changes again.
         entries=()
+        actions=()
         if [ "${MP_IS_HOST}" -eq 1 ]; then
             entries+=("${I18N[mp_start]}")
+            actions+=("start")
+            entries+=("${I18N[mp_settings]}")
+            actions+=("settings")
         elif [ "${ready}" -eq 1 ]; then
             entries+=("${I18N[mp_unready]}")
+            actions+=("ready")
         else
             entries+=("${I18N[mp_ready]}")
+            actions+=("ready")
         fi
         entries+=("${I18N[mp_leave]}")
+        actions+=("leave")
         if [ "${dirty}" -eq 1 ] || [ "${DIRTY}" -eq 1 ]; then
             DIRTY=0
             lines=("  ${I18N[mp_lobby_title]}" "")
@@ -846,6 +884,13 @@ mp_lobby() {
                     "${NET_LOCAL_ADDR:-?}" "${MP_PORT}"
                 lines+=("  ${line}")
             fi
+            # The session settings, shown to everybody and not only to
+            # the host who set them: they decide how this round is won,
+            # and a player who cannot see them is guessing (user
+            # request). Only the host has the entry that changes them.
+            mp_setting_lines
+            lines+=("  ${MP_SETUP_MODE_LINE}")
+            lines+=("  ${MP_SETUP_GARBAGE_LINE}")
             lines+=("")
             n=0
             for (( i = 0; i < MP_MAX; i++ )); do
@@ -879,24 +924,27 @@ mp_lobby() {
             continue
         fi
         case "${KEY}" in
-            UP|DOWN|w|s)
-                sel=$(( (sel + 1) % ${#entries[@]} ))
-                dirty=1
-                ;;
+            UP|w)   sel=$(( (sel + ${#entries[@]} - 1) % ${#entries[@]} )); dirty=1 ;;
+            DOWN|s) sel=$(( (sel + 1) % ${#entries[@]} )); dirty=1 ;;
             ENTER|SPACE)
-                if [ "${sel}" -eq 0 ]; then
-                    if [ "${MP_IS_HOST}" -eq 1 ]; then
+                case "${actions[sel]}" in
+                    start)
                         proto_msg READY 1
                         net_send "${PROTO_LINE}" || :
-                    else
+                        dirty=1
+                        ;;
+                    ready)
                         ready=$(( 1 - ready ))
                         proto_msg READY "${ready}"
                         net_send "${PROTO_LINE}" || :
-                    fi
-                    dirty=1
-                else
-                    left=1
-                fi
+                        dirty=1
+                        ;;
+                    settings)
+                        mp_settings_menu
+                        dirty=1
+                        ;;
+                    *) left=1 ;;
+                esac
                 ;;
             ESC|x) left=1 ;;
         esac
@@ -907,6 +955,145 @@ mp_lobby() {
             return 0
         fi
     done
+}
+
+# mp_setting_lines
+# The two lines that show the session settings, in
+# MP_SETUP_MODE_LINE / MP_SETUP_GARBAGE_LINE: the mode with the win
+# condition it stands for, and whether garbage is on. The win condition is
+# spelled out rather than left to the mode's name - "Sprint" says how long
+# a round lasts, not who wins it, and that is the question a player in a
+# lobby is asking.
+MP_SETUP_MODE_LINE=""
+MP_SETUP_GARBAGE_LINE=""
+mp_setting_lines() {
+    local state
+    printf -v MP_SETUP_MODE_LINE "${I18N[mp_setup_mode]}" \
+        "${I18N[mpmode_${MP_MODE}]}" "${I18N[mpwin_${MP_MODE}]}"
+    if [ "${MP_GARBAGE}" -eq 1 ]; then
+        state="${I18N[mp_on]}"
+    else
+        state="${I18N[mp_off]}"
+    fi
+    printf -v MP_SETUP_GARBAGE_LINE "${I18N[mp_setup_garbage]}" "${state}"
+    return 0
+}
+
+# mp_settings_menu
+# The host's settings menu, opened from the lobby. Enter switches the
+# entry it stands on - the mode cycles through MP_MODES, the garbage
+# switch flips - and every change goes to the hub at once, which sends it
+# back to everybody. Changing them is therefore never a private decision:
+# the lobby of every player shows the new state the moment it is made.
+# Like the lobby it keeps draining the link while it is open, for the same
+# reason (a menu that stops reading runs into the ping timeout).
+# The two limits that make a mode what it is - the Sprint time and the
+# Ultra target - are the singleplayer constants and are shown as such, so
+# a retuned SPRINT_TIME_MS cannot leave this screen lying.
+mp_settings_menu() {
+    local -a lines entries
+    local sel=0 dirty=1 i line
+    while :; do
+        if ! mp_poll; then
+            return 0
+        fi
+        if [ -n "${MP_ERROR}" ] || [ "${MP_PHASE}" != "lobby" ]; then
+            # The round started or the session died while this was open.
+            return 0
+        fi
+        mp_setting_lines
+        entries=("${MP_SETUP_MODE_LINE}" "${MP_SETUP_GARBAGE_LINE}"
+                 "${I18N[menu_back]}")
+        if [ "${dirty}" -eq 1 ] || [ "${DIRTY}" -eq 1 ]; then
+            DIRTY=0
+            lines=("  ${I18N[mp_settings_title]}" "")
+            i18n_lines mp_settings_body
+            for (( i = 0; i < ${#I18N_LINES[@]}; i++ )); do
+                lines+=("  ${I18N_LINES[i]}")
+            done
+            lines+=("")
+            for (( i = 0; i < ${#entries[@]}; i++ )); do
+                if [ "${i}" -eq "${sel}" ]; then
+                    lines+=($'  \e[7m '"${entries[i]}"$' \e[0m')
+                else
+                    lines+=("   ${entries[i]} ")
+                fi
+            done
+            lines+=("")
+            # What the picked mode costs to win, from the live constants.
+            case "${MP_MODE}" in
+                sprint)
+                    fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+                    printf -v line "${I18N[mp_setup_limit_sprint]}" \
+                        "${FMT_DURATION}"
+                    ;;
+                ultra)
+                    printf -v line "${I18N[mp_setup_limit_ultra]}" \
+                        "${ULTRA_TARGET_ROWS}"
+                    ;;
+                *) line="" ;;
+            esac
+            lines+=("  ${line}")
+            lines+=("" "  ${I18N[mp_settings_nav]}")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        read_key
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+            continue
+        fi
+        case "${KEY}" in
+            UP|w)   sel=$(( (sel + ${#entries[@]} - 1) % ${#entries[@]} )); dirty=1 ;;
+            DOWN|s) sel=$(( (sel + 1) % ${#entries[@]} )); dirty=1 ;;
+            ENTER|SPACE|LEFT|RIGHT)
+                case "${sel}" in
+                    0) mp_settings_cycle_mode "${KEY}" ;;
+                    1) MP_GARBAGE=$(( 1 - MP_GARBAGE )); mp_settings_send ;;
+                    *)
+                        if [ "${KEY}" = "ENTER" ] || [ "${KEY}" = "SPACE" ]; then
+                            return 0
+                        fi
+                        ;;
+                esac
+                dirty=1
+                ;;
+            ESC|x) return 0 ;;
+        esac
+    done
+}
+
+# mp_settings_cycle_mode KEY
+# Step to the next (or, on the left arrow, the previous) mode and send it.
+mp_settings_cycle_mode() {
+    local key="${1}" i idx=0 n="${#MP_MODES[@]}"
+    for (( i = 0; i < n; i++ )); do
+        if [ "${MP_MODES[i]}" = "${MP_MODE}" ]; then
+            idx="${i}"
+            break
+        fi
+    done
+    if [ "${key}" = "LEFT" ]; then
+        idx=$(( (idx + n - 1) % n ))
+    else
+        idx=$(( (idx + 1) % n ))
+    fi
+    MP_MODE="${MP_MODES[idx]}"
+    mp_settings_send
+    return 0
+}
+
+# mp_settings_send
+# Hand the settings to the hub. Only the host ever gets here (the entry
+# exists nowhere else), and the hub checks that again - a client that says
+# it is the host is not one.
+mp_settings_send() {
+    proto_msg SETUP "${MP_MODE}" "${MP_GARBAGE}"
+    net_send "${PROTO_LINE}" || :
+    debug_event "mp: host set mode=${MP_MODE} garbage=${MP_GARBAGE}"
+    return 0
 }
 
 # mp_lobby_line SLOT

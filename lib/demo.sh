@@ -255,7 +255,7 @@ demo_record_start() {
         return 0
     fi
     # A mode this format does not know is not recorded. Today that is
-    # exactly one: the multiplayer (2.0.0). A versus round cannot be
+    # exactly one: the multiplayer (1.1.0). A versus round cannot be
     # replayed from this format at all - the moves of the opponents are
     # never transmitted, so a recording of one has to carry what arrived
     # of them instead, which is a format of its own (CLAUDE.md 5.20, open

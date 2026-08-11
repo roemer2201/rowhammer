@@ -20,7 +20,7 @@ Description: Tetris-like terminal game written in pure bash
  player name.
  .
  The square system (gold/silver bonus blocks) and the persistent wonders
- building mode are part of the game; since 2.0.0 it also has a
+ building mode are part of the game; since 1.1.0 it also has a
  multiplayer for the local network, in which two to six people play the
  same piece sequence on their own boards and send each other garbage
  rows. That part needs socat, which is why it is recommended - without

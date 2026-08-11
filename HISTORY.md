@@ -86,7 +86,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 1.0.2 | Rundenende am oberen Feldrand | 3.1, 3.6 |
 | 1.0.3 | Spielzeit der Namensabfrage auf die Millisekunde; Versionszeile in der README | 3.7, 4.9 |
 | 1.0.4 | Beutel des Randomizers auf 63 Steine (Dynamik der Spezialbloecke) | 3.1 |
-| 2.0.0 | Mehrspieler im lokalen Netz (Phase 5, Schritte 1-8 und 10-12) | 5.1-5.10 |
+| 1.1.0 | Mehrspieler im lokalen Netz (Phase 5, Schritte 1-8 und 10-12) | 5.1-5.10 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1573,11 +1573,14 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       (Nutzerentscheidung; CLAUDE.md, Abschnitt 6): das
       Einzelspieler-Spiel behaelt seine laufende Versionsreihe, und der
       erste Schritt in die Phasen 5 und 6 ist der Sprung auf `2.0.0`.
+      _Spaeter ueberholt: 1.1.0 - der Mehrspieler waechst bis zu seiner
+      Fertigstellung in der `1.x`-Reihe, und `2.0.0` ist fuer den Stand
+      reserviert, an dem Phase 5 wirklich abgeschlossen ist._
 
 
-## Phase 5 - Mehrspieler (umgesetzt, Version 2.0.0)
+## Phase 5 - Mehrspieler (umgesetzt, Version 1.1.0)
 
-Die Schritte 1 bis 8 sowie 10 bis 12 der Roadmap sind mit `2.0.0`
+Die Schritte 1 bis 8 sowie 10 bis 12 der Roadmap sind mit `1.1.0`
 umgesetzt; offen bleibt allein Schritt 9 (Demo-Aufzeichnung einer
 Mehrspieler-Runde, siehe CLAUDE.md 5.20) und die Entkopplung aus
 Schritt 1, soweit sie ueber das hinausgeht, was der Mehrspieler
@@ -1669,6 +1672,28 @@ anders aussieht.
         der Reihen geraeumt hat, hat gerade seinen `CLEAR` gemeldet;
         die Verrechnung laeuft davor, und das ist es, was den
         Gegenangriff gegenueber reiner Abwehr belohnt.
+- [x] **Sitzungseinstellungen des Gastgebers** (Nutzerwunsch, kam beim
+      Bauen dazu und ist in CLAUDE.md 5.1 beschrieben). Der Gastgeber
+      legt in der Lobby fest, **wie gewonnen wird** - `survival` (wer
+      uebrig bleibt, Vorgabe), `sprint` (die meisten Rows in der Zeit)
+      oder `ultra` (wer zuerst am Ziel ist) - und ob **Stoerreihen**
+      ueberhaupt fliegen; beides steht in der Lobby jedes Spielers.
+      - **Drei Modi, weil es drei Siegbedingungen gibt.** Ein Modus, der
+        nur anders aussieht, waere eine Einstellung; einer, der die
+        Frage "wer gewinnt" anders beantwortet, ist ein Modus. Time
+        Attack und Hochwasser sind aus genau diesem Grund nicht dabei:
+        im Duell endeten beide wie `survival`.
+      - **Stoerreihen sind anfangs aus** (Nutzervorgabe). Sie machen die
+        anspruchsvollere Runde und sollen etwas sein, das man
+        einschaltet. Ausgeschaltet bleibt ein Abbau ein Abbau - er
+        zaehlt fuer die Rows -, er reist nur nicht, weshalb es ein
+        Schalter neben dem Modus ist und kein vierter Modus.
+      - **In `sprint` und `ultra` endet die Runde nicht am vorletzten
+        Ausscheiden**, und die Plaetze werden am Ende nach Rows neu
+        vergeben: wer schon draussen ist, kann trotzdem vorn liegen.
+      - Umgesetzt als eine Nachricht in beide Richtungen (`SETUP`, wie
+        `ROSTER`); der Hub nimmt sie nur von Slot 0 und nur ausserhalb
+        der Runde an. Damit ging die Protokollversion auf 2.
 - [x] **Rundenende, Zuschauermodus, Verbindungsabbruch** (Schritt 8).
       Wer oben rausbaut, meldet `TOPOUT`, bleibt als Zuschauer im Bild
       und bekommt den hoechsten noch freien Platz; der letzte im Feld
@@ -1680,6 +1705,11 @@ anders aussieht.
       - **Es gibt keine Pause** (die anderen warten nicht) und kein
         "Ins Hauptmenue": eine pausierte Mehrspieler-Runde koennte
         nirgendwohin zurueckkehren.
+  Die Siegbedingung war bis dahin der letzte offene Punkt aus Abschnitt
+  8 gewesen ("bleibt es beim letzten Ueberlebenden, oder kommt ein
+  reiner Rows-Wettkampf dazu?"); mit den Sitzungseinstellungen ist er
+  beantwortet, ohne dass eine Seite die andere verdraengt.
+
 - [x] **Drei bis sechs Spieler** (Schritt 10): Zielwahl `random|all|even`
       im Hub, `--mp-max` als Obergrenze, Layout-Raster fuer mehrere
       Mini-Felder.

@@ -469,7 +469,7 @@ in fester Reihenfolge einmal durchzureichen:
    sass mit 18 Zeilen schon auf `MENU_BODY_MAX`, und der Absatz sagte in
    fuenf Zeilen, was in vieren steht.
 
-10. Mehrspieler (seit 2.0.0): dass jeder sein eigenes Feld mit
+10. Mehrspieler (seit 1.1.0): dass jeder sein eigenes Feld mit
    derselben Steinfolge spielt, dass abgebaute Reihen dem Gegner
    Stoerreihen schicken und ein eigener Abbau zuerst die eigene
    Warteschlange raeumt, wie eine Sitzung eroeffnet und gefunden wird
@@ -1107,8 +1107,8 @@ rowhammer/
   README.md
 ```
 
-Stand (Version 2.0.0): alle Module aus dem Baum oben existieren; die
-vier Mehrspieler-Module (`net`, `proto`, `hub`, `mp`) sind mit 2.0.0
+Stand (Version 1.1.0): alle Module aus dem Baum oben existieren; die
+vier Mehrspieler-Module (`net`, `proto`, `hub`, `mp`) sind mit 1.1.0
 dazugekommen (siehe Abschnitt 5)
 (`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
 `stats.sh`, `demo.sh` und `i18n.sh` mit `lib/lang/` sowie
@@ -1128,7 +1128,7 @@ endlose Modus hiess bis
 0.47.0 waehlt auch der Menuepunkt "Statistik" zuerst die Sicht
 (`menu_stats`: Gesamt oder einer der Modi, siehe 4.5). Die
 Modus-Eintraege dieser drei Auswahlen baut seit 0.48.0 ein gemeinsamer
-Helfer (`menu_mode_entries`); seit 2.0.0 haengt er auf Wunsch einen
+Helfer (`menu_mode_entries`); seit 1.1.0 haengt er auf Wunsch einen
 sechsten Modus an - den Mehrspieler, den nur die beiden
 Rueckblick-Auswahlen (Highscores, Statistik) fuehren, weil er im
 Einzelspieler-Menue nicht gestartet wird; seit 0.53.0 nennt jeder Eintrag hinter dem
@@ -1171,7 +1171,7 @@ die Mehrspieler-Optionen `--mp-transport lan|unix`, `--mp-port N`,
 `--mp-dir DIR`, `--mp-max N`, `--mp-session NAME`,
 `--mp-view auto|full|compact|score`, `--mp-target random|all|even`,
 `--mp-host`, `--mp-join HOST[:PORT]` und `--mp-bot` (je mit
-`ROWHAMMER_MP_*`-Variable, seit 2.0.0, siehe 5.10) sowie die drei
+`ROWHAMMER_MP_*`-Variable, seit 1.1.0, siehe 5.10) sowie die drei
 internen Prozessmodi `--mp-hub`, `--mp-bridge` und `--mp-discover`,
 `--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
 0.35.0, das Ziel `demo` seit 0.46.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
@@ -1353,7 +1353,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   (seit 0.39.0), die Time-Attack-Bestenliste `highscore-timeattack`
   (seit 0.42.0), die Hochwasser-Bestenliste `highscore-flood`
   (seit 0.49.0), die Mehrspieler-Bestenliste `highscore-versus`
-  (seit 2.0.0, siehe unten), der Spielstand `save`, die
+  (seit 1.1.0, siehe unten), der Spielstand `save`, die
   Statistik `stats` und - seit 0.46.0 - das Unterverzeichnis `demos`
   mit den aufgezeichneten Runden (Format und Ablage siehe 4.10; als
   einziger Eintrag ein Verzeichnis statt einer Datei, weil es beliebig
@@ -1538,7 +1538,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Wasser steigt nach der Uhr, die ueberlebte Zeit sagt also, gegen wie
   viele Flutreihen ein Eintrag angespielt hat, und trennt zwei Runden
   mit gleichen Rows.
-  **Mehrspieler-Bestenliste (seit 2.0.0, siehe 5.8):** die Ergebnisse
+  **Mehrspieler-Bestenliste (seit 1.1.0, siehe 5.8):** die Ergebnisse
   einer Mehrspieler-Runde liegen in einer sechsten Datei
   `${DATA_DIR}/highscore-versus`, Zeilenformat und Rangordnung wieder
   wie die Marathon-Liste (elf Felder, absteigend nach Rows, gleiche Rows
@@ -1556,6 +1556,15 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   vergleichbar - wer an einem bestimmten Abend gewonnen hat, nicht. Wie
   oft jemand gewonnen hat, steht dafuer in der Statistik (das
   `goal`-Feld des Modus, siehe unten).
+  **Eine Liste fuer alle drei Mehrspieler-Modi** (seit 1.1.0, als der
+  Gastgeber die Wahl zwischen `survival`, `sprint` und `ultra` bekam,
+  siehe 5.1). Das ist die eine Stelle, an der bewusst *nicht* nach dem
+  Muster der Einzelspieler-Listen aufgeteilt wird: die drei
+  unterscheiden sich in der Siegbedingung, gewertet wird aber ueberall
+  dieselbe Zahl in derselben Einheit - die eigenen Rows -, und drei
+  Listen mit je zwei Eintraegen waeren fuer den Leser weniger wert als
+  eine mit sechs. Der Modus ist Teil des Abends, wie die Zahl der
+  Mitspieler, und der steht auch nicht in der Liste.
   **Anzeige:** `highscore_versus_screen` zeigt die Liste im Layout der
   fuenf anderen, mit den Spalten der Marathon-Liste samt Spielzeit: ein
   Lauf, der frueh ausgeschieden ist, ist genau der kurze, sodass die
@@ -1985,7 +1994,7 @@ Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
   unangetastet laesst.
 - **`highscore` trifft alle Bestenlisten.** Endlos-, Ultra-, Sprint-,
   Time-Attack-, Hochwasser- und Mehrspieler-Liste (seit 0.34.0, 0.39.0,
-  0.42.0, 0.49.0 bzw. 2.0.0, siehe 4.5)
+  0.42.0, 0.49.0 bzw. 1.1.0, siehe 4.5)
   sind dieselbe Art
   Daten; eine davon stehen zu
   lassen waere ueberraschend, und ein eigenes Ziel je Liste waere fuer
@@ -2377,15 +2386,15 @@ abgeschnitten wurden (Mehrspieler-Platzhalter, die drei Meldungen des
 Rebind-Dialogs, die Abbrechen-Fusszeile einer Sicherheitsabfrage und je
 eine Zeile der ersten und dritten Anleitungsseite) - sie sind umbrochen.
 
-## 5. Multiplayer (Phase 5, umgesetzt seit 2.0.0)
+## 5. Multiplayer (Phase 5, umgesetzt seit 1.1.0)
 
-**Alles in diesem Abschnitt ist Arbeit an Version 2.x.x** (siehe die
-Arbeitsregel in Abschnitt 6): der erste Schritt hier hinein war der
-Sprung auf `2.0.0`, waehrend das Einzelspieler-Spiel seine eigene
-Versionsreihe weiterfuehrt. Das gilt auch fuer die darauf aufbauende
-Phase 6 (5.11-5.19).
+**Diese Phase laeuft in der `1.x`-Reihe** (siehe die Arbeitsregel in
+Abschnitt 6): `2.0.0` ist fuer den Stand reserviert, an dem der
+Mehrspieler fertig ist - einschliesslich der Demo-Aufzeichnung aus
+5.20. Bis dahin traegt jeder Zuwachs eine Minor-Version, angefangen bei
+`1.1.0`.
 
-**Stand:** Der Mehrspieler laeuft seit 2.0.0 - Sitzung eroeffnen und
+**Stand:** Der Mehrspieler laeuft seit 1.1.0 - Sitzung eroeffnen und
 beitreten, gemeinsame Steinfolge, Stoerreihen, Ausscheiden, Sieger,
 eigene Bestenliste und eigener Statistik-Modus (Roadmap-Schritte 1 bis 8
 und 10 bis 12, siehe HISTORY.md). Dieser Abschnitt beschreibt damit
@@ -2459,15 +2468,72 @@ im Code nur eine andere socat-Adresse: Prozessmodell (5.3), Protokoll
   - Garbage-Zielwahl wird ab ~4 Spielern ohne Zielauswahl-UI beliebig.
   - Mehr als 6 Spieler waeren nur noch als reines Scoreboard sinnvoll;
     das ist bewusst kein Ziel.
-- **Modus:** "Versus" - jeder Spieler hat sein eigenes 10x20-Feld, alle
-  starten mit demselben Seed (identische Steinfolge, Fairness).
-  Abgebaute Reihen erzeugen Stoerreihen ("Garbage") beim Gegner
-  (siehe 5.7). Wer oben rausbaut (Top-Out), scheidet aus und wird
-  Zuschauer; wer als Letzter uebrig ist, gewinnt (siehe 5.8).
+- **Grundform:** "Versus" - jeder Spieler hat sein eigenes 10x20-Feld,
+  alle starten mit demselben Seed (identische Steinfolge, Fairness).
+  Wer oben rausbaut (Top-Out), scheidet aus und wird Zuschauer
+  (siehe 5.8).
 - Das Quadrat-System bleibt unveraendert die Kernmechanik: Gold- und
-  Silber-Quadrate sind im Versus-Modus die staerksten Angriffe.
-- Ein spaeterer kooperativer Modus oder ein reiner "Race"-Modus (wer
-  zuerst N Reihen hat) ist denkbar, aber nicht Teil dieser Spezifikation.
+  Silber-Quadrate sind die staerksten Angriffe - und in jedem Modus der
+  schnellste Weg zu Rows.
+
+**Sitzungseinstellungen (seit 1.1.0, Nutzerwunsch).** Der Gastgeber legt
+in der Lobby zwei Dinge fest, und **beide stehen in der Lobby jedes
+Spielers**: den **Modus**, der die Siegbedingung bestimmt, und den
+Schalter fuer die **Stoerreihen**. Umgesetzt als eigener Menuepunkt
+"Einstellungen" in der Lobby (`mp_settings_menu`, `lib/mp.sh`), der die
+Werte per `SETUP` an den Hub schickt; der Hub nimmt sie nur von Slot 0
+und nur ausserhalb einer laufenden Runde an und schickt sie an alle
+zurueck (`hub_msg_setup`, `lib/hub.sh`). Die Entscheidungen dazu:
+
+- **Sichtbar fuer alle, aenderbar nur vom Gastgeber.** Die Einstellungen
+  entscheiden, wofuer gespielt wird; wer sie nicht sieht, raet. Deshalb
+  ist es *eine* Nachricht in beide Richtungen (wie `ROSTER`) und keine
+  private Einstellung des Gastgebers.
+- **Der Hub prueft die Herkunft ein zweites Mal.** Der Menuepunkt
+  existiert nur beim Gastgeber, aber ein Client, der behauptet, der
+  Gastgeber zu sein, ist keiner (5.5): `hub_msg_setup` weist alles
+  ausser Slot 0 ab.
+- **Waehrend der Runde nicht mehr.** Eine Regel, die sich mitten in der
+  Runde aendert, ist keine.
+- **Drei Modi, weil es drei Siegbedingungen gibt.** Der Modus ist keine
+  Geschmacksfrage, sondern die Antwort auf "wer gewinnt":
+  - `survival` (Standard) - **wer uebrig bleibt.** Die klassische
+    Duellform; sie braucht keine Erklaerung und ist deshalb die Vorgabe.
+  - `sprint` - **die meisten Rows,** wenn `SPRINT_TIME_MS` um sind. Die
+    Uhr gehoert dem Hub (`HUB_ROUND_END_MS`), die Clients zaehlen
+    dieselbe Grenze nur fuer ihre Anzeige herunter.
+  - `ultra` - **wer zuerst `ULTRA_TARGET_ROWS` erreicht.** Der Hub sieht
+    das an den `STATE`-Zaehlern und beendet die Runde in dem Moment.
+  Die beiden Grenzen sind die Konstanten der gleichnamigen
+  Einzelspieler-Modi, nicht neue: derselbe Sprint ist derselbe Sprint,
+  ob allein oder zu sechst.
+- **In `sprint` und `ultra` endet die Runde nicht am vorletzten
+  Ausscheiden.** Nur `survival` ist vorbei, sobald einer uebrig ist; in
+  den beiden anderen entscheiden die Rows, und wer schon ausgeschieden
+  ist, kann trotzdem vorn liegen - der Letzte im Feld spielt also
+  weiter, bis die Uhr bzw. das Ziel es sagt oder auch er ausscheidet.
+  Aus demselben Grund werden die Plaetze dort am Ende **nach Rows neu
+  vergeben** (`hub_places_by_rows`): die Reihenfolge des Ausscheidens
+  ist in diesen Modi nicht die Reihenfolge des Ergebnisses.
+- **Stoerreihen sind anfangs aus** (Nutzerentscheidung). Eine Runde, in
+  der jemand anders das eigene Feld fuellt, ist das anspruchsvollere
+  Spiel; sie soll etwas sein, das der Gastgeber einschaltet, und nicht
+  etwas, das einem beim ersten Mal ungefragt widerfaehrt. Ausgeschaltet
+  bleibt ein Abbau ein Abbau - er zaehlt fuer die Rows, mit denen jeder
+  Modus gewertet wird -, er reist nur nicht. Deshalb ist es ein
+  Schalter neben dem Modus und kein vierter Modus.
+- **Nicht angeboten werden Time Attack und Hochwasser.** Beide haetten
+  im Duell dieselbe Siegbedingung wie `survival` (der Letzte gewinnt)
+  und waeren damit Varianten desselben Modus statt eigener - und die
+  Hochwasser-Flut waere neben eingeschalteten Stoerreihen eine zweite
+  Quelle steigender Reihen, die dem Spieler nicht mehr zu erklaeren
+  ist. Sie bleiben Einzelspieler-Modi.
+- **Vorbelegt ueber die Kommandozeile:** `--mp-mode` und `--mp-garbage`
+  (siehe 5.10) setzen, womit eine eroeffnete Sitzung startet - fuer
+  jemanden, der immer dasselbe spielt, und fuer die Tests. Sie sind
+  keine Config-Werte: was in einer Sitzung gilt, entscheidet die Lobby.
+- Ein spaeterer kooperativer Modus ist denkbar, aber nicht Teil dieser
+  Spezifikation.
 
 ### 5.2 Transport: socat, LAN-Broadcast und Unix-Domain-Socket
 
@@ -2700,8 +2766,8 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `STATE` | `<lines> <rows> <level> <gold> <silver> <height> <pending>` | eigener Zaehlerstand, bei Aenderung, max. 10/s |
   | `BOARD` | `<200 Zeichen>` | Feld-Snapshot, nur wenn der Hub `NEEDBOARD 1` gesetzt hat, max. 5/s |
   | `CLEAR` | `<lines> <silver> <gold>` | ein Reihenabbau als Angriffs-Meldung (Hub rechnet daraus die Garbage aus) |
-  | `APPLIED` | `<count>` | eingeschobene Stoerreihen (seit 2.0.0, siehe unten) |
-  | `VIEW` | `<0 oder 1>` | ob dieser Client die Gegnerfelder zeichnet (seit 2.0.0) |
+  | `APPLIED` | `<count>` | eingeschobene Stoerreihen (seit 1.1.0, siehe unten) |
+  | `VIEW` | `<0 oder 1>` | ob dieser Client die Gegnerfelder zeichnet (seit 1.1.0) |
   | `TOPOUT` | - | eigenes Game Over |
   | `PONG` | `<token>` | Antwort auf `PING` |
   | `BYE` | - | geordnetes Verlassen |
@@ -2718,7 +2784,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `PEERBOARD` | `<slot> <200 Zeichen>` | Feld-Snapshot eines Mitspielers |
   | `NEEDBOARD` | `<0 oder 1>` | ob dieser Client Snapshots senden soll (spart Last, wenn niemand Stufe 2 anzeigt) |
   | `GARBAGE` | `<count> <hole>` | eingehende Stoerreihen, Lochspalte 0-9 |
-  | `QUEUE` | `<count>` | verbindliche Laenge der eigenen Warteschlange (seit 2.0.0) |
+  | `QUEUE` | `<count>` | verbindliche Laenge der eigenen Warteschlange (seit 1.1.0) |
   | `KO` | `<slot> <platz>` | Spieler ausgeschieden |
   | `END` | `<siegerslot>` | Runde vorbei |
   | `PING` | `<token>` | Lebendpruefung, alle 2 s |
@@ -2918,6 +2984,13 @@ Zuordnung auch ohne Namenslesen funktioniert.
 
 ### 5.7 Garbage-Regeln
 
+**Stoerreihen sind seit 1.1.0 abschaltbar und anfangs aus** (siehe die
+Sitzungseinstellungen in 5.1). Alles in diesem Abschnitt beschreibt die
+Runde, in der der Gastgeber sie eingeschaltet hat; ist der Schalter aus,
+faellt genau dieser Teil weg - ein Abbau zaehlt weiter fuer die Rows,
+er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
+"Muell"-Zeile verschwindet aus dem HUD.
+
 - **Angriffswert eines Reihenabbaus** (Hub-Berechnung aus `CLEAR`):
   - 1/2/3/4 Reihen -> 0/1/2/4 Garbage-Reihen (Tetris lohnt sich),
   - je **Silber-Quadrat** in den abgebauten Reihen: **+2**,
@@ -2969,9 +3042,15 @@ Zuordnung auch ohne Namenslesen funktioniert.
   **Zuschauer** - er sieht die verbleibenden Felder bis zum Rundenende.
   Der Hub vergibt den Platz von hinten (erster Ausgeschiedener = letzter
   Platz) und meldet `KO <slot> <platz>`.
-- **Sieg:** letzter lebender Spieler. Steigen alle bis auf einen aus, ist
-  die Runde vorbei (`END <slot>`). Bei gleichzeitigem KO entscheidet die
-  hoehere Rows-Zahl, danach der niedrigere Slot.
+- **Sieg: haengt am Modus** (seit 1.1.0, siehe 5.1). In `survival` ist
+  es der letzte lebende Spieler: steigen alle bis auf einen aus, ist die
+  Runde vorbei (`END <slot>`). In `sprint` sind es die meisten Rows,
+  wenn die Uhr des Hubs abgelaufen ist, in `ultra` der erste Spieler am
+  Rows-Ziel; in beiden endet die Runde ausserdem, wenn **alle**
+  ausgeschieden sind, und dann entscheiden ebenfalls die Rows. Bei
+  Gleichstand entscheidet der niedrigere Slot - eine Runde braucht eine
+  Antwort, und die Slot-Reihenfolge ist der einzige Tiebreaker, der fuer
+  alle gleich aussieht.
 - **Verbindungsabbruch eines Clients:** EOF oder 6 s ohne `PONG` ->
   Status `gone`, gilt wie ein KO, die Runde laeuft weiter. Kein
   Reconnect in v1 (Zustandsuebertragung waere aufwendig; die Runde
@@ -2986,7 +3065,7 @@ Zuordnung auch ohne Namenslesen funktioniert.
   fortgesetzt werden (die anderen warten nicht) - der Eintrag "Ins
   Hauptmenue" fehlt im Mehrspieler-Pausenmenue.
 - **Pause:** eine echte Pause gibt es im Mehrspieler nicht. Umgesetzt
-  seit 2.0.0: `p` tut schlicht nichts (eine Einblendung, die nichts
+  seit 1.1.0: `p` tut schlicht nichts (eine Einblendung, die nichts
   anhaelt, waere die verwirrendere Antwort), und `Esc`/`x` oeffnet ein
   eigenes Menue mit "Fortsetzen" und "Runde verlassen"
   (`mp_pause_menu`, `lib/mp.sh`). Es **leert die Leitung weiter**,
@@ -3068,6 +3147,8 @@ Standard < Config < Env < CLI, wie in Abschnitt 6 gefordert):
 | `--mp-max N` | `ROWHAMMER_MP_MAX` | Obergrenze der Spielerzahl 2..6, Standard 6 (siehe 5.1) |
 | `--mp-view MODE` | `ROWHAMMER_MP_VIEW` | `auto`, `full`, `compact`, `score` |
 | `--mp-target MODE` | `ROWHAMMER_MP_TARGET` | `random`, `all`, `even` (nur Host) |
+| `--mp-mode MODE` | `ROWHAMMER_MP_MODE` | `survival` (Standard), `sprint`, `ultra`: womit eine eroeffnete Sitzung startet (siehe 5.1) |
+| `--mp-garbage on\|off` | `ROWHAMMER_MP_GARBAGE` | Stoerreihen einer eroeffneten Sitzung, Standard `off` |
 | `--mp-hub` | - | interner Modus: Hub-Prozess (nicht dokumentiert im Menue) |
 | `--mp-bridge` | - | interner Modus: Socket-Bridge |
 | `--mp-discover` | - | interner Modus: Beacon-Sammler (siehe 5.3) |
@@ -3077,9 +3158,11 @@ Menuefuehrung: "Mehrspieler" -> "Spiel eroeffnen" / "Spiel beitreten"
 (Liste der gefundenen Sitzungen: im Transport `lan` aus den Beacons,
 im Transport `unix` aus dem Glob ueber `MP_DIR`, je mit Name und
 Spielerzahl) / "Direkt verbinden" (Adresse von Hand, siehe 5.2) /
-"Zurueck". Danach eine Lobby mit Spielerliste, Bereitschaftsstatus
-und - fuer den Host - Zielwahl-Modus, Start und die **eigene Adresse
-samt Port** zum Durchsagen (siehe 5.2). **Der Start gehoert
+"Zurueck". Danach eine Lobby mit Spielerliste, Bereitschaftsstatus, den
+**Sitzungseinstellungen** (Modus und Stoerreihen, sichtbar fuer alle,
+aenderbar nur vom Host ueber den Eintrag "Einstellungen", siehe 5.1)
+und - fuer den Host - Start und die **eigene Adresse samt Port** zum
+Durchsagen (siehe 5.2). **Der Start gehoert
 allein dem Host** (5.1): er sieht den Eintrag, sobald ein zweiter
 Spieler da ist, und niemand wartet auf eine vorher festgelegte Zahl.
 
@@ -3476,20 +3559,28 @@ gehoert dazu:
    Roadmap-Punkt ("siehe Phase 4 ..."), wird der Verweis auf HISTORY.md
    samt Version umgeschrieben.
 
-Arbeitsregel: **Der Mehrspieler ist Version 2.x.x** (seit 1.0.2,
-Nutzerentscheidung). **Jede Aenderung, die den Mehrspieler-Modus
-betrifft, ist Arbeit an Version 2.x.x** - das ist die ganze Phase 5
-(Abschnitt 5, Schritte 1 bis 11) samt ihrer Vorarbeit im
-Einzelspieler-Code, und ebenso die darauf aufbauende Phase 6
-(Server-Betrieb, Accounts, Web, 5.11-5.19). Das Einzelspieler-Spiel
-laeuft daneben in seiner eigenen Reihe weiter und traegt, was an ihm
-nachgezogen wird (Fehlerbehebungen, Feinjustierung, die restliche
-Politur aus Phase 4). Der erste Schritt in Richtung Mehrspieler ist
-damit der Sprung auf `2.0.0`, nicht die naechste Minor-Version; SemVer
-passt dazu von selbst, denn der Mehrspieler bringt neue Dateiformate und
-Schnittstellen mit (Protokoll, Sitzungsverzeichnis, spaeter die
-Datenbank), und die Arbeitsregel "keine Abwaertskompatibilitaet" unten
-laesst sie brechen.
+Arbeitsregel: **`2.0.0` kommt erst, wenn der Mehrspieler fertig ist**
+(Nutzerentscheidung, ueberarbeitet mit 1.1.0). Bis dahin laeuft die
+Arbeit am Mehrspieler in der **`1.x`-Reihe** weiter, Seite an Seite mit
+allem anderen, was am Spiel nachgezogen wird: eine Minor-Version je
+Zuwachs, eine Patch-Version je Korrektur.
+
+Bis 1.0.4 galt hier die umgekehrte Regel - jede Aenderung am
+Mehrspieler sei Arbeit an `2.x.x`, und der erste Schritt hinein der
+Sprung auf `2.0.0`. Die erste Fassung des Mehrspielers war danach
+zunaechst als `2.0.0` beschriftet; noch vor jedem Release hat der Nutzer
+das umgedreht, weil die grosse Zahl etwas Fertiges verspricht, das
+dieser Modus noch nicht ist (der Lobby-Aufbau, die Sitzungs-
+einstellungen und die Demo-Aufzeichnung fehlten). Eine Versionsnummer
+ist eine Aussage ueber den Zustand, nicht ueber die Menge der Arbeit.
+`2.0.0` ist damit reserviert fuer den Stand, an dem Phase 5
+abgeschlossen ist - also einschliesslich der Demo-Aufzeichnung einer
+Mehrspieler-Runde (5.20); die Server-Phase 6 baut danach darauf auf.
+SemVer traegt das: die neuen Formate des Mehrspielers (Protokoll,
+Sitzungsverzeichnis) sind bislang nur untereinander im Umlauf, und die
+Arbeitsregel "keine Abwaertskompatibilitaet" unten laesst sie ohnehin
+brechen - eine Protokollversion, die ein alter Client nicht kennt,
+weist der Hub sauber ab.
 
 Arbeitsregel: **Keine Abwaertskompatibilitaet noetig.** Das Projekt wird
 sequenziell entwickelt und war nie anderswo installiert; Migrationslogik
@@ -3511,13 +3602,13 @@ Archiv der abgeschlossenen Roadmap-Punkte, nach Version geordnet. Der
 sondern in den Abschnitten 1 bis 5 dieser Datei und - soweit
 spielersichtbar - in der README.md (Arbeitsregel in Abschnitt 6).
 
-**Versionszuordnung (seit 1.0.2):** Die Zwischenschritt- und
-Phase-4-Punkte unten gehoeren zum Einzelspieler-Spiel. **Die Phasen 5
-und 6 sind Version 2.x.x** - jede Aenderung, die den Mehrspieler
-betrifft, ist Arbeit an `2.x.x` (Arbeitsregel in Abschnitt 6). Mit dem
-Sprung auf `2.0.0` laeuft die Hauptreihe des Spiels dort weiter; die
-offenen Einzelspieler-Punkte werden in ihr mitgenommen, statt eine
-zweite Reihe zu fuehren.
+**Versionszuordnung (ueberarbeitet mit 1.1.0):** Alles unten laeuft in
+der **`1.x`-Reihe** - die offenen Einzelspieler-Punkte ebenso wie der
+Rest der Phase 5. **`2.0.0` ist fuer den fertigen Mehrspieler
+reserviert** (Arbeitsregel in Abschnitt 6): erst wenn Phase 5
+abgeschlossen ist, also samt der Demo-Aufzeichnung einer
+Mehrspieler-Runde (5.20), traegt das Spiel die grosse Zahl; die
+Server-Phase 6 baut danach darauf auf.
 
 Erledigt und nach HISTORY.md verschoben:
 
@@ -3535,7 +3626,7 @@ Erledigt und nach HISTORY.md verschoben:
   (Rundenende am oberen Feldrand); die
   Uebersichtstabelle in HISTORY.md
   listet jede Version mit ihrem Thema. Offen ist der Punkt unten
-- **Phase 5 - Mehrspieler** (2.0.0): die Schritte 1 bis 8 und 10 bis 12
+- **Phase 5 - Mehrspieler** (1.1.0): die Schritte 1 bis 8 und 10 bis 12
   (Transport, Protokoll, Hub und Lobby, Mitspieler-Anzeige in drei
   Stufen, Garbage, Rundenende, mehrere Spieler, Test-Bot und
   Fuzz-Review). Offen bleiben die zwei Punkte unten
@@ -3567,9 +3658,9 @@ Erledigt und nach HISTORY.md verschoben:
       serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
       keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
       umsetzbar.
-### Phase 5 - Multiplayer (Version 2.x.x; umgesetzt mit 2.0.0, offener Rest unten)
+### Phase 5 - Multiplayer (Version 1.x.x; Kern seit 1.1.0, offener Rest unten)
 
-Die Schritte 1 bis 8 sowie 10 bis 12 sind mit `2.0.0` umgesetzt und samt
+Die Schritte 1 bis 8 sowie 10 bis 12 sind mit `1.1.0` umgesetzt und samt
 ihrer Begruendung nach [HISTORY.md](HISTORY.md) gewandert; der aktuelle
 Zustand steht in Abschnitt 5. Offen ist ein Schritt:
 
@@ -3594,6 +3685,9 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
       steht deshalb hinter allem anderen.
 
 ### Phase 6 - Server-Betrieb, Accounts, Web (Version 2.x.x; spezifiziert in 5.11-5.19, noch nicht umgesetzt)
+
+Diese Phase beginnt hinter `2.0.0`, also hinter dem abgeschlossenen
+Mehrspieler (Arbeitsregel in Abschnitt 6).
 
 Setzt auf einem fertigen Phase 5 auf (der Mehrspieler-Kern muss laufen
 und sich per Playtesting bewaehrt haben, bevor Accounts/Web/Liga
@@ -3751,20 +3845,19 @@ Multi-Server zuletzt.
 Offene Punkte zum Mehrspieler (Spezifikation siehe Abschnitt 5; alles
 Uebrige dort ist entschieden):
 
-- **Siegbedingung im Versus-Modus:** gebaut ist mit 2.0.0 der
-  spezifizierte Modus aus 5.1/5.7/5.8 - **letzter Ueberlebender**, mit
-  Garbage und Ausscheiden, und den Rows als Tiebreaker, wenn zwei im
-  selben Moment ausscheiden. Das war die Fassung, die in der
-  Spezifikation stand und an der die Roadmap-Schritte haengen; die
-  Runde bleibt trotzdem an den Rows messbar, denn sie sind es, was in
-  die Bestenliste, die Statistik und den Weltwunderbau eingeht.
-  **Offen bleibt allein die Bestaetigung**, ob es dabei bleibt oder ob
-  zusaetzlich ein reiner Rows-Wettkampf ohne Garbage als zweiter
-  waehlbarer Modus dazukommen soll. Umbauen liesse sich das ohne
-  Bruch: der Hub entscheidet ueber Angriff, Ausscheiden und Rundenende
-  ohnehin allein, ein zweiter Modus waere eine Fallunterscheidung in
-  `hub_attack`/`hub_eliminate` und ein Eintrag in der Lobby.
-- **Fremdabhaengigkeit:** entschieden und seit 2.0.0 in Gebrauch
+- **Siegbedingung im Versus-Modus:** entschieden und umgesetzt
+  (Nutzerentscheidung mit 1.1.0). Sie ist **keine Festlegung des
+  Spiels mehr, sondern eine der Sitzung**: der Gastgeber waehlt in der
+  Lobby zwischen `survival` (wer uebrig bleibt - die Vorgabe),
+  `sprint` (die meisten Rows in der Zeit) und `ultra` (wer zuerst am
+  Ziel ist), und die Stoerreihen sind ein Schalter daneben, der
+  anfangs aus ist (siehe 5.1). Damit ist auch die frueher offene Frage
+  nach einem "reinen Rows-Wettkampf ohne Garbage" beantwortet: das ist
+  `sprint` bzw. `ultra` mit ausgeschalteten Stoerreihen.
+  Offen bleibt nur, welche Modi nach Playtesting dazukommen oder
+  wegfallen - die drei sind die, die sich in der Siegbedingung
+  unterscheiden.
+- **Fremdabhaengigkeit:** entschieden und seit 1.1.0 in Gebrauch
   (Nutzerentscheidung). **`socat` ist gesetzt**, weil die Discovery
   UDP-Broadcast braucht und `socat` als einziges der frueher
   erwogenen Programme Broadcast, TCP und Unix-Socket zugleich kann; die
@@ -3775,7 +3868,7 @@ Uebrige dort ist entschieden):
   **Weltwunder-Fortschritt und Statistik: ja, aber nur die eigene
   Leistung** - keine Reihe eines Mitspielers, kein Bonus fuer den Sieg
   (Nutzerentscheidung, siehe 5.8). Die zuletzt offene Frage nach der
-  **Bestenliste** ist mit 2.0.0 im Sinne der Empfehlung entschieden:
+  **Bestenliste** ist mit 1.1.0 im Sinne der Empfehlung entschieden:
   eine **eigene Liste `highscore-versus`** (siehe 4.5). Die drei Wege
   und warum es dieser wurde:
   - **Eigene Liste `highscore-versus`** (gebaut): dasselbe
@@ -3801,7 +3894,7 @@ Uebrige dort ist entschieden):
 - **Garbage-Werte** (0/1/2/4 Reihen, +2 Silber, +4 Gold, Deckel 10,
   `GARBAGE_*` in `lib/hub.sh`) sind aus der Reihenwertung abgeleitet,
   nicht aus dem Original - "The New Tetris" hat keinen vergleichbaren
-  Versus-Modus. Sie stehen seit 2.0.0 im Code und sind bislang nur
+  Versus-Modus. Sie stehen seit 1.1.0 im Code und sind bislang nur
   gerechnet, nicht gespielt: nach Playtesting nachjustieren.
 - **Zielwahl ab 3 Spielern:** Standard `random`. Ob eine manuelle
   Zielauswahl (Taste) gewuenscht ist, bleibt offen; die Tastenbelegung

@@ -124,7 +124,7 @@ STATS_RECENT=()
 # - for the modes that have one - how many of those ended in that mode's
 # regular ending rather than in a top-out: Ultra reaching
 # ULTRA_TARGET_ROWS, Sprint playing its full SPRINT_TIME_MS, Time Attack
-# running its clock down to zero and, since 2.0.0, a multiplayer round
+# running its clock down to zero and, since 1.1.0, a multiplayer round
 # won rather than lost (see rowhammer.sh). The share of attempts that got
 # there is the one figure no other stored number can reconstruct, because
 # a failed run never enters its mode's highscore list - and for the

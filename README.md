@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 2.0.0
+**Version:** 1.1.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -69,7 +69,7 @@ Anwendung startet in einem Menue mit Einzelspieler,
 Mehrspieler, Highscores, Weltwunder, Statistik, Demos,
 Einstellungen und einer kurzen Anleitung;
 die besten
-10 Runden werden dauerhaft gespeichert. Seit 2.0.0 ist der
+10 Runden werden dauerhaft gespeichert. Seit 1.1.0 ist der
 **Mehrspieler** kein Platzhalter mehr, sondern eine Runde gegen zwei bis
 sechs Leute im lokalen Netz (siehe unten). Dazu kommen die Politur-Schritte
 aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
@@ -83,12 +83,14 @@ und die offene Roadmap stehen in [CLAUDE.md](CLAUDE.md), die bereits
 abgeschlossenen Entwicklungsschritte je Version in
 [HISTORY.md](HISTORY.md).
 
-Der **Mehrspieler-Modus** ist die Arbeit an **Version 2.x.x**: der
-Kern - Sitzung eroeffnen und beitreten, gemeinsame Steinfolge,
-Stoerreihen, Ausscheiden und Sieger - laeuft seit 2.0.0. Offen bleiben
-die Demo-Aufzeichnung einer Mehrspieler-Runde und der Server-Betrieb
-darum herum (Phase 6: Accounts, Web-Highscore, Liga; siehe Roadmap in
-[CLAUDE.md](CLAUDE.md)).
+Der **Mehrspieler-Modus** ist noch nicht fertig und waechst deshalb in
+der `1.x`-Reihe weiter: der Kern - Sitzung eroeffnen und beitreten,
+gemeinsame Steinfolge, Sitzungseinstellungen des Gastgebers,
+Stoerreihen, Ausscheiden und Sieger - laeuft seit 1.1.0. **`2.0.0` ist
+fuer den fertigen Mehrspieler reserviert**; offen ist bis dahin die
+Demo-Aufzeichnung einer Mehrspieler-Runde. Danach folgt der
+Server-Betrieb darum herum (Phase 6: Accounts, Web-Highscore, Liga;
+siehe Roadmap in [CLAUDE.md](CLAUDE.md)).
 
 ## Spielen
 
@@ -432,9 +434,11 @@ Umgesetzt:
   (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
 - Startmenue mit Einzelspieler, Mehrspieler, Highscores,
   Weltwunder, Statistik, Demos, Einstellungen und Anleitung
-- **Mehrspieler im lokalen Netz** (seit 2.0.0): zwei bis sechs Spieler,
-  gemeinsame Steinfolge, Stoerreihen durch abgebaute Reihen, Ausscheiden
-  bei vollem Feld, letzter im Feld gewinnt; Sitzungssuche per
+- **Mehrspieler im lokalen Netz** (seit 1.1.0): zwei bis sechs Spieler,
+  gemeinsame Steinfolge, Sitzungseinstellungen des Gastgebers (Modus
+  mit der Siegbedingung - Ueberleben, Sprint oder Ultra - und ein
+  Schalter fuer die Stoerreihen, anfangs aus), fuer alle sichtbar in
+  der Lobby; Ausscheiden bei vollem Feld; Sitzungssuche per
   UDP-Broadcast oder Verbindung ueber eine eingegebene Adresse, Anzeige
   der Mitspieler als Mini-Felder oder - bei schmalem Terminal - als
   Kurzzeilen; eigene Bestenliste und eigener Statistik-Modus. Braucht
@@ -526,12 +530,26 @@ Geplant:
 
 ## Mehrspieler im lokalen Netz
 
-Seit 2.0.0. **Zwei bis sechs Leute**, jeder an seinem eigenen Feld, alle
+Seit 1.1.0. **Zwei bis sechs Leute**, jeder an seinem eigenen Feld, alle
 mit **derselben Steinfolge** - wer gewinnt, entscheidet das Spiel und
-nicht das Glueck. Abgebaute Reihen schicken dem Gegner **Stoerreihen**
-(eine volle Reihe mit genau einem Loch, die den Stapel nach oben
-drueckt); wer oben aus dem Feld baut, scheidet aus und schaut den
-anderen zu, und der letzte im Feld gewinnt.
+nicht das Glueck. Wer oben aus dem Feld baut, scheidet aus und schaut
+den anderen zu.
+
+**Der Gastgeber legt die Regeln fest**, und sie stehen in der Lobby
+jedes Spielers:
+
+| Modus | Wer gewinnt |
+|---|---|
+| **Ueberleben** (Vorgabe) | wer als Letzter im Feld ist |
+| **Sprint** | wer nach 3 Minuten die meisten Rows hat |
+| **Ultra** | wer zuerst 150 Rows abgebaut hat |
+
+Dazu ein Schalter fuer die **Stoerreihen** (Vorgabe: **aus**). Ist er
+an, schickt jeder Reihenabbau dem Gegner eine volle Reihe mit genau
+einem Loch, die dessen Stapel nach oben drueckt - und ein eigener Abbau
+raeumt zuerst die eigene Warteschlange, sodass sich der Gegenangriff
+gegenueber reiner Abwehr lohnt. Gold- und Silberquadrate sind dabei die
+staerksten Angriffe.
 
 **Eine Runde spielen:**
 
@@ -543,15 +561,19 @@ anderen zu, und der letzte im Feld gewinnt.
    VLANs, manche Container-Netze), nimmt man *Direkt verbinden* und
    tippt die Adresse aus der Lobby ein - ein gleichwertiger zweiter Weg,
    kein Notnagel.
-3. Der Gastgeber startet, sobald genug Leute da sind. Ab dem zweiten
-   Spieler ist der Eintrag frei; auf eine vorher verabredete Zahl wartet
-   niemand.
+3. Der Gastgeber stellt ueber *Einstellungen* Modus und Stoerreihen ein
+   - alle sehen die Aenderung sofort in ihrer Lobby - und startet,
+   sobald genug Leute da sind. Ab dem zweiten Spieler ist der Eintrag
+   frei; auf eine vorher verabredete Zahl wartet niemand.
 
 Ohne Menue geht es auch direkt:
 
 ```
 # Gastgeber
 rowhammer --mp-host
+
+# Gastgeber, der immer Sprint mit Stoerreihen spielt
+rowhammer --mp-host --mp-mode sprint --mp-garbage on
 
 # Beitreten
 rowhammer --mp-join 192.168.1.23
@@ -560,8 +582,9 @@ rowhammer --mp-join 192.168.1.23
 **Was waehrend der Runde anders ist:** Es gibt **keine Pause** - die
 anderen warten nicht. `Esc`/`x` oeffnet ein kleines Menue mit
 *Fortsetzen* und *Runde verlassen*; die Verbindung laeuft dabei weiter.
-Im HUD stehen links die wartenden Stoerreihen ("Muell") und die Zahl der
-Spieler, die noch im Rennen sind ("Gegner"). Die Mitspieler zeigt das
+Im HUD stehen links das Ziel des Modus (bei Sprint und Ultra), die
+wartenden Stoerreihen ("Muell", nur wenn sie eingeschaltet sind) und die
+Zahl der Spieler, die noch im Rennen sind ("Gegner"). Die Mitspieler zeigt das
 Spiel rechts neben dem Feld als **Mini-Felder**; ist das Terminal dafuer
 zu schmal, werden daraus zwei Zeilen bzw. eine Zeile je Gegner, sodass
 eine Runde auch im 48x22-Minimum laeuft (`--mp-view`).

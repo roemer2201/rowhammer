@@ -14,6 +14,11 @@
 #   its gap sits in, who receives it, in which order players are knocked
 #   out and when the round is over. Clients report events (CLEAR, TOPOUT),
 #   never consequences.
+#   It also keeps the session settings the host picks in the lobby (SETUP,
+#   since 1.1.0): the mode - survival, sprint or ultra, which is to say
+#   who wins - and whether garbage flies at all. They are taken from slot
+#   0 only and only while no round is running, and they are what
+#   hub_end_round asks when it has to name a winner.
 #   It speaks to nobody directly. socat listens (TCP4-LISTEN in the "lan"
 #   transport, UNIX-LISTEN in "unix") and starts one bridge process per
 #   connection ("rowhammer.sh --mp-bridge"); the bridge has the socket on
@@ -26,7 +31,7 @@
 #   shared inbox is atomic, which is what lets several bridges share it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.0.0  (2026-08-11)
+# Version: 1.1.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -89,11 +94,31 @@ HUB_BAD=()
 # for as long as the connection lives.
 declare -A HUB_SLOT_OF_ID=()
 
+# The session settings, decided by the host in the lobby and sent to
+# everybody (see hub_msg_setup): the mode of the round and whether
+# cleared rows send garbage.
+# "survival" is the default because it is the mode that needs no
+# explaining - play until your field is full, the last one left wins -
+# and garbage is **off** by default (user decision): a duel in which
+# somebody else fills your board is the more demanding game, and it
+# should be something the host switches on rather than something a
+# first-time player is handed without being asked.
+# The two values start from what the host's command line said
+# (--mp-mode / --mp-garbage, see rowhammer.sh); from then on the settings
+# menu in the lobby owns them.
+HUB_MODE="${MP_MODE_OPT:-survival}"
+HUB_GARBAGE=0
+if [ "${MP_GARBAGE_OPT:-off}" = "on" ]; then
+    HUB_GARBAGE=1
+fi
+
 # Session-wide state: whether the loop runs, whether the round is on,
 # the roster's "something changed" flag and the timestamps of the periodic
-# work.
+# work. HUB_ROUND_END_MS is the moment the sprint mode's clock runs out
+# (0 in the modes that have no clock).
 HUB_RUN=1
 HUB_PLAYING=0
+HUB_ROUND_END_MS=0
 HUB_ROSTER_DIRTY=1
 HUB_NEXT_BEACON_MS=0
 HUB_NEXT_PING_MS=0
@@ -332,6 +357,7 @@ hub_client_msg() {
     case "${PROTO_VERB}" in
         HELLO)  hub_msg_hello "${slot}" ;;
         VIEW)   hub_msg_view "${slot}" ;;
+        SETUP)  hub_msg_setup "${slot}" ;;
         READY)  hub_msg_ready "${slot}" ;;
         STATE)  hub_msg_state "${slot}" ;;
         BOARD)  hub_msg_board "${slot}" ;;
@@ -368,6 +394,9 @@ hub_msg_hello() {
     HUB_STATE[slot]="lobby"
     proto_msg WELCOME "${slot}" "${PROTO_VERSION}" "${MP_MAX}"
     hub_send "${slot}" "${PROTO_LINE}" || :
+    # The settings before the roster: a client that has just been let in
+    # should know what it has joined before it sees who it plays against.
+    hub_setup_send "${slot}"
     HUB_ROSTER_DIRTY=1
     # A new player changes who is looking at whom, so the send flags are
     # re-derived here as well as on every VIEW.
@@ -401,6 +430,42 @@ hub_msg_ready() {
     return 0
 }
 
+# hub_msg_setup SLOT: SETUP <mode> <garbage>
+# The host changes the rules of the session. Refused from anybody else
+# and refused once the round runs - the settings decide how the round is
+# won, and a rule that changes mid-round is no rule. Both refusals are
+# silent towards the sender's screen (it has no entry to press) and land
+# in the debug log; a client that sends this without being the host is
+# not malformed, only wrong about who it is.
+# The new settings go to everybody, the host included: the lobby of every
+# player shows them, which is the whole point of putting them in the
+# hands of one person.
+hub_msg_setup() {
+    local slot="${1}"
+    if [ "${slot}" -ne 0 ] || [ "${HUB_PLAYING}" -eq 1 ]; then
+        debug_event "hub: SETUP from slot ${slot} ignored (host=0, playing=${HUB_PLAYING})"
+        return 0
+    fi
+    HUB_MODE="${PROTO_ARG[0]}"
+    HUB_GARBAGE="${PROTO_ARG[1]}"
+    debug_event "hub: settings changed to mode=${HUB_MODE} garbage=${HUB_GARBAGE}"
+    hub_setup_send
+    return 0
+}
+
+# hub_setup_send [SLOT]
+# Send the session settings to one slot, or to everybody when no slot is
+# given.
+hub_setup_send() {
+    proto_msg SETUP "${HUB_MODE}" "${HUB_GARBAGE}"
+    if [ "$#" -ge 1 ]; then
+        hub_send "${1}" "${PROTO_LINE}" || :
+        return 0
+    fi
+    hub_bcast "${PROTO_LINE}"
+    return 0
+}
+
 # hub_msg_state SLOT: STATE <lines> <rows> <level> <gold> <silver> <height> <pending>
 # A player's counters. Kept and forwarded to everybody else as PEER; the
 # pending figure the client reports is display only - the hub keeps its
@@ -417,6 +482,16 @@ hub_msg_state() {
         "${HUB_LEVEL[slot]}" "${HUB_GOLD[slot]}" "${HUB_SILVER[slot]}" \
         "${HUB_HEIGHT[slot]}" "${HUB_PENDING[slot]}" "${HUB_STATE[slot]}"
     hub_bcast "${PROTO_LINE}" "${slot}"
+    # Ultra: the first player past the row target has won, and this is the
+    # message that says so - the counters are the only thing the hub knows
+    # about a player's progress. Checked here rather than on a timer, so
+    # the round ends on the clear that decided it.
+    if [ "${HUB_PLAYING}" -eq 1 ] && [ "${HUB_MODE}" = "ultra" ] \
+        && [ "${HUB_STATE[slot]}" = "play" ] \
+        && [ "${HUB_ROWS[slot]}" -ge "${ULTRA_TARGET_ROWS}" ]; then
+        debug_event "hub: slot ${slot} reached the ultra target (${HUB_ROWS[slot]}/${ULTRA_TARGET_ROWS})"
+        hub_end_round "${slot}"
+    fi
     return 0
 }
 
@@ -567,6 +642,13 @@ hub_deal() {
 hub_msg_clear() {
     local slot="${1}" lines="${PROTO_ARG[0]}" cancel
     [ "${HUB_STATE[slot]}" = "play" ] || return 0
+    # Garbage off (the default, see HUB_GARBAGE): the clear is still a
+    # clear - it counts towards the player's rows, which is what every
+    # mode is scored by - it just does not travel. Nothing else about the
+    # round changes, which is why this is a switch and not a mode.
+    if [ "${HUB_GARBAGE}" -ne 1 ]; then
+        return 0
+    fi
     hub_attack "${lines}" "${PROTO_ARG[1]}" "${PROTO_ARG[2]}"
     cancel="${HUB_ATTACK}"
     if [ "${cancel}" -gt "${HUB_PENDING[slot]}" ]; then
@@ -601,6 +683,11 @@ hub_msg_applied() {
 # and take the highest place still free.
 hub_msg_topout() {
     local slot="${1}"
+    # A round that is already decided cannot be lost again. The message is
+    # not a mistake: the winner's own board keeps running for the handful
+    # of milliseconds between the hub's END and the client noticing it, so
+    # a late top-out is the normal case rather than the odd one.
+    [ "${HUB_PLAYING}" -eq 1 ] || return 0
     [ "${HUB_STATE[slot]}" = "play" ] || return 0
     hub_eliminate "${slot}" "ko"
     return 0
@@ -623,7 +710,16 @@ hub_eliminate() {
     hub_bcast "${PROTO_LINE}"
     HUB_ROSTER_DIRTY=1
     debug_event "hub: slot ${slot} (${HUB_NAME[slot]}) out as ${state}, place ${HUB_PLACE[slot]}"
-    if [ "${HUB_ALIVE}" -le 1 ]; then
+    # When an elimination ends the round is the one thing the mode decides
+    # (CLAUDE.md 5.1): in survival the last player standing has won and
+    # there is nothing left to play for, while in sprint and ultra the
+    # rows decide - so a lone survivor plays on, because somebody who
+    # already topped out may still be ahead of them.
+    if [ "${HUB_MODE}" = "survival" ]; then
+        if [ "${HUB_ALIVE}" -le 1 ]; then
+            hub_end_round
+        fi
+    elif [ "${HUB_ALIVE}" -eq 0 ]; then
         hub_end_round
     fi
     return 0
@@ -647,30 +743,101 @@ hub_start_round() {
         HUB_PLACE[i]=0
     done
     HUB_PLAYING=1
+    # The settings once more, right before the round: they decide how it
+    # is played and won, and a client that joined while the host was still
+    # switching things around must not start under the old ones.
+    hub_setup_send
     proto_msg SEED "${seed}"
     hub_bcast "${PROTO_LINE}"
     proto_msg START "${HUB_COUNTDOWN_MS}"
     hub_bcast "${PROTO_LINE}"
+    # Sprint runs against a clock the hub owns. It starts when the
+    # countdown ends, so everybody gets the same three minutes; the
+    # clients count the same limit down for their own display, but only
+    # this clock ends the round.
+    HUB_ROUND_END_MS=0
+    if [ "${HUB_MODE}" = "sprint" ]; then
+        now_ms
+        HUB_ROUND_END_MS=$(( NOW_MS + HUB_COUNTDOWN_MS + SPRINT_TIME_MS ))
+    fi
     HUB_ROSTER_DIRTY=1
     hub_count_players
-    debug_event "hub: round starts with ${HUB_PLAYERS} player(s), seed=${seed}, target mode=${MP_TARGET}"
+    debug_event "hub: round starts with ${HUB_PLAYERS} player(s), seed=${seed}, mode=${HUB_MODE}, garbage=${HUB_GARBAGE}, target mode=${MP_TARGET}"
     return 0
 }
 
-# hub_end_round
-# The round is decided: the last player standing wins. If the last two
-# went out in the same moment - which the loop can produce, since two
-# messages are handled one after the other - the higher row credit
-# decides and the lower slot breaks a tie, exactly as CLAUDE.md 5.8 says.
-hub_end_round() {
-    local i winner=-1 best=-1
+# hub_places_by_rows WINNER
+# Give every player the place their row credit earned them and tell them:
+# the winner is first (they are handed in, because in ultra that is the
+# player who hit the target rather than the one with the most rows), the
+# rest follow by rows, and equal rows go to the lower slot - the one
+# tiebreaker that reads the same for everybody.
+# The places are sent as KO, the message that carries a place already;
+# a client simply takes the newer one.
+hub_places_by_rows() {
+    local winner="${1}" place=1 i best rows
+    local -a left=()
     for (( i = 0; i < MP_MAX; i++ )); do
         [ -n "${HUB_NAME[i]}" ] || continue
-        if [ "${HUB_STATE[i]}" = "play" ]; then
-            winner="${i}"
-            break
-        fi
+        [ "${i}" -ne "${winner}" ] || continue
+        left+=("${i}")
     done
+    if [ "${winner}" -ge 0 ]; then
+        HUB_PLACE[winner]=1
+        place=2
+    fi
+    # Selection sort over at most six entries: shorter than any clever
+    # alternative and free at this size.
+    while [ "${#left[@]}" -gt 0 ]; do
+        best=0
+        rows="${HUB_ROWS[${left[0]}]}"
+        for (( i = 1; i < ${#left[@]}; i++ )); do
+            if [ "${HUB_ROWS[${left[i]}]}" -gt "${rows}" ]; then
+                rows="${HUB_ROWS[${left[i]}]}"
+                best="${i}"
+            fi
+        done
+        HUB_PLACE[${left[best]}]="${place}"
+        proto_msg KO "${left[best]}" "${place}"
+        hub_bcast "${PROTO_LINE}"
+        left=("${left[@]:0:best}" "${left[@]:best+1}")
+        place=$(( place + 1 ))
+    done
+    return 0
+}
+
+# hub_end_round [WINNER]
+# The round is decided. Who won is the mode's question and therefore the
+# one thing this function asks it about (CLAUDE.md 5.1/5.8):
+#   survival - the last player standing. If the last two went out in the
+#              same moment - which the loop can produce, since two
+#              messages are handled one after the other - the higher row
+#              credit decides and the lower slot breaks a tie.
+#   sprint   - the most rows when the clock ran out, over everybody who
+#              took part; somebody who topped out early keeps the rows
+#              they scored, which is why a lone survivor cannot simply
+#              sit out the rest.
+#   ultra    - the first player past the target, which is who the caller
+#              hands in as WINNER; without one (everybody topped out
+#              first) the most rows decide, as in sprint.
+# Ties always go to the lower slot, because a duel needs an answer and
+# the slot order is the only tiebreaker that is the same for everybody.
+hub_end_round() {
+    local winner="${1:--1}"
+    local i best=-1
+    # Once only. Several things can decide a round in the same tick - the
+    # last elimination, the sprint clock, a late top-out - and a second
+    # END would tell everybody a different winner than the first.
+    [ "${HUB_PLAYING}" -eq 1 ] || return 0
+    if [ "${winner}" -lt 0 ] && [ "${HUB_MODE}" = "survival" ]; then
+        for (( i = 0; i < MP_MAX; i++ )); do
+            [ -n "${HUB_NAME[i]}" ] || continue
+            if [ "${HUB_STATE[i]}" = "play" ]; then
+                winner="${i}"
+                break
+            fi
+        done
+    fi
     if [ "${winner}" -lt 0 ]; then
         for (( i = 0; i < MP_MAX; i++ )); do
             [ -n "${HUB_NAME[i]}" ] || continue
@@ -680,13 +847,22 @@ hub_end_round() {
             fi
         done
     fi
+    # In the modes that are decided by rows, the places a player was
+    # given as they dropped out say the wrong thing: they are the order of
+    # dying, and here the order is the score. They are recomputed and sent
+    # again before the round ends, so everybody's result box names the
+    # place they really took.
+    if [ "${HUB_MODE}" != "survival" ]; then
+        hub_places_by_rows "${winner}"
+    fi
     if [ "${winner}" -ge 0 ]; then
         HUB_PLACE[winner]=1
     fi
     HUB_PLAYING=0
+    HUB_ROUND_END_MS=0
     proto_msg END "${winner}"
     hub_bcast "${PROTO_LINE}"
-    debug_event "hub: round over, winner slot ${winner} (${HUB_NAME[winner]:-none})"
+    debug_event "hub: round over (mode=${HUB_MODE}), winner slot ${winner} (${HUB_NAME[winner]:-none})"
     return 0
 }
 
@@ -715,6 +891,14 @@ hub_periodic() {
         net_beacon_line "${MP_SESSION}" "${HUB_PLAYERS}" "${MP_MAX}" \
             "${MP_PORT}" "${state}"
         net_beacon_send "${NET_BEACON}" || :
+    fi
+    # Sprint: the clock is the round's ending, so it is checked on the
+    # same pass as the ping rather than waiting for a message that may
+    # never come (a player who stopped playing sends nothing).
+    if [ "${HUB_PLAYING}" -eq 1 ] && [ "${HUB_ROUND_END_MS}" -gt 0 ] \
+        && (( NOW_MS >= HUB_ROUND_END_MS )); then
+        debug_event "hub: sprint time is up after ${SPRINT_TIME_MS}ms"
+        hub_end_round
     fi
     if (( NOW_MS >= HUB_NEXT_PING_MS )); then
         HUB_NEXT_PING_MS=$(( NOW_MS + MP_PING_MS ))
