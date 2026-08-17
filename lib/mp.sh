@@ -1,0 +1,1470 @@
+#!/usr/bin/env bash
+#
+# lib/mp.sh
+#
+# Description:
+#   Client side of the rowhammer multiplayer (CLAUDE.md 5.3/5.6/5.10):
+#   the "Mehrspieler" menu, the session search, the lobby, the peer states
+#   and everything the running round needs to talk to the hub.
+#   Three ways into a session, all of them ending in the same lobby: open
+#   one (which starts a hub process in the background and connects to it
+#   like any other client - the host is simply the client in slot 0),
+#   join one found by its beacon, or connect to an address typed by hand.
+#   The third is not a fallback but an equal path: WLANs with client
+#   isolation, separate VLANs and quite a few container networks drop
+#   broadcasts, and without it the game would be broken there for no
+#   reason a player could see. That is also why the lobby shows the host
+#   its own address and port - an address one has to look up with "ip
+#   addr" first is no help to somebody who is stuck.
+#   The lobby also carries the session settings the host decides on - the
+#   mode, which decides how the round is won, and whether garbage flies -
+#   and shows them to every player, not only to the one who set them
+#   (mp_settings_menu, CLAUDE.md 5.1).
+#   During the round mp_poll drains the link once per tick and applies
+#   what arrived; nothing here ever blocks, and nothing here draws - the
+#   peers are painted by lib/render.sh from the arrays this module keeps.
+#   The client reports events and never consequences: it sends its
+#   counters, its clears and its top-out, and the hub decides what they
+#   are worth (see lib/hub.sh).
+#   Library file: sourced by rowhammer.sh, not meant to be executed directly.
+#
+# Version: 1.1.0  (2026-08-11)
+
+# Guard: this file is a library and must be sourced, not executed.
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    printf 'lib/mp.sh is a library; source it from rowhammer.sh\n' >&2
+    exit 2
+fi
+
+# --- Session state --------------------------------------------------------
+# MP_ACTIVE is read all over the game loop and the renderer: 1 means this
+# round is a multiplayer round. MP_SLOT is our own slot, MP_STATE what the
+# hub thinks we are doing, MP_PHASE where the session is (lobby, play,
+# end).
+MP_ACTIVE=0
+MP_SLOT=-1
+MP_STATE="lobby"
+MP_PHASE="lobby"
+# Whether this client started the hub (and may therefore start the round),
+# and the process id of that hub.
+MP_IS_HOST=0
+MP_HUB_PID=0
+# Garbage waiting to be pushed into our board, and the gap column of the
+# rows waiting. The hub owns the authoritative queue length and corrects
+# ours with QUEUE whenever a clear of ours cancelled part of it.
+MP_PENDING=0
+MP_HOLE=0
+# The round's outcome as the hub reported it: our place, the winning slot
+# and whether the round has been decided at all.
+MP_PLACE=0
+MP_WINNER=-1
+MP_ENDED=0
+# Why the session ended, for the message shown afterwards: "" (regular),
+# "lost" (connection gone), "err:<code>" (the hub refused us).
+MP_ERROR=""
+# How much of the round's state still has to reach the hub: the counters
+# are only sent when they changed, and a board snapshot only when one is
+# wanted (NEEDBOARD) and at most MP_BOARD_MS apart.
+MP_NEEDBOARD=0
+MP_LAST_STATE=""
+MP_NEXT_BOARD_MS=0
+MP_BOARD_MS=200
+# Start of the round, counted down from the hub's START.
+MP_START_MS=0
+# The session settings as the hub last sent them (SETUP): the mode of the
+# round and whether cleared rows send garbage. Every client keeps them,
+# not only the host - the lobby of every player shows them, and during the
+# round they decide what the HUD has to show and what the result means.
+# The defaults here are the hub's; they are overwritten by the first SETUP
+# the moment a client is let in.
+MP_MODE="survival"
+MP_GARBAGE=0
+# The modes the host can pick, in the order the settings menu offers them.
+# One entry per win condition - which is what makes them modes rather than
+# options (see CLAUDE.md 5.1).
+MP_MODES=(survival sprint ultra)
+
+# Peer tables, indexed by slot. Every one of them is filled from validated
+# protocol fields only (lib/proto.sh), and the renderer clamps them again
+# before they reach the screen - the hub is not trusted either, it could
+# be a different program altogether (CLAUDE.md 5.5).
+MP_PEER_NAME=()
+MP_PEER_READY=()
+MP_PEER_STATE=()
+MP_PEER_ROWS=()
+MP_PEER_LINES=()
+MP_PEER_LEVEL=()
+MP_PEER_GOLD=()
+MP_PEER_SILVER=()
+MP_PEER_HEIGHT=()
+MP_PEER_PENDING=()
+MP_PEER_PLACE=()
+MP_PEER_BOARD=()
+
+# mp_reset
+# Clear the whole session state. Called before every join attempt, so a
+# second session never inherits anything from the first.
+mp_reset() {
+    local i
+    MP_SLOT=-1
+    MP_STATE="lobby"
+    MP_PHASE="lobby"
+    MP_PENDING=0
+    MP_HOLE=0
+    MP_PLACE=0
+    MP_WINNER=-1
+    MP_ENDED=0
+    MP_ERROR=""
+    MP_NEEDBOARD=0
+    MP_LAST_STATE=""
+    MP_NEXT_BOARD_MS=0
+    MP_START_MS=0
+    MP_VIEW_SENT=-1
+    MP_MODE="survival"
+    MP_GARBAGE=0
+    for (( i = 0; i < MP_MAX; i++ )); do
+        MP_PEER_NAME[i]=""
+        MP_PEER_READY[i]=0
+        MP_PEER_STATE[i]="lobby"
+        MP_PEER_ROWS[i]=0
+        MP_PEER_LINES[i]=0
+        MP_PEER_LEVEL[i]=0
+        MP_PEER_GOLD[i]=0
+        MP_PEER_SILVER[i]=0
+        MP_PEER_HEIGHT[i]=0
+        MP_PEER_PENDING[i]=0
+        MP_PEER_PLACE[i]=0
+        MP_PEER_BOARD[i]=""
+    done
+    return 0
+}
+
+# mp_peer_count
+# How many other players the session has (slots with a name that are not
+# our own), into MP_PEER_COUNT, and their slot numbers in MP_PEER_SLOTS.
+# The renderer asks this to pick its detail level and to lay the mini
+# boards out.
+MP_PEER_COUNT=0
+MP_PEER_SLOTS=()
+mp_peer_count() {
+    local i
+    MP_PEER_COUNT=0
+    MP_PEER_SLOTS=()
+    for (( i = 0; i < MP_MAX; i++ )); do
+        [ -n "${MP_PEER_NAME[i]}" ] || continue
+        [ "${i}" -ne "${MP_SLOT}" ] || continue
+        MP_PEER_SLOTS+=("${i}")
+        MP_PEER_COUNT=$(( MP_PEER_COUNT + 1 ))
+    done
+    return 0
+}
+
+# mp_alive_count
+# How many players are still in the round, into MP_ALIVE - the opponents
+# whose state is neither "ko" nor "gone", plus this player when their own
+# board is still standing. The HUD shows it: in a duel it is the number
+# that says whether this is still a race or already a victory lap.
+MP_ALIVE=0
+mp_alive_count() {
+    local i
+    MP_ALIVE=0
+    if [ "${MP_STATE}" = "play" ]; then
+        MP_ALIVE=1
+    fi
+    for (( i = 0; i < MP_MAX; i++ )); do
+        [ -n "${MP_PEER_NAME[i]}" ] || continue
+        [ "${i}" -ne "${MP_SLOT}" ] || continue
+        case "${MP_PEER_STATE[i]}" in
+            ko|gone) : ;;
+            *) MP_ALIVE=$(( MP_ALIVE + 1 )) ;;
+        esac
+    done
+    return 0
+}
+
+# --- Receiving ------------------------------------------------------------
+# mp_handle LINE
+# Apply one message from the hub. Every field it reads has been through
+# the whitelist parser first, so no value here needs a second look before
+# it is used as a number or an array index.
+mp_handle() {
+    local line="${1}" rc=0 slot
+    proto_parse "${line}" || rc=$?
+    if [ "${rc}" -ne 0 ]; then
+        # An unknown verb (2) is ignored on purpose; a malformed line (1)
+        # is dropped and noted. A client does not hang up on its hub for
+        # it: the hub is the only peer it has, and losing the round over
+        # one bad line would be worse than ignoring it.
+        net_log "bad" "${line}"
+        return 0
+    fi
+    case "${PROTO_VERB}" in
+        WELCOME)
+            MP_SLOT="${PROTO_ARG[0]}"
+            debug_event "mp: welcome, slot ${MP_SLOT} of ${PROTO_ARG[2]}"
+            ;;
+        ROSTER)
+            slot="${PROTO_ARG[0]}"
+            if [ "${slot}" -lt "${MP_MAX}" ]; then
+                MP_PEER_NAME[slot]="${PROTO_ARG[1]}"
+                MP_PEER_READY[slot]="${PROTO_ARG[2]}"
+                MP_PEER_STATE[slot]="${PROTO_ARG[3]}"
+            fi
+            ;;
+        SEED)
+            # The shared piece sequence: everybody plays the same pieces,
+            # which is what makes the duel about play rather than luck. A
+            # --seed given on the host's command line became this seed in
+            # the hub; on every client it simply arrives here.
+            RANDOM="${PROTO_ARG[0]}"
+            debug_event "mp: seed ${PROTO_ARG[0]}"
+            ;;
+        START)
+            now_ms
+            MP_START_MS=$(( NOW_MS + ${PROTO_ARG[0]} ))
+            MP_PHASE="start"
+            ;;
+        PEER)
+            slot="${PROTO_ARG[0]}"
+            if [ "${slot}" -lt "${MP_MAX}" ]; then
+                MP_PEER_LINES[slot]="${PROTO_ARG[1]}"
+                MP_PEER_ROWS[slot]="${PROTO_ARG[2]}"
+                MP_PEER_LEVEL[slot]="${PROTO_ARG[3]}"
+                MP_PEER_GOLD[slot]="${PROTO_ARG[4]}"
+                MP_PEER_SILVER[slot]="${PROTO_ARG[5]}"
+                MP_PEER_HEIGHT[slot]="${PROTO_ARG[6]}"
+                MP_PEER_PENDING[slot]="${PROTO_ARG[7]}"
+                MP_PEER_STATE[slot]="${PROTO_ARG[8]}"
+                DIRTY=1
+            fi
+            ;;
+        PEERBOARD)
+            slot="${PROTO_ARG[0]}"
+            if [ "${slot}" -lt "${MP_MAX}" ]; then
+                MP_PEER_BOARD[slot]="${PROTO_ARG[1]}"
+                DIRTY=1
+            fi
+            ;;
+        NEEDBOARD)
+            MP_NEEDBOARD="${PROTO_ARG[0]}"
+            ;;
+        SETUP)
+            # What the host settled on. Taken as it comes: the hub is the
+            # one that decides, and a client that argued with it would
+            # only be playing a different round from everybody else.
+            MP_MODE="${PROTO_ARG[0]}"
+            MP_GARBAGE="${PROTO_ARG[1]}"
+            debug_event "mp: session settings mode=${MP_MODE} garbage=${MP_GARBAGE}"
+            DIRTY=1
+            ;;
+        GARBAGE)
+            # Queued, not applied: garbage comes in at the next lock, never
+            # while a piece is falling, so the move in progress stays
+            # plannable (CLAUDE.md 5.7).
+            MP_PENDING=$(( MP_PENDING + ${PROTO_ARG[0]} ))
+            MP_HOLE="${PROTO_ARG[1]}"
+            debug_event "mp: ${PROTO_ARG[0]} garbage row(s) incoming, hole=${MP_HOLE}, queue=${MP_PENDING}"
+            DIRTY=1
+            ;;
+        QUEUE)
+            # The hub cancelled part of our queue against a clear of ours
+            # and tells us what is left of it. Its number wins over ours.
+            MP_PENDING="${PROTO_ARG[0]}"
+            DIRTY=1
+            ;;
+        KO)
+            slot="${PROTO_ARG[0]}"
+            if [ "${slot}" -lt "${MP_MAX}" ]; then
+                MP_PEER_PLACE[slot]="${PROTO_ARG[1]}"
+                MP_PEER_STATE[slot]="ko"
+                if [ "${slot}" -eq "${MP_SLOT}" ]; then
+                    MP_PLACE="${PROTO_ARG[1]}"
+                    MP_STATE="ko"
+                fi
+                DIRTY=1
+            fi
+            ;;
+        END)
+            MP_WINNER="${PROTO_ARG[0]}"
+            MP_ENDED=1
+            MP_PHASE="end"
+            if [ "${MP_WINNER}" -eq "${MP_SLOT}" ]; then
+                MP_PLACE=1
+            fi
+            debug_event "mp: round over, winner slot ${MP_WINNER}, own place ${MP_PLACE}"
+            DIRTY=1
+            ;;
+        PING)
+            proto_msg PONG "${PROTO_ARG[0]}"
+            net_send "${PROTO_LINE}" || :
+            ;;
+        ERR)
+            MP_ERROR="err:${PROTO_ARG[0]}"
+            debug_event "mp: hub error ${PROTO_ARG[0]}: ${PROTO_ARG[1]:-}"
+            ;;
+    esac
+    return 0
+}
+
+# mp_poll
+# Drain the link and apply everything that arrived. Returns 1 when the
+# link is gone, which the caller turns into "connection lost". Called once
+# per game tick and, during the clear animation, from flash_rows as well:
+# 280 ms without reading would let the hub's messages pile up right at the
+# moment a clear is being reported.
+mp_poll() {
+    local line
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    if ! net_poll; then
+        MP_ERROR="lost"
+        return 1
+    fi
+    for line in ${NET_INBOX[@]+"${NET_INBOX[@]}"}; do
+        mp_handle "${line}"
+    done
+    return 0
+}
+
+# --- Sending --------------------------------------------------------------
+# mp_send_state
+# Report our counters, but only when they actually changed - the limit in
+# the protocol is ten a second, and a round produces far fewer changes
+# than that. The peers see the same numbers our own HUD shows.
+mp_send_state() {
+    local key
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    proto_stack_height
+    key="${CLEARED_TOTAL}|${ROW_CREDIT}|${LEVEL}|${GOLD_COUNT}|${SILVER_COUNT}|${PROTO_HEIGHT}|${MP_PENDING}"
+    if [ "${key}" = "${MP_LAST_STATE}" ]; then
+        return 0
+    fi
+    MP_LAST_STATE="${key}"
+    proto_msg STATE "${CLEARED_TOTAL}" "${ROW_CREDIT}" "${LEVEL}" \
+        "${GOLD_COUNT}" "${SILVER_COUNT}" "${PROTO_HEIGHT}" "${MP_PENDING}"
+    net_send "${PROTO_LINE}" || :
+    return 0
+}
+
+# mp_send_view LEVEL
+# Tell the hub whether this client is drawing the opponents' boards. Sent
+# only when the answer changes, which is at the start of a round and
+# whenever a resize moves the detail level across the line (see
+# render_peer_level in lib/render.sh, which is where this is called from -
+# the level is decided per frame, and this is the one thing about it the
+# hub has to know).
+MP_VIEW_SENT=-1
+mp_send_view() {
+    local want=0
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    if [ "${1}" -ge 2 ]; then
+        want=1
+    fi
+    [ "${want}" -ne "${MP_VIEW_SENT}" ] || return 0
+    MP_VIEW_SENT="${want}"
+    proto_msg VIEW "${want}"
+    net_send "${PROTO_LINE}" || :
+    debug_event "mp: board snapshots ${want} (detail level ${1})"
+    return 0
+}
+
+# mp_send_board
+# Send a board snapshot, at most every MP_BOARD_MS and only while some
+# peer actually shows one (NEEDBOARD). That flag is what keeps a session
+# of small terminals from producing snapshot traffic nobody looks at.
+mp_send_board() {
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    [ "${MP_NEEDBOARD}" -eq 1 ] || return 0
+    now_ms
+    (( NOW_MS >= MP_NEXT_BOARD_MS )) || return 0
+    MP_NEXT_BOARD_MS=$(( NOW_MS + MP_BOARD_MS ))
+    proto_board_encode
+    proto_msg BOARD "${PROTO_BOARD}"
+    net_send "${PROTO_LINE}" || :
+    return 0
+}
+
+# mp_send_clear LINES SILVER GOLD
+# Report a clear: how many rows, and how many silver and gold squares ran
+# through them. What that is worth in garbage is the hub's arithmetic -
+# this end never computes an attack, which is what makes "I simply send
+# twenty rows" impossible (CLAUDE.md 5.4).
+mp_send_clear() {
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    proto_msg CLEAR "${1}" "${2}" "${3}"
+    net_send "${PROTO_LINE}" || :
+    return 0
+}
+
+# mp_send_topout
+# Report our own game over. From here on this client is a spectator: it
+# keeps drawing the others until the hub calls the round.
+mp_send_topout() {
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    MP_STATE="ko"
+    proto_msg TOPOUT
+    net_send "${PROTO_LINE}" || :
+    debug_event "mp: reported top-out"
+    return 0
+}
+
+# mp_send_bye
+# Leave in an orderly fashion. Best effort: a link that is already gone
+# makes this a no-op, and the hub notices the same thing one timeout
+# later either way.
+mp_send_bye() {
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    proto_msg BYE
+    net_send "${PROTO_LINE}" || :
+    return 0
+}
+
+# --- Garbage --------------------------------------------------------------
+# mp_apply_garbage
+# Push the queued garbage rows into our board. Called from lock_and_next
+# after a lock that cleared nothing: a lock that cleared rows has just
+# sent its CLEAR, and the hub cancels against the queue before it is
+# applied - which is what rewards the counter-attack over pure defence.
+# Returns 1 when the rows push the stack out of the field, which is a
+# top-out like any other.
+mp_apply_garbage() {
+    local n="${MP_PENDING}" i
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    [ "${n}" -gt 0 ] || return 0
+    MP_PENDING=0
+    # Row by row through the same function the Hochwasser mode uses
+    # (board_flood_row): one rule for a row rising from below, whether the
+    # water or an opponent sent it.
+    for (( i = 0; i < n; i++ )); do
+        board_flood_row "${MP_HOLE}" || break
+    done
+    proto_msg APPLIED "${n}"
+    net_send "${PROTO_LINE}" || :
+    debug_event "mp: applied ${n} garbage row(s) with hole=${MP_HOLE}"
+    DIRTY=1
+    if board_top_out; then
+        return 1
+    fi
+    return 0
+}
+
+# mp_wait_ms MS
+# Wait a moment without busy-looping. In a normal session that is
+# key_drain, the timed read the whole game paces itself with, which also
+# swallows keys pressed while nothing is meant to be typed. The test bot
+# has no terminal at all - a read on its closed standard input would be a
+# fatal error there - so it waits with sleep instead. One helper, because
+# every wait in this file is on one side or the other of that line.
+mp_wait_ms() {
+    local ms="${1}" secs
+    if [ "${MP_BOT}" -eq 1 ]; then
+        printf -v secs '%d.%03d' "$(( ms / 1000 ))" "$(( ms % 1000 ))"
+        sleep "${secs}"
+        return 0
+    fi
+    key_drain "${ms}"
+    return 0
+}
+
+# --- Connecting -----------------------------------------------------------
+# mp_hello
+# Announce ourselves and wait for the hub's WELCOME. Returns 1 when the
+# hub refuses us or does not answer within MP_HELLO_MS - the two cases a
+# player has to be told about, because nothing else would happen
+# afterwards.
+mp_hello() {
+    local deadline
+    proto_name "${PLAYER_NAME}"
+    proto_msg HELLO "${PROTO_VERSION}" "${PROTO_NAME}" "board"
+    net_send "${PROTO_LINE}" || return 1
+    now_ms
+    deadline=$(( NOW_MS + MP_HELLO_MS ))
+    while :; do
+        now_ms
+        (( NOW_MS < deadline )) || return 1
+        mp_poll || return 1
+        [ -z "${MP_ERROR}" ] || return 1
+        if [ "${MP_SLOT}" -ge 0 ]; then
+            return 0
+        fi
+        # The same short timed read the rest of the game paces itself
+        # with; no sleep, and a key pressed here is swallowed on purpose
+        # (the bot, which has no terminal, waits differently - see
+        # mp_wait_ms).
+        mp_wait_ms 50
+    done
+}
+
+# mp_connect_host HOST PORT
+# Connect to a session over TCP. The address is built from checked parts
+# by net_addr_tcp; not one byte of what may have come off the network
+# reaches a command line (CLAUDE.md 5.5).
+mp_connect_host() {
+    mp_reset
+    net_addr_tcp "${1}" "${2}" || return 1
+    net_connect "${NET_ADDR}" || return 1
+    MP_ACTIVE=1
+    if ! mp_hello; then
+        mp_disconnect
+        return 1
+    fi
+    return 0
+}
+
+# mp_connect_unix NAME
+# Connect to a session on this host over its domain socket.
+mp_connect_unix() {
+    mp_reset
+    net_session_path "${1}" || return 1
+    [ -S "${NET_SESSION_PATH}" ] || return 1
+    net_addr_unix "${NET_SESSION_PATH}" || return 1
+    net_connect "${NET_ADDR}" || return 1
+    MP_ACTIVE=1
+    if ! mp_hello; then
+        mp_disconnect
+        return 1
+    fi
+    return 0
+}
+
+# mp_disconnect
+# Leave the session and put everything back: the link, the hub process
+# this client may have started, and the multiplayer flag the game loop
+# and the renderer read.
+mp_disconnect() {
+    if [ "${MP_ACTIVE}" -eq 1 ]; then
+        mp_send_bye
+    fi
+    net_close
+    MP_ACTIVE=0
+    mp_hub_stop
+    return 0
+}
+
+# mp_hub_start
+# Start the hub for a session we are opening. It is a process of its own,
+# detached from this client's terminal and process group, so neither can
+# take the other down: a client killed with Ctrl-C leaves a hub that ends
+# itself when the last player is gone, and a hub that dies leaves clients
+# that see an end of file and return to the menu.
+mp_hub_start() {
+    local args=()
+    args=(--mp-hub --mp-transport "${MP_TRANSPORT}" --mp-port "${MP_PORT}"
+          --mp-max "${MP_MAX}" --mp-target "${MP_TARGET}"
+          --mp-session "${MP_SESSION}" --mp-dir "${MP_DIR}"
+          --mp-mode "${MP_MODE_OPT}" --mp-garbage "${MP_GARBAGE_OPT}")
+    if [ -n "${SEED}" ]; then
+        args+=(--seed "${SEED}")
+    fi
+    if [ "${DEBUG_OPT}" -eq 1 ]; then
+        # The hub logs into a directory of its own below the session's, so
+        # its events and the client's do not interleave in one file.
+        args+=(--debug --debug-dir "${DEBUG_DIR}/hub")
+    fi
+    setsid "${SCRIPT_DIR}/rowhammer.sh" "${args[@]}" >/dev/null 2>&1 &
+    MP_HUB_PID=$!
+    # Give it the moment it needs to bind and create its FIFOs; the
+    # connect below would otherwise race it and fail on the first try.
+    key_drain 400
+    if ! kill -0 "${MP_HUB_PID}" 2>/dev/null; then
+        MP_HUB_PID=0
+        return 1
+    fi
+    debug_event "mp: hub started (pid ${MP_HUB_PID}, session ${MP_SESSION})"
+    return 0
+}
+
+# mp_hub_stop
+# End a hub this client started. A hub of somebody else's session is
+# never touched - MP_HUB_PID is only set by mp_hub_start.
+mp_hub_stop() {
+    if [ "${MP_HUB_PID}" -gt 0 ]; then
+        kill "${MP_HUB_PID}" 2>/dev/null || :
+        MP_HUB_PID=0
+    fi
+    return 0
+}
+
+# --- Menu -----------------------------------------------------------------
+# mp_available
+# True when a session can be opened or joined at all. socat is the one
+# thing the multiplayer needs beyond the game itself; without it the entry
+# stays visible and says which package is missing, which is why socat is
+# a Recommends of the packages and not a Depends.
+mp_available() {
+    if net_require; then
+        return 0
+    fi
+    i18n_lines mp_no_socat
+    menu_message "${I18N[main_multi]}" "${I18N_LINES[@]}"
+    return 1
+}
+
+# mp_menu
+# The "Mehrspieler" main menu entry: open a session, join one from the
+# list of those found, connect to an address by hand, or go back.
+mp_menu() {
+    local -a entries
+    mp_available || return 0
+    while :; do
+        entries=("${I18N[mp_host]}" "${I18N[mp_join]}" "${I18N[mp_direct]}"
+                 "${I18N[menu_back]}")
+        menu_run "${I18N[main_multi]}" "${entries[@]}"
+        case "${MENU_CHOICE}" in
+            0) mp_host ;;
+            1) mp_join ;;
+            2) mp_direct ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+# mp_host
+# Open a session: start the hub, connect to it as the first client and go
+# into the lobby. Being the host is nothing but being slot 0 - the same
+# client, the same protocol, one extra process in the background.
+mp_host() {
+    local ok=0
+    if ! net_dir_prepare; then
+        menu_message "${I18N[main_multi]}" "${NET_ERROR}"
+        return 0
+    fi
+    if ! mp_hub_start; then
+        i18n_lines mp_host_failed
+        menu_message "${I18N[mp_host]}" "${I18N_LINES[@]}"
+        return 0
+    fi
+    MP_IS_HOST=1
+    if [ "${MP_TRANSPORT}" = "unix" ]; then
+        mp_connect_unix "${MP_SESSION}" && ok=1
+    else
+        # Through the loopback address rather than the outside one: the
+        # host's own client and its hub are on the same machine, and this
+        # works whether or not the machine has a usable network address.
+        mp_connect_host "127.0.0.1" "${MP_PORT}" && ok=1
+    fi
+    if [ "${ok}" -eq 0 ]; then
+        mp_hub_stop
+        MP_IS_HOST=0
+        i18n_lines mp_host_failed
+        menu_message "${I18N[mp_host]}" "${I18N_LINES[@]}"
+        return 0
+    fi
+    mp_lobby
+    return 0
+}
+
+# mp_join
+# Search for sessions and join the one picked. The search listens for
+# MP_DISCOVER_MS and then shows what it heard; a session that stopped
+# beaconing drops out of the list after three missed beacons.
+# The list is a hint and never a truth (CLAUDE.md 5.5): a forged beacon
+# can at worst point at its own sender, and joining it then simply fails.
+mp_join() {
+    local -a entries
+    local i n choice
+    if [ "${MP_TRANSPORT}" = "unix" ]; then
+        mp_join_unix
+        return 0
+    fi
+    if ! net_dir_prepare; then
+        menu_message "${I18N[main_multi]}" "${NET_ERROR}"
+        return 0
+    fi
+    if ! net_discover_start; then
+        i18n_lines mp_search_failed
+        menu_message "${I18N[mp_join]}" "${I18N_LINES[@]}"
+        return 0
+    fi
+    while :; do
+        mp_search_wait
+        net_discover_expire
+        n="${#NET_SESSION_HOST[@]}"
+        entries=()
+        for (( i = 0; i < n; i++ )); do
+            printf -v choice "${I18N[mp_session_entry]}" \
+                "${NET_SESSION_NAME[i]}" "${NET_SESSION_HOST[i]}" \
+                "${NET_SESSION_PLAYERS[i]}" "${NET_SESSION_MAX[i]}" \
+                "${I18N[mp_state_${NET_SESSION_STATE[i]}]}"
+            entries+=("${choice}")
+        done
+        if [ "${n}" -eq 0 ]; then
+            entries+=("${I18N[mp_none]}")
+        fi
+        entries+=("${I18N[mp_search_again]}" "${I18N[menu_back]}")
+        menu_run "${I18N[mp_join]}" "${entries[@]}"
+        choice="${MENU_CHOICE}"
+        if [ "${choice}" -lt 0 ] || [ "${choice}" -eq $(( ${#entries[@]} - 1 )) ]; then
+            break
+        fi
+        if [ "${choice}" -eq $(( ${#entries[@]} - 2 )) ]; then
+            continue
+        fi
+        if [ "${n}" -eq 0 ]; then
+            continue
+        fi
+        net_discover_stop
+        if mp_connect_host "${NET_SESSION_HOST[choice]}" \
+            "${NET_SESSION_PORT[choice]}"; then
+            mp_lobby
+        else
+            mp_connect_failed
+        fi
+        return 0
+    done
+    net_discover_stop
+    return 0
+}
+
+# mp_search_wait
+# Collect beacons for MP_DISCOVER_MS with a "searching..." screen up.
+# Nothing is drawn from the collector itself; this loop simply reads the
+# FIFO between two short waits, the same way the game loop reads the
+# socket between two ticks.
+mp_search_wait() {
+    local deadline line
+    local -a lines
+    printf -v line "${I18N[mp_searching]}" "${MP_PORT}"
+    lines=("  ${I18N[mp_join]}" "" "  ${line}")
+    render_menu_frame "${lines[@]}"
+    screen_write "${RENDER_MENU_FRAME}"
+    now_ms
+    deadline=$(( NOW_MS + MP_DISCOVER_MS ))
+    while :; do
+        net_discover_poll
+        now_ms
+        (( NOW_MS < deadline )) || break
+        key_drain 100
+    done
+    return 0
+}
+
+# mp_join_unix
+# The same thing for the unix transport, where no beacon is needed: the
+# live sessions are the socket files in the shared directory, so a glob
+# finds them.
+mp_join_unix() {
+    local -a entries names
+    local sock name choice
+    if ! net_dir_prepare; then
+        menu_message "${I18N[main_multi]}" "${NET_ERROR}"
+        return 0
+    fi
+    entries=()
+    names=()
+    for sock in "${MP_DIR}"/*.sock; do
+        [ -S "${sock}" ] || continue
+        name="${sock##*/}"
+        name="${name%.sock}"
+        [[ "${name}" =~ ${MP_SESSION_RE} ]] || continue
+        names+=("${name}")
+        entries+=("${name}")
+    done
+    if [ "${#entries[@]}" -eq 0 ]; then
+        entries+=("${I18N[mp_none]}")
+    fi
+    entries+=("${I18N[menu_back]}")
+    menu_run "${I18N[mp_join]}" "${entries[@]}"
+    choice="${MENU_CHOICE}"
+    if [ "${choice}" -lt 0 ] || [ "${choice}" -ge "${#names[@]}" ]; then
+        return 0
+    fi
+    if mp_connect_unix "${names[choice]}"; then
+        mp_lobby
+    else
+        mp_connect_failed
+    fi
+    return 0
+}
+
+# mp_direct
+# Join by an address typed in by hand: "host" or "host:port". An equal
+# path to the beacon search, not a fallback - a network that drops
+# broadcasts is common enough that a game without this way in would be
+# broken there for no visible reason.
+# The input is checked and split exactly like an address that came out of
+# a datagram; that it was typed here changes nothing about that.
+mp_direct() {
+    local host port
+    MENU_INPUT_RE_CUR='^[A-Za-z0-9_.:-]$'
+    MENU_INPUT_MAX_CUR=45
+    i18n_lines mp_direct_body
+    if ! menu_text_input "${I18N[mp_direct]}" "" "${I18N_LINES[@]}"; then
+        return 0
+    fi
+    [ -n "${MENU_INPUT}" ] || return 0
+    host="${MENU_INPUT%%:*}"
+    port="${MP_PORT}"
+    if [[ "${MENU_INPUT}" == *:* ]]; then
+        port="${MENU_INPUT##*:}"
+    fi
+    if ! net_host_ok "${host}" || ! net_port_ok "${port}"; then
+        i18n_lines mp_bad_address
+        menu_message "${I18N[mp_direct]}" "${I18N_LINES[@]}"
+        return 0
+    fi
+    if mp_connect_host "${host}" "${port}"; then
+        mp_lobby
+    else
+        mp_connect_failed
+    fi
+    return 0
+}
+
+# mp_connect_failed
+# One message for every way a join can fail - refused, unreachable, no
+# answer. Which of them it was is in the debug log; on screen the useful
+# half is what to try instead.
+mp_connect_failed() {
+    local -a body
+    i18n_lines mp_join_failed
+    body=("${I18N_LINES[@]}")
+    if [ -n "${MP_ERROR}" ]; then
+        body+=("" "${I18N[mp_reason]:-} ${MP_ERROR}")
+    fi
+    mp_disconnect
+    menu_message "${I18N[main_multi]}" "${body[@]}"
+    return 0
+}
+
+# --- Lobby ----------------------------------------------------------------
+# mp_lobby
+# The waiting room. It is a menu with a network connection, so it cannot
+# use menu_run: the frame has to be redrawn when the roster changes, not
+# only when a key is pressed, and the link has to be drained meanwhile.
+# The host's entry is "start the round" (which the hub reads as its READY
+# and answers with SEED and START), everybody else's is "ready".
+mp_lobby() {
+    local -a lines entries actions
+    local sel=0 dirty=1 i n line ready=0 left=0
+    net_local_addr
+    while :; do
+        if ! mp_poll; then
+            mp_lobby_lost
+            return 0
+        fi
+        if [ -n "${MP_ERROR}" ]; then
+            mp_lobby_lost
+            return 0
+        fi
+        if [ "${MP_PHASE}" = "start" ]; then
+            mp_countdown
+            if [ "${MP_PHASE}" = "play" ]; then
+                mp_round
+            fi
+            return 0
+        fi
+        # The entries and what they do, built together: the host has one
+        # more than everybody else, and hanging the dispatch below off a
+        # position would break the moment that changes again.
+        entries=()
+        actions=()
+        if [ "${MP_IS_HOST}" -eq 1 ]; then
+            entries+=("${I18N[mp_start]}")
+            actions+=("start")
+            entries+=("${I18N[mp_settings]}")
+            actions+=("settings")
+        elif [ "${ready}" -eq 1 ]; then
+            entries+=("${I18N[mp_unready]}")
+            actions+=("ready")
+        else
+            entries+=("${I18N[mp_ready]}")
+            actions+=("ready")
+        fi
+        entries+=("${I18N[mp_leave]}")
+        actions+=("leave")
+        if [ "${dirty}" -eq 1 ] || [ "${DIRTY}" -eq 1 ]; then
+            DIRTY=0
+            lines=("  ${I18N[mp_lobby_title]}" "")
+            printf -v line "${I18N[mp_lobby_session]}" "${MP_SESSION}"
+            lines+=("  ${line}")
+            if [ "${MP_IS_HOST}" -eq 1 ] && [ "${MP_TRANSPORT}" = "lan" ]; then
+                # The host's own address, so it can be read out to
+                # somebody whose network swallows the beacon.
+                printf -v line "${I18N[mp_lobby_addr]}" \
+                    "${NET_LOCAL_ADDR:-?}" "${MP_PORT}"
+                lines+=("  ${line}")
+            fi
+            # The session settings, shown to everybody and not only to
+            # the host who set them: they decide how this round is won,
+            # and a player who cannot see them is guessing (user
+            # request). Only the host has the entry that changes them.
+            mp_setting_lines
+            lines+=("  ${MP_SETUP_MODE_LINE}")
+            lines+=("  ${MP_SETUP_GARBAGE_LINE}")
+            lines+=("")
+            n=0
+            for (( i = 0; i < MP_MAX; i++ )); do
+                [ -n "${MP_PEER_NAME[i]}" ] || continue
+                n=$(( n + 1 ))
+                mp_lobby_line "${i}"
+                lines+=("  ${MP_LOBBY_LINE}")
+            done
+            lines+=("")
+            if [ "${MP_IS_HOST}" -eq 1 ] && [ "${n}" -lt 2 ]; then
+                lines+=("  ${I18N[mp_lobby_alone]}")
+            else
+                lines+=("")
+            fi
+            for (( i = 0; i < ${#entries[@]}; i++ )); do
+                if [ "${i}" -eq "${sel}" ]; then
+                    lines+=($'  \e[7m '"${entries[i]}"$' \e[0m')
+                else
+                    lines+=("   ${entries[i]} ")
+                fi
+            done
+            lines+=("" "  ${I18N[menu_nav]}")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        read_key
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+            continue
+        fi
+        case "${KEY}" in
+            UP|w)   sel=$(( (sel + ${#entries[@]} - 1) % ${#entries[@]} )); dirty=1 ;;
+            DOWN|s) sel=$(( (sel + 1) % ${#entries[@]} )); dirty=1 ;;
+            ENTER|SPACE)
+                case "${actions[sel]}" in
+                    start)
+                        proto_msg READY 1
+                        net_send "${PROTO_LINE}" || :
+                        dirty=1
+                        ;;
+                    ready)
+                        ready=$(( 1 - ready ))
+                        proto_msg READY "${ready}"
+                        net_send "${PROTO_LINE}" || :
+                        dirty=1
+                        ;;
+                    settings)
+                        mp_settings_menu
+                        dirty=1
+                        ;;
+                    *) left=1 ;;
+                esac
+                ;;
+            ESC|x) left=1 ;;
+        esac
+        if [ "${left}" -eq 1 ]; then
+            debug_event "mp: left the lobby"
+            mp_disconnect
+            MP_IS_HOST=0
+            return 0
+        fi
+    done
+}
+
+# mp_setting_lines
+# The two lines that show the session settings, in
+# MP_SETUP_MODE_LINE / MP_SETUP_GARBAGE_LINE: the mode with the win
+# condition it stands for, and whether garbage is on. The win condition is
+# spelled out rather than left to the mode's name - "Sprint" says how long
+# a round lasts, not who wins it, and that is the question a player in a
+# lobby is asking.
+MP_SETUP_MODE_LINE=""
+MP_SETUP_GARBAGE_LINE=""
+mp_setting_lines() {
+    local state
+    printf -v MP_SETUP_MODE_LINE "${I18N[mp_setup_mode]}" \
+        "${I18N[mpmode_${MP_MODE}]}" "${I18N[mpwin_${MP_MODE}]}"
+    if [ "${MP_GARBAGE}" -eq 1 ]; then
+        state="${I18N[mp_on]}"
+    else
+        state="${I18N[mp_off]}"
+    fi
+    printf -v MP_SETUP_GARBAGE_LINE "${I18N[mp_setup_garbage]}" "${state}"
+    return 0
+}
+
+# mp_settings_menu
+# The host's settings menu, opened from the lobby. Enter switches the
+# entry it stands on - the mode cycles through MP_MODES, the garbage
+# switch flips - and every change goes to the hub at once, which sends it
+# back to everybody. Changing them is therefore never a private decision:
+# the lobby of every player shows the new state the moment it is made.
+# Like the lobby it keeps draining the link while it is open, for the same
+# reason (a menu that stops reading runs into the ping timeout).
+# The two limits that make a mode what it is - the Sprint time and the
+# Ultra target - are the singleplayer constants and are shown as such, so
+# a retuned SPRINT_TIME_MS cannot leave this screen lying.
+mp_settings_menu() {
+    local -a lines entries
+    local sel=0 dirty=1 i line
+    while :; do
+        if ! mp_poll; then
+            return 0
+        fi
+        if [ -n "${MP_ERROR}" ] || [ "${MP_PHASE}" != "lobby" ]; then
+            # The round started or the session died while this was open.
+            return 0
+        fi
+        mp_setting_lines
+        entries=("${MP_SETUP_MODE_LINE}" "${MP_SETUP_GARBAGE_LINE}"
+                 "${I18N[menu_back]}")
+        if [ "${dirty}" -eq 1 ] || [ "${DIRTY}" -eq 1 ]; then
+            DIRTY=0
+            lines=("  ${I18N[mp_settings_title]}" "")
+            i18n_lines mp_settings_body
+            for (( i = 0; i < ${#I18N_LINES[@]}; i++ )); do
+                lines+=("  ${I18N_LINES[i]}")
+            done
+            lines+=("")
+            for (( i = 0; i < ${#entries[@]}; i++ )); do
+                if [ "${i}" -eq "${sel}" ]; then
+                    lines+=($'  \e[7m '"${entries[i]}"$' \e[0m')
+                else
+                    lines+=("   ${entries[i]} ")
+                fi
+            done
+            lines+=("")
+            # What the picked mode costs to win, from the live constants.
+            case "${MP_MODE}" in
+                sprint)
+                    fmt_duration $(( SPRINT_TIME_MS / 1000 ))
+                    printf -v line "${I18N[mp_setup_limit_sprint]}" \
+                        "${FMT_DURATION}"
+                    ;;
+                ultra)
+                    printf -v line "${I18N[mp_setup_limit_ultra]}" \
+                        "${ULTRA_TARGET_ROWS}"
+                    ;;
+                *) line="" ;;
+            esac
+            lines+=("  ${line}")
+            lines+=("" "  ${I18N[mp_settings_nav]}")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        read_key
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+            continue
+        fi
+        case "${KEY}" in
+            UP|w)   sel=$(( (sel + ${#entries[@]} - 1) % ${#entries[@]} )); dirty=1 ;;
+            DOWN|s) sel=$(( (sel + 1) % ${#entries[@]} )); dirty=1 ;;
+            ENTER|SPACE|LEFT|RIGHT)
+                case "${sel}" in
+                    0) mp_settings_cycle_mode "${KEY}" ;;
+                    1) MP_GARBAGE=$(( 1 - MP_GARBAGE )); mp_settings_send ;;
+                    *)
+                        if [ "${KEY}" = "ENTER" ] || [ "${KEY}" = "SPACE" ]; then
+                            return 0
+                        fi
+                        ;;
+                esac
+                dirty=1
+                ;;
+            ESC|x) return 0 ;;
+        esac
+    done
+}
+
+# mp_settings_cycle_mode KEY
+# Step to the next (or, on the left arrow, the previous) mode and send it.
+mp_settings_cycle_mode() {
+    local key="${1}" i idx=0 n="${#MP_MODES[@]}"
+    for (( i = 0; i < n; i++ )); do
+        if [ "${MP_MODES[i]}" = "${MP_MODE}" ]; then
+            idx="${i}"
+            break
+        fi
+    done
+    if [ "${key}" = "LEFT" ]; then
+        idx=$(( (idx + n - 1) % n ))
+    else
+        idx=$(( (idx + 1) % n ))
+    fi
+    MP_MODE="${MP_MODES[idx]}"
+    mp_settings_send
+    return 0
+}
+
+# mp_settings_send
+# Hand the settings to the hub. Only the host ever gets here (the entry
+# exists nowhere else), and the hub checks that again - a client that says
+# it is the host is not one.
+mp_settings_send() {
+    proto_msg SETUP "${MP_MODE}" "${MP_GARBAGE}"
+    net_send "${PROTO_LINE}" || :
+    debug_event "mp: host set mode=${MP_MODE} garbage=${MP_GARBAGE}"
+    return 0
+}
+
+# mp_lobby_line SLOT
+# One player's line in the lobby, in MP_LOBBY_LINE: the slot, the name,
+# whether they are ready, and a marker on our own entry so everybody can
+# find themselves. The name is clamped again here even though it came
+# through the parser - the hub is not trusted either (CLAUDE.md 5.5).
+MP_LOBBY_LINE=""
+mp_lobby_line() {
+    local slot="${1}" name mark="" state
+    name="${MP_PEER_NAME[slot]:0:16}"
+    if [ "${slot}" -eq "${MP_SLOT}" ]; then
+        mark="${I18N[mp_you]}"
+    fi
+    if [ "${slot}" -eq 0 ]; then
+        state="${I18N[mp_is_host]}"
+    elif [ "${MP_PEER_READY[slot]}" -eq 1 ]; then
+        state="${I18N[mp_is_ready]}"
+    else
+        state="${I18N[mp_is_waiting]}"
+    fi
+    printf -v MP_LOBBY_LINE '%d. %-16s %-10s %s' \
+        "$(( slot + 1 ))" "${name}" "${state}" "${mark}"
+    return 0
+}
+
+# mp_countdown
+# The moment between "start" and the first piece: the hub named a point
+# in time, and every client counts down to it, so the round really starts
+# for everybody at once. The link keeps being drained meanwhile - a
+# player leaving during the countdown is news the others need.
+mp_countdown() {
+    local -a lines
+    local left line
+    while :; do
+        if ! mp_poll; then
+            mp_lobby_lost
+            return 0
+        fi
+        now_ms
+        left=$(( MP_START_MS - NOW_MS ))
+        if [ "${left}" -le 0 ]; then
+            break
+        fi
+        printf -v line "${I18N[mp_countdown]}" "$(( (left + 999) / 1000 ))"
+        lines=("  ${I18N[mp_lobby_title]}" "" "  ${line}")
+        render_menu_frame "${lines[@]}"
+        screen_write "${RENDER_MENU_FRAME}"
+        key_drain 100
+    done
+    MP_PHASE="play"
+    MP_STATE="play"
+    debug_event "mp: round starts"
+    return 0
+}
+
+# mp_pause_menu
+# The pause menu of a multiplayer round: two entries instead of four.
+# "Suspend into the main menu" is missing because there is nothing to
+# come back to - the others do not wait - and there is no restart for the
+# same reason (see handle_key in rowhammer.sh).
+# It keeps draining the link on every pass, which is the whole reason it
+# is not menu_pause: a menu that stops reading for as long as somebody
+# stares at it would let the hub's ping time out and get this client
+# dropped from a round it never meant to leave. The board is frozen
+# meanwhile, and the screen says as much - the opponents keep playing,
+# so this is not a pause, it is a decision to make quickly.
+mp_pause_menu() {
+    local -a lines
+    local sel=0 dirty=1 i
+    local -a entries
+    entries=("${I18N[main_resume]}" "${I18N[pause_end]}")
+    while :; do
+        if ! mp_poll; then
+            # The link died while the menu was open: leave the round, the
+            # game loop notices the same thing on its next pass.
+            return 0
+        fi
+        if [ "${MP_ENDED}" -eq 1 ]; then
+            # The round was decided while the menu was open. Back to the
+            # board, where the result box is waiting.
+            return 0
+        fi
+        if [ "${dirty}" -eq 1 ]; then
+            lines=("  ${I18N[pause_title]}" "")
+            i18n_lines mp_pause_note
+            for (( i = 0; i < ${#I18N_LINES[@]}; i++ )); do
+                lines+=("  ${I18N_LINES[i]}")
+            done
+            lines+=("")
+            for (( i = 0; i < ${#entries[@]}; i++ )); do
+                if [ "${i}" -eq "${sel}" ]; then
+                    lines+=($'  \e[7m '"${entries[i]}"$' \e[0m')
+                else
+                    lines+=("   ${entries[i]} ")
+                fi
+            done
+            lines+=("" "  ${I18N[menu_nav]}")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        read_key
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+            continue
+        fi
+        case "${KEY}" in
+            UP|DOWN|w|s) sel=$(( 1 - sel )); dirty=1 ;;
+            ENTER|SPACE)
+                if [ "${sel}" -eq 1 ]; then
+                    # Leaving a running round is leaving it for good, so
+                    # it is confirmed like the same entry in the
+                    # singleplayer pause menu.
+                    if mp_confirm_leave; then
+                        GAME_EXIT=1
+                        return 0
+                    fi
+                    dirty=1
+                else
+                    return 0
+                fi
+                ;;
+            ESC|x) return 0 ;;
+        esac
+    done
+}
+
+# mp_confirm_leave
+# Ask before a running multiplayer round is thrown away, the way the
+# singleplayer pause menu asks - with the state of the round, so the
+# question is answerable, and with "no" preselected. The link is drained
+# in this loop too, for the reason mp_pause_menu drains it.
+mp_confirm_leave() {
+    local -a lines
+    local sel=0 dirty=1 round_line i
+    printf -v round_line "${I18N[round_state]}" \
+        "${CLEARED_TOTAL}" "${ROW_CREDIT}" "${LEVEL}"
+    while :; do
+        mp_poll || return 0
+        if [ "${dirty}" -eq 1 ]; then
+            lines=("  ${I18N[end_title]}" "" "  ${I18N[end_head]}"
+                   "  ${round_line}" "")
+            i18n_lines mp_end_tail
+            for (( i = 0; i < ${#I18N_LINES[@]}; i++ )); do
+                lines+=("  ${I18N_LINES[i]}")
+            done
+            lines+=("")
+            if [ "${sel}" -eq 0 ]; then
+                lines+=($'  \e[7m '"${I18N[confirm_no]}"$' \e[0m')
+                lines+=("   ${I18N[end_yes]} ")
+            else
+                lines+=("   ${I18N[confirm_no]} ")
+                lines+=($'  \e[7m '"${I18N[end_yes]}"$' \e[0m')
+            fi
+            lines+=("" "  ${I18N[menu_nav_cancel]}")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        read_key
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+            continue
+        fi
+        case "${KEY}" in
+            UP|DOWN|w|s) sel=$(( 1 - sel )); dirty=1 ;;
+            ENTER|SPACE)
+                if [ "${sel}" -eq 1 ]; then
+                    return 0
+                fi
+                return 1
+                ;;
+            ESC|x) return 1 ;;
+        esac
+    done
+}
+
+# mp_round
+# Play the round and clean up after it. The session ends with the round:
+# there is no way back into the lobby, because the others have left it
+# long ago - a second round is a second session, which is one menu entry
+# away. The construction site is shown afterwards like after any other
+# round: the rows were really cleared, so they built the wonder (see
+# CLAUDE.md 5.8 on what a multiplayer round counts towards).
+mp_round() {
+    game_run versus
+    mp_disconnect
+    MP_IS_HOST=0
+    wonder_screen "${TOTAL_ROW_CREDIT}"
+    return 0
+}
+
+# mp_join_target TARGET
+# Join the session TARGET names without going through the search: an
+# address "host" or "host:port" in the lan transport, a session name in
+# the unix one. This is what --mp-join uses, and it is the only way to
+# tell a bot where to play. The input is split and checked exactly like
+# an address that came off the network.
+mp_join_target() {
+    local target="${1}" host port
+    if [ "${MP_TRANSPORT}" = "unix" ]; then
+        mp_connect_unix "${target}"
+        return $?
+    fi
+    host="${target%%:*}"
+    port="${MP_PORT}"
+    if [[ "${target}" == *:* ]]; then
+        port="${target##*:}"
+    fi
+    net_host_ok "${host}" || return 1
+    net_port_ok "${port}" || return 1
+    mp_connect_host "${host}" "${port}"
+}
+
+# --- Test bot -------------------------------------------------------------
+# How long a bot sits in the lobby before it asks for the round to start.
+# Only the bot that happens to be slot 0 can start one at all, and this is
+# the window everybody else has to join in.
+MP_BOT_LOBBY_MS=5000
+
+# mp_bot_column
+# Where the bot drops its next piece, in MP_BOT_COLUMN: the emptiest
+# column of its board, ties broken at random. That is barely a strategy,
+# and it is not meant to be one - but it does complete a row now and
+# then, which a bot dropping into random columns practically never does.
+# Without that the bot could not exercise the half of the multiplayer
+# that only starts at the first clear: the attack arithmetic, the queue
+# and the cancelling.
+MP_BOT_COLUMN=0
+mp_bot_column() {
+    local x y best=-1 h
+    local -a candidates=()
+    for (( x = 0; x < BOARD_W; x++ )); do
+        h=0
+        for (( y = HIDDEN_ROWS; y < BOARD_H; y++ )); do
+            if [ "${BOARD[y * BOARD_W + x]}" != "${EMPTY_CELL}" ]; then
+                h=$(( BOARD_H - y ))
+                break
+            fi
+        done
+        if [ "${best}" -lt 0 ] || [ "${h}" -lt "${best}" ]; then
+            best="${h}"
+            candidates=("${x}")
+        elif [ "${h}" -eq "${best}" ]; then
+            candidates+=("${x}")
+        fi
+    done
+    MP_BOT_COLUMN="${candidates[RANDOM % ${#candidates[@]}]}"
+    # The target is the piece's origin, and a piece is up to four cells
+    # wide, so an origin beyond this is never reachable. Clamping it here
+    # is cheaper than teaching the bot the shape table, and it keeps
+    # every choice a move it can actually carry out.
+    if [ "${MP_BOT_COLUMN}" -gt $(( BOARD_W - 4 )) ]; then
+        MP_BOT_COLUMN=$(( BOARD_W - 4 ))
+    fi
+    return 0
+}
+
+# mp_bot_main
+# The body of --mp-bot: a client without a terminal that joins a session
+# and plays badly but legally, so a round with six players can be tested
+# without six terminals (roadmap step 11).
+# It runs its own loop rather than game_run: that loop is paced by
+# read_key on the terminal, and a bot has none - a read on a closed stdin
+# would be a fatal error there. Everything below it is the real game
+# though: the same board, the same pieces, the same locking and the same
+# messages, which is what makes it a useful test partner rather than a
+# traffic generator.
+mp_bot_main() {
+    local target="${MP_JOIN}" tick=0 want_x=0 want_rot=0
+    net_require || die "socat is required for --mp-bot (package: socat)"
+    [ -n "${target}" ] || die "--mp-bot needs --mp-join HOST[:PORT]"
+    # No terminal, so nothing may draw. The clear animation is the one
+    # part of the game logic that renders on its own; switching it off is
+    # what keeps this loop silent (see flash_rows in rowhammer.sh).
+    FLASH_CYCLES=0
+    if ! mp_join_target "${target}"; then
+        die "bot could not join ${target}"
+    fi
+    # The first "ready" waits MP_BOT_LOBBY_MS and is then repeated every
+    # second. Both halves are needed for a test with more than two bots:
+    # whichever bot connects first is the host of the session, and a host
+    # that asks to start the moment a second player appears would slam
+    # the door on everybody still joining (the hub refuses a late join
+    # into a running round). The repeat is for the other side of it - the
+    # very first request, while the bot is still alone, is refused with
+    # ERR alone.
+    now_ms
+    local next_ready=$(( NOW_MS + MP_BOT_LOBBY_MS ))
+    while [ "${MP_PHASE}" != "start" ] && [ "${MP_PHASE}" != "play" ]; do
+        mp_poll || { mp_disconnect; return 0; }
+        # An "alone" refusal is not a reason to give up - it is the
+        # answer to a question asked too early.
+        if [ "${MP_ERROR}" = "err:alone" ]; then
+            MP_ERROR=""
+        fi
+        [ -z "${MP_ERROR}" ] || { mp_disconnect; return 0; }
+        now_ms
+        if (( NOW_MS >= next_ready )); then
+            next_ready=$(( NOW_MS + 1000 ))
+            proto_msg READY 1
+            net_send "${PROTO_LINE}" || :
+        fi
+        mp_wait_ms 100
+    done
+    while :; do
+        mp_poll || break
+        now_ms
+        (( NOW_MS >= MP_START_MS )) || { mp_wait_ms 50; continue; }
+        break
+    done
+    MP_PHASE="play"
+    MP_STATE="play"
+    game_reset versus
+    while :; do
+        mp_poll || break
+        if [ "${MP_ENDED}" -eq 1 ]; then
+            break
+        fi
+        play_clock_tick
+        if [ "${GAME_OVER}" -eq 0 ]; then
+            # One decision per piece: a target column and a rotation,
+            # both drawn at random. Then one step towards it per tick and
+            # a hard drop once it is reached - which produces a stack
+            # that fills up at a believable pace.
+            if [ "${tick}" -eq 0 ]; then
+                mp_bot_column
+                want_x="${MP_BOT_COLUMN}"
+                want_rot=$(( RANDOM % 4 ))
+            fi
+            tick=$(( tick + 1 ))
+            # A blocked move or rotation ends the plan instead of being
+            # retried: the target column is chosen without looking at the
+            # piece's width, so the right-hand columns are regularly out
+            # of reach, and a bot that kept pushing against the wall
+            # would never drop another piece.
+            if [ "${CUR_ROT}" -ne "${want_rot}" ]; then
+                try_rotate 1 || want_rot="${CUR_ROT}"
+            elif [ "${CUR_X}" -gt "${want_x}" ]; then
+                try_move -1 0 || want_x="${CUR_X}"
+            elif [ "${CUR_X}" -lt "${want_x}" ]; then
+                try_move 1 0 || want_x="${CUR_X}"
+            else
+                hard_drop
+                tick=0
+            fi
+            mp_send_state
+            # Snapshots too, when somebody is drawing them: a bot that
+            # showed up as an empty board would make the mini board view
+            # untestable without a second terminal.
+            mp_send_board
+        fi
+        mp_wait_ms 50
+    done
+    debug_event "bot: session over (rows=${ROW_CREDIT} lines=${CLEARED_TOTAL} place=${MP_PLACE})"
+    mp_disconnect
+    return 0
+}
+
+# mp_lobby_lost
+# The hub is gone while we were waiting. Nothing was played, so nothing is
+# recorded; the message says what happened and the menu takes over again.
+mp_lobby_lost() {
+    local -a body
+    i18n_lines mp_lost_body
+    body=("${I18N_LINES[@]}")
+    mp_disconnect
+    MP_IS_HOST=0
+    menu_message "${I18N[main_multi]}" "${body[@]}"
+    return 0
+}

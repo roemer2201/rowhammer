@@ -104,9 +104,15 @@
 #   its name like the other four: "highscore" became
 #   "highscore-marathon", and highscore_migrate_legacy renames an
 #   existing file once at startup so no top ten is lost over it.
+#   Since 1.1.0 there is a sixth list, highscore-versus, for the
+#   multiplayer rounds: the Marathon layout and the Marathon ranking
+#   (rows, descending), every round recorded whether it was won or lost,
+#   and deliberately without the place achieved - the list ranks what one
+#   player did, which compares across sessions of two and of six, while
+#   who won a given evening does not (see CLAUDE.md 4.5).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.19.0  (2026-08-04)
+# Version: 0.20.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -353,6 +359,9 @@ highscore_hash_set() {
     fi
     if [ "${#HSF_ENTRIES[@]}" -gt 0 ]; then
         lists+=("${HSF_ENTRIES[@]}")
+    fi
+    if [ "${#HSV_ENTRIES[@]}" -gt 0 ]; then
+        lists+=("${HSV_ENTRIES[@]}")
     fi
     if [ "${#lists[@]}" -eq 0 ]; then
         return 0
@@ -1581,6 +1590,222 @@ highscore_flood_screen() {
     return 0
 }
 
+# --- Versus mode list -----------------------------------------------------
+# The multiplayer (added 1.1.0) is the sixth mode with results of its own.
+# A list rather than an entry in the Marathon one, which is the decision
+# this project has now taken six times for the same reason: a round under
+# different rules belongs in a different list. Garbage cuts a round short
+# and hands it extra rows to clear at the same time, so its numbers are
+# simply not the same size as an endless round's - merging them would
+# mean two yardsticks in one table.
+#
+# The score is the row credit, as in Marathon: what a round is worth does
+# not change because somebody was playing against you. Every round is
+# recorded, won or lost - like Time Attack and Hochwasser and unlike Ultra
+# and Sprint: a multiplayer round has no incomparable "did not finish"
+# state, it ends when it ends, and a player who was knocked out early
+# simply scored fewer rows.
+#
+# The place achieved is deliberately not stored. The list ranks what one
+# player did, and that is comparable across evenings of two and of six;
+# who won a particular session is not, and a "1st of 2" next to a "3rd of
+# 6" would read like an order where there is none. The field layout is
+# therefore the Marathon one down to the last field, which is what lets
+# every list share the parsing, the screen and the hash lookup.
+HSV_MAX=10
+HSV_FILE_NAME="highscore-versus"
+
+# In-memory list, one
+# "rows|lines|level|name|date|gold|silver|time|rowhammers|pieces|hash"
+# string per element, sorted by rows descending. HSV_LAST_RANK is the
+# rank the most recently added round reached (1-based, 0 = not on the
+# list).
+HSV_ENTRIES=()
+HSV_LAST_RANK=0
+
+# Field count of a stored versus line. Eleven, with no shorter variant:
+# like the Hochwasser list this one was born with the round hash and has
+# nothing to be lenient about.
+HSV_FIELDS=11
+
+# highscore_versus_parse_line LINE
+# Validate one stored versus line and, on success, append it to
+# HSV_ENTRIES. Field patterns and layout are the Marathon list's; a line
+# that fails anywhere is dropped silently, so a damaged file costs single
+# entries instead of the game.
+highscore_versus_parse_line() {
+    local line="${1}"
+    local -a f=()
+    local i n
+
+    IFS='|' read -r -a f <<< "${line}"
+    n="${#f[@]}"
+    [ "${n}" -eq "${HSV_FIELDS}" ] || return 0
+
+    # rows, lines, level.
+    for ((i = 0; i < 3; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+    [[ "${f[3]}" =~ ${HS_FIELD_NAME_RE} ]] || return 0
+    [[ "${f[4]}" =~ ${HS_FIELD_DATE_RE} ]] || return 0
+    # gold, silver, time, rowhammers, pieces.
+    for ((i = 5; i < HSV_FIELDS - 1; i++)); do
+        [[ "${f[i]}" =~ ${HS_FIELD_NUM_RE} ]] || return 0
+    done
+    [[ "${f[HSV_FIELDS - 1]}" =~ ${HS_FIELD_HASH_RE} ]] || return 0
+
+    HSV_ENTRIES+=("${line}")
+    return 0
+}
+
+# highscore_versus_load
+# Read the versus list into HSV_ENTRIES. Missing file = empty list,
+# malformed lines are skipped (highscore_versus_parse_line).
+highscore_versus_load() {
+    HSV_ENTRIES=()
+    local f="${DATA_DIR}/${HSV_FILE_NAME}" line
+    if [ ! -r "${f}" ]; then
+        return 0
+    fi
+    while IFS= read -r line; do
+        highscore_versus_parse_line "${line}"
+        if [ "${#HSV_ENTRIES[@]}" -ge "${HSV_MAX}" ]; then
+            break
+        fi
+    done < "${f}"
+    debug_event "highscore versus loaded: ${#HSV_ENTRIES[@]} entries from ${f}"
+    return 0
+}
+
+# highscore_versus_save
+# Write HSV_ENTRIES atomically (temp file + mv), like highscore_save.
+highscore_versus_save() {
+    local f="${DATA_DIR}/${HSV_FILE_NAME}" tmp
+    mkdir -p -- "${DATA_DIR}"
+    tmp="$(mktemp -- "${DATA_DIR}/.${HSV_FILE_NAME}.XXXXXX")"
+    # Expanding an empty array under set -u errors on bash < 4.4, so the
+    # empty list writes an empty file explicitly.
+    if [ "${#HSV_ENTRIES[@]}" -gt 0 ]; then
+        printf '%s\n' "${HSV_ENTRIES[@]}" > "${tmp}"
+    else
+        : > "${tmp}"
+    fi
+    mv -f -- "${tmp}" "${f}"
+    debug_event "highscore versus saved: ${f} (${#HSV_ENTRIES[@]} entries)"
+    return 0
+}
+
+# highscore_versus_add ROWS LINES LEVEL NAME GOLD SILVER TIME ROWHAMMERS
+#                      PIECES HASH
+# Insert one finished multiplayer round into the sorted list and persist
+# it. Arguments and order are the Marathon list's (highscore_add), TIME
+# the play time in whole seconds - here the time the player stayed in the
+# round, which is why the list shows it. Equal row credits rank below
+# existing ones, so the older entry keeps its place. Rounds without a
+# single row are ignored, and nothing is written when the round does not
+# make the list; HSV_LAST_RANK reports the outcome either way.
+highscore_versus_add() {
+    local rows="${1}" lines="${2}" level="${3}" name="${4}"
+    local gold="${5}" silver="${6}" time="${7}" hammers="${8}"
+    local pieces="${9}" hash="${10:--}"
+    local entry e placed=0 rank=0
+    local -a merged=()
+    HSV_LAST_RANK=0
+    if [ "${rows}" -le 0 ]; then
+        return 0
+    fi
+    entry="${rows}|${lines}|${level}|${name}|$(date +%Y-%m-%d)|${gold}|${silver}|${time}|${hammers}|${pieces}|${hash}"
+    if [ "${#HSV_ENTRIES[@]}" -gt 0 ]; then
+        for e in "${HSV_ENTRIES[@]}"; do
+            if [ "${placed}" -eq 0 ] && [ "${rows}" -gt "${e%%|*}" ]; then
+                merged+=("${entry}")
+                rank="${#merged[@]}"
+                placed=1
+            fi
+            merged+=("${e}")
+        done
+    fi
+    # Not better than any existing entry: append only while there is room.
+    if [ "${placed}" -eq 0 ]; then
+        if [ "${#merged[@]}" -ge "${HSV_MAX}" ]; then
+            debug_event "highscore versus: '${name}' rows=${rows} below the top ${HSV_MAX}"
+            return 0
+        fi
+        merged+=("${entry}")
+        rank="${#merged[@]}"
+    fi
+    HSV_ENTRIES=("${merged[@]:0:HSV_MAX}")
+    HSV_LAST_RANK="${rank}"
+    debug_event "highscore versus: '${name}' rows=${rows} time=${time}s enters at rank ${rank}"
+    highscore_versus_save
+    return 0
+}
+
+# highscore_versus_screen
+# Show the versus list the way the other five screens show theirs:
+# browsed via highscore_browse (HS_PAGE_ENTRIES again), two lines per
+# entry, same column widths and the same coloring rules. Rows rank this
+# list and therefore carry the accent color, as on the Marathon, the
+# Sprint, the Time Attack and the Hochwasser screen.
+# The columns are the Marathon ones down to the play time, and it earns
+# its place here as it does there: a round that ended early is exactly
+# the one that is short, so the time tells a knocked-out round from one
+# that was played to the end.
+highscore_versus_screen() {
+    local -a body=()
+    local i line plain rank hsv_rows hsv_name hsv_date hsv_gold
+    local hsv_silver hsv_time hsv_hammers hsv_pieces hsv_hash title
+    title="${I18N[hs_title]} - ${I18N[mode_versus]}"
+    if [ "${#HSV_ENTRIES[@]}" -eq 0 ]; then
+        body+=("${I18N[hs_empty]}")
+        body+=("")
+        i18n_lines hs_empty_versus
+        body+=("${I18N_LINES[@]}")
+        debug_event "highscore versus screen shown (0 entries)"
+        menu_message "${title}" "${body[@]}"
+        return 0
+    fi
+    printf -v line '%2s %-12s %6s %5s %10s' \
+        "${I18N[hs_col_no]}" "${I18N[hs_col_name]}" "${I18N[hs_col_rows]}" \
+        "${I18N[hs_col_time]}" "${I18N[hs_col_date]}"
+    HSB_HEAD="${TXT_BOLD_SGR}${line}${TXT_RESET_SGR}"
+    HSB_L1=()
+    HSB_L2=()
+    HSB_DEMO=()
+    demo_hash_map
+    for i in "${!HSV_ENTRIES[@]}"; do
+        IFS='|' read -r hsv_rows _ _ hsv_name hsv_date hsv_gold \
+            hsv_silver hsv_time hsv_hammers hsv_pieces hsv_hash \
+            <<< "${HSV_ENTRIES[i]}"
+        fmt_duration "${hsv_time}"
+        rank=$(( i + 1 ))
+        printf -v plain '%2d %-12.12s %6d %5s %10s' \
+            "${rank}" "${hsv_name}" "${hsv_rows}" "${FMT_DURATION}" \
+            "${hsv_date}"
+        # Same guard as the other five screens: color only while the line
+        # stays within the HS_LINE_MAX budget, so a hand-edited file with
+        # implausible numbers costs the colors, never a cut escape
+        # sequence.
+        if [ "${#plain}" -le "${HS_LINE_MAX}" ]; then
+            highscore_rank_sgr "${rank}"
+            printf -v line '%s%2d%s %-12.12s %s%6d%s %5s %10s' \
+                "${HS_RANK_SGR}" "${rank}" "${TXT_RESET_SGR}" "${hsv_name}" \
+                "${TXT_ACCENT_SGR}" "${hsv_rows}" "${TXT_RESET_SGR}" \
+                "${FMT_DURATION}" "${hsv_date}"
+            HSB_L1+=("${line}")
+        else
+            HSB_L1+=("${plain:0:HS_LINE_MAX}")
+        fi
+        highscore_row2 "${hsv_gold}" "${hsv_silver}" "${hsv_hammers}" \
+            "${hsv_pieces}" "${hsv_time}"
+        HSB_L2+=("${HS_ROW2}")
+        HSB_DEMO+=("${DEMO_HASH_FILE[${hsv_hash}]:-}")
+    done
+    debug_event "highscore versus screen shown (${#HSV_ENTRIES[@]} entries)"
+    highscore_browse "${title}"
+    return 0
+}
+
 # --- Rank preview ---------------------------------------------------------
 # highscore_rank_preview MODE VALUE
 # Report in HS_PREVIEW_RANK which place a round of MODE would take in
@@ -1648,6 +1873,12 @@ highscore_rank_preview() {
             HS_PREVIEW_MAX="${HSF_MAX}"
             if [ "${#HSF_ENTRIES[@]}" -gt 0 ]; then
                 entries=("${HSF_ENTRIES[@]}")
+            fi
+            ;;
+        versus)
+            HS_PREVIEW_MAX="${HSV_MAX}"
+            if [ "${#HSV_ENTRIES[@]}" -gt 0 ]; then
+                entries=("${HSV_ENTRIES[@]}")
             fi
             ;;
         *)

@@ -131,7 +131,31 @@
 #   terminal of at least 48x22; a resize during play is caught via
 #   SIGWINCH and redraws cleanly, and shrinking below the minimum pauses
 #   the round behind a "resize me" overlay until the terminal grows back.
-#   A working multiplayer follows in a later phase (see CLAUDE.md).
+#   Since 1.1.0 the "Mehrspieler" menu entry is a working multiplayer on
+#   the local network: one player opens a session, the others find it via
+#   a UDP broadcast beacon or connect to its address by hand, and
+#   everybody then plays their own board with the same piece sequence.
+#   Whoever builds out of the field drops out and watches. How the round
+#   is won and whether cleared rows send garbage rows to the opponents is
+#   the host's to decide in the lobby, where every player sees it: the
+#   mode is survival (last one standing, the default), sprint (most rows
+#   in the time limit) or ultra (first to the row target), and the
+#   garbage switch starts out off. The
+#   session is carried by socat (a Recommends, not a Depends - without it
+#   the singleplayer is untouched and the menu entry says which package is
+#   missing) over TCP in the local network or over a Unix domain socket on
+#   a shared host. It runs in four processes: the client (this script),
+#   the headless hub that owns the session (--mp-hub), a bridge per
+#   connection (--mp-bridge) and a beacon collector per datagram
+#   (--mp-discover). The hub decides everything a client must not decide
+#   for itself - how much garbage a clear is worth, where its gap sits,
+#   who receives it, who is out and when the round is over - and every
+#   line off the wire is length-, charset- and pattern-checked before
+#   anything looks at it. The opponents appear next to the board as mini
+#   boards, or as two lines resp. one line each when the terminal is too
+#   narrow for that (--mp-view). A multiplayer round is recorded like any
+#   other, in a list of its own, and it feeds the wonder progress and the
+#   statistics with this player's own rows and nothing else.
 #
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
@@ -179,10 +203,16 @@
 #                [--color-mode auto|basic|extended]
 #                [--color-theme guideline|classic|mono|colorblind]
 #                [--render-mode partial|full] [--demo-record on|off]
+#                [--mp-transport lan|unix] [--mp-port N] [--mp-dir DIR]
+#                [--mp-max N] [--mp-session NAME] [--mp-view MODE]
+#                [--mp-target random|all|even]
+#                [--mp-mode survival|sprint|ultra] [--mp-garbage on|off]
+#                [--mp-host]
+#                [--mp-join HOST[:PORT]] [--mp-bot]
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.0.3  (2026-08-06)
+# Version: 1.1.0  (2026-08-11)
 
 set -euo pipefail
 
@@ -197,7 +227,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.0.4"
+ROWHAMMER_VERSION="1.1.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -322,6 +352,61 @@ CLI_PLAYER_NAME=""
 CLI_COLOR_THEME=""
 CLI_DEMO_RECORD=""
 CLI_LANGUAGE=""
+# --- Multiplayer settings (phase 5, see CLAUDE.md 5.10) -------------------
+# None of these is a config file value. Which session to open or join, on
+# which port and over which transport is a property of the evening and of
+# the network, not a taste that wants remembering - the same reasoning the
+# render mode is kept out of the config file under. Precedence therefore
+# default < env < CLI throughout.
+# Transport: "lan" is TCP in the local network (the case the multiplayer
+# is for), "unix" a domain socket for the host everybody is logged into
+# anyway, where it saves the network layer entirely and keeps the file
+# permissions as one more barrier.
+MP_TRANSPORT="${ROWHAMMER_MP_TRANSPORT:-lan}"
+# TCP and beacon port. A busy port is not an error: the hub takes the next
+# free one and announces that one (see hub_listen).
+MP_PORT="${ROWHAMMER_MP_PORT:-27301}"
+# Where the session's FIFOs live, and in the unix transport its socket.
+MP_DIR="${ROWHAMMER_MP_DIR:-${XDG_RUNTIME_DIR:-/tmp/rowhammer-$(id -u)}/rowhammer}"
+# Upper bound on the players of a session: 2 is the minimum a duel needs,
+# 6 the technical maximum (see CLAUDE.md 5.1 for why six). A host may set
+# it lower to close a session for exactly three people instead of asking
+# a fourth to leave again.
+MP_MAX="${ROWHAMMER_MP_MAX:-6}"
+# Session name, also the name shown in the beacon and the file name of the
+# socket in the unix transport. The user name is a name the others
+# recognize; it is reduced to what a session name may hold.
+MP_SESSION="${ROWHAMMER_MP_SESSION:-}"
+# How much of the opponents is drawn: "auto" takes the most detailed view
+# the terminal has room for (see render_peer_level in lib/render.sh).
+MP_VIEW="${ROWHAMMER_MP_VIEW:-auto}"
+# Who receives the garbage of an attack with three or more players.
+MP_TARGET="${ROWHAMMER_MP_TARGET:-random}"
+# The session settings a host opens its session with: the mode of the
+# round and whether cleared rows send garbage. Both are what the lobby's
+# settings menu changes (see mp_settings_menu in lib/mp.sh) - these two
+# only decide what it starts out showing, which is worth an option for
+# somebody who always plays the same way and for a scripted test.
+# "survival" and garbage off are the defaults for the reason given in
+# lib/hub.sh: they are the round that needs no explaining.
+MP_MODE_OPT="${ROWHAMMER_MP_MODE:-survival}"
+MP_GARBAGE_OPT="${ROWHAMMER_MP_GARBAGE:-off}"
+# The internal process modes. They are not menu entries and not
+# documented in --help beyond a line: the hub is started by the host's own
+# client, the bridge by socat for every connection and the discover
+# collector by socat for every beacon received. Each of them ends the
+# program instead of entering the menu.
+MP_ROLE=""
+# The test client of --mp-bot: plays random moves without a terminal, so a
+# six-player round can be tested without six terminals.
+MP_BOT="${ROWHAMMER_MP_BOT:-0}"
+# Skip the menu and go straight into a session: open one (--mp-host) or
+# join one (--mp-join HOST[:PORT], or a session name in the unix
+# transport). Both are conveniences for a LAN evening and the only way to
+# tell the bot where to play; without them the menu is the way in.
+MP_HOST_OPT="${ROWHAMMER_MP_HOST:-0}"
+MP_JOIN="${ROWHAMMER_MP_JOIN:-}"
+
 # -h/--help only raises this flag; the text itself is printed further
 # down, once the modules are sourced and the language is resolved. The
 # help is one of the texts the translation layer covers (lib/i18n.sh),
@@ -486,6 +571,60 @@ while [ "$#" -gt 0 ]; do
             FORCE_OPT=1
             shift
             ;;
+        --mp-transport|--mp-port|--mp-dir|--mp-max|--mp-session|--mp-view|--mp-target|--mp-mode|--mp-garbage)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            case "${1}" in
+                --mp-transport) MP_TRANSPORT="${2}" ;;
+                --mp-port)      MP_PORT="${2}" ;;
+                --mp-dir)       MP_DIR="${2}" ;;
+                --mp-max)       MP_MAX="${2}" ;;
+                --mp-session)   MP_SESSION="${2}" ;;
+                --mp-view)      MP_VIEW="${2}" ;;
+                --mp-target)    MP_TARGET="${2}" ;;
+                --mp-mode)      MP_MODE_OPT="${2}" ;;
+                --mp-garbage)   MP_GARBAGE_OPT="${2}" ;;
+            esac
+            shift 2
+            ;;
+        --mp-transport=*) MP_TRANSPORT="${1#*=}"; shift ;;
+        --mp-port=*)      MP_PORT="${1#*=}"; shift ;;
+        --mp-dir=*)       MP_DIR="${1#*=}"; shift ;;
+        --mp-max=*)       MP_MAX="${1#*=}"; shift ;;
+        --mp-session=*)   MP_SESSION="${1#*=}"; shift ;;
+        --mp-view=*)      MP_VIEW="${1#*=}"; shift ;;
+        --mp-target=*)    MP_TARGET="${1#*=}"; shift ;;
+        --mp-mode=*)      MP_MODE_OPT="${1#*=}"; shift ;;
+        --mp-garbage=*)   MP_GARBAGE_OPT="${1#*=}"; shift ;;
+        --mp-hub|--mp-bridge|--mp-discover)
+            # Internal process modes. They never touch the terminal and
+            # never enter the menu; each of them runs its own loop and
+            # exits (see the dispatch after the modules are sourced).
+            MP_ROLE="${1#--mp-}"
+            shift
+            ;;
+        --mp-bot)
+            MP_BOT=1
+            shift
+            ;;
+        --mp-host)
+            MP_HOST_OPT=1
+            shift
+            ;;
+        --mp-join)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            MP_JOIN="${2}"
+            shift 2
+            ;;
+        --mp-join=*)
+            MP_JOIN="${1#*=}"
+            shift
+            ;;
         --debug)
             DEBUG_OPT=1
             shift
@@ -593,6 +732,79 @@ case "${FORCE_OPT}" in
         exit 2
         ;;
 esac
+# Multiplayer options. Validated here with the other command line values
+# and before anything touches the terminal; the patterns are written out
+# rather than taken from lib/net.sh, which is not sourced yet.
+case "${MP_TRANSPORT}" in
+    lan|unix) : ;;
+    *)
+        printf '%s: --mp-transport expects lan or unix, got: %s\n' \
+            "${SCRIPT_NAME}" "${MP_TRANSPORT}" >&2
+        exit 2
+        ;;
+esac
+if ! [[ "${MP_PORT}" =~ ^[0-9]{1,5}$ ]] || [ "${MP_PORT}" -lt 1 ] \
+    || [ "${MP_PORT}" -gt 65535 ]; then
+    printf '%s: --mp-port expects a port in 1..65535, got: %s\n' \
+        "${SCRIPT_NAME}" "${MP_PORT}" >&2
+    exit 2
+fi
+# Two is what a duel needs, six the technical maximum: beyond that the
+# opponents no longer fit next to the board and bash no longer renders
+# them fast enough (see CLAUDE.md 5.1).
+if ! [[ "${MP_MAX}" =~ ^[0-9]{1,2}$ ]] || [ "${MP_MAX}" -lt 2 ] \
+    || [ "${MP_MAX}" -gt 6 ]; then
+    printf '%s: --mp-max expects a player count in 2..6, got: %s\n' \
+        "${SCRIPT_NAME}" "${MP_MAX}" >&2
+    exit 2
+fi
+case "${MP_VIEW}" in
+    auto|full|compact|score) : ;;
+    *)
+        printf '%s: --mp-view expects auto, full, compact or score, got: %s\n' \
+            "${SCRIPT_NAME}" "${MP_VIEW}" >&2
+        exit 2
+        ;;
+esac
+case "${MP_TARGET}" in
+    random|all|even) : ;;
+    *)
+        printf '%s: --mp-target expects random, all or even, got: %s\n' \
+            "${SCRIPT_NAME}" "${MP_TARGET}" >&2
+        exit 2
+        ;;
+esac
+case "${MP_MODE_OPT}" in
+    survival|sprint|ultra) : ;;
+    *)
+        printf '%s: --mp-mode expects survival, sprint or ultra, got: %s\n' \
+            "${SCRIPT_NAME}" "${MP_MODE_OPT}" >&2
+        exit 2
+        ;;
+esac
+case "${MP_GARBAGE_OPT}" in
+    on|off) : ;;
+    *)
+        printf '%s: --mp-garbage expects on or off, got: %s\n' \
+            "${SCRIPT_NAME}" "${MP_GARBAGE_OPT}" >&2
+        exit 2
+        ;;
+esac
+if [ -n "${MP_SESSION}" ] && ! [[ "${MP_SESSION}" =~ ^[A-Za-z0-9_-]{1,16}$ ]]; then
+    printf '%s: --mp-session expects 1-16 characters of [A-Za-z0-9_-], got: %s\n' \
+        "${SCRIPT_NAME}" "${MP_SESSION}" >&2
+    exit 2
+fi
+if [ -z "${MP_SESSION}" ]; then
+    # Default: the user name, reduced to what a session name may hold -
+    # it goes into a beacon, into a file name and onto other players'
+    # screens. An empty result (a user name of nothing but punctuation)
+    # falls back to a fixed word rather than to an empty file name.
+    MP_SESSION="${USER:-${LOGNAME:-player}}"
+    MP_SESSION="${MP_SESSION//[^A-Za-z0-9_-]/}"
+    MP_SESSION="${MP_SESSION:0:16}"
+    MP_SESSION="${MP_SESSION:-player}"
+fi
 
 # --- Prerequisites --------------------------------------------------------
 # Associative arrays (piece tables) and fractional read timeouts need
@@ -632,7 +844,7 @@ TERM_RESIZED=0
 # take the piece stream from a recording during playback, and the
 # renderer reads it as well, so the flags have to exist before either
 # module runs.
-for _lib in debug config i18n demo pieces board squares highscore save stats wonders input render menu; do
+for _lib in debug config i18n demo pieces board squares highscore save stats wonders input render menu net proto hub mp; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -714,7 +926,7 @@ reset_run() {
         stats)     names=("${STATS_FILE_NAME}") ;;
         highscore) names=("${HS_FILE_NAME}" "${HSU_FILE_NAME}"
                           "${HSS_FILE_NAME}" "${HSA_FILE_NAME}"
-                          "${HSF_FILE_NAME}") ;;
+                          "${HSF_FILE_NAME}" "${HSV_FILE_NAME}") ;;
         save)      names=("${SAVE_FILE_NAME}") ;;
         # The only target that is a directory rather than a file. It is
         # moved aside as a whole, which the loop below does without
@@ -828,18 +1040,23 @@ if [ -n "${RESET_OPT}" ]; then
 fi
 
 # The game itself needs a terminal (the reset above does not, see the
-# prerequisites section).
-if [ ! -t 0 ] || [ ! -t 1 ]; then
-    die "This game needs an interactive terminal (stdin/stdout must be a tty)"
-fi
-
-# Terminal size check, now that term_measure (lib/input.sh) is available.
-# It fills TERM_ROWS/TERM_COLS and sets TERM_TOO_SMALL against the minimum
-# above; a too-small terminal at startup is a hard error, while one that
-# shrinks later is handled live via SIGWINCH.
-term_measure
-if [ "${TERM_TOO_SMALL}" -eq 1 ]; then
-    die "Terminal too small: need at least ${MIN_TERM_COLS}x${MIN_TERM_ROWS}, got ${TERM_COLS}x${TERM_ROWS}"
+# prerequisites section). Neither do the headless multiplayer processes
+# (1.1.0): the hub, the socket bridge, the beacon collector and the test
+# bot never draw anything and are started by socat, by the host's client
+# or from a script - each of them runs its own loop further down and ends
+# the program instead of entering the menu.
+if [ -z "${MP_ROLE}" ] && [ "${MP_BOT}" -eq 0 ]; then
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        die "This game needs an interactive terminal (stdin/stdout must be a tty)"
+    fi
+    # Terminal size check, now that term_measure (lib/input.sh) is
+    # available. It fills TERM_ROWS/TERM_COLS and sets TERM_TOO_SMALL
+    # against the minimum above; a too-small terminal at startup is a hard
+    # error, while one that shrinks later is handled live via SIGWINCH.
+    term_measure
+    if [ "${TERM_TOO_SMALL}" -eq 1 ]; then
+        die "Terminal too small: need at least ${MIN_TERM_COLS}x${MIN_TERM_ROWS}, got ${TERM_COLS}x${TERM_ROWS}"
+    fi
 fi
 
 # --- Settings resolution (default < config < env < CLI) -------------------
@@ -1260,6 +1477,9 @@ round_is_ranked() {
     case "${GAME_MODE}" in
         ultra)  [ "${GOAL_REACHED}" -eq 1 ] && [ "${PLAY_MS}" -gt 0 ] ;;
         sprint) [ "${GOAL_REACHED}" -eq 1 ] && [ "${ROW_CREDIT}" -gt 0 ] ;;
+        # A multiplayer round is ranked like a Marathon one, won or lost:
+        # it has no incomparable "did not finish" state, and the rows are
+        # the same achievement whichever way it ended (lib/highscore.sh).
         *)      [ "${ROW_CREDIT}" -gt 0 ] ;;
     esac || return 1
     # The preview needs a list its mode's rules accept, which is what the
@@ -1410,6 +1630,16 @@ record_round() {
             "${LEVEL}" "${name}" "${GOLD_COUNT}" \
             "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
             "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "${ROUND_HASH}"
+    elif [ "${GAME_MODE}" = "versus" ]; then
+        # A multiplayer round is recorded whether it was won or lost, for
+        # the reason Time Attack and Hochwasser are: it has no state that
+        # cannot be compared with a finished round. What enters the list
+        # is this player's own achievement and nothing else - no row of
+        # a peer, no bonus for the win (CLAUDE.md 5.8).
+        highscore_versus_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" \
+            "${LEVEL}" "${name}" "${GOLD_COUNT}" \
+            "${SILVER_COUNT}" "$(( PLAY_MS / 1000 ))" \
+            "${ROWHAMMER_COUNT}" "${PIECE_COUNT}" "${ROUND_HASH}"
     else
         highscore_add "${ROW_CREDIT}" "${CLEARED_TOTAL}" "${LEVEL}" \
             "${name}" "${GOLD_COUNT}" "${SILVER_COUNT}" \
@@ -1448,6 +1678,26 @@ record_round() {
         demo_end="over"
     fi
     demo_record_finish "${demo_end}" "${ROUND_HASH}"
+    return 0
+}
+
+# round_finish: what happens when this player's board is full. In every
+# singleplayer mode that is the end of the round and the books are closed
+# on the spot; in a multiplayer round it is not - the round is over when
+# the hub says so, and until then this player is a spectator watching the
+# others finish it (CLAUDE.md 5.8). So the top-out is reported and
+# nothing is booked yet: record_round runs when END arrives (see the game
+# loop), or when the player leaves, whichever comes first.
+# Called from the three places a top-out is detected (a blocked spawn, a
+# piece settling above the field, and the rising water of the Hochwasser
+# mode, which cannot occur in a multiplayer round) so all three follow
+# the same rule.
+round_finish() {
+    if [ "${MP_ACTIVE}" -eq 1 ]; then
+        mp_send_topout
+        return 0
+    fi
+    record_round
     return 0
 }
 
@@ -1576,7 +1826,7 @@ spawn_piece() {
     if ! can_place "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"; then
         GAME_OVER=1
         debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} blocked - game over (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
-        record_round
+        round_finish
     else
         debug_event "spawn ${CUR_TYPE} at ${CUR_X},${CUR_Y} queue=${QUEUE[*]}"
     fi
@@ -1620,9 +1870,20 @@ flash_rows() {
         FLASH_STATE=1
         draw_frame
         key_drain "${ms}"
+        # The animation holds the loop for its ~280 ms, and in a
+        # multiplayer round those are exactly the milliseconds around a
+        # clear - the moment the hub has the most to say. The link is
+        # therefore drained here too; key presses stay swallowed, as they
+        # always were.
+        if [ "${MP_ACTIVE}" -eq 1 ]; then
+            mp_poll || :
+        fi
         FLASH_STATE=0
         draw_frame
         key_drain "${ms}"
+        if [ "${MP_ACTIVE}" -eq 1 ]; then
+            mp_poll || :
+        fi
     done
     FLASH_ROWS=()
     FLASH_STATE=0
@@ -1664,6 +1925,14 @@ lock_and_next() {
         CLEARED_TOTAL=$(( CLEARED_TOTAL + CLEARED ))
         ROW_CREDIT=$(( ROW_CREDIT + CLEARED_CREDIT ))
         update_speed
+        # Multiplayer: report the clear as the event it is - how many
+        # rows, and how many gold and silver squares ran through them.
+        # What that is worth as an attack, whether it cancels garbage of
+        # our own first and who receives the rest is the hub's arithmetic
+        # and never this end's (CLAUDE.md 5.4).
+        if [ "${MP_ACTIVE}" -eq 1 ]; then
+            mp_send_clear "${CLEARED}" "${CLEARED_SILVER}" "${CLEARED_GOLD}"
+        fi
         # CHANGE 2026-07-28: the wonder state is no longer refreshed per
         # clear. It used to feed the HUD's live wonder line, which gave
         # up its slot to the rowhammer counter (see render_status in
@@ -1688,6 +1957,17 @@ lock_and_next() {
             DIRTY=1
             return 0
         fi
+    elif [ "${MP_ACTIVE}" -eq 1 ]; then
+        # Multiplayer: the garbage waiting for us comes in now - at a
+        # lock, never while a piece is falling, so the move in progress
+        # stays plannable. Only at a lock that cleared nothing: a lock
+        # that did clear has just reported it, and the hub cancels the
+        # queue against that clear before anything of it is applied,
+        # which is what rewards the counter-attack over pure defence
+        # (CLAUDE.md 5.7). Rows that push the stack out of the field are
+        # caught by the top-out check right below - the same rule a
+        # settling piece is measured by.
+        mp_apply_garbage || :
     fi
     # Lock out: the piece came to rest reaching into the hidden spawn
     # rows above the field, so the stack has grown out of the 20 rows it
@@ -1703,7 +1983,7 @@ lock_and_next() {
     if board_top_out; then
         GAME_OVER=1
         debug_event "lock out: piece settled above the field (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} pieces=${PIECE_COUNT})"
-        record_round
+        round_finish
         debug_board_snapshot
         DIRTY=1
         return 0
@@ -1865,6 +2145,13 @@ handle_key() {
     if [ "${GAME_OVER}" -eq 1 ]; then
         case "${KEY}" in
             r)
+                # Not in a multiplayer round: a fresh round there means a
+                # fresh session, and restarting into an empty board while
+                # the others play on would be a round nobody is having.
+                # Leaving is the only way out of a decided duel.
+                if [ "${MP_ACTIVE}" -eq 1 ]; then
+                    return 0
+                fi
                 debug_event "restart from game over screen"
                 game_reset
                 ;;
@@ -1877,6 +2164,15 @@ handle_key() {
     fi
     case "${KEY}" in
         "${KEY_PAUSE}")
+            # There is no pause in a multiplayer round: the others do not
+            # stop, so stopping this board would be a free breather at
+            # their expense. The key does nothing rather than something
+            # surprising; the pause menu behind ESC/x says so in as many
+            # words (CLAUDE.md 5.8).
+            if [ "${MP_ACTIVE}" -eq 1 ]; then
+                debug_event "pause key ignored: multiplayer round"
+                return 0
+            fi
             PAUSED=$(( 1 - PAUSED ))
             if [ "${PAUSED}" -eq 1 ]; then
                 debug_event "paused"
@@ -1896,7 +2192,16 @@ handle_key() {
             # end it (lib/menu.sh sets
             # GAME_EXIT/GAME_SUSPENDED/GAME_RESTART accordingly).
             debug_event "pause menu opened"
-            menu_pause
+            if [ "${MP_ACTIVE}" -eq 1 ]; then
+                # A multiplayer round has its own two-entry menu: it has
+                # no "suspend into the main menu" (the others do not
+                # wait) and it keeps draining the link while it is open,
+                # so the connection survives the detour (see
+                # mp_pause_menu in lib/mp.sh).
+                mp_pause_menu
+            else
+                menu_pause
+            fi
             # "Neustarten" (2026-08-03, user request): the running round
             # is given up for a fresh one in the same mode (game_reset
             # without an argument keeps GAME_MODE, like the game over
@@ -1968,7 +2273,7 @@ handle_key() {
 
 # game_reset [MODE]
 # Start a fresh round in MODE ("marathon", "ultra", "sprint",
-# "timeattack" or "flood"); without
+# "timeattack", "flood" or - in a multiplayer session - "versus"); without
 # an argument the current GAME_MODE is kept, which is what the game over
 # screen's restart key does - a failed Ultra run restarts as an Ultra
 # run, a finished Sprint as a Sprint.
@@ -2014,7 +2319,7 @@ game_reset() {
 }
 
 # --- Game loop ------------------------------------------------------------
-# game_run [marathon|ultra|sprint|timeattack|flood|resume]
+# game_run [marathon|ultra|sprint|timeattack|flood|versus|resume]
 # One game session; returns to the caller (the menu) when the player
 # leaves via the pause menu or the game over screen. The argument is
 # either the game mode of the new round (see GAME_MODE) or "resume",
@@ -2054,6 +2359,36 @@ game_run() {
         # on the too-small overlay while the terminal is undersized).
         read_key
         handle_key
+        # Multiplayer: drain the link once per tick and apply what came
+        # in - peer counters, garbage, the knock-outs and the end of the
+        # round. Right behind the key, so a message never waits longer
+        # than one tick, and before the gravity below, so garbage that
+        # just arrived is queued before the piece it will meet falls.
+        if [ "${MP_ACTIVE}" -eq 1 ]; then
+            if ! mp_poll; then
+                # The hub or the connection is gone. The round is over
+                # for this client; it is booked like any other round -
+                # what was cleared was cleared (CLAUDE.md 5.8).
+                GAME_OVER=1
+                MP_ENDED=1
+                debug_event "mp: connection lost, ending the round"
+            fi
+            if [ "${MP_ENDED}" -eq 1 ] && [ "${ROUND_RECORDED}" -eq 0 ]; then
+                GAME_OVER=1
+                # Winning is this mode's regular ending, so it is what
+                # the statistics count as its goal (lib/stats.sh).
+                if [ "${MP_PLACE}" -eq 1 ]; then
+                    GOAL_REACHED=1
+                fi
+                play_clock_tick
+                record_round
+                DIRTY=1
+            fi
+            if [ "${GAME_OVER}" -eq 0 ]; then
+                mp_send_state
+                mp_send_board
+            fi
+        fi
         # A resize just happened: read_key cleared the screen (and may have
         # blocked for a while behind the too-small overlay). Repaint and
         # restart the gravity and play-time clocks so the resize interval
@@ -2149,7 +2484,11 @@ main() {
     # demo_record_discard removes the RAM disk file of a round that never
     # finished (Ctrl-C, a killed session); a finished round has already
     # moved its recording into the data directory and left nothing here.
-    trap 'term_restore; demo_record_discard; debug_close' EXIT
+    # net_close and mp_hub_stop end a multiplayer session that is still
+    # open: the socat coprocess of the link, and - only when this client
+    # started one - the hub process behind it. A hub of somebody else's
+    # session is never touched.
+    trap 'term_restore; net_close; mp_hub_stop; net_discover_stop; demo_record_discard; debug_close' EXIT
     trap 'exit 130' INT TERM
     # Debug logging starts before the alternate screen, so init errors
     # (unwritable log directory etc.) stay readable.
@@ -2166,6 +2505,7 @@ main() {
     highscore_sprint_load
     highscore_timeattack_load
     highscore_flood_load
+    highscore_versus_load
     # Load the wonder savegame and derive the wonder state once, so the
     # "Weltwunder" screen and record_round start from a valid state.
     save_load
@@ -2174,6 +2514,22 @@ main() {
     # record_round.
     stats_load
     term_setup
+
+    # --mp-host / --mp-join go straight into a session instead of
+    # through the menu - the way somebody who has agreed on an address
+    # over the phone wants to start. Afterwards the game continues into
+    # the menu like any other round.
+    if [ "${MP_HOST_OPT}" -eq 1 ] || [ -n "${MP_JOIN}" ]; then
+        if mp_available; then
+            if [ "${MP_HOST_OPT}" -eq 1 ]; then
+                mp_host
+            elif mp_join_target "${MP_JOIN}"; then
+                mp_lobby
+            else
+                mp_connect_failed
+            fi
+        fi
+    fi
 
     # While a round is suspended (pause menu, issue #12) the main menu
     # grows a "Fortsetzen" entry at the top; the other entries shift
@@ -2213,9 +2569,17 @@ main() {
                 menu_singleplayer
                 ;;
             1)
-                # Placeholder until the multiplayer phase (see CLAUDE.md).
-                i18n_lines mp_body
-                menu_message "${I18N[main_multi]}" "${I18N_LINES[@]}"
+                # Open a session, join one found in the local network or
+                # connect to an address by hand (lib/mp.sh). A round
+                # suspended into the main menu blocks it: a multiplayer
+                # round runs through the very game state that round is
+                # parked in, the same rule a demo replay follows.
+                if [ "${GAME_SUSPENDED}" -eq 1 ]; then
+                    i18n_lines mp_suspended
+                    menu_message "${I18N[main_multi]}" "${I18N_LINES[@]}"
+                else
+                    mp_menu
+                fi
                 ;;
             2)
                 # Picks the mode first (Marathon or Ultra): the two
@@ -2279,5 +2643,50 @@ main() {
 
     term_restore
 }
+
+# --- Internal multiplayer processes ---------------------------------------
+# Three of the multiplayer's four processes are this same script started
+# with a role: the hub (started by the host's own client), the bridge
+# (started by socat for every connection) and the beacon collector
+# (started by socat for every datagram received). None of them has a
+# terminal, none of them enters the menu, and each of them ends the
+# program when it is done. The dispatch sits here, right before main,
+# because the bot plays through the real game functions above and they
+# have to be defined by now; the tty and terminal size checks skip these
+# roles further up, so getting here without a terminal is normal.
+# The bridge and the collector deliberately do nothing else at all: they
+# are started once per connection resp. once per datagram, and the
+# collector is the first parser a complete stranger can reach.
+if [ -n "${MP_ROLE}" ]; then
+    case "${MP_ROLE}" in
+        bridge)
+            hub_bridge_main
+            exit 0
+            ;;
+        discover)
+            net_discover_child
+            exit 0
+            ;;
+        hub)
+            # The hub logs like any other session when --debug is given;
+            # its log directory is its own, so its events and the host
+            # client's do not interleave in one file.
+            debug_init
+            hub_main
+            debug_close
+            exit 0
+            ;;
+    esac
+fi
+
+# The test bot is headless as well: it joins a session, plays random
+# moves through the real game logic and exits when the round is over. It
+# has no terminal either, which is why the check above lets it through.
+if [ "${MP_BOT}" -eq 1 ]; then
+    debug_init
+    mp_bot_main
+    debug_close
+    exit 0
+fi
 
 main "$@"

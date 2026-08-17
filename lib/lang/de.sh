@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.6.1  (2026-08-07)
+# Version: 1.7.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -49,9 +49,102 @@ I18N=(
     [main_settings]="Einstellungen"
     [main_help]="Anleitung"
     [main_quit]="Beenden"
-    [mp_body]="Der Mehrspieler-Modus ist noch nicht
-verfuegbar. Er folgt in einer spaeteren
-Phase (siehe Roadmap)."
+
+    # --- Mehrspieler (1.1.0) ----------------------------------------------
+    # Menue, Sitzungssuche, Lobby und die Meldungen dazu. Die Zeilen
+    # bleiben in den 46 Zeichen, die ein 48-Spalten-Terminal neben dem
+    # Menue-Einzug laesst.
+    [mp_host]="Spiel eroeffnen"
+    [mp_join]="Spiel beitreten"
+    [mp_direct]="Direkt verbinden"
+    [mp_no_socat]="Fuer den Mehrspieler wird socat benoetigt.
+Es ist auf diesem Rechner nicht installiert.
+
+Debian/Ubuntu:  apt install socat
+Fedora/RHEL:    dnf install socat
+
+Der Einzelspieler laeuft ohne socat weiter."
+    [mp_host_failed]="Die Sitzung konnte nicht eroeffnet werden.
+
+Moeglicherweise ist der Port belegt oder das
+Sitzungsverzeichnis nicht beschreibbar."
+    [mp_search_failed]="Die Suche konnte nicht gestartet werden.
+
+Moeglicherweise ist der Port belegt."
+    [mp_searching]="Suche Sitzungen im Netz (UDP-Port %s)..."
+    # Reihenfolge: Name, Adresse, Spieler, Maximum, Zustand.
+    [mp_session_entry]="%-12.12s %-15.15s %s/%s %s"
+    [mp_state_lobby]="Lobby"
+    [mp_state_play]="laeuft"
+    [mp_none]="Keine Sitzung gefunden"
+    [mp_search_again]="Erneut suchen"
+    [mp_direct_body]="Adresse des Rechners, der die Sitzung
+eroeffnet hat - mit Port, wenn er vom
+Standard abweicht:
+
+  192.168.1.23   oder   192.168.1.23:27301"
+    [mp_bad_address]="Das ist keine gueltige Adresse.
+
+Erlaubt sind eine IPv4-Adresse oder ein
+Rechnername, wahlweise mit :Port dahinter."
+    [mp_join_failed]="Die Verbindung kam nicht zustande.
+
+Laeuft die Sitzung noch, und sind beide
+Rechner im selben Netz?"
+    [mp_reason]="Grund:"
+    # --- Sitzungseinstellungen des Gastgebers (1.1.0) ---------------------
+    # Der Modus entscheidet die Siegbedingung, die Stoerreihen sind ein
+    # Schalter daneben. Beides steht in der Lobby jedes Spielers, nicht
+    # nur beim Gastgeber - es entscheidet, wofuer gespielt wird.
+    [mp_settings]="Einstellungen"
+    [mp_settings_title]="Mehrspieler - Einstellungen"
+    [mp_settings_body]="Nur du als Gastgeber aenderst sie;
+alle sehen sie in ihrer Lobby."
+    [mp_settings_nav]="Enter/Pfeile: aendern   ESC: zurueck"
+    [mp_setup_mode]="Modus: %s (%s)"
+    [mp_setup_garbage]="Stoerreihen: %s"
+    [mp_setup_limit_sprint]="Zeitlimit: %s Minuten"
+    [mp_setup_limit_ultra]="Ziel: %s Rows"
+    [mp_on]="an"
+    [mp_off]="aus"
+    # Die Namen der drei Mehrspieler-Modi und - getrennt davon - wer in
+    # ihnen gewinnt. Der Name sagt, wie eine Runde laeuft, die
+    # Siegbedingung, wofuer man spielt; in der Lobby ist die zweite Frage
+    # die wichtigere.
+    [mpmode_survival]="Ueberleben"
+    [mpmode_sprint]="Sprint"
+    [mpmode_ultra]="Ultra"
+    [mpwin_survival]="wer uebrig bleibt"
+    [mpwin_sprint]="meiste Rows"
+    [mpwin_ultra]="wer zuerst am Ziel ist"
+    [mp_lobby_title]="Mehrspieler - Lobby"
+    [mp_lobby_session]="Sitzung: %s"
+    [mp_lobby_addr]="Adresse zum Weitersagen: %s:%s"
+    [mp_lobby_alone]="Warte auf einen zweiten Spieler..."
+    [mp_start]="Runde starten"
+    [mp_ready]="Bereit"
+    [mp_unready]="Doch nicht bereit"
+    [mp_leave]="Lobby verlassen"
+    [mp_you]="(du)"
+    [mp_is_host]="Gastgeber"
+    [mp_is_ready]="bereit"
+    [mp_is_waiting]="wartet"
+    [mp_countdown]="Es geht los in %s..."
+    [mp_lost_body]="Die Verbindung zur Sitzung ist weg.
+
+Der Gastgeber hat sie beendet, oder das Netz
+war kurz nicht da."
+    [mp_pause_note]="Die anderen spielen weiter - hier haelt nur
+dein eigenes Feld an. Entscheide dich also
+zuegig."
+    [mp_end_tail]="Die Runde wird gewertet und ist danach
+vorbei; die anderen spielen sie zu Ende."
+    [mp_suspended]="Es wartet noch eine pausierte Runde im
+Hauptmenue.
+
+Eine Mehrspieler-Runde laeuft durch genau
+diesen Zustand, also beende die pausierte
+Runde erst (Fortsetzen)."
 
     # The state of the running round, shown in every question that would
     # throw it away. Arguments: lines, rows, level.
@@ -79,11 +172,16 @@ nicht mehr fortsetzbar."
     [mode_timeattack_short]="TimeAtk"
     [mode_flood]="Hochwasser"
     [mode_flood_short]="Flut"
+    # Der Mehrspieler-Modus (1.1.0). Er steht nicht im
+    # Einzelspieler-Menue, aber in den beiden Ruecksichten (Highscores,
+    # Statistik) und ueberall dort, wo eine Runde ihren Modus nennt.
+    [mode_versus]="Mehrspieler"
     [entry_marathon]="(endlos, bis Game Over)"
     [entry_ultra]="(%s Rows auf Zeit)"
     [entry_sprint]="(%s Minuten auf Rows)"
     [entry_timeattack]="(%s + %ss je Row)"
     [entry_flood]="(Flut alle %s Sek.)"
+    [entry_versus]="(2 bis %s Spieler)"
 
     # --- Singleplayer and pause menu --------------------------------------
     [sp_title]="Einzelspieler"
@@ -220,6 +318,14 @@ Du kannst sie im Demo-Menue loeschen."
     [hud_left]="Rest"
     [hud_flood]="Flut"
     [hud_demo]="Demo"
+    # Mehrspieler: die wartenden Stoerreihen und die Zahl der Spieler,
+    # die noch im Rennen sind. Sechs Zeichen, wie jede HUD-Beschriftung.
+    [hud_garbage]="Muell"
+    [hud_alive]="Gegner"
+    # Ein Zeichen je Marke, mehr ist neben einem Mini-Feld nicht zu
+    # haben: Stoerreihen im Anflug und ein ausgeschiedener Spieler.
+    [hud_peer_warn]="!"
+    [hud_peer_ko]="K.O."
 
     # --- Result box over the board ----------------------------------------
     # Every line lives inside a box 18 columns wide; the headlines are
@@ -244,6 +350,11 @@ Du kannst sie im Demo-Menue loeschen."
     [box_menu]="  %s = Menue"
     [box_demo_again]="  r = nochmal"
     [box_demo_back]="  %s = zurueck"
+    [box_mp_win]="     GEWONNEN"
+    [box_mp_over]="    RUNDE VORBEI"
+    [box_mp_ko]="      K. O."
+    [box_mp_place]="   Platz %d"
+    [box_mp_watch]="  Du schaust zu"
 
     # --- Too-small terminal overlay ---------------------------------------
     # Drawn on a terminal that is smaller than the fixed layout, so these
@@ -311,6 +422,11 @@ jeder Lauf - auch ein vorzeitiges Game Over."
 Sekunden schiebt sich eine Reihe von unten
 ins Feld. Gewertet wird jede Runde - sie
 endet ohnehin immer im Game Over."
+    [hs_empty_versus]="Spiele eine Mehrspieler-Runde. Gewertet
+werden deine eigenen Rows, gewonnen oder
+verloren; wie viele mitgespielt haben und
+wer gewonnen hat, steht bewusst nicht in
+dieser Liste."
 
     # --- Statistics -------------------------------------------------------
     [stats_title]="Statistik"
@@ -344,6 +460,7 @@ endet ohnehin immer im Game Over."
     [stats_goal_ultra]="davon Ziel erreicht:"
     [stats_goal_sprint]="davon volle Zeit:"
     [stats_goal_timeattack]="davon Zeit abgelaufen:"
+    [stats_goal_versus]="davon gewonnen:"
 
     # --- Manual -----------------------------------------------------------
     [help_title]="Anleitung"
@@ -499,6 +616,27 @@ Waehrend der Wiedergabe:"
     # Arguments: old path, new path.
     [highscore_renamed]="Bestenliste umbenannt: %s -> %s"
 
+
+    # Page 10: der Mehrspieler (1.1.0). Spielerzahl und Port kommen aus
+    # den laufenden Konstanten, damit ein nachjustierter Wert die Seite
+    # nicht zur Luege macht.
+    [help_p9_head]="Mehrspieler (im lokalen Netz)
+
+Jeder spielt sein eigenes Feld, alle mit
+derselben Steinfolge. Wer oben rausbaut,
+scheidet aus und schaut den anderen zu."
+    [help_p9_players]="Es spielen 2 bis %s Leute; einer eroeffnet
+die Sitzung, die anderen finden sie im Netz
+(UDP-Port %s) oder geben die Adresse ein."
+    [help_p9_tail]="Der Gastgeber legt in der Lobby fest, wie
+gewonnen wird - wer uebrig bleibt, die
+meisten Rows in der Zeit (Sprint) oder wer
+zuerst am Ziel ist (Ultra) - und ob
+abgebaute Reihen dem Gegner Stoerreihen
+schicken (anfangs aus). Alle sehen das.
+Eine Pause gibt es nicht. Gewertet wird nur
+die eigene Leistung. Benoetigt socat."
+
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" betrifft diese Dateien in %s:"
     [reset_absent]="(nicht vorhanden)"
@@ -523,8 +661,8 @@ Aufruf: rowhammer.sh [OPTIONEN]
 
 Terminal-Tetris des rowhammer-Projekts. Startet mit einem Menue:
 Einzelspieler (endloser "Marathon", die Zeitmodi "Ultra", "Sprint" und
-"Time Attack" sowie "Hochwasser"), Mehrspieler (Platzhalter), Highscores,
-Weltwunder, Statistik, Demos und Einstellungen.
+"Time Attack" sowie "Hochwasser"), Mehrspieler im lokalen Netz,
+Highscores, Weltwunder, Statistik, Demos und Einstellungen.
 
 Optionen:
   --seed N      Startwert des Zufallsgenerators fuer eine
@@ -585,13 +723,66 @@ Optionen:
                 Update falsch darstellen, und fuer ein Frame-Log mit
                 ganzen Bildern.
                 Env: ROWHAMMER_RENDER_MODE  Standard: partial
+  --mp-transport MODUS
+                Wie eine Mehrspieler-Sitzung verbunden wird: "lan" ueber
+                TCP im lokalen Netz (Standard) oder "unix" ueber einen
+                Domain-Socket, wenn alle auf demselben Rechner
+                eingeloggt sind.
+                Env: ROWHAMMER_MP_TRANSPORT Standard: lan
+  --mp-port N   TCP- und Broadcast-Port des Mehrspielers. Ist der Port
+                belegt, nimmt der Gastgeber den naechsten freien und
+                kuendigt genau den an.
+                Env: ROWHAMMER_MP_PORT      Standard: 27301
+  --mp-dir DIR  Verzeichnis fuer die Sitzungsdateien (im Transport
+                "unix" auch fuer den Socket).
+                Env: ROWHAMMER_MP_DIR
+                Standard: ${XDG_RUNTIME_DIR}/rowhammer
+  --mp-max N    Obergrenze der Spielerzahl einer Sitzung, 2 bis 6.
+                Env: ROWHAMMER_MP_MAX       Standard: 6
+  --mp-session NAME
+                Name der Sitzung (1-16 Zeichen aus A-Z a-z 0-9 _ -), so
+                wie die anderen sie in der Liste sehen.
+                Env: ROWHAMMER_MP_SESSION   Standard: der Benutzername
+  --mp-view MODUS
+                Wie viel von den Mitspielern gezeichnet wird: "auto"
+                (Standard) nimmt die ausfuehrlichste Ansicht, fuer die
+                das Terminal Platz hat, "full" die Mini-Felder,
+                "compact" zwei Zeilen je Gegner, "score" eine.
+                Env: ROWHAMMER_MP_VIEW      Standard: auto
+  --mp-target MODUS
+                Wer ab drei Spielern die Stoerreihen bekommt: "random"
+                (ein zufaelliger Gegner), "all" (jeder die volle Menge)
+                oder "even" (gleichmaessig aufgeteilt). Gilt nur fuer
+                den Gastgeber, der Hub entscheidet.
+                Env: ROWHAMMER_MP_TARGET    Standard: random
+  --mp-mode MODUS
+                Womit eine eroeffnete Sitzung startet: "survival" (wer
+                als Letzter im Feld ist, gewinnt), "sprint" (wer nach
+                dem Zeitlimit die meisten Rows hat) oder "ultra" (wer
+                zuerst das Rows-Ziel erreicht). Der Modus bestimmt die
+                Siegbedingung; der Gastgeber kann ihn jederzeit in der
+                Lobby aendern, wo ihn alle Spieler sehen.
+                Env: ROWHAMMER_MP_MODE      Standard: survival
+  --mp-garbage on|off
+                Ob abgebaute Reihen den Gegnern Stoerreihen schicken -
+                ebenfalls nur die Vorbelegung der Lobby. Aus, weil eine
+                Runde, in der ein anderer das eigene Feld fuellt, das
+                anspruchsvollere Spiel ist: sie soll eingeschaltet
+                werden und nicht ungefragt passieren.
+                Env: ROWHAMMER_MP_GARBAGE   Standard: off
+  --mp-bot      Testclient ohne Terminal: verbindet sich mit einer
+                Sitzung und spielt zufaellige Zuege, damit eine Runde
+                mit mehreren Spielern ohne mehrere Terminals getestet
+                werden kann.
+                Env: ROWHAMMER_MP_BOT       Standard: 0
   --reset ZIEL  Dauerhafte Daten im Datenverzeichnis zuruecksetzen und
                 beenden, ohne das Spiel zu starten. ZIEL ist eines von:
                   config     die Konfigurationsdatei rowhammer.conf
                   stats      die Statistikdatei stats
                   highscore  alle Bestenlisten (highscore-marathon,
                              highscore-ultra, highscore-sprint,
-                             highscore-timeattack und highscore-flood)
+                             highscore-timeattack, highscore-flood und
+                             highscore-versus)
                   save       der Spielstand save (Weltwunder-Fortschritt)
                   demo       die Demo-Aufzeichnungen (Verzeichnis demos)
                   all        alles davon

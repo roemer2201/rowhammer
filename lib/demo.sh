@@ -77,7 +77,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-08-04)
+# Version: 0.4.1  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -252,6 +252,19 @@ demo_record_start() {
     fi
     demo_record_discard
     if [ "${DEMO_RECORD}" != "on" ]; then
+        return 0
+    fi
+    # A mode this format does not know is not recorded. Today that is
+    # exactly one: the multiplayer (1.1.0). A versus round cannot be
+    # replayed from this format at all - the moves of the opponents are
+    # never transmitted, so a recording of one has to carry what arrived
+    # of them instead, which is a format of its own (CLAUDE.md 5.20, open
+    # step 9 of phase 5). Writing a file that says "marathon" over a
+    # round that was nothing of the sort would be worse than not writing
+    # one: it would replay as a round with garbage rows appearing out of
+    # nowhere.
+    if ! [[ "${mode}" =~ ${DEMO_MODE_RE} ]]; then
+        debug_event "demo: mode '${mode}' is not recordable, round is not recorded"
         return 0
     fi
     if ! demo_tmp_base; then

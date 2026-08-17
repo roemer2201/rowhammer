@@ -86,6 +86,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 1.0.2 | Rundenende am oberen Feldrand | 3.1, 3.6 |
 | 1.0.3 | Spielzeit der Namensabfrage auf die Millisekunde; Versionszeile in der README | 3.7, 4.9 |
 | 1.0.4 | Beutel des Randomizers auf 63 Steine (Dynamik der Spezialbloecke) | 3.1 |
+| 1.1.0 | Mehrspieler im lokalen Netz (Phase 5, Schritte 1-8 und 10-12) | 5.1-5.10 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1572,3 +1573,162 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       (Nutzerentscheidung; CLAUDE.md, Abschnitt 6): das
       Einzelspieler-Spiel behaelt seine laufende Versionsreihe, und der
       erste Schritt in die Phasen 5 und 6 ist der Sprung auf `2.0.0`.
+      _Spaeter ueberholt: 1.1.0 - der Mehrspieler waechst bis zu seiner
+      Fertigstellung in der `1.x`-Reihe, und `2.0.0` ist fuer den Stand
+      reserviert, an dem Phase 5 wirklich abgeschlossen ist._
+
+
+## Phase 5 - Mehrspieler (umgesetzt, Version 1.1.0)
+
+Die Schritte 1 bis 8 sowie 10 bis 12 der Roadmap sind mit `1.1.0`
+umgesetzt; offen bleibt allein Schritt 9 (Demo-Aufzeichnung einer
+Mehrspieler-Runde, siehe CLAUDE.md 5.20) und die Entkopplung aus
+Schritt 1, soweit sie ueber das hinausgeht, was der Mehrspieler
+brauchte. Der aktuelle Zustand steht in CLAUDE.md 5.1 bis 5.10 und in
+der README; hier steht, was umgesetzt wurde und warum es so und nicht
+anders aussieht.
+
+- [x] **Transport, Discovery, Protokoll** (Schritte 2 und 3, `lib/net.sh`,
+      `lib/proto.sh`). socat traegt beides: die Sitzung ueber
+      `TCP4-LISTEN`/`TCP4` im lokalen Netz oder ueber `UNIX-LISTEN`/
+      `UNIX-CONNECT` auf einem gemeinsamen Rechner, und den Beacon ueber
+      `UDP4-DATAGRAM` an die limitierte Broadcast-Adresse. Der Client
+      haelt seine Verbindung als **Coprocess**, sodass Lesen und
+      Schreiben gewoehnliche Bash-Deskriptoren sind und `net_poll` je
+      Tick hoechstens `MP_POLL_MAX` Zeilen abraeumt, ohne je zu
+      blockieren. Entscheidungen, die beim Bauen dazukamen:
+      - **Ein Beacon nennt seine Adresse nicht.** Sie kommt aus der
+        Absenderadresse des Datagramms (`SOCAT_PEERADDR`), die nur einem
+        von socat gestarteten Kind zur Verfuegung steht - daher der
+        Sammler `--mp-discover`. Ein gefaelschter Beacon kann damit
+        hoechstens auf seinen eigenen Absender zeigen.
+      - **Eine Adresse wird nie als Zeichenkette weitergereicht**:
+        `net_addr_tcp` zerlegt sie in vier Oktette und einen Port,
+        prueft jedes Stueck einzeln und baut die socat-Adresse aus den
+        Zahlen neu. Das ist der Weg, auf dem eine Netzwerk-Discovery am
+        ehesten zur Codeausfuehrung wuerde.
+      - **Ein halb angekommenes Paket geht nicht verloren.** TCP darf
+        mitten in einer Zeile trennen; `net_poll` haelt den Rest in
+        `NET_PART` und setzt ihn beim naechsten Mal davor - ohne das
+        waeren aus einer Nachricht zwei ungueltige geworden.
+      - **Der Zeichensatzfilter fixiert die Locale.** Ein Bereich wie
+        `[\x01-\x1f]` folgt der Kollationsreihenfolge und trifft in
+        einer UTF-8-Locale auch den Punkt; `net_line_ok` setzt daher
+        `LC_ALL=C` fuer die Dauer der Pruefung. Gefunden hat das der
+        Fuzz-Lauf (Schritt 12), noch bevor die erste Runde lief.
+- [x] **Hub, Bridge und Lobby** (Schritt 4, `lib/hub.sh`, `lib/mp.sh`).
+      Der Hub laeuft als eigener, terminalloser Prozess, den der Client
+      des Gastgebers im Hintergrund startet; socat nimmt die
+      Verbindungen an und startet je Verbindung eine **Bridge**, die
+      Socket und FIFOs verbindet. Der Hub spricht damit nur mit FIFOs
+      (kann Bash nativ), socat nur mit Sockets, und der Wechsel zwischen
+      den Transporten kostet genau eine geaenderte Adresszeile.
+      - **Die Bridge haelt ihre eigene Down-FIFO offen** (`exec 8<>`).
+        Ohne das ging die erste Nachricht verloren: ein FIFO-Puffer
+        existiert nur, solange jemand die Datei offen hat, und der Hub
+        oeffnet sie je Nachricht nur kurz. Das war der einzige Fehler,
+        der die erste Sitzung nicht zustande kommen liess.
+      - **Der Start gehoert dem Gastgeber**, und er braucht dafuer keine
+        eigene Nachricht: Slot 0 ist die erste Verbindung und damit der
+        Gastgeber, und sein `READY 1` ist der Start (ab dem zweiten
+        Spieler; allein bekommt er ein `ERR alone`). Fuer ihn ist der
+        Lobby-Eintrag ohnehin der Startknopf.
+      - **Die Lobby ist kein `menu_run`.** Sie muss neu zeichnen, wenn
+        sich die Spielerliste aendert, und dabei die Leitung leeren -
+        ein Menue, das nur auf Tasten reagiert, liesse die Verbindung
+        in den Ping-Timeout laufen. Aus demselben Grund hat auch das
+        Pausenmenue der Runde eine eigene, leerende Variante.
+- [x] **Mitspieler-Anzeige, alle drei Stufen** (Schritte 5 und 6).
+      Stufe 2 zeichnet je Gegner ein Mini-Feld (ein Zeichen je Zelle,
+      13 Spalten) rechts neben dem Spielblock, Stufe 1 zwei Zeilen und
+      Stufe 0 eine Zeile in der rechten Seitenleiste; `auto` nimmt die
+      ausfuehrlichste, fuer die das Terminal Platz hat, und rechnet bei
+      jedem Resize neu.
+      - **Die Stufen 1 und 0 kosten keine Breite.** Sie nutzen die
+        freien Zeilen unter der Vorschau, weshalb eine Sechs-Spieler-
+        Runde auch im 48x22-Minimum laeuft - genau der Fall, fuer den
+        die Stufen erfunden wurden.
+      - **Feld-Schnappschuesse fliessen nur, wenn jemand hinsieht.** Der
+        Client meldet mit `VIEW 0|1`, ob er Stufe 2 zeichnet; der Hub
+        leitet daraus je Client ab, ob er senden soll (`NEEDBOARD`).
+        Beides sind Nachrichten, die die Spezifikation so nicht hatte:
+        sie schrieb `NEEDBOARD` vor, ohne zu sagen, woher der Hub weiss,
+        wer zeichnet.
+- [x] **Garbage** (Schritt 7). Die Zellsorte, das zeilenweise
+      Hochschieben und die Top-Out-Pruefung gab es seit 0.49.0 aus dem
+      Hochwasser-Modus; dazu kamen die Warteschlange, die Verrechnung
+      und die Hub-Seite. Ein Abbau meldet nur das Ereignis
+      (`CLEAR <Reihen> <Silber> <Gold>`), der Hub rechnet daraus den
+      Angriff (0/1/2/4 Reihen, +2 je Silber, +4 je Gold, Deckel 10),
+      verrechnet ihn zuerst gegen die eigene Warteschlange des
+      Angreifers und schickt nur den Rest.
+      - **Die Warteschlange gehoert dem Hub.** Er schickt sie dem
+        Client mit `QUEUE` nach, wenn ein Abbau sie gekuerzt hat, und
+        der Client meldet mit `APPLIED`, was er eingeschoben hat. Zwei
+        Kopien derselben Zahl auf beiden Seiten koennten nur
+        auseinanderlaufen - und die Verrechnung ist genau die Stelle,
+        an der ein manipulierter Client sich sonst bedienen koennte.
+      - **Eingeschoben wird beim naechsten Lock ohne Abbau.** Ein Lock,
+        der Reihen geraeumt hat, hat gerade seinen `CLEAR` gemeldet;
+        die Verrechnung laeuft davor, und das ist es, was den
+        Gegenangriff gegenueber reiner Abwehr belohnt.
+- [x] **Sitzungseinstellungen des Gastgebers** (Nutzerwunsch, kam beim
+      Bauen dazu und ist in CLAUDE.md 5.1 beschrieben). Der Gastgeber
+      legt in der Lobby fest, **wie gewonnen wird** - `survival` (wer
+      uebrig bleibt, Vorgabe), `sprint` (die meisten Rows in der Zeit)
+      oder `ultra` (wer zuerst am Ziel ist) - und ob **Stoerreihen**
+      ueberhaupt fliegen; beides steht in der Lobby jedes Spielers.
+      - **Drei Modi, weil es drei Siegbedingungen gibt.** Ein Modus, der
+        nur anders aussieht, waere eine Einstellung; einer, der die
+        Frage "wer gewinnt" anders beantwortet, ist ein Modus. Time
+        Attack und Hochwasser sind aus genau diesem Grund nicht dabei:
+        im Duell endeten beide wie `survival`.
+      - **Stoerreihen sind anfangs aus** (Nutzervorgabe). Sie machen die
+        anspruchsvollere Runde und sollen etwas sein, das man
+        einschaltet. Ausgeschaltet bleibt ein Abbau ein Abbau - er
+        zaehlt fuer die Rows -, er reist nur nicht, weshalb es ein
+        Schalter neben dem Modus ist und kein vierter Modus.
+      - **In `sprint` und `ultra` endet die Runde nicht am vorletzten
+        Ausscheiden**, und die Plaetze werden am Ende nach Rows neu
+        vergeben: wer schon draussen ist, kann trotzdem vorn liegen.
+      - Umgesetzt als eine Nachricht in beide Richtungen (`SETUP`, wie
+        `ROSTER`); der Hub nimmt sie nur von Slot 0 und nur ausserhalb
+        der Runde an. Damit ging die Protokollversion auf 2.
+- [x] **Rundenende, Zuschauermodus, Verbindungsabbruch** (Schritt 8).
+      Wer oben rausbaut, meldet `TOPOUT`, bleibt als Zuschauer im Bild
+      und bekommt den hoechsten noch freien Platz; der letzte im Feld
+      gewinnt (`END`). Ein Abbruch zaehlt wie ein K.O., die Runde laeuft
+      weiter.
+      - **Die Runde wird erst verbucht, wenn der Hub sie beendet.**
+        `round_finish` unterscheidet das vom Einzelspieler: dort ist der
+        volle Stapel das Rundenende, hier nur das eigene Ausscheiden.
+      - **Es gibt keine Pause** (die anderen warten nicht) und kein
+        "Ins Hauptmenue": eine pausierte Mehrspieler-Runde koennte
+        nirgendwohin zurueckkehren.
+  Die Siegbedingung war bis dahin der letzte offene Punkt aus Abschnitt
+  8 gewesen ("bleibt es beim letzten Ueberlebenden, oder kommt ein
+  reiner Rows-Wettkampf dazu?"); mit den Sitzungseinstellungen ist er
+  beantwortet, ohne dass eine Seite die andere verdraengt.
+
+- [x] **Drei bis sechs Spieler** (Schritt 10): Zielwahl `random|all|even`
+      im Hub, `--mp-max` als Obergrenze, Layout-Raster fuer mehrere
+      Mini-Felder.
+- [x] **Test-Bot, Doku, Paketierung** (Schritt 11). `--mp-bot` ist ein
+      Client ohne Terminal, der ueber dieselben Spielfunktionen spielt
+      wie ein Mensch - er laeuft nur nicht durch `game_run`, dessen Takt
+      am Terminal haengt. `socat` ist in beiden Paketen ein
+      `Recommends`; README und Anleitung (zehnte Seite) beschreiben den
+      Ablauf.
+- [x] **Sicherheits-Review und Fuzzing** (Schritt 12, `tools/net-fuzz.sh`).
+      Gepruefte Eigenschaften: kein Befehl aus Eingaben wird ausgefuehrt
+      (Kanarienvogel-Datei), kein Byte ausserhalb 0x20-0x7E kommt durch,
+      kein Fall bringt einen Prozess zum Absturz oder Haengen. Der
+      Beacon-Sammler ist mit gefuzzt - er ist der erste Parser, den ein
+      Fremder ohne jede Verbindung erreicht. Der Lauf ist Teil der CI.
+
+Bewusst **nicht** umgesetzt und weiterhin offen: die Aufzeichnung einer
+Mehrspieler-Runde als Demo (Schritt 9). Sie braucht das Format 3 aus
+5.20 mit den Peer-Ereignissen; eine Runde in Formatversion 2 zu
+schreiben, waere schlimmer als keine - sie liefe als Runde ab, in der
+aus dem Nichts Stoerreihen erscheinen. `demo_record_start` lehnt einen
+unbekannten Modus deshalb ausdruecklich ab.

@@ -124,6 +124,24 @@ jobs:
         run: ./tools/key-scan.sh --gap 0.06 --silent
 
   # ---------------------------------------------------------------------
+  # Multiplayer parsers: feed the transport filter, the message parser and
+  # the beacon collector random and hostile lines and check that nothing
+  # is executed, no control character gets through and nothing crashes.
+  # The beacon collector is the first parser a stranger reaches - it needs
+  # no connection at all - which is why this runs on every push like the
+  # input regression test does.
+  # ---------------------------------------------------------------------
+  net-fuzz:
+    name: Multiplayer parser fuzz test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Fuzz the multiplayer parsers
+        run: ./tools/net-fuzz.sh --random 400 --silent
+
+  # ---------------------------------------------------------------------
   # Debian package: build it, install it and run the installed game far
   # enough to prove the layout works (the starter is a relative symlink
   # into /usr/share, so a wrong path only shows up after installing).

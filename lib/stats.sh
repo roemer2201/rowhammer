@@ -65,7 +65,7 @@
 #   to the plain truncated text instead of risking a cut escape sequence.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.13.0  (2026-08-04)
+# Version: 0.14.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -100,7 +100,7 @@ STATS_RECENT_RE='^recent=([0-9]{1,15}(\|[0-9]{1,15}){6}\|[0-9]{4}-[0-9]{2}-[0-9]
 # lose their per-mode round counts (project rule: no backward
 # compatibility); the all-time counters and the recent rounds, which
 # were never per mode, are unaffected.
-STATS_MODE_RE='^mode_(marathon|ultra|sprint|timeattack|flood)_(rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|pieces|play_time)=([0-9]{1,15})$'
+STATS_MODE_RE='^mode_(marathon|ultra|sprint|timeattack|flood|versus)_(rounds|goal|lines|bonus_rows|gold_squares|silver_squares|rowhammers|pieces|play_time)=([0-9]{1,15})$'
 
 # How many recent rounds are kept and shown.
 STATS_RECENT_MAX=3
@@ -121,13 +121,15 @@ STATS_PLAY_TIME=0
 STATS_RECENT=()
 
 # The same counters once per game mode, plus the rounds played in it and
-# - for the three timed modes - how many of those ended in that mode's
+# - for the modes that have one - how many of those ended in that mode's
 # regular ending rather than in a top-out: Ultra reaching
 # ULTRA_TARGET_ROWS, Sprint playing its full SPRINT_TIME_MS, Time Attack
-# running its clock down to zero (see rowhammer.sh). The share of
-# attempts that got there is the one figure no other stored number can
-# reconstruct, because a failed run never enters its mode's highscore
-# list.
+# running its clock down to zero and, since 1.1.0, a multiplayer round
+# won rather than lost (see rowhammer.sh). The share of attempts that got
+# there is the one figure no other stored number can reconstruct, because
+# a failed run never enters its mode's highscore list - and for the
+# multiplayer it is the one number the highscore list deliberately does
+# not carry, the wins (see lib/highscore.sh).
 # Keys are "<mode>_<field>" of the two lists below, so the file format,
 # the reset, the write and both screens walk the same two loops; every
 # combination exists from startup on, which keeps reads free of set -u
@@ -139,7 +141,7 @@ STATS_RECENT=()
 # would have meant 36 more globals, so the per-mode data moved into one
 # keyed array - the fixed field list below took over from the variable
 # names as the single source of truth for what may appear in the file.
-STATS_MODES=(marathon ultra sprint timeattack flood)
+STATS_MODES=(marathon ultra sprint timeattack flood versus)
 STATS_MODE_FIELDS=(rounds goal lines bonus_rows gold_squares
                    silver_squares rowhammers pieces play_time)
 declare -A STATS_MODE=()

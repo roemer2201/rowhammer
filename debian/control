@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: rowhammer
 Architecture: all
 Depends: bash (>= 4.0), ${misc:Depends}
-Recommends: ncurses-bin
+Recommends: ncurses-bin, socat
 Description: Tetris-like terminal game written in pure bash
  rowhammer is a Tetris-like game that runs entirely in the terminal and
  is modeled after "The New Tetris" (N64). It offers a classic 10x20
@@ -19,8 +19,12 @@ Description: Tetris-like terminal game written in pure bash
  and restart, plus a start menu with configurable key bindings and
  player name.
  .
- The square system (gold/silver bonus blocks), the persistent wonders
- building mode and network multiplayer are planned for later releases.
+ The square system (gold/silver bonus blocks) and the persistent wonders
+ building mode are part of the game; since 1.1.0 it also has a
+ multiplayer for the local network, in which two to six people play the
+ same piece sequence on their own boards and send each other garbage
+ rows. That part needs socat, which is why it is recommended - without
+ it the singleplayer runs unchanged.
  .
  The name is a pun on hammering rows of blocks; the game is unrelated
  to the hardware attack of the same name.

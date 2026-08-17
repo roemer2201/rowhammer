@@ -1,3 +1,76 @@
+rowhammer (1.1.0) unstable; urgency=medium
+
+  * Multiplayer on the local network (phase 5 of the roadmap, user
+    request). Two to six people play their own board with the same piece
+    sequence; cleared rows send garbage rows to the opponents, whoever
+    builds out of the field drops out and watches, and the last one
+    standing wins. One player opens the session, the others find it via a
+    UDP broadcast beacon or connect to its address by hand - an equal
+    second way in, because plenty of networks (WLAN client isolation,
+    separate VLANs, container bridges) drop broadcasts and the game would
+    otherwise be broken there for no visible reason. The host's own
+    address is therefore shown in the lobby.
+  * Carried by socat over TCP in the local network or over a Unix domain
+    socket on a host everybody is logged into (--mp-transport). socat is
+    a Recommends and not a Depends: the singleplayer runs unchanged
+    without it, and the menu entry names the package when it is missing.
+  * Four processes: the client, the headless hub that owns the session
+    (--mp-hub), one bridge per connection (--mp-bridge) and one collector
+    per received beacon (--mp-discover). The hub decides everything a
+    client must not decide for itself - what a clear is worth as an
+    attack, where the gap of a garbage row sits, who receives it, in
+    which order players are out and when the round is over.
+  * Every line off the wire is checked before anything looks at it:
+    length, printable ASCII only, a whitelist of message verbs and a
+    pattern per field, a rate limit per sender, and a session address
+    that is rebuilt from checked numbers rather than carried over as a
+    string. tools/net-fuzz.sh fuzzes all three parsers, including the
+    beacon collector a stranger reaches without a connection.
+  * The host settles the rules of the session in the lobby, and every
+    player sees them there (user request): the mode, which decides how
+    the round is won - "survival" (last one standing, the default),
+    "sprint" (most rows when the time limit is up) or "ultra" (first to
+    the row target) - and a switch for the garbage rows, which is off to
+    begin with. A round in which somebody else fills your board is the
+    more demanding game and should be something the host switches on
+    rather than something a first-time player is handed unasked. With
+    garbage off a clear still counts for the rows every mode is scored
+    by, it just does not travel, which is why it is a switch beside the
+    mode and not a fourth mode.
+  * In sprint and ultra the round no longer ends when only one player is
+    left: the rows decide there, and somebody who already topped out may
+    still be ahead. The places are recomputed by rows at the end of
+    those rounds, because the order of dropping out is not the order of
+    the result.
+  * The two settings can be preset with --mp-mode and --mp-garbage, for
+    a host who always plays the same way; what applies in a session is
+    decided in the lobby.
+  * The opponents appear as mini boards next to the board, or - when the
+    terminal is too narrow - as two lines resp. one line each in the
+    right pane, so a duel still runs in the 48x22 minimum (--mp-view).
+  * A multiplayer round is ranked in a list of its own
+    (highscore-versus), counts as its own mode in the statistics (with
+    the wins as its goal figure) and feeds the wonder progress with this
+    player's own rows and nothing else.
+  * --mp-bot is a test client without a terminal: it joins a session and
+    plays through the real game logic, so a round with several players
+    can be tested without several terminals.
+  * The manual has a tenth page about the multiplayer, and --help lists
+    the new options; both in German and English.
+  * Working rule changed (user decision): the multiplayer is not
+    finished, so it keeps growing in the 1.x series. Version 2.0.0 is
+    reserved for the state at which phase 5 is really complete - which
+    still needs the demo recording of a multiplayer round. The first
+    version of the multiplayer carried the number 2.0.0 for a while
+    before any release; a version number is a statement about the state
+    of a thing, not about the amount of work in it.
+  * Fixed on the way: the line filter of the transport used a character
+    range, which follows the locale's collation order - in a UTF-8 locale
+    it rejected ordinary characters. It pins the locale for the check
+    now.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 11 Aug 2026 12:00:00 +0200
+
 rowhammer (1.0.4) unstable; urgency=medium
 
   * More dynamics for the special blocks (user request): the randomizer
