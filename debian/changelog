@@ -1,3 +1,29 @@
+rowhammer (1.2.0) unstable; urgency=medium
+
+  * The lobby survives its host (user request). When the host leaves the
+    lobby, their hub is shut down and the session moves to the player who
+    joined first: that client starts a hub of its own, and everybody else
+    follows it to the new address, keeping the session name and their
+    seats. Everyone's ready flag is cleared - the rules can change with
+    the host - and a message names the new host, which each player
+    confirms with Enter before the lobby comes back. The successor is the
+    first to have joined and not the lowest free slot, because "the one
+    who has been here longest" is a rule a room of people can follow.
+  * If nobody is left to take over, or the successor does not answer
+    within three seconds, the hub tells the remaining clients the session
+    is closed instead of leaving them in a lobby that no longer exists.
+  * Clients notice a dead lobby on their own (user request): the hub is
+    heard from at least every two seconds, and six seconds of silence end
+    the lobby, the countdown and the round alike with "connection lost".
+    That covers the cases no message can be sent for - a hub whose
+    machine was switched off, a network that went away mid-round.
+  * Protocol version 3 for the five new messages (HOST, PROMOTE,
+    PROMOTED, MIGRATE, CLOSED) and the session name that WELCOME now
+    carries, so that a moved session keeps its identity. An older client
+    is rejected cleanly by the hub, as before.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 18 Aug 2026 12:00:00 +0200
+
 rowhammer (1.1.0) unstable; urgency=medium
 
   * Multiplayer on the local network (phase 5 of the roadmap, user

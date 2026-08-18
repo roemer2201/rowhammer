@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.1.0
+Version:        1.2.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,19 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Tue Aug 18 2026 roemer2201 <r.oliver@web.de> - 1.2.0-1
+- The lobby survives its host: when the host leaves, their hub is shut
+  down and the session moves to the player who joined first, who starts
+  a hub of their own while everybody else follows it to the new address.
+- The ready flags are cleared on a handover and every remaining player
+  confirms the new host with Enter.
+- A session nobody can take over is reported as closed instead of
+  leaving the clients in a lobby that no longer exists.
+- Clients end lobby, countdown and round on their own after six seconds
+  without a word from the hub.
+- Protocol version 3 for the handover messages and the session name in
+  WELCOME.
+
 * Tue Aug 11 2026 roemer2201 <r.oliver@web.de> - 1.1.0-1
 - Multiplayer on the local network (phase 5): open or join a session,
   play against two to six people with the same piece sequence, send

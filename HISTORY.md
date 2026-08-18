@@ -87,6 +87,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 1.0.3 | Spielzeit der Namensabfrage auf die Millisekunde; Versionszeile in der README | 3.7, 4.9 |
 | 1.0.4 | Beutel des Randomizers auf 63 Steine (Dynamik der Spezialbloecke) | 3.1 |
 | 1.1.0 | Mehrspieler im lokalen Netz (Phase 5, Schritte 1-8 und 10-12) | 5.1-5.10 |
+| 1.2.0 | Gastgeberwechsel: die Lobby ueberlebt ihren Gastgeber; Client-Timeouts | 5.1, 5.4, 5.8 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1732,3 +1733,101 @@ Mehrspieler-Runde als Demo (Schritt 9). Sie braucht das Format 3 aus
 schreiben, waere schlimmer als keine - sie liefe als Runde ab, in der
 aus dem Nichts Stoerreihen erscheinen. `demo_record_start` lehnt einen
 unbekannten Modus deshalb ausdruecklich ab.
+
+
+## Gastgeberwechsel im Mehrspieler (umgesetzt, Version 1.2.0)
+
+Nutzerwunsch, in zwei Schritten praezisiert: erst "gib die Lobby an den
+ersten beigetretenen Spieler weiter, setze die Bereit-Haken zurueck und
+lass die anderen den neuen Gastgeber mit Enter bestaetigen", dann - noch
+waehrend der Arbeit daran - "wenn der Host die Lobby verlaesst, muss auch
+dessen Hub beendet werden; der zweite Spieler wird zum Hub" und "bitte
+baue auch Timeouts ein, damit Clients eine Lobby von selbst als
+geschlossen erkennen". Der aktuelle Zustand steht in CLAUDE.md 5.1
+(Ablauf), 5.4 (Nachrichten und Zeiten) und 5.8 (Rundenende und
+Abbruch).
+
+- [x] **Die Sitzung zieht um, statt dass der Hub weiterlaeuft.** Die
+      erste Fassung liess den Hub des weggegangenen Gastgebers stehen
+      und reichte nur die Rolle weiter - der kuerzere Weg, aber der
+      falsche: die Sitzung laege dann als Prozess auf der Maschine von
+      jemandem, der sich von ihr abgewandt hat, und nichts wuerde sie je
+      beenden ausser dem Weggehen des letzten Spielers. Jetzt bittet der
+      alte Hub den Nachfolger zu uebernehmen (`PROMOTE`), der startet
+      einen **eigenen** Hub und nennt dessen Port (`PROMOTED <port>`),
+      alle anderen werden dorthin geschickt (`MIGRATE <adresse> <port>`)
+      - und erst dann stellt sich der alte Hub ab.
+- [x] **Nachfolger ist, wer am laengsten da ist** (`HUB_JOINED`, eine je
+      Verbindung hochgezaehlte Beitrittsnummer), nicht der niedrigste
+      freie Slot: nach ein paar Kommen und Gehen ist die
+      Slot-Reihenfolge fuer niemanden im Raum mehr eine Reihenfolge.
+- [x] **Die Sitzung behaelt ihren Namen.** Sonst liefe sie beim
+      Nachfolger unter dessen Namen weiter und erschiene im Beacon als
+      eine andere. `WELCOME` traegt dafuer seit dieser Version den
+      Sitzungsnamen als viertes Feld; jeder Client merkt ihn sich
+      (`MP_SESSION_NAME`) und gibt ihn seinem Hub mit, falls er einmal
+      selbst uebernehmen muss. Damit ging die Protokollversion auf 3.
+- [x] **Alle Bereit-Haken fallen** (Nutzerwunsch). Sie galten dem alten
+      Gastgeber und seinen Einstellungen; ausserdem *ist* das
+      Bereit-Zeichen des Gastgebers der Startknopf, ein geerbter Haken
+      koennte also eine Runde starten, die niemand wollte.
+- [x] **Die Meldung wird mit Enter bestaetigt** (Nutzerwunsch), nicht
+      mit einer beliebigen Taste wie sonst im Spiel: sie faellt mitten
+      in eine Lobby, in der gerade jemand auf den Pfeiltasten war, und
+      soll gelesen und nicht weggetippt werden.
+- [x] **Klappt der Wechsel nicht, sagt der Hub das.** Kein Nachfolger da
+      (`CLOSED host`), oder der Gefragte antwortet nicht binnen
+      `HUB_PROMOTE_MS` (3000 ms) bzw. bekommt keinen Hub hoch
+      (`CLOSED failed`). Eine ausgesprochene Absage ist besser als eine
+      Lobby, die stumm bleibt, bis ein Timeout greift.
+- [x] **Der Hub endet nicht im selben Atemzug** (`hub_stop_soon`,
+      `HUB_STOP_GRACE_MS`): die eben geschriebenen Nachrichten liegen
+      noch in den Down-FIFOs, die die Bridges erst durch ihre Sockets
+      schieben muessen. Ein Hub, der sofort aufhoerte, naehme sein
+      letztes Wort mit - `hub_cleanup` raeumt genau diese FIFOs weg.
+- [x] **Nur in der Lobby.** Geht der Gastgeber waehrend der Runde, ist
+      das ein gewoehnliches Ausscheiden und die Runde spielt sich zu
+      Ende; ein Umzug mitten im Spiel muesste den ganzen Rundenzustand
+      mitnehmen.
+- [x] **Client-Timeout** (Nutzerwunsch). Bis dahin erkannte ein Client
+      nur, was ihm gesagt wurde - ein Hub, dessen Rechner ausgeschaltet
+      wird, sagt aber nichts mehr und schickt auch kein EOF. Jeder
+      Client stempelt deshalb jede empfangene Zeile (`MP_LAST_RX_MS`)
+      und gibt nach `MP_TIMEOUT_MS` (6000 ms) Stille auf
+      (`mp_link_silent`) - derselbe Wert, mit dem der Hub seine Clients
+      fuer abgestuerzt haelt. Der `PING` des Hubs alle 2000 ms ist damit
+      nicht nur eine Frage, sondern das Lebenszeichen, auf das der
+      Client wartet: drei ausgefallene reichen. Gefragt wird an jeder
+      Stelle, an der ein Client auf den Hub wartet - Lobby,
+      Einstellungsmenue, Namensabfrage, Countdown und Game-Loop -,
+      sodass eine tote Sitzung nirgends stehen bleibt.
+- [x] **Der Nachfolger bekommt einen Vorsprung.** Der neue Hub gibt die
+      Lobby dem, der sich zuerst meldet; auf einer Maschine - zwei
+      Terminals und ein Test-Bot auf der Loopback-Adresse - entschied
+      das eine Handvoll Millisekunden, und der Falsche gewann sie
+      ungefaehr so oft wie der Richtige. Der alte Hub haelt das
+      `MIGRATE` an die anderen deshalb `HUB_MIGRATE_DELAY_MS` (500 ms)
+      zurueck, waehrend der Nachfolger nach seinem `PROMOTED` nur
+      `MP_HANDOFF_FLUSH_MS` (250 ms) wartet - gerade genug, damit socat
+      die Zeile noch hinausbekommt, bevor `net_close` es beendet.
+- [x] **Die FIFOs eines Hubs tragen seine Prozessnummer.** Zwei Hubs
+      desselben Sitzungsnamens auf einer Maschine sind mit dem Umzug der
+      Normalfall geworden; unter dem alten Namensschema loeschte der
+      zweite das Postfach des ersten, und dessen Bruecken schrieben von
+      da an in ein Postfach, an dem niemand wartete - die Nachricht des
+      Nachfolgers kam nie an und die Sitzung wurde fuer gescheitert
+      erklaert, obwohl alles funktioniert hatte. `hub_sweep_stale`
+      raeumt beim Start die FIFOs von Hubs weg, deren Prozess es nicht
+      mehr gibt.
+- [x] **Die Sitzungsgroesse zieht mit um** (`MP_SESSION_MAX` aus
+      `WELCOME`), nach oben begrenzt durch das eigene `--mp-max` des
+      Nachfolgers: seine Peer-Tabellen haben so viele Plaetze, wie er
+      selbst angemeldet hat.
+- [x] **Ein fehlgeschlagener Sendeversuch schreibt nichts mehr auf den
+      Bildschirm.** Stirbt der Hub, schliesst Bash die Deskriptoren des
+      Coprozesses, und die naechste Umleitung darauf meldet "Bad file
+      descriptor" - eine Shell-Meldung, die `2>/dev/null` am Befehl
+      nicht abfaengt und die im Standard-Render-Modus mitten im
+      Spielfeld stehen bleibt (CLAUDE.md 4.3). `net_send` umleitet
+      deshalb die Fehlerausgabe der ganzen Gruppe und behaelt dabei den
+      Fehlerstatus.

@@ -28,7 +28,7 @@
 #   are worth (see lib/hub.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.1.0  (2026-08-11)
+# Version: 1.2.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -45,10 +45,50 @@ MP_ACTIVE=0
 MP_SLOT=-1
 MP_STATE="lobby"
 MP_PHASE="lobby"
-# Whether this client started the hub (and may therefore start the round),
-# and the process id of that hub.
+# Whether this client runs the lobby - which is the hub's answer (the HOST
+# message), not something this end decides. Since 1.2.0 the role can move:
+# when the host leaves, the lobby passes to whoever joined first of those
+# still there, and this flag follows.
 MP_IS_HOST=0
+MP_HOST_SLOT=-1
+# Whether this client started the hub process, and its pid. Deliberately
+# separate from MP_IS_HOST: the two used to be the same thing and are not
+# any more. Whoever started the hub keeps the pid (and only they may end
+# it); who runs the lobby is the hub's to say.
+MP_OWNS_HUB=0
 MP_HUB_PID=0
+# A host change that still has to be shown: the slot it went to, or -1
+# when there is nothing to show. The lobby turns it into a notice that has
+# to be acknowledged; during a round it stays unshown, because there is
+# nothing to do about it until the round is over.
+MP_HOST_NOTICE=-1
+# The port the hub this client started really listens on (it may have had
+# to move up from MP_PORT), read back from the file the hub writes. It is
+# what a takeover reports to the old hub so the others know where to go.
+MP_HUB_PORT=0
+# A session that has moved or ended while this client was in its lobby:
+# the address to follow, or the reason the session is over. The lobby acts
+# on them - nothing here talks to the screen.
+MP_MOVE_ADDR=""
+MP_MOVE_PORT=0
+MP_CLOSED=""
+# When the last message from the hub arrived. A hub that has gone away
+# without closing its sockets - a killed process, a machine that fell off
+# the network - produces no end of file, so silence is the only thing left
+# to notice it by (user request, 1.2.0). The hub watches its clients the
+# same way and with the same limit.
+MP_LAST_RX_MS=0
+# The name of the session this client is in, as its hub reported it
+# (WELCOME). MP_SESSION beside it stays what this client would call a
+# session it opens itself; the two are the same only for the player who
+# opened this one.
+MP_SESSION_NAME=""
+# How many players the session we are in holds, as its hub reported it
+# (WELCOME). It is not this client's MP_MAX: a session keeps its size
+# when it moves to another hub (1.2.0), and a successor whose own
+# --mp-max happens to be a different number must not quietly resize the
+# room everybody is sitting in.
+MP_SESSION_MAX=0
 # Garbage waiting to be pushed into our board, and the gap column of the
 # rows waiting. The hub owns the authoritative queue length and corrects
 # ours with QUEUE whenever a clear of ours cancelled part of it.
@@ -69,6 +109,11 @@ MP_NEEDBOARD=0
 MP_LAST_STATE=""
 MP_NEXT_BOARD_MS=0
 MP_BOARD_MS=200
+# How long the last message to a hub we are about to leave is given to
+# get out (mp_promote). Well below HUB_PROMOTE_MS, the window the old hub
+# waits in, and long enough for socat to move one line into a loopback
+# socket.
+MP_HANDOFF_FLUSH_MS=250
 # Start of the round, counted down from the hub's START.
 MP_START_MS=0
 # The session settings as the hub last sent them (SETUP): the mode of the
@@ -106,6 +151,10 @@ MP_PEER_BOARD=()
 # second session never inherits anything from the first.
 mp_reset() {
     local i
+    # MP_SESSION_NAME is deliberately not cleared here: a session that
+    # moves to another hub runs through the connect path, and the name is
+    # the one thing that has to survive it. The new hub confirms it in its
+    # WELCOME anyway.
     MP_SLOT=-1
     MP_STATE="lobby"
     MP_PHASE="lobby"
@@ -120,6 +169,13 @@ mp_reset() {
     MP_NEXT_BOARD_MS=0
     MP_START_MS=0
     MP_VIEW_SENT=-1
+    MP_HOST_SLOT=-1
+    MP_HOST_NOTICE=-1
+    MP_MOVE_ADDR=""
+    MP_MOVE_PORT=0
+    MP_CLOSED=""
+    now_ms
+    MP_LAST_RX_MS="${NOW_MS}"
     MP_MODE="survival"
     MP_GARBAGE=0
     for (( i = 0; i < MP_MAX; i++ )); do
@@ -201,7 +257,17 @@ mp_handle() {
     case "${PROTO_VERB}" in
         WELCOME)
             MP_SLOT="${PROTO_ARG[0]}"
-            debug_event "mp: welcome, slot ${MP_SLOT} of ${PROTO_ARG[2]}"
+            # The name of the session we are in - which a client that
+            # joined by address could not know otherwise. It is what the
+            # lobby shows and what a session keeps when it moves to
+            # another hub, so it is deliberately not this client's own
+            # MP_SESSION (the name it would give a session it opened).
+            MP_SESSION_NAME="${PROTO_ARG[3]}"
+            # Kept for the same reason as the name: it is a property of
+            # the session, not of this client, and it has to survive a
+            # move to another hub (see mp_hub_start).
+            MP_SESSION_MAX="${PROTO_ARG[2]}"
+            debug_event "mp: welcome to '${MP_SESSION_NAME}', slot ${MP_SLOT} of ${PROTO_ARG[2]}"
             ;;
         ROSTER)
             slot="${PROTO_ARG[0]}"
@@ -247,6 +313,24 @@ mp_handle() {
             ;;
         NEEDBOARD)
             MP_NEEDBOARD="${PROTO_ARG[0]}"
+            ;;
+        HOST)
+            # Who runs the lobby. The first one of these is the session
+            # this client just joined and is nothing to report; every one
+            # after it is a handover, and the lobby shows it as a notice
+            # that has to be acknowledged (user request).
+            if [ "${MP_HOST_SLOT}" -ge 0 ] \
+                && [ "${PROTO_ARG[0]}" -ne "${MP_HOST_SLOT}" ]; then
+                MP_HOST_NOTICE="${PROTO_ARG[0]}"
+            fi
+            MP_HOST_SLOT="${PROTO_ARG[0]}"
+            if [ "${MP_HOST_SLOT}" -eq "${MP_SLOT}" ]; then
+                MP_IS_HOST=1
+            else
+                MP_IS_HOST=0
+            fi
+            debug_event "mp: slot ${MP_HOST_SLOT} runs the lobby (own slot ${MP_SLOT})"
+            DIRTY=1
             ;;
         SETUP)
             # What the host settled on. Taken as it comes: the hub is the
@@ -294,6 +378,23 @@ mp_handle() {
             debug_event "mp: round over, winner slot ${MP_WINNER}, own place ${MP_PLACE}"
             DIRTY=1
             ;;
+        PROMOTE)
+            # The host has left and this client is the one asked to carry
+            # the session on. Answered here rather than in the lobby: the
+            # old hub is waiting for the port, and a menu that happens to
+            # be open must not delay it.
+            mp_promote
+            ;;
+        MIGRATE)
+            # The session has moved to the hub the new host started.
+            MP_MOVE_ADDR="${PROTO_ARG[0]}"
+            MP_MOVE_PORT="${PROTO_ARG[1]}"
+            debug_event "mp: session moved to ${MP_MOVE_ADDR}:${MP_MOVE_PORT}"
+            ;;
+        CLOSED)
+            MP_CLOSED="${PROTO_ARG[0]}"
+            debug_event "mp: session closed by the hub (${MP_CLOSED})"
+            ;;
         PING)
             proto_msg PONG "${PROTO_ARG[0]}"
             net_send "${PROTO_LINE}" || :
@@ -319,10 +420,30 @@ mp_poll() {
         MP_ERROR="lost"
         return 1
     fi
+    if [ "${#NET_INBOX[@]}" -gt 0 ]; then
+        now_ms
+        MP_LAST_RX_MS="${NOW_MS}"
+    fi
     for line in ${NET_INBOX[@]+"${NET_INBOX[@]}"}; do
         mp_handle "${line}"
     done
     return 0
+}
+
+# mp_link_silent
+# True when nothing has come from the hub for MP_TIMEOUT_MS. A hub that
+# ends properly closes its sockets and the client sees an end of file; one
+# that is killed, or a machine that disappears from the network, leaves
+# the connection open and silent forever. The hub sends a PING every
+# MP_PING_MS, so silence for three times that long is not a quiet moment -
+# it is a session that is not there any more (user request).
+# Deliberately the same limit the hub drops a silent client after: both
+# ends give up on each other at the same moment rather than one of them
+# waiting for a peer that has already written it off.
+mp_link_silent() {
+    [ "${MP_ACTIVE}" -eq 1 ] || return 1
+    now_ms
+    (( NOW_MS - MP_LAST_RX_MS > MP_TIMEOUT_MS ))
 }
 
 # --- Sending --------------------------------------------------------------
@@ -534,9 +655,83 @@ mp_disconnect() {
     if [ "${MP_ACTIVE}" -eq 1 ]; then
         mp_send_bye
     fi
+    # Before the link is dropped: mp_hub_stop asks the roster whether
+    # anybody else is still in the session, and the roster is only
+    # meaningful while the session is.
+    mp_hub_stop
     net_close
     MP_ACTIVE=0
-    mp_hub_stop
+    return 0
+}
+
+# mp_promote
+# Take the session over after the host has left: start a hub of our own
+# and tell the old one which port it listens on, so it can send the others
+# after us. Answering with 0 is a real answer - the old hub then closes
+# the session properly instead of letting everybody run into a timeout.
+# Nothing is drawn here and no key is asked for: this runs inside the
+# receive path, and the old hub is waiting.
+mp_promote() {
+    debug_event "mp: asked to take the session over"
+    if ! mp_hub_start; then
+        MP_HUB_PORT=0
+    fi
+    proto_msg PROMOTED "${MP_HUB_PORT}"
+    net_send "${PROTO_LINE}" || :
+    # A moment for that line to leave the machine before the caller tears
+    # the link down: net_send only writes into the coprocess, and
+    # net_close kills it, so an answer written and closed on in the same
+    # breath can be thrown away with the process that was to carry it.
+    # The old hub would then wait out HUB_PROMOTE_MS and close a session
+    # that was taken over perfectly well.
+    mp_wait_ms "${MP_HANDOFF_FLUSH_MS}"
+    if [ "${MP_HUB_PORT}" -eq 0 ]; then
+        debug_event "mp: could not start a hub, the session cannot be taken over"
+        return 0
+    fi
+    # Straight over to our own hub, without waiting for the MIGRATE the
+    # others get: being first is what makes this client the host of the
+    # new session (the hub gives the lobby to the first player that
+    # identifies itself), and that is the whole point of being asked.
+    # The old hub holds the others back for a moment for the same reason
+    # (HUB_MIGRATE_DELAY_MS) - on one machine this head start is the only
+    # thing between "the one who was asked" and "whoever reconnects
+    # quickest".
+    MP_MOVE_PORT="${MP_HUB_PORT}"
+    MP_MOVE_ADDR="127.0.0.1"
+    if [ "${MP_TRANSPORT}" != "lan" ]; then
+        MP_MOVE_ADDR="0.0.0.0"
+    fi
+    return 0
+}
+
+# mp_migrate
+# Follow a session that has moved: drop the old link and connect to the
+# hub the new host started, under the same session name. Returns 1 when
+# that does not work, which the lobby turns into "the session is gone" -
+# there is nothing else it could be.
+# The old host, the settings and the ready flags are all left behind: this
+# is a new session with the same people in it, and the hub it now belongs
+# to says who runs it and what it is set to (HOST, SETUP).
+mp_migrate() {
+    local addr="${MP_MOVE_ADDR}" port="${MP_MOVE_PORT}" ok=0
+    MP_MOVE_ADDR=""
+    MP_MOVE_PORT=0
+    net_close
+    MP_ACTIVE=0
+    # The hub bookkeeping (MP_OWNS_HUB, MP_HUB_PID) survives this on its
+    # own - mp_reset does not touch it - which is what a client that
+    # started a hub for this very migration needs. A connect that fails
+    # takes that hub down with it through mp_disconnect, and rightly so:
+    # a hub nobody can reach is of no use to anybody.
+    local session="${MP_SESSION_NAME:-${MP_SESSION}}"
+    if [ "${MP_TRANSPORT}" != "lan" ] || [ "${addr}" = "0.0.0.0" ]; then
+        mp_connect_unix "${session}" && ok=1
+    else
+        mp_connect_host "${addr}" "${port}" && ok=1
+    fi
+    [ "${ok}" -eq 1 ] || return 1
+    debug_event "mp: followed the session to ${addr}:${port}"
     return 0
 }
 
@@ -548,9 +743,25 @@ mp_disconnect() {
 # that see an end of file and return to the menu.
 mp_hub_start() {
     local args=()
+    # The session keeps its name when it moves to another hub: the others
+    # know it by that name, it is what the beacon announces, and in the
+    # unix transport it is the socket everybody reconnects to. Only a
+    # client opening a session of its own falls back to the name it would
+    # give one (mp_host sets MP_SESSION_NAME for exactly that case).
+    local session="${MP_SESSION_NAME:-${MP_SESSION}}"
+    # The size of the session travels with it, too: a takeover continues
+    # the room the others are already sitting in, and this client's own
+    # --mp-max is what it would open a session of its own with.
+    # Never above this client's own limit, though: the peer arrays and
+    # the layout are built for MP_MAX seats, and a hub that admitted more
+    # than that would send this very client a roster it cannot show.
+    local max="${MP_MAX}"
+    if [ "${MP_SESSION_MAX}" -ge 2 ] && [ "${MP_SESSION_MAX}" -lt "${max}" ]; then
+        max="${MP_SESSION_MAX}"
+    fi
     args=(--mp-hub --mp-transport "${MP_TRANSPORT}" --mp-port "${MP_PORT}"
-          --mp-max "${MP_MAX}" --mp-target "${MP_TARGET}"
-          --mp-session "${MP_SESSION}" --mp-dir "${MP_DIR}"
+          --mp-max "${max}" --mp-target "${MP_TARGET}"
+          --mp-session "${session}" --mp-dir "${MP_DIR}"
           --mp-mode "${MP_MODE_OPT}" --mp-garbage "${MP_GARBAGE_OPT}")
     if [ -n "${SEED}" ]; then
         args+=(--seed "${SEED}")
@@ -560,27 +771,81 @@ mp_hub_start() {
         # its events and the client's do not interleave in one file.
         args+=(--debug --debug-dir "${DEBUG_DIR}/hub")
     fi
+    rm -f -- "${MP_DIR}/${session}.port" 2>/dev/null || :
     setsid "${SCRIPT_DIR}/rowhammer.sh" "${args[@]}" >/dev/null 2>&1 &
     MP_HUB_PID=$!
+    MP_OWNS_HUB=1
+    MP_HUB_PORT=0
     # Give it the moment it needs to bind and create its FIFOs; the
     # connect below would otherwise race it and fail on the first try.
-    key_drain 400
+    mp_wait_ms 400
     if ! kill -0 "${MP_HUB_PID}" 2>/dev/null; then
         MP_HUB_PID=0
+        MP_OWNS_HUB=0
         return 1
     fi
-    debug_event "mp: hub started (pid ${MP_HUB_PID}, session ${MP_SESSION})"
+    # Which port it really got. It may not be the one asked for - a taken
+    # port moves the hub up to the next free one - and a takeover has to
+    # report the true number, so the other players reach the right door.
+    mp_hub_port_read
+    if [ "${MP_TRANSPORT}" = "lan" ] && [ "${MP_HUB_PORT}" -eq 0 ]; then
+        debug_event "mp: the hub did not report a port"
+        mp_hub_stop
+        return 1
+    fi
+    debug_event "mp: hub started (pid ${MP_HUB_PID}, session ${session}, port ${MP_HUB_PORT})"
+    return 0
+}
+
+# mp_hub_port_read
+# Read the port our hub bound from the file it writes (hub_port_publish),
+# retrying for a moment: the hub writes it right after binding, and that
+# can land a hair after the wait above. In the unix transport there is no
+# port to speak of and the file only says so.
+mp_hub_port_read() {
+    local tries port
+    MP_HUB_PORT=0
+    for (( tries = 0; tries < 10; tries++ )); do
+        if [ -r "${MP_DIR}/${MP_SESSION_NAME}.port" ]; then
+            IFS= read -r port < "${MP_DIR}/${MP_SESSION_NAME}.port" || port=""
+            if net_port_ok "${port}"; then
+                MP_HUB_PORT="${port}"
+                return 0
+            fi
+        fi
+        mp_wait_ms 100
+    done
     return 0
 }
 
 # mp_hub_stop
-# End a hub this client started. A hub of somebody else's session is
-# never touched - MP_HUB_PID is only set by mp_hub_start.
+# End the hub this client started - but only when nobody else is in the
+# session (user request, 1.2.0). Whoever opened a session used to take it
+# down with them; now the lobby passes to the next player
+# (hub_host_reassign), and killing the hub here would pull the session out
+# from under everybody who is still in it.
+# Leaving it running is safe in every case: a hub with no players left
+# ends itself on its next pass (hub_periodic), so an abandoned session
+# never outlives its last player - this call only makes the common case,
+# somebody quitting an empty lobby, immediate instead of a tick later.
+# A hub of somebody else's session is never touched: MP_HUB_PID is only
+# set by mp_hub_start.
 mp_hub_stop() {
-    if [ "${MP_HUB_PID}" -gt 0 ]; then
-        kill "${MP_HUB_PID}" 2>/dev/null || :
-        MP_HUB_PID=0
+    if [ "${MP_HUB_PID}" -le 0 ]; then
+        return 0
     fi
+    if [ "${MP_ACTIVE}" -eq 1 ]; then
+        mp_peer_count
+        if [ "${MP_PEER_COUNT}" -gt 0 ]; then
+            debug_event "mp: leaving the hub (pid ${MP_HUB_PID}) to the ${MP_PEER_COUNT} player(s) still in the session"
+            MP_HUB_PID=0
+            MP_OWNS_HUB=0
+            return 0
+        fi
+    fi
+    kill "${MP_HUB_PID}" 2>/dev/null || :
+    MP_HUB_PID=0
+    MP_OWNS_HUB=0
     return 0
 }
 
@@ -628,12 +893,21 @@ mp_host() {
         menu_message "${I18N[main_multi]}" "${NET_ERROR}"
         return 0
     fi
+    # The session this client opens is the one it named; from the moment
+    # somebody joins, that name travels with the session (WELCOME).
+    MP_SESSION_NAME="${MP_SESSION}"
+    # A session of our own is as big as this client says; whatever an
+    # earlier session was sized at is none of its business.
+    MP_SESSION_MAX=0
     if ! mp_hub_start; then
         i18n_lines mp_host_failed
         menu_message "${I18N[mp_host]}" "${I18N_LINES[@]}"
         return 0
     fi
-    MP_IS_HOST=1
+    # Not "MP_IS_HOST=1" any more: who runs the lobby is the hub's answer
+    # and arrives as its HOST message. Opening the session and running it
+    # are the same thing at this moment, but they stop being the same the
+    # first time a host leaves (see hub_host_reassign in lib/hub.sh).
     if [ "${MP_TRANSPORT}" = "unix" ]; then
         mp_connect_unix "${MP_SESSION}" && ok=1
     else
@@ -846,6 +1120,47 @@ mp_lobby() {
             mp_lobby_lost
             return 0
         fi
+        # The session moved: the host left and somebody else took it over.
+        # Followed first, told about afterwards - the notice belongs in
+        # the lobby the player ends up in, not in the one they are
+        # leaving.
+        if [ -n "${MP_MOVE_ADDR}" ]; then
+            local moved_to="${MP_HOST_SLOT}"
+            if mp_migrate; then
+                MP_HOST_NOTICE="${moved_to}"
+                ready=0
+                sel=0
+                dirty=1
+                continue
+            fi
+            mp_lobby_closed "failed"
+            return 0
+        fi
+        if [ -n "${MP_CLOSED}" ]; then
+            mp_lobby_closed "${MP_CLOSED}"
+            return 0
+        fi
+        # Nothing from the hub for far too long: it is gone without
+        # having said so (see mp_link_silent).
+        if mp_link_silent; then
+            mp_lobby_closed "silent"
+            return 0
+        fi
+        # A handover that arrived: shown before the lobby is redrawn, so
+        # nobody presses Enter on a menu that changed under their hands.
+        # The ready flags were cleared by the hub with the handover, so
+        # this end's copy has to go with them.
+        if [ "${MP_HOST_NOTICE}" -ge 0 ]; then
+            MP_HOST_NOTICE=-1
+            ready=0
+            sel=0
+            # Who it went to is read from the session as it is now, not
+            # from the slot the message named: after following a moved
+            # session the slots have been handed out afresh.
+            mp_host_notice "${MP_HOST_SLOT}"
+            dirty=1
+            continue
+        fi
         if [ "${MP_PHASE}" = "start" ]; then
             mp_countdown
             if [ "${MP_PHASE}" = "play" ]; then
@@ -875,7 +1190,8 @@ mp_lobby() {
         if [ "${dirty}" -eq 1 ] || [ "${DIRTY}" -eq 1 ]; then
             DIRTY=0
             lines=("  ${I18N[mp_lobby_title]}" "")
-            printf -v line "${I18N[mp_lobby_session]}" "${MP_SESSION}"
+            printf -v line "${I18N[mp_lobby_session]}" \
+                "${MP_SESSION_NAME:-${MP_SESSION}}"
             lines+=("  ${line}")
             if [ "${MP_IS_HOST}" -eq 1 ] && [ "${MP_TRANSPORT}" = "lan" ]; then
                 # The host's own address, so it can be read out to
@@ -957,6 +1273,85 @@ mp_lobby() {
     done
 }
 
+# mp_host_notice
+# Show that the lobby has changed hands and wait for it to be
+# acknowledged (user request): the host who opened the session has left,
+# and the player who joined first of those still there has inherited it.
+# It has to be confirmed with Enter rather than dismissed by any key,
+# because it is not a decoration: everybody's ready flag was cleared with
+# the handover, and whoever inherited the lobby now has a start button
+# where their "ready" entry used to be. A message that scrolls past on the
+# next arrow key would leave them pressing Enter on something else than
+# they think.
+# Like every other wait in this file it keeps draining the link, so the
+# hub does not lose a player who is reading.
+mp_host_notice() {
+    local -a lines
+    local slot="${1}" dirty=1 line name i
+    if [ "${slot}" -lt 0 ]; then
+        slot=0
+    fi
+    name="${MP_PEER_NAME[slot]:-?}"
+    while :; do
+        if ! mp_poll; then
+            return 0
+        fi
+        if [ -n "${MP_ERROR}" ] || [ "${MP_PHASE}" != "lobby" ]; then
+            return 0
+        fi
+        # Anything that ends the session hands control straight back to
+        # the lobby, which is where those cases are dealt with.
+        if [ -n "${MP_CLOSED}" ] || [ -n "${MP_MOVE_ADDR}" ] \
+            || mp_link_silent; then
+            return 0
+        fi
+        if [ "${dirty}" -eq 1 ]; then
+            lines=("  ${I18N[mp_host_left_title]}" "")
+            i18n_lines mp_host_left_body
+            for (( i = 0; i < ${#I18N_LINES[@]}; i++ )); do
+                lines+=("  ${I18N_LINES[i]}")
+            done
+            lines+=("")
+            if [ "${slot}" -eq "${MP_SLOT}" ]; then
+                # The one who inherited it needs the plainer sentence: the
+                # menu under this message is not the one they saw before.
+                i18n_lines mp_host_you
+            else
+                printf -v line "${I18N[mp_host_new]}" "${name}"
+                mapfile -t I18N_LINES <<< "${line}"
+            fi
+            for (( i = 0; i < ${#I18N_LINES[@]}; i++ )); do
+                lines+=("  ${I18N_LINES[i]}")
+            done
+            lines+=("" "  ${I18N[mp_host_confirm]}")
+            render_menu_frame "${lines[@]}"
+            screen_write "${RENDER_MENU_FRAME}"
+            dirty=0
+        fi
+        # The name of whoever took over can still be on its way when this
+        # screen opens: after following a moved session the roster arrives
+        # a moment after the welcome. Any message that changed something
+        # therefore redraws the notice.
+        if [ "${DIRTY}" -eq 1 ]; then
+            DIRTY=0
+            slot="${MP_HOST_SLOT}"
+            name="${MP_PEER_NAME[slot]:-?}"
+            dirty=1
+        fi
+        read_key
+        if [ "${REDRAW_PENDING}" -eq 1 ]; then
+            REDRAW_PENDING=0
+            dirty=1
+            continue
+        fi
+        # Enter only, as asked for: this is an acknowledgement, and every
+        # other key in this lobby means something else.
+        if [ "${KEY}" = "ENTER" ]; then
+            return 0
+        fi
+    done
+}
+
 # mp_setting_lines
 # The two lines that show the session settings, in
 # MP_SETUP_MODE_LINE / MP_SETUP_GARBAGE_LINE: the mode with the win
@@ -999,6 +1394,12 @@ mp_settings_menu() {
         fi
         if [ -n "${MP_ERROR}" ] || [ "${MP_PHASE}" != "lobby" ]; then
             # The round started or the session died while this was open.
+            return 0
+        fi
+        # The session moved, ended or went quiet while this was open: the
+        # lobby behind this menu is where all three are handled.
+        if [ -n "${MP_CLOSED}" ] || [ -n "${MP_MOVE_ADDR}" ] \
+            || mp_link_silent; then
             return 0
         fi
         mp_setting_lines
@@ -1131,6 +1532,11 @@ mp_countdown() {
     while :; do
         if ! mp_poll; then
             mp_lobby_lost
+            return 0
+        fi
+        if mp_link_silent; then
+            mp_lobby_lost
+            MP_PHASE="lobby"
             return 0
         fi
         now_ms
@@ -1394,6 +1800,23 @@ mp_bot_main() {
             MP_ERROR=""
         fi
         [ -z "${MP_ERROR}" ] || { mp_disconnect; return 0; }
+        # The host left and the session moved: follow it, exactly as a
+        # player's lobby does. A bot that stayed behind would be testing
+        # the one path that no longer exists.
+        if [ -n "${MP_MOVE_ADDR}" ]; then
+            if ! mp_migrate; then
+                debug_event "bot: could not follow the moved session"
+                mp_disconnect
+                return 0
+            fi
+            next_ready=0
+            continue
+        fi
+        if [ -n "${MP_CLOSED}" ] || mp_link_silent; then
+            debug_event "bot: session closed (${MP_CLOSED:-silent})"
+            mp_disconnect
+            return 0
+        fi
         now_ms
         if (( NOW_MS >= next_ready )); then
             next_ready=$(( NOW_MS + 1000 ))
@@ -1413,7 +1836,7 @@ mp_bot_main() {
     game_reset versus
     while :; do
         mp_poll || break
-        if [ "${MP_ENDED}" -eq 1 ]; then
+        if [ "${MP_ENDED}" -eq 1 ] || mp_link_silent; then
             break
         fi
         play_clock_tick
@@ -1453,6 +1876,28 @@ mp_bot_main() {
     done
     debug_event "bot: session over (rows=${ROW_CREDIT} lines=${CLEARED_TOTAL} place=${MP_PLACE})"
     mp_disconnect
+    return 0
+}
+
+# mp_lobby_closed REASON
+# The session is over while we were waiting in its lobby, and the reason
+# is known: the host left and nobody could take over ("host"), the
+# takeover failed ("failed"), or the hub stopped answering ("silent").
+# Told apart on screen because they are told apart by the player: the
+# first is somebody's decision, the other two are a fault.
+mp_lobby_closed() {
+    local reason="${1}"
+    local -a body
+    case "${reason}" in
+        host)   i18n_lines mp_closed_host ;;
+        failed) i18n_lines mp_closed_failed ;;
+        *)      i18n_lines mp_closed_silent ;;
+    esac
+    body=("${I18N_LINES[@]}")
+    debug_event "mp: lobby closed (${reason})"
+    mp_disconnect
+    MP_IS_HOST=0
+    menu_message "${I18N[main_multi]}" "${body[@]}"
     return 0
 }
 

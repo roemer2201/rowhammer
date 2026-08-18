@@ -437,7 +437,16 @@ net_send() {
     # "1>&fd" rather than ">&fd": the short form reads as a redirection
     # to a *file* named by the variable when a second redirection follows
     # it, which is exactly the ambiguity ShellCheck flags (SC2261).
-    if ! printf '%s\n' "${line}" 1>&"${NET_LINK_OUT}" 2>/dev/null; then
+    # Wrapped in a group whose stderr goes away, because the descriptor
+    # can be gone by the time this runs - bash closes a coprocess's
+    # descriptors when the coprocess dies, which is precisely what a hub
+    # that was killed looks like from here. A redirection that fails is
+    # reported by the shell itself, not by printf, so "2>/dev/null" on
+    # the command would not catch it, and the game owns the terminal: the
+    # message would be written across the board and, in the standard
+    # render mode, stay there (see CLAUDE.md 4.3). The failure is still
+    # seen - the group's exit status is the redirection's.
+    if ! { printf '%s\n' "${line}" 1>&"${NET_LINK_OUT}"; } 2>/dev/null; then
         NET_LINK_ERROR="send"
         NET_LINK_UP=0
         debug_event "net: send failed, link down"

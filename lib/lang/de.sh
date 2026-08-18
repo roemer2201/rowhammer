@@ -117,6 +117,30 @@ alle sehen sie in ihrer Lobby."
     [mpwin_survival]="wer uebrig bleibt"
     [mpwin_sprint]="meiste Rows"
     [mpwin_ultra]="wer zuerst am Ziel ist"
+    # --- Gastgeberwechsel und geschlossene Sitzung (1.2.0) ----------------
+    # Verlaesst der Gastgeber die Lobby, endet sein Hub - die Sitzung
+    # zieht zum naechsten Spieler um. Die Meldung wird mit Enter
+    # bestaetigt, weil darunter ein anderes Menue steht als vorher.
+    [mp_host_left_title]="Gastgeber hat die Lobby verlassen"
+    [mp_host_left_body]="Die Sitzung laeuft weiter - sie ist zum naechsten
+Spieler umgezogen. Alle Bereit-Haken sind
+zurueckgesetzt."
+    [mp_host_new]="Neuer Gastgeber: %s"
+    [mp_host_you]="Du bist jetzt der Gastgeber und startest die
+Runde."
+    [mp_host_confirm]="Enter: verstanden"
+    [mp_closed_host]="Der Gastgeber hat die Lobby geschlossen.
+
+Es war niemand mehr da, der die Sitzung
+uebernehmen konnte."
+    [mp_closed_failed]="Die Sitzung konnte nicht uebernommen werden.
+
+Der naechste Spieler konnte keine eigene
+Sitzung eroeffnen - damit ist sie beendet."
+    [mp_closed_silent]="Die Sitzung antwortet nicht mehr.
+
+Der Gastgeber ist weg, oder das Netz ist
+zwischen euch abgerissen."
     [mp_lobby_title]="Mehrspieler - Lobby"
     [mp_lobby_session]="Sitzung: %s"
     [mp_lobby_addr]="Adresse zum Weitersagen: %s:%s"

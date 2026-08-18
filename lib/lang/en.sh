@@ -112,6 +112,29 @@ everybody sees them in their lobby."
     [mpwin_survival]="last one standing"
     [mpwin_sprint]="most rows"
     [mpwin_ultra]="first to the target"
+    # --- Host handover and a closed session (1.2.0) -----------------------
+    # When the host leaves the lobby their hub ends - the session moves on
+    # to the next player. The notice is acknowledged with Enter, because
+    # the menu below it is not the one that was there before.
+    [mp_host_left_title]="The host has left the lobby"
+    [mp_host_left_body]="The session carries on - it has moved to the next
+player. Everybody's ready mark has been
+cleared."
+    [mp_host_new]="New host: %s"
+    [mp_host_you]="You are the host now and start the round."
+    [mp_host_confirm]="Enter: got it"
+    [mp_closed_host]="The host closed the lobby.
+
+There was nobody left who could have taken
+the session over."
+    [mp_closed_failed]="The session could not be taken over.
+
+The next player could not open a session of
+their own, so this one is over."
+    [mp_closed_silent]="The session has stopped answering.
+
+The host is gone, or the network between you
+broke down."
     [mp_lobby_title]="Multiplayer - lobby"
     [mp_lobby_session]="Session: %s"
     [mp_lobby_addr]="Address to pass on: %s:%s"

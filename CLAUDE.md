@@ -2397,7 +2397,9 @@ Mehrspieler fertig ist - einschliesslich der Demo-Aufzeichnung aus
 **Stand:** Der Mehrspieler laeuft seit 1.1.0 - Sitzung eroeffnen und
 beitreten, gemeinsame Steinfolge, Stoerreihen, Ausscheiden, Sieger,
 eigene Bestenliste und eigener Statistik-Modus (Roadmap-Schritte 1 bis 8
-und 10 bis 12, siehe HISTORY.md). Dieser Abschnitt beschreibt damit
+und 10 bis 12, siehe HISTORY.md); seit 1.2.0 ueberlebt eine Lobby
+ausserdem ihren Gastgeber (Umzug der Sitzung, siehe 5.1) und ein Client
+erkennt eine verstummte Sitzung von selbst (siehe 5.4/5.8). Dieser Abschnitt beschreibt damit
 nicht mehr eine Absicht, sondern den gebauten Zustand; wo die Umsetzung
 von der urspruenglichen Spezifikation abweicht, steht es an Ort und
 Stelle. **Offen ist ein Punkt:** die Demo-Aufzeichnung einer
@@ -2534,6 +2536,86 @@ zurueck (`hub_msg_setup`, `lib/hub.sh`). Die Entscheidungen dazu:
   keine Config-Werte: was in einer Sitzung gilt, entscheidet die Lobby.
 - Ein spaeterer kooperativer Modus ist denkbar, aber nicht Teil dieser
   Spezifikation.
+
+**Gastgeberwechsel: die Sitzung zieht um (seit 1.2.0, Nutzerwunsch).**
+Verlaesst der Gastgeber die **Lobby**, ist die Sitzung damit nicht zu
+Ende: sie wandert zum **zuerst beigetretenen** der verbliebenen Spieler.
+Der Ablauf ist eine kleine Kette aus vier Nachrichten (siehe 5.4):
+`PROMOTE` an den Nachfolger, dessen `PROMOTED <port>` zurueck, `MIGRATE
+<adresse> <port>` an alle uebrigen - und dann stellt sich der alte Hub
+ab. Umgesetzt in `hub_migrate_begin`/`hub_msg_promoted`
+(`lib/hub.sh`) und `mp_promote`/`mp_migrate` (`lib/mp.sh`). Die
+Entscheidungen dazu:
+
+- **Der Hub des Gastgebers endet mit ihm** (Nutzervorgabe). Ihn
+  weiterlaufen zu lassen waere der kuerzere Weg gewesen - die Sitzung
+  laege dann aber als Prozess auf der Maschine von jemandem, der sich
+  gerade von ihr abgewandt hat, und nichts wuerde sie je beenden ausser
+  dem Weggehen des letzten Spielers. Der Nachfolger startet deshalb
+  einen **eigenen** Hub (derselbe `mp_hub_start` wie beim Eroeffnen) und
+  die anderen ziehen ihm nach.
+- **Nachfolger ist, wer am laengsten da ist**, nicht der niedrigste
+  freie Slot (`HUB_JOINED`, eine je Verbindung hochgezaehlte
+  Beitrittsnummer). Nach ein paar Kommen und Gehen ist die
+  Slot-Reihenfolge fuer niemanden mehr eine Reihenfolge; "wer zuerst da
+  war" kann jeder im Raum nachvollziehen.
+- **Die Sitzung behaelt ihren Namen.** Der neue Hub wuerde sonst unter
+  dem Namen des Nachfolgers laufen und im Beacon als andere Sitzung
+  erscheinen. Dafuer traegt `WELCOME` seit 1.2.0 den Sitzungsnamen
+  (`MP_SESSION_NAME`), den jeder Client sich merkt und der Nachfolger
+  seinem Hub mitgibt.
+- **Alle Bereit-Haken fallen** (Nutzerwunsch). Sie galten dem alten
+  Gastgeber und seinen Einstellungen, die der neue aendern darf; ausserdem
+  **ist** das Bereit-Zeichen des Gastgebers der Startknopf (siehe oben),
+  ein geerbter Haken koennte also eine Runde starten, die niemand
+  wollte.
+- **Die Meldung wird mit Enter bestaetigt** (Nutzerwunsch,
+  `mp_host_notice` in `lib/mp.sh`): ein Bildschirm, der den neuen
+  Gastgeber nennt und nur auf Enter schliesst. Bewusst nicht "beliebige
+  Taste" wie sonst - er faellt mitten in eine Lobby, in der gerade
+  jemand auf den Pfeiltasten war, und soll gelesen und nicht
+  weggetippt werden.
+- **Der Nachfolger bekommt einen Vorsprung.** Der neue Hub gibt die
+  Lobby dem Client, der sich zuerst meldet - und das muss der sein, der
+  gefragt wurde, nicht der, der am schnellsten neu verbindet. Sein
+  Client ist zwar schon zu einem Hub auf der eigenen Maschine
+  unterwegs, waehrend das `MIGRATE` der anderen noch ein Netz vor sich
+  hat; sitzen aber alle auf **einem** Rechner (zwei Terminals und ein
+  Test-Bot auf der Loopback-Adresse), sind das wenige Millisekunden und
+  der Falsche gewinnt sie ungefaehr so oft wie der Richtige. Der alte
+  Hub haelt das `MIGRATE` deshalb `HUB_MIGRATE_DELAY_MS` (500 ms)
+  zurueck (`hub_migrate_finish`), und der Nachfolger wartet nach seinem
+  `PROMOTED` nur `MP_HANDOFF_FLUSH_MS` (250 ms) - lang genug, damit
+  socat die Zeile noch aus dem Prozess bekommt, bevor `net_close` ihn
+  beendet, und kurz genug fuer einen Vorsprung, den lokal niemand
+  aufholt.
+- **Die FIFOs eines Hubs tragen seine Prozessnummer**
+  (`${MP_DIR}/<sitzung>.<pid>.inbox`, dito `.down.<bruecke>`). Zwei
+  Hubs desselben Sitzungsnamens auf einer Maschine sind hier der
+  Normalfall und kein Versehen - genau das ist ein Umzug -, und mit dem
+  blossen Namen loeschte der zweite Hub das Postfach des ersten und
+  dessen Bruecken schrieben fortan in ein Postfach, an dem niemand
+  wartet. Beim Start raeumt `hub_sweep_stale` die FIFOs von Hubs weg,
+  deren Prozess es nicht mehr gibt - streng nach dieser Bedingung, denn
+  ein noch laufender Hub gehoert zu einer Sitzung, in der jemand
+  spielt.
+- **Die Sitzung behaelt auch ihre Groesse.** `WELCOME` nennt sie
+  ohnehin; der Nachfolger gibt sie seinem Hub mit (`MP_SESSION_MAX`),
+  statt die Runde stillschweigend auf sein eigenes `--mp-max`
+  umzustellen. Nach oben begrenzt ihn dabei sein eigener Wert - seine
+  Peer-Tabellen und sein Layout haben so viele Plaetze, wie er selbst
+  angemeldet hat.
+- **Klappt es nicht, ist die Sitzung zu.** Ist niemand mehr da, den man
+  fragen koennte, oder antwortet der Gefragte nicht binnen
+  `HUB_PROMOTE_MS` (3000 ms) bzw. bekommt keinen Hub hoch, geht ein
+  `CLOSED host` bzw. `CLOSED failed` an alle. Eine ausgesprochene
+  Absage ist besser als eine Lobby, die stumm bleibt, bis der
+  Client-Timeout greift - den es dafuer trotzdem gibt (siehe 5.4/5.8).
+- **Nur in der Lobby.** Geht der Gastgeber waehrend der **Runde**, ist
+  das ein gewoehnliches Ausscheiden und die Runde spielt sich zu Ende
+  (`hub_client_close`); ein Umzug mitten im Spiel muesste den ganzen
+  Rundenzustand mitnehmen. Der Hub laeuft dann bis zum Rundenende
+  weiter, wie er es auch ohne diesen Fall taete.
 
 ### 5.2 Transport: socat, LAN-Broadcast und Unix-Domain-Socket
 
@@ -2711,7 +2793,11 @@ Vier Rollen, strikt getrennt (die vierte nur im Transport `lan`):
   mit FIFOs (Bash-nativ) und `socat` nur mit dem Socket; **der Wechsel
   zwischen den beiden Transporten aendert damit nur die
   socat-Adresse**, keine Zeile Sitzungslogik - genau die Trennung, die
-  dieser Abschnitt seit jeher vorsieht.
+  dieser Abschnitt seit jeher vorsieht. Beide FIFO-Namen tragen seit
+  1.2.0 die Prozessnummer des Hubs, damit zwei Hubs derselben Sitzung
+  auf einer Maschine - der Normalfall waehrend eines Gastgeberwechsels,
+  siehe 5.1 - einander nicht das Postfach unter den Bruecken
+  wegziehen.
 - **Discover-Sammler** (`rowhammer.sh --mp-discover`, ein kurzlebiger
   Prozess je empfangenem Beacon, nur Transport `lan`): wird von
   `socat UDP4-RECVFROM:<port>,fork,...` gestartet, liest das Datagramm
@@ -2745,7 +2831,7 @@ Konkret: `game_reset`, `step_down`, `lock_and_next`, `hold_piece`,
 markiert nur. Das ist ohnehin fast erreicht - offen sind die Stellen, an
 denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
 
-### 5.4 Protokoll v1
+### 5.4 Protokoll (Version 3)
 
 - **Rahmen:** eine Nachricht = eine Zeile, `\n`-terminiert, reines
   druckbares ASCII (0x20-0x7E), maximal **512 Byte** inklusive Zeilenende.
@@ -2753,10 +2839,16 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   Grossbuchstaben. Unbekannte Verben werden ignoriert (Vorwaerts-
   kompatibilitaet), fehlerhafte Zeilen fuehren zum Verbindungsabbruch
   (siehe 5.5).
-- **Versionierung:** `PROTO_VERSION=1`. Der Hub lehnt abweichende
+- **Versionierung:** `PROTO_VERSION=3`. Der Hub lehnt abweichende
   Versionen im `HELLO` mit `ERR proto ...` ab. Gemaess der Arbeitsregel
   "keine Abwaertskompatibilitaet" wird das Protokoll bei Bedarf
-  hochgezaehlt statt kompatibel erweitert.
+  hochgezaehlt statt kompatibel erweitert; genau das ist zweimal
+  passiert. **Version 2** kam mit den Sitzungseinstellungen (1.1.0,
+  siehe 5.1): `SETUP` in beide Richtungen. **Version 3** kam mit dem
+  Gastgeberwechsel (1.2.0, siehe unten und 5.8): `HOST`, `PROMOTE`,
+  `PROMOTED`, `MIGRATE` und `CLOSED`, dazu der Sitzungsname als viertes
+  Feld von `WELCOME` - eine umgezogene Sitzung soll unter ihrem eigenen
+  Namen weiterlaufen und nicht unter dem des Nachfolgers.
 - **Client -> Hub**
 
   | Nachricht | Felder | Bedeutung |
@@ -2768,6 +2860,8 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `CLEAR` | `<lines> <silver> <gold>` | ein Reihenabbau als Angriffs-Meldung (Hub rechnet daraus die Garbage aus) |
   | `APPLIED` | `<count>` | eingeschobene Stoerreihen (seit 1.1.0, siehe unten) |
   | `VIEW` | `<0 oder 1>` | ob dieser Client die Gegnerfelder zeichnet (seit 1.1.0) |
+  | `SETUP` | `<modus> <garbage>` | Sitzungseinstellungen, nur vom Gastgeber (seit 1.1.0, siehe 5.1) |
+  | `PROMOTED` | `<port>` | "mein Hub laeuft auf diesem Port" - Antwort auf `PROMOTE` (seit 1.2.0) |
   | `TOPOUT` | - | eigenes Game Over |
   | `PONG` | `<token>` | Antwort auf `PING` |
   | `BYE` | - | geordnetes Verlassen |
@@ -2776,8 +2870,13 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
 
   | Nachricht | Felder | Bedeutung |
   | --- | --- | --- |
-  | `WELCOME` | `<slot> <proto> <maxplayers>` | Anmeldung akzeptiert |
+  | `WELCOME` | `<slot> <proto> <maxplayers> <sitzung>` | Anmeldung akzeptiert; der Sitzungsname seit 1.2.0 (siehe oben) |
   | `ROSTER` | `<slot> <name> <ready> <state>` | eine Zeile je Spieler, bei jeder Aenderung |
+  | `SETUP` | `<modus> <garbage>` | die geltenden Sitzungseinstellungen, an alle (seit 1.1.0) |
+  | `HOST` | `<slot>` | wer die Sitzung fuehrt (seit 1.2.0) |
+  | `PROMOTE` | - | "uebernimm die Sitzung" - nur an den Nachfolger (seit 1.2.0) |
+  | `MIGRATE` | `<adresse> <port>` | "die Sitzung zieht dorthin um" (seit 1.2.0) |
+  | `CLOSED` | `<host oder failed>` | die Sitzung ist zu Ende, ohne Nachfolger (seit 1.2.0) |
   | `SEED` | `<seed>` | gemeinsamer Seed fuer die Steinfolge |
   | `START` | `<countdown_ms>` | Rundenstart |
   | `PEER` | `<slot> <lines> <rows> <level> <gold> <silver> <height> <pending> <state>` | Zustand eines Mitspielers |
@@ -2810,6 +2909,17 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
 - **Zeitverhalten:** `PING` alle 2 s, Timeout nach 6 s ohne Lebenszeichen
   -> Spieler gilt als abgestuerzt (siehe 5.8). Der Hub laeuft mit einem
   eigenen Tick von 50 ms (`read -t` auf dem Inbox-FIFO, kein `sleep`).
+  **Die Uhr laeuft seit 1.2.0 in beide Richtungen** (Nutzerwunsch): der
+  Client merkt sich mit jeder empfangenen Zeile die Zeit
+  (`MP_LAST_RX_MS` in `lib/mp.sh`) und gibt nach denselben
+  `MP_TIMEOUT_MS` (6000 ms) Stille auf (`mp_link_silent`). Der `PING`
+  des Hubs alle `MP_PING_MS` (2000 ms) ist damit nicht nur eine Frage,
+  sondern zugleich das Lebenszeichen, auf das der Client wartet - drei
+  ausgefallene reichen. Gefragt wird an jeder Stelle, an der ein Client
+  auf den Hub wartet: Lobby, Einstellungsmenue, Namensabfrage,
+  Countdown und Game-Loop. Ohne diese Pruefung erkennt ein Client nur
+  das, was ihm gesagt wird - und ein Hub, dessen Maschine ausgeschaltet
+  wurde, sagt nichts mehr (siehe 5.8).
 
 ### 5.5 Sicherheit
 
@@ -3058,7 +3168,23 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
 - **Ausfall des Hubs:** alle Clients bekommen EOF, zeigen "Verbindung
   verloren" und kehren ins Hauptmenue zurueck. Die Runde wird wie ein
   abgebrochenes Spiel behandelt und gemaess 3.3 gewertet (abgebrochene
-  Runden zaehlen).
+  Runden zaehlen). **Ein EOF setzt allerdings voraus, dass ueberhaupt
+  noch jemand da ist, der die Verbindung schliesst** - deshalb gibt
+  jeder Client seit 1.2.0 zusaetzlich nach `MP_TIMEOUT_MS` (6000 ms)
+  ohne eine einzige empfangene Zeile von selbst auf (Nutzerwunsch,
+  `mp_link_silent`, siehe 5.4): ein ausgeschalteter Rechner, ein
+  gezogenes Kabel oder ein WLAN, das mitten in der Lobby weg ist,
+  schickt kein EOF. Gefragt wird an jeder Warte-Stelle - Lobby,
+  Einstellungsmenue, Namensabfrage, Countdown und Game-Loop -, sodass
+  eine tote Sitzung nirgends stehen bleibt; im Game-Loop endet die
+  Runde damit wie bei jedem anderen Verbindungsverlust.
+- **Der Gastgeber verlaesst die Lobby:** die Sitzung zieht zum zuerst
+  beigetretenen Spieler um, der alte Hub endet, alle bekommen den neuen
+  Gastgeber genannt und bestaetigen ihn mit Enter (seit 1.2.0,
+  ausfuehrlich in 5.1). Findet sich kein Nachfolger, sagt der Hub das
+  mit `CLOSED` und die Clients kehren ins Menue zurueck. **Waehrend der
+  Runde** ist das Weggehen des Gastgebers dagegen ein gewoehnliches
+  Ausscheiden wie bei jedem anderen.
 - **Verlassen ueber das Menue:** wie im Einzelspieler beendet "Runde
   beenden" die Runde; zusaetzlich geht ein `BYE` raus. Eine
   Mehrspieler-Runde kann **nicht** ins Hauptmenue gelegt und spaeter
