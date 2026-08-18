@@ -212,7 +212,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.1.0  (2026-08-11)
+# Version: 1.2.0  (2026-08-18)
 
 set -euo pipefail
 
@@ -227,7 +227,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.1.0"
+ROWHAMMER_VERSION="1.2.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -2365,13 +2365,18 @@ game_run() {
         # than one tick, and before the gravity below, so garbage that
         # just arrived is queued before the piece it will meet falls.
         if [ "${MP_ACTIVE}" -eq 1 ]; then
-            if ! mp_poll; then
+            # Two ways for a session to disappear, and the round has to
+            # end on both: the connection closes (mp_poll fails), or the
+            # hub stops answering without closing anything - a killed
+            # process, a machine off the network - which only silence
+            # gives away (mp_link_silent, since 1.2.0).
+            if ! mp_poll || mp_link_silent; then
                 # The hub or the connection is gone. The round is over
                 # for this client; it is booked like any other round -
                 # what was cleared was cleared (CLAUDE.md 5.8).
                 GAME_OVER=1
                 MP_ENDED=1
-                debug_event "mp: connection lost, ending the round"
+                debug_event "mp: connection lost or silent, ending the round"
             fi
             if [ "${MP_ENDED}" -eq 1 ] && [ "${ROUND_RECORDED}" -eq 0 ]; then
                 GAME_OVER=1

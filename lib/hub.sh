@@ -16,9 +16,12 @@
 #   never consequences.
 #   It also keeps the session settings the host picks in the lobby (SETUP,
 #   since 1.1.0): the mode - survival, sprint or ultra, which is to say
-#   who wins - and whether garbage flies at all. They are taken from slot
-#   0 only and only while no round is running, and they are what
-#   hub_end_round asks when it has to name a winner.
+#   who wins - and whether garbage flies at all. They are taken from the
+#   host only and only while no round is running, and they are what
+#   hub_end_round asks when it has to name a winner. The host is a slot
+#   the hub names (HUB_HOST_SLOT, since 1.2.0): when its holder leaves,
+#   the lobby passes to whoever joined first of those still there, and
+#   everybody's ready flag is cleared with it.
 #   It speaks to nobody directly. socat listens (TCP4-LISTEN in the "lan"
 #   transport, UNIX-LISTEN in "unix") and starts one bridge process per
 #   connection ("rowhammer.sh --mp-bridge"); the bridge has the socket on
@@ -31,7 +34,7 @@
 #   shared inbox is atomic, which is what lets several bridges share it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.1.0  (2026-08-11)
+# Version: 1.2.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -65,6 +68,21 @@ HUB_BATCH_MAX=64
 # How many malformed messages in a row cost a client its connection.
 HUB_BAD_MAX=3
 
+# How long the successor has to start a hub of their own after the host
+# left (PROMOTE -> PROMOTED). Starting one is a fork, a bind and a moment
+# of waiting; three seconds is far more than that and still short enough
+# that nobody wonders whether the game has hung.
+HUB_PROMOTE_MS=3000
+
+# How long this hub keeps running after its last message before it exits,
+# so the bridges can push that message out (see hub_stop_soon).
+HUB_STOP_GRACE_MS=500
+
+# The head start the new host gets before the others are sent after them
+# (see hub_msg_promoted). Long enough that no client on this machine can
+# make it up, short enough that nobody sees a pause.
+HUB_MIGRATE_DELAY_MS=500
+
 # --- Session state --------------------------------------------------------
 # One entry per slot (0 .. MP_MAX-1). A free slot has an empty HUB_ID.
 HUB_ID=()
@@ -84,6 +102,15 @@ HUB_PENDING=()
 # snapshots exactly when some other client is drawing them.
 HUB_WANTBOARD=()
 HUB_NEEDBOARD=()
+# The order the players joined in, as a counter per slot. Slots are handed
+# out lowest-free-first, so a slot number is not a join order once
+# somebody has left and their place has been taken again - and the join
+# order is exactly what decides who inherits the lobby (hub_migrate_begin).
+HUB_JOINED=()
+# The address each connection came from (the bridge reports it), or "-"
+# when there is none - the unix transport has no addresses, and there the
+# session is a socket path on the one machine everybody is on anyway.
+HUB_ADDR=()
 HUB_PLACE=()
 HUB_LAST_MS=()
 HUB_OPEN_MS=()
@@ -119,6 +146,30 @@ fi
 HUB_RUN=1
 HUB_PLAYING=0
 HUB_ROUND_END_MS=0
+# Which slot runs the lobby, and the counter the join order is taken from.
+# -1 means the session has nobody in it yet; the first client to identify
+# itself becomes the host. It is a slot the hub names rather than the
+# fixed slot 0 it used to be, because the role has to be able to move on
+# when its holder leaves (user request, 1.2.0).
+HUB_HOST_SLOT=-1
+HUB_JOIN_SEQ=0
+# The handover, once the host has left: which slot was asked to start a
+# hub of its own, when that question was asked, and the moment this hub
+# gives up waiting and closes the session instead. While
+# HUB_PROMOTED_SLOT is set the session is on its way out either way -
+# this hub ends as soon as the new one has taken it over, or as soon as
+# it is clear that nobody did.
+HUB_PROMOTED_SLOT=-1
+HUB_PROMOTE_DEADLINE_MS=0
+# The MIGRATE for everybody else, written the moment the successor
+# answered and sent a moment later (hub_migrate_finish).
+HUB_MIGRATE_LINE=""
+HUB_MIGRATE_SLOT=-1
+HUB_MIGRATE_AT_MS=0
+# When this hub stops, once it has said everything it has to say. A hub
+# that quit the instant it sent MIGRATE would take the message with it:
+# the bridges still have to push it through their sockets.
+HUB_STOP_AT_MS=0
 HUB_ROSTER_DIRTY=1
 HUB_NEXT_BEACON_MS=0
 HUB_NEXT_PING_MS=0
@@ -130,8 +181,10 @@ HUB_LISTEN_PATH=""
 
 # hub_slot_free
 # Index of the first free slot in HUB_FREE_SLOT, or -1 when the session is
-# full. Slots are handed out low first, so the host is always slot 0 - the
-# one place the "who may start the round" question is answered.
+# full. Slots are handed out low first, which is why the first player to
+# arrive is slot 0 - but only until somebody leaves and their place is
+# taken again, so who runs the lobby is a slot of its own
+# (HUB_HOST_SLOT) and not "slot 0".
 HUB_FREE_SLOT=-1
 hub_slot_free() {
     local i
@@ -165,6 +218,8 @@ hub_slot_reset() {
     HUB_PLACE[s]=0
     HUB_LAST_MS[s]=0
     HUB_OPEN_MS[s]=0
+    HUB_JOINED[s]=0
+    HUB_ADDR[s]="-"
     HUB_HELLO[s]=0
     HUB_BAD[s]=0
     return 0
@@ -277,7 +332,9 @@ hub_client_open() {
     HUB_OPEN_MS[slot]="${NOW_MS}"
     HUB_LAST_MS[slot]="${NOW_MS}"
     HUB_SLOT_OF_ID["${id}"]="${slot}"
-    debug_event "hub: connection ${id} -> slot ${slot}"
+    HUB_JOIN_SEQ=$(( HUB_JOIN_SEQ + 1 ))
+    HUB_JOINED[slot]="${HUB_JOIN_SEQ}"
+    debug_event "hub: connection ${id} -> slot ${slot} (join #${HUB_JOINED[slot]})"
     return 0
 }
 
@@ -298,11 +355,30 @@ hub_client_close() {
         # The slot keeps its name and figures so the others still see who
         # it was; only the id is cleared, so nothing is sent there again.
         HUB_ID[slot]=""
+        # No handover during a round: the settings are frozen, the round
+        # plays itself out for everybody who is left, and moving the
+        # session to another machine mid-round would mean every board
+        # reconnecting in the middle of a duel. The host slot is simply
+        # vacated; the round ends the session anyway.
+        if [ "${slot}" -eq "${HUB_HOST_SLOT}" ]; then
+            HUB_HOST_SLOT=-1
+            debug_event "hub: the host left during the round; no handover until it is over"
+        fi
         return 0
     fi
     debug_event "hub: slot ${slot} (${HUB_NAME[slot]:-unnamed}) left"
+    local was_host=0
+    if [ "${slot}" -eq "${HUB_HOST_SLOT}" ]; then
+        was_host=1
+    fi
     hub_slot_reset "${slot}"
     HUB_ROSTER_DIRTY=1
+    # The host left: the session moves to whoever joined first of those
+    # still here, and this hub ends with the handover. Done after the slot
+    # is cleared, so the one who is leaving cannot be picked again.
+    if [ "${was_host}" -eq 1 ] && [ "${HUB_STOP_AT_MS}" -eq 0 ]; then
+        hub_migrate_begin
+    fi
     return 0
 }
 
@@ -358,6 +434,7 @@ hub_client_msg() {
         HELLO)  hub_msg_hello "${slot}" ;;
         VIEW)   hub_msg_view "${slot}" ;;
         SETUP)  hub_msg_setup "${slot}" ;;
+        PROMOTED) hub_msg_promoted "${slot}" ;;
         READY)  hub_msg_ready "${slot}" ;;
         STATE)  hub_msg_state "${slot}" ;;
         BOARD)  hub_msg_board "${slot}" ;;
@@ -392,11 +469,21 @@ hub_msg_hello() {
     HUB_NAME[slot]="${name}"
     HUB_HELLO[slot]=1
     HUB_STATE[slot]="lobby"
-    proto_msg WELCOME "${slot}" "${PROTO_VERSION}" "${MP_MAX}"
+    proto_msg WELCOME "${slot}" "${PROTO_VERSION}" "${MP_MAX}" "${MP_SESSION}"
     hub_send "${slot}" "${PROTO_LINE}" || :
-    # The settings before the roster: a client that has just been let in
-    # should know what it has joined before it sees who it plays against.
+    # The first player to identify themselves opens the session and runs
+    # its lobby. That used to be slot 0 by definition; since the role can
+    # move on (hub_migrate_begin) it is a slot the hub remembers, and an
+    # empty session is the one case in which it is handed out afresh.
+    if [ "${HUB_HOST_SLOT}" -lt 0 ]; then
+        HUB_HOST_SLOT="${slot}"
+        debug_event "hub: slot ${slot} opens the session and runs the lobby"
+    fi
+    # The settings and the host before the roster: a client that has just
+    # been let in should know what it has joined, and who runs it, before
+    # it sees who it plays against.
     hub_setup_send "${slot}"
+    hub_host_send "${slot}"
     HUB_ROSTER_DIRTY=1
     # A new player changes who is looking at whom, so the send flags are
     # re-derived here as well as on every VIEW.
@@ -416,7 +503,7 @@ hub_msg_ready() {
     local slot="${1}"
     HUB_READY[slot]="${PROTO_ARG[0]}"
     HUB_ROSTER_DIRTY=1
-    if [ "${slot}" -eq 0 ] && [ "${PROTO_ARG[0]}" -eq 1 ] \
+    if [ "${slot}" -eq "${HUB_HOST_SLOT}" ] && [ "${PROTO_ARG[0]}" -eq 1 ] \
         && [ "${HUB_PLAYING}" -eq 0 ]; then
         hub_count_players
         if [ "${HUB_PLAYERS}" -ge 2 ]; then
@@ -442,8 +529,8 @@ hub_msg_ready() {
 # hands of one person.
 hub_msg_setup() {
     local slot="${1}"
-    if [ "${slot}" -ne 0 ] || [ "${HUB_PLAYING}" -eq 1 ]; then
-        debug_event "hub: SETUP from slot ${slot} ignored (host=0, playing=${HUB_PLAYING})"
+    if [ "${slot}" -ne "${HUB_HOST_SLOT}" ] || [ "${HUB_PLAYING}" -eq 1 ]; then
+        debug_event "hub: SETUP from slot ${slot} ignored (host=${HUB_HOST_SLOT}, playing=${HUB_PLAYING})"
         return 0
     fi
     HUB_MODE="${PROTO_ARG[0]}"
@@ -463,6 +550,173 @@ hub_setup_send() {
         return 0
     fi
     hub_bcast "${PROTO_LINE}"
+    return 0
+}
+
+# hub_host_send [SLOT]
+# Tell one slot, or everybody, who runs the lobby.
+hub_host_send() {
+    [ "${HUB_HOST_SLOT}" -ge 0 ] || return 0
+    proto_msg HOST "${HUB_HOST_SLOT}"
+    if [ "$#" -ge 1 ]; then
+        hub_send "${1}" "${PROTO_LINE}" || :
+        return 0
+    fi
+    hub_bcast "${PROTO_LINE}"
+    return 0
+}
+
+# hub_client_addr ID ADDRESS
+# Remember where a connection came from. The value comes off the wire
+# through the bridge, so it is checked here and nowhere trusted: anything
+# that is not a dotted quad becomes "-", which the handover below reads as
+# "no address" (the unix transport, or a socat that did not report one).
+hub_client_addr() {
+    local id="${1}" addr="${2}" slot
+    slot="${HUB_SLOT_OF_ID[${id}]:-}"
+    [ -n "${slot}" ] || return 0
+    # socat reports "address:port" for a TCP peer; only the address half
+    # is of interest, and only when it really is one.
+    addr="${addr%%:*}"
+    if net_ipv4_ok "${addr}"; then
+        HUB_ADDR[slot]="${addr}"
+    else
+        HUB_ADDR[slot]="-"
+    fi
+    return 0
+}
+
+# hub_migrate_begin
+# The host has left, so this hub is finished - but the session need not
+# be (user request, 1.2.0). The lobby is offered to the player who joined
+# first of those still there: the one who has been waiting longest has
+# the best claim to it, and it is a rule everybody can see coming, unlike
+# "the lowest free slot", which after a few comings and goings is nobody's
+# idea of an order.
+#
+# Why the session moves instead of this hub simply carrying on: the hub is
+# a process on the departed host's machine. Leaving it running would keep
+# a session alive on a computer whose owner has walked away from it - and
+# nothing would ever end it but the last player leaving. So the successor
+# starts a hub of their own (PROMOTE), reports the port it listens on
+# (PROMOTED), and everybody else is sent after it (MIGRATE) before this
+# hub stops.
+#
+# Nobody left to ask, or nobody who answers: the session is over and says
+# so (CLOSED) rather than leaving its players to work it out by timeout.
+hub_migrate_begin() {
+    local i best=-1 seq=0
+    HUB_HOST_SLOT=-1
+    for (( i = 0; i < MP_MAX; i++ )); do
+        [ -n "${HUB_ID[i]}" ] || continue
+        [ "${HUB_HELLO[i]}" -eq 1 ] || continue
+        if [ "${best}" -lt 0 ] || [ "${HUB_JOINED[i]}" -lt "${seq}" ]; then
+            best="${i}"
+            seq="${HUB_JOINED[i]}"
+        fi
+    done
+    if [ "${best}" -lt 0 ]; then
+        debug_event "hub: the host left and nobody is here to take over"
+        hub_close_session "host"
+        return 0
+    fi
+    # Everybody's ready flag goes with the old host: they were given to
+    # somebody who is gone, and for the new host "ready" means "start the
+    # round" - an inherited flag could start a round nobody asked for.
+    for (( i = 0; i < MP_MAX; i++ )); do
+        HUB_READY[i]=0
+    done
+    HUB_PROMOTED_SLOT="${best}"
+    now_ms
+    HUB_PROMOTE_DEADLINE_MS=$(( NOW_MS + HUB_PROMOTE_MS ))
+    debug_event "hub: the host left; slot ${best} (${HUB_NAME[best]}) is asked to take the session over"
+    proto_msg PROMOTE
+    hub_send "${best}" "${PROTO_LINE}" || :
+    return 0
+}
+
+# hub_msg_promoted SLOT: PROMOTED <port>
+# The answer to PROMOTE: the port of the hub the successor started, or 0
+# when they could not start one. Accepted from the one client that was
+# asked and from nobody else - and only once, because the session is on
+# its way out from here either way.
+hub_msg_promoted() {
+    local slot="${1}" port="${PROTO_ARG[0]}" addr i
+    if [ "${slot}" -ne "${HUB_PROMOTED_SLOT}" ]; then
+        debug_event "hub: PROMOTED from slot ${slot}, which was not asked"
+        return 0
+    fi
+    HUB_PROMOTED_SLOT=-1
+    if [ "${port}" -eq 0 ] || ! net_port_ok "${port}"; then
+        debug_event "hub: slot ${slot} could not take the session over"
+        hub_close_session "failed"
+        return 0
+    fi
+    # Where the others have to go. In the unix transport there is no
+    # address to send: everybody is on this machine and finds the session
+    # by its name, so 0.0.0.0 stands for "the socket of this session,
+    # here".
+    addr="${HUB_ADDR[slot]}"
+    if [ "${MP_TRANSPORT}" != "lan" ] || [ "${addr}" = "-" ]; then
+        addr="0.0.0.0"
+    fi
+    debug_event "hub: the session moves to slot ${slot} at ${addr}:${port}"
+    proto_msg MIGRATE "${addr}" "${port}"
+    # Held back for a moment rather than sent straight away: the new hub
+    # hands its lobby to whoever identifies itself first, and that has to
+    # be the player who took the session over, not whoever happens to
+    # reconnect quickest. Their client is already on its way to a hub on
+    # its own machine while this message still has a network to cross,
+    # but on one machine - two clients and a test bot on a loopback
+    # address - that lead is a few milliseconds and the wrong client wins
+    # it about as often as the right one. The delay turns a coin toss
+    # into a lead nothing local can make up.
+    HUB_MIGRATE_LINE="${PROTO_LINE}"
+    HUB_MIGRATE_SLOT="${slot}"
+    now_ms
+    HUB_MIGRATE_AT_MS=$(( NOW_MS + HUB_MIGRATE_DELAY_MS ))
+    return 0
+}
+
+# hub_migrate_finish
+# Send the MIGRATE held back above and end this hub. Called from
+# hub_periodic once the successor's lead is long enough.
+hub_migrate_finish() {
+    local i slot="${HUB_MIGRATE_SLOT}"
+    HUB_MIGRATE_AT_MS=0
+    HUB_MIGRATE_SLOT=-1
+    for (( i = 0; i < MP_MAX; i++ )); do
+        [ -n "${HUB_ID[i]}" ] || continue
+        [ "${i}" -ne "${slot}" ] || continue
+        hub_send "${i}" "${HUB_MIGRATE_LINE}" || :
+    done
+    HUB_MIGRATE_LINE=""
+    hub_stop_soon
+    return 0
+}
+
+# hub_close_session REASON
+# Tell everybody that this session is over and end this hub. Used where a
+# handover cannot happen or did not work; a round that is running is not
+# interrupted by it, because a host leaving mid-round is an ordinary
+# elimination and the round plays itself out (see hub_client_close).
+hub_close_session() {
+    local reason="${1}"
+    proto_msg CLOSED "${reason}"
+    hub_bcast "${PROTO_LINE}"
+    debug_event "hub: session closed (${reason})"
+    hub_stop_soon
+    return 0
+}
+
+# hub_stop_soon
+# Stop this hub, but not this instant: the messages just written are
+# sitting in the down FIFOs, and the bridges still have to push them
+# through their sockets. A hub that exited straight away would take its
+# own last word with it, because hub_cleanup removes those FIFOs.
+hub_stop_soon() {
+    now_ms
+    HUB_STOP_AT_MS=$(( NOW_MS + HUB_STOP_GRACE_MS ))
     return 0
 }
 
@@ -918,6 +1172,24 @@ hub_periodic() {
             hub_client_close "${HUB_ID[i]}"
         fi
     done
+    # The successor never answered: the session cannot move, so it ends
+    # here rather than leaving everybody waiting for a hub that is about
+    # to stop anyway.
+    if [ "${HUB_PROMOTED_SLOT}" -ge 0 ] \
+        && (( NOW_MS >= HUB_PROMOTE_DEADLINE_MS )); then
+        debug_event "hub: slot ${HUB_PROMOTED_SLOT} did not take the session over in time"
+        HUB_PROMOTED_SLOT=-1
+        hub_close_session "failed"
+    fi
+    # The successor has had their head start: after them, everybody.
+    if [ "${HUB_MIGRATE_AT_MS}" -gt 0 ] && (( NOW_MS >= HUB_MIGRATE_AT_MS )); then
+        hub_migrate_finish
+    fi
+    # The last word has had its moment to reach the sockets.
+    if [ "${HUB_STOP_AT_MS}" -gt 0 ] && (( NOW_MS >= HUB_STOP_AT_MS )); then
+        HUB_RUN=0
+        return 0
+    fi
     # Nobody left: the session is over. A hub that outlived its players
     # would keep the port and keep beaconing an empty room.
     hub_count_players
@@ -958,6 +1230,7 @@ hub_listen() {
         if ! kill -0 "${HUB_SOCAT_PID}" 2>/dev/null; then
             return 1
         fi
+        hub_port_publish
         debug_event "hub: listening on ${HUB_LISTEN_PATH}"
         return 0
     fi
@@ -974,6 +1247,7 @@ hub_listen() {
         sleep 0.2
         if kill -0 "${HUB_SOCAT_PID}" 2>/dev/null; then
             MP_PORT="${port}"
+            hub_port_publish
             debug_event "hub: listening on tcp/${MP_PORT}"
             return 0
         fi
@@ -981,6 +1255,52 @@ hub_listen() {
         net_port_ok "${port}" || return 1
     done
     return 1
+}
+
+# hub_port_publish
+# Write the port this hub really listens on into a file beside its FIFOs,
+# so the client that started it can read it back. It cannot be told
+# otherwise: the port is only settled once the listener has bound (a taken
+# port moves the hub to the next free one), and by then the hub is a
+# process of its own. The number matters for exactly one thing - a
+# takeover has to tell the other players where the session moved to
+# (hub_msg_promoted).
+hub_port_publish() {
+    local tmp
+    HUB_PORT_PATH="${MP_DIR}/${MP_SESSION}.port"
+    tmp="${HUB_PORT_PATH}.tmp"
+    if printf '%s\n' "${MP_PORT}" > "${tmp}" 2>/dev/null; then
+        mv -f -- "${tmp}" "${HUB_PORT_PATH}" 2>/dev/null || :
+    fi
+    return 0
+}
+HUB_PORT_PATH=""
+
+# hub_sweep_stale
+# Clear away the FIFOs of hubs of this session name that are no longer
+# running. They can only be left by a hub that was killed outright (a
+# SIGKILL, a machine going down), because every other end runs through
+# hub_cleanup - but since the paths now carry a process id, nothing else
+# would ever remove them. Strictly by "the process is gone": a FIFO whose
+# hub still answers belongs to a session somebody may well be playing in,
+# and taking it away is exactly the damage the process id is there to
+# prevent.
+hub_sweep_stale() {
+    local path pid
+    for path in "${MP_DIR}/${MP_SESSION}."*".inbox" \
+                "${MP_DIR}/${MP_SESSION}."*".down."*; do
+        [ -e "${path}" ] || continue
+        # <session>.<pid>.inbox and <session>.<pid>.down.<bridge>: the
+        # process id is the field after the session name either way.
+        pid="${path#"${MP_DIR}/${MP_SESSION}."}"
+        pid="${pid%%.*}"
+        [[ "${pid}" =~ ${MP_NUM_RE} ]] || continue
+        if kill -0 "${pid}" 2>/dev/null; then
+            continue
+        fi
+        rm -f -- "${path}" 2>/dev/null || :
+    done
+    return 0
 }
 
 # hub_cleanup
@@ -1000,6 +1320,9 @@ hub_cleanup() {
     if [ -n "${HUB_LISTEN_PATH}" ]; then
         rm -f -- "${HUB_LISTEN_PATH}" 2>/dev/null || :
     fi
+    if [ -n "${HUB_PORT_PATH}" ]; then
+        rm -f -- "${HUB_PORT_PATH}" 2>/dev/null || :
+    fi
     return 0
 }
 
@@ -1015,10 +1338,20 @@ hub_main() {
     net_require || die "socat is required for the multiplayer (package: socat)"
     net_dir_prepare || die "${NET_ERROR}"
     [[ "${MP_SESSION}" =~ ${MP_SESSION_RE} ]] || die "Invalid session name: ${MP_SESSION}"
-    HUB_INBOX_PATH="${MP_DIR}/${MP_SESSION}.inbox"
-    HUB_DOWN_PREFIX="${MP_DIR}/${MP_SESSION}.down"
+    # The FIFOs carry this hub's process id, not just the session name.
+    # Two hubs of the same name on one machine are not a mistake but the
+    # normal picture during a handover (1.2.0): the session moves to
+    # another player's hub under the same name, and for a moment - or
+    # longer, if somebody opens a fresh session named like the one they
+    # just left - both exist. With the name alone, the second hub would
+    # remove and recreate the first one's inbox, and the first one's
+    # bridges would from then on write their clients' messages into the
+    # second one's, where nobody is waiting for them.
+    HUB_INBOX_PATH="${MP_DIR}/${MP_SESSION}.$$.inbox"
+    HUB_DOWN_PREFIX="${MP_DIR}/${MP_SESSION}.$$.down"
     trap 'hub_cleanup' EXIT
     trap 'HUB_RUN=0' INT TERM
+    hub_sweep_stale
     rm -f -- "${HUB_INBOX_PATH}" 2>/dev/null || :
     mkfifo -m 0600 -- "${HUB_INBOX_PATH}" || die "Cannot create ${HUB_INBOX_PATH}"
     # Read-write, so the hub neither blocks on the open nor ever sees an
@@ -1050,6 +1383,7 @@ hub_main() {
             case "${rest}" in
                 _OPEN) hub_client_open "${id}" ;;
                 _EOF)  hub_client_close "${id}" ;;
+                _PEER\ *) hub_client_addr "${id}" "${rest#_PEER }" ;;
                 *)     hub_client_msg "${id}" "${rest}" ;;
             esac
             # Nothing more waiting: leave the batch so the periodic work
@@ -1089,6 +1423,13 @@ hub_bridge_main() {
     # message without racing the reader below into existence.
     exec 8<>"${down}" || return 1
     printf '%s _OPEN\n' "${id}" >>"${inbox}" 2>/dev/null || return 1
+    # The address this connection came from, which only a process socat
+    # started can see (SOCAT_PEERADDR). The hub needs it for exactly one
+    # thing: when the host leaves, it has to tell everybody where the
+    # session has moved to, and that is the new host's address. Cut hard
+    # and checked by the hub - it is data from the network like any other.
+    printf '%s _PEER %s\n' "${id}" "${SOCAT_PEERADDR:-none}" \
+        >>"${inbox}" 2>/dev/null || return 1
     # Everything the hub writes for this client goes straight to the
     # socket.
     cat <&8 &

@@ -28,7 +28,7 @@
 #   then a length and a character class and has no gaps.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.1.0  (2026-08-11)
+# Version: 1.2.0  (2026-08-11)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -44,7 +44,13 @@ fi
 # would never learn the mode of the round it is in and would take a
 # missing garbage flag for the old "garbage always on" - which is exactly
 # the kind of guessing this number exists to prevent.
-PROTO_VERSION=2
+# Version 3 (1.2.0) added HOST, PROMOTE, PROMOTED, MIGRATE and CLOSED:
+# the host is a slot the hub names, and when its holder leaves, the
+# session does not die with them - it moves to a hub the next player
+# starts, and everybody else follows it there. A version 2 client would
+# sit in a lobby whose hub has quit and wait for a round that nobody can
+# start any more.
+PROTO_VERSION=3
 
 # --- Field patterns -------------------------------------------------------
 # Every field of every message is checked against exactly one of these.
@@ -68,6 +74,15 @@ PROTO_CODE_RE='^[a-z]{1,12}$'
 #   ultra    - first to the row target wins
 PROTO_MPMODE_RE='^(survival|sprint|ultra)$'
 PROTO_TEXT_RE='^[A-Za-z0-9 ._-]{0,64}$'
+# The address a session has moved to (MIGRATE). Only ever a dotted quad -
+# net_addr_tcp rebuilds the socat address from its four numbers, and a
+# name would be a string from the network in a command line (5.5).
+# "0.0.0.0" is the unix transport's stand-in: there the session is a
+# socket path on this very machine, derived from the session name.
+PROTO_ADDR_RE='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
+# Why a session ended: the host left and nobody could take over, or the
+# takeover itself failed.
+PROTO_CLOSE_RE='^(host|failed)$'
 # One board cell per character, 200 of them (10 columns x 20 visible
 # rows): "." empty, a piece type letter, "g"/"s" for a gold/silver square
 # cell and "x" for garbage.
@@ -80,7 +95,8 @@ PROTO_BOARD_RE='^[.IOTSZJLgsx]{200}$'
 # to add one means the message is ignored rather than trusted.
 # Classes: n = number, f = 0/1 flag, s = slot, N = name, S = peer state,
 # c = caps list, b = board snapshot, h = hole column, k = token,
-# e = error code, t = free text, m = multiplayer mode.
+# e = error code, t = free text, m = multiplayer mode, a = IPv4 address,
+# C = reason a session closed.
 declare -A PROTO_MSG=(
     # Client to hub.
     [HELLO]="n N c"
@@ -106,16 +122,47 @@ declare -A PROTO_MSG=(
     # they change - one verb in both directions, like ROSTER, because it
     # carries the same thing either way.
     [SETUP]="m f"
+    # The answer to PROMOTE: the port the hub this client just started
+    # listens on, or 0 when it could not start one. The old hub waits for
+    # it before it sends everybody after the new one, so a takeover that
+    # fails ends in a clean "session closed" rather than in a lobby
+    # everybody sits in alone.
+    [PROMOTED]="n"
     [PONG]="k"
     [BYE]=""
     # Hub to client.
-    [WELCOME]="s n n"
+    # The slot this client got, the protocol version, the player limit and
+    # the name of the session. The name is in there because a client that
+    # joined by address has no other way of knowing it - it shows it in
+    # the lobby, and a session that moves to another hub keeps it
+    # (mp_promote in lib/mp.sh).
+    [WELCOME]="s n n N"
     [ROSTER]="s N f S"
     [SEED]="n"
     [START]="n"
     [PEER]="s n n n n n n n S"
     [PEERBOARD]="s b"
     [NEEDBOARD]="f"
+    # Who runs the lobby. Sent to a client when it is let in and again to
+    # everybody whenever the role moves on - which happens when the
+    # current host leaves and somebody is still there to inherit it (see
+    # hub_host_reassign). It is a slot rather than a flag because every
+    # client has to be able to see who it is, not only the one it is.
+    [HOST]="s"
+    # "Take over": sent to the one player who is to start a hub of their
+    # own because the host has left (see hub_migrate_begin). It carries no
+    # arguments - who is being asked is the only thing it says, and that
+    # is the client it is sent to.
+    [PROMOTE]=""
+    # "The session is over there now": the address and port of the hub the
+    # new host started. Everybody still in the lobby reconnects to it,
+    # which is what makes a handover a moved session rather than a lost
+    # one.
+    [MIGRATE]="a n"
+    # "This session is over" - the host left and nobody was there to take
+    # over, or the takeover failed. Sent instead of leaving the clients to
+    # find out by timeout.
+    [CLOSED]="C"
     [GARBAGE]="n h"
     # The authoritative length of this client's garbage queue after the
     # hub cancelled part of it against a clear. The hub owns that number
@@ -152,6 +199,8 @@ proto_field_ok() {
         k) [[ "${2}" =~ ${PROTO_TOKEN_RE} ]] ;;
         e) [[ "${2}" =~ ${PROTO_CODE_RE} ]] ;;
         m) [[ "${2}" =~ ${PROTO_MPMODE_RE} ]] ;;
+        a) [[ "${2}" =~ ${PROTO_ADDR_RE} ]] ;;
+        C) [[ "${2}" =~ ${PROTO_CLOSE_RE} ]] ;;
         t) [[ "${2}" =~ ${PROTO_TEXT_RE} ]] ;;
         *) return 1 ;;
     esac

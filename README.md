@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -86,7 +86,8 @@ abgeschlossenen Entwicklungsschritte je Version in
 Der **Mehrspieler-Modus** ist noch nicht fertig und waechst deshalb in
 der `1.x`-Reihe weiter: der Kern - Sitzung eroeffnen und beitreten,
 gemeinsame Steinfolge, Sitzungseinstellungen des Gastgebers,
-Stoerreihen, Ausscheiden und Sieger - laeuft seit 1.1.0. **`2.0.0` ist
+Stoerreihen, Ausscheiden und Sieger - laeuft seit 1.1.0, und seit 1.2.0
+uebersteht eine Lobby auch den Weggang ihres Gastgebers. **`2.0.0` ist
 fuer den fertigen Mehrspieler reserviert**; offen ist bis dahin die
 Demo-Aufzeichnung einer Mehrspieler-Runde. Danach folgt der
 Server-Betrieb darum herum (Phase 6: Accounts, Web-Highscore, Liga;
@@ -441,8 +442,9 @@ Umgesetzt:
   der Lobby; Ausscheiden bei vollem Feld; Sitzungssuche per
   UDP-Broadcast oder Verbindung ueber eine eingegebene Adresse, Anzeige
   der Mitspieler als Mini-Felder oder - bei schmalem Terminal - als
-  Kurzzeilen; eigene Bestenliste und eigener Statistik-Modus. Braucht
-  `socat`
+  Kurzzeilen; eigene Bestenliste und eigener Statistik-Modus. Verlaesst
+  der Gastgeber die Lobby, uebernimmt sie der zuerst beigetretene
+  Spieler und alle ziehen mit um (seit 1.2.0). Braucht `socat`
 - **Anleitung im Spiel:** zehn Bildschirme zu Spielprinzip,
   Steuerung,
   Vorschau/Hold, Gold- und Silberbloecken, Weltwunderbau, den
@@ -578,6 +580,19 @@ rowhammer --mp-host --mp-mode sprint --mp-garbage on
 # Beitreten
 rowhammer --mp-join 192.168.1.23
 ```
+
+**Wenn der Gastgeber geht** (seit 1.2.0): Verlaesst er die **Lobby**,
+uebernimmt der Spieler, der **zuerst beigetreten** ist - seine Sitzung
+laeuft unter demselben Namen weiter, alle anderen werden automatisch
+dorthin mitgenommen und behalten ihren Platz. Die Bereit-Haken werden
+dabei zurueckgesetzt (der neue Gastgeber darf die Regeln aendern), und
+jeder bekommt eine Meldung mit dem neuen Gastgeber, die er mit `Enter`
+bestaetigt. Ist niemand mehr da, der uebernehmen kann, meldet das Spiel
+die Sitzung als geschlossen. Waehrend einer **laufenden Runde** ist das
+Weggehen des Gastgebers dagegen ein gewoehnliches Ausscheiden - die
+Runde wird zu Ende gespielt. Hoert eine Sitzung ganz ohne Abschied auf
+(Rechner aus, Netz weg), merken das die Clients nach sechs Sekunden von
+selbst und kehren ins Menue zurueck.
 
 **Was waehrend der Runde anders ist:** Es gibt **keine Pause** - die
 anderen warten nicht. `Esc`/`x` oeffnet ein kleines Menue mit
