@@ -108,7 +108,7 @@
 #   multiplayer rounds: the Marathon layout and the Marathon ranking
 #   (rows, descending), every round recorded whether it was won or lost,
 #   and deliberately without the place achieved - the list ranks what one
-#   player did, which compares across sessions of two and of six, while
+#   player did, which compares across sessions of two and of five, while
 #   who won a given evening does not (see CLAUDE.md 4.5).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
@@ -1607,9 +1607,9 @@ highscore_flood_screen() {
 # simply scored fewer rows.
 #
 # The place achieved is deliberately not stored. The list ranks what one
-# player did, and that is comparable across evenings of two and of six;
+# player did, and that is comparable across evenings of two and of five;
 # who won a particular session is not, and a "1st of 2" next to a "3rd of
-# 6" would read like an order where there is none. The field layout is
+# 5" would read like an order where there is none. The field layout is
 # therefore the Marathon one down to the last field, which is what lets
 # every list share the parsing, the screen and the hash lookup.
 HSV_MAX=10

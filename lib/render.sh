@@ -70,7 +70,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.27.0  (2026-08-11)
+# Version: 0.28.0  (2026-08-29)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -329,10 +329,11 @@ render_colors_init() {
 # resize; a terminal exactly at the minimum simply gets offset 1/1.
 layout_update() {
     local row col
-    # In a multiplayer round with the mini boards of the opponents shown
+    # In a multiplayer round with the boards of the opponents shown
     # (detail level 2, see render_peer_level) the block is wider by their
-    # columns, so the whole thing stays centered rather than the own board
-    # sitting in the middle with the opponents hanging off to the right.
+    # columns on both sides, so LAYOUT_COL is the left edge of the whole
+    # composite - the leftmost opponent - and the own board ends up in
+    # the middle of it, which is where the seating puts it.
     # The menu screens keep centering on the bare LAYOUT_W: they are the
     # same screens the singleplayer shows and they have no peers.
     render_peer_level
@@ -1048,34 +1049,75 @@ render_status_box() {
 # --- Multiplayer: the opponents -------------------------------------------
 # Three detail levels (CLAUDE.md 5.6), picked from the terminal size and
 # the number of opponents and recomputed on every resize:
-#   2 "full"    - a mini board per opponent, one character per cell, in
-#                 columns to the right of the play screen.
+#   2 "full"    - a board per opponent in its own column, seated to the
+#                 left and right of the play screen (see the seating
+#                 below), at full or half cell width.
 #   1 "compact" - two lines per opponent in the right pane: name and rows,
 #                 and a bar for the height of their stack.
 #   0 "score"   - one line per opponent: place, name, rows.
 # Levels 1 and 0 cost no width at all - they use the rows the right pane
 # has free below the three previews - which is what makes them the answer
-# for a 48x22 terminal with five opponents.
-# A mini board is 10 cells wide plus its two borders plus one column of
-# air, i.e. 13 columns per opponent; MP_PEER_COLS is what that adds up to
-# and is 0 in every other case, including the whole singleplayer.
-MP_PEER_COL_W=13
+# for a 48x22 terminal with four opponents.
+#
+# CHANGE 2026-08-29 (user decision): level 2 has two cell widths, and the
+# opponents are laid out around the own board instead of all to its right.
+#   MP_PEER_COL_W_FULL  - two characters per cell, exactly the way the own
+#                         board is drawn (10 cells = 20 columns plus the
+#                         two borders plus one column of air = 23). This
+#                         is what "full" means: an opponent's board reads
+#                         like the own one, same glyphs, same proportions.
+#   MP_PEER_COL_W_HALF  - the previous half width, one character per cell
+#                         (12 plus one column of air = 13). It is the
+#                         fallback for a terminal that cannot spare the
+#                         width the full boards want; the own board keeps
+#                         its size in either case, because the whole fixed
+#                         layout (panes, status box, menus) is built on it.
+# Seating (user decision): the first opponent sits to the right of the own
+# board, the second to its left, the third further right, the fourth
+# further left - so with the opponents numbered by their index in
+# MP_PEER_SLOTS the screen reads [3][1][self][0][2], and the own board
+# stays in the middle of the block however many opponents there are. The
+# player keeps their eyes on their own stack for a whole round; a board
+# that slid left with every player joining would have to be found again
+# each time.
+# MP_PEER_COLS is the total the opponents add and is 0 in every other
+# case, including the whole singleplayer; the split into the two sides
+# lives in MP_PEER_COLS_LEFT/MP_PEER_COLS_RIGHT.
+MP_PEER_COL_W_FULL=23
+MP_PEER_COL_W_HALF=13
+# Width of one opponent column in the level the current frame uses, and
+# the number of characters one of their cells takes (1 or 2).
+MP_PEER_COL_W="${MP_PEER_COL_W_HALF}"
+MP_PEER_CELL_W=1
 MP_PEER_COLS=0
+MP_PEER_COLS_LEFT=0
+MP_PEER_COLS_RIGHT=0
+# What MP_PEER_COLS was when the block was last placed; a difference means
+# the block has to be recentered and repainted (see render_peer_level).
+MP_PEER_COLS_PREV=0
 MP_VIEW_LEVEL=0
-declare -a PEER_LINES=()
+declare -a PEER_LINES_LEFT=()
+declare -a PEER_LINES_RIGHT=()
 # The first pane row the opponents may use: below the three previews of
 # the "Next" pane, with one blank row between.
 PEER_PANE_ROW=11
 
 # render_peer_level
 # Decide the detail level for the current terminal and opponent count and
-# leave it in MP_VIEW_LEVEL, with the extra width in MP_PEER_COLS. Called
-# from layout_update (i.e. at every resize) and once per frame, so the
-# level follows the terminal while the round runs.
-# --mp-view forces a level; "auto" takes the widest one that fits.
+# leave it in MP_VIEW_LEVEL, with the extra width in MP_PEER_COLS (split
+# over the two sides in MP_PEER_COLS_LEFT/MP_PEER_COLS_RIGHT) and the cell
+# width of level 2 in MP_PEER_CELL_W. Called from layout_update (i.e. at
+# every resize) and once per frame, so the level follows the terminal
+# while the round runs.
+# --mp-view forces a level; "auto" takes the widest one that fits. Within
+# level 2 the full cell width is taken whenever the terminal has room for
+# it and the half width otherwise - the own board is never shrunk for it,
+# it is the block the whole fixed layout is built on.
 render_peer_level() {
-    local want
+    local want left right
     MP_PEER_COLS=0
+    MP_PEER_COLS_LEFT=0
+    MP_PEER_COLS_RIGHT=0
     MP_VIEW_LEVEL=0
     if [ "${MP_ACTIVE:-0}" -ne 1 ]; then
         return 0
@@ -1090,7 +1132,7 @@ render_peer_level() {
         score)   want=0 ;;
         *)
             want=0
-            if (( TERM_COLS >= LAYOUT_W + MP_PEER_COUNT * MP_PEER_COL_W )); then
+            if (( TERM_COLS >= LAYOUT_W + MP_PEER_COUNT * MP_PEER_COL_W_HALF )); then
                 want=2
             elif (( PEER_PANE_ROW + 2 * MP_PEER_COUNT <= BOARD_BOTTOM_ROW + 1 )); then
                 want=1
@@ -1101,7 +1143,7 @@ render_peer_level() {
     # runs off the screen would tear the frame diff apart, which is the
     # one thing the fixed line width may never do.
     if [ "${want}" -eq 2 ] \
-        && (( TERM_COLS < LAYOUT_W + MP_PEER_COUNT * MP_PEER_COL_W )); then
+        && (( TERM_COLS < LAYOUT_W + MP_PEER_COUNT * MP_PEER_COL_W_HALF )); then
         want=1
     fi
     if [ "${want}" -eq 1 ] \
@@ -1110,7 +1152,41 @@ render_peer_level() {
     fi
     MP_VIEW_LEVEL="${want}"
     if [ "${want}" -eq 2 ]; then
-        MP_PEER_COLS=$(( MP_PEER_COUNT * MP_PEER_COL_W ))
+        # Full cell width when the terminal can carry the own board plus
+        # every opponent at it; the half width is what is left over, and
+        # it is the width that got this far in the check above.
+        if (( TERM_COLS >= LAYOUT_W + MP_PEER_COUNT * MP_PEER_COL_W_FULL )); then
+            MP_PEER_COL_W="${MP_PEER_COL_W_FULL}"
+            MP_PEER_CELL_W=2
+        else
+            MP_PEER_COL_W="${MP_PEER_COL_W_HALF}"
+            MP_PEER_CELL_W=1
+        fi
+        # Seats alternate right, left, right, left (see the constants
+        # above), so the right side holds the even indices and the left
+        # side the odd ones.
+        right=$(( ( MP_PEER_COUNT + 1 ) / 2 ))
+        left=$(( MP_PEER_COUNT - right ))
+        MP_PEER_COLS_RIGHT=$(( right * MP_PEER_COL_W ))
+        MP_PEER_COLS_LEFT=$(( left * MP_PEER_COL_W ))
+        MP_PEER_COLS=$(( MP_PEER_COLS_LEFT + MP_PEER_COLS_RIGHT ))
+    fi
+    # A changed width moves the whole block: the opponents grow to both
+    # sides now, so the left edge itself wanders and the previous frame
+    # no longer sits where this one will write. Recenter and repaint in
+    # full, otherwise the columns the block gave up keep their old
+    # contents - the frame diff only ever overwrites what it writes.
+    # This is the same computation layout_update does, which is where the
+    # call for a real resize comes from; here it catches the changes that
+    # happen without one (a player joins the lobby, a forced level that
+    # only now fits).
+    if [ "${MP_PEER_COLS}" -ne "${MP_PEER_COLS_PREV}" ]; then
+        MP_PEER_COLS_PREV="${MP_PEER_COLS}"
+        LAYOUT_COL=$(( (TERM_COLS - LAYOUT_W - MP_PEER_COLS) / 2 + 1 ))
+        if [ "${LAYOUT_COL}" -lt 1 ]; then
+            LAYOUT_COL=1
+        fi
+        RENDER_FULL=1
     fi
     # The hub has to know whether anybody is looking at the boards: it
     # only asks for snapshots while somebody is (CLAUDE.md 5.6). Reported
@@ -1121,14 +1197,54 @@ render_peer_level() {
 }
 
 # render_peer_cell CHAR
-# One cell of an opponent's board as a single character, into
-# RENDER_PEER_CELL. The snapshot alphabet is the protocol's (lib/proto.sh):
+# One cell of an opponent's board into RENDER_PEER_CELL, MP_PEER_CELL_W
+# characters wide. The snapshot alphabet is the protocol's (lib/proto.sh):
 # "." empty, a piece type letter, "g"/"s" for a gold/silver square cell,
 # "x" for garbage. With color a square keeps its own glyph as well, so the
 # two square kinds stay apart at a glance on a board this small.
+# At the full cell width the glyphs are exactly the ones render_board_row
+# paints the own board with (## / %% / :: and the per-type PIECE_GLYPH),
+# so a neighbouring board reads the same as the own one; at the half width
+# they are the single-character short forms of the same set.
 RENDER_PEER_CELL=" "
 render_peer_cell() {
     local c="${1}"
+    if [ "${MP_PEER_CELL_W}" -eq 2 ]; then
+        case "${c}" in
+            g)
+                if [ "${USE_COLOR}" -eq 1 ]; then
+                    RENDER_PEER_CELL="${SQ_GOLD_SGR}##${RESET_SGR}"
+                else
+                    RENDER_PEER_CELL="${SQ_GOLD_GLYPH}"
+                fi
+                ;;
+            s)
+                if [ "${USE_COLOR}" -eq 1 ]; then
+                    RENDER_PEER_CELL="${SQ_SILVER_SGR}##${RESET_SGR}"
+                else
+                    RENDER_PEER_CELL="${SQ_SILVER_GLYPH}"
+                fi
+                ;;
+            x)
+                if [ "${USE_COLOR}" -eq 1 ]; then
+                    RENDER_PEER_CELL="${GARBAGE_SGR}${GARBAGE_GLYPH}${RESET_SGR}"
+                else
+                    RENDER_PEER_CELL="${GARBAGE_GLYPH}"
+                fi
+                ;;
+            I|O|T|S|Z|J|L)
+                if [ "${USE_COLOR}" -eq 1 ]; then
+                    RENDER_PEER_CELL="${PIECE_SGR[${c}]}  ${RESET_SGR}"
+                else
+                    RENDER_PEER_CELL="${PIECE_GLYPH[${c}]}"
+                fi
+                ;;
+            *)
+                RENDER_PEER_CELL="  "
+                ;;
+        esac
+        return 0
+    fi
     case "${c}" in
         g)
             if [ "${USE_COLOR}" -eq 1 ]; then
@@ -1165,67 +1281,104 @@ render_peer_cell() {
     return 0
 }
 
-# render_peers
-# Build the mini board columns of detail level 2 into PEER_LINES, one
-# entry per row of the block (0..LAYOUT_H-1), each exactly MP_PEER_COLS
-# visible columns wide. Row 0 carries the name, rows 1..20 the board,
-# row 21 the rows scored and the garbage on its way in.
+# render_peer_column INDEX
+# Build the block of one opponent (the INDEX-th of MP_PEER_SLOTS) into
+# PEER_COL_LINES, one entry per row of the block (0..LAYOUT_H-1), each
+# exactly MP_PEER_COL_W-1 visible columns wide - the gap column that
+# separates it from its neighbour is added by the caller, on the side the
+# column is seated. Row 0 carries the name, rows 1..20 the board, row 21
+# the rows scored and the garbage on its way in.
 # Every value is clamped here a second time although it came through the
 # protocol parser: the hub is not trusted either - it could be a program
 # somebody else wrote (CLAUDE.md 5.5).
-render_peers() {
-    local i r slot board line cell name row_line head foot
-    for (( r = 0; r < LAYOUT_H; r++ )); do
-        PEER_LINES[r]=""
-    done
-    for (( i = 0; i < MP_PEER_COUNT; i++ )); do
-        slot="${MP_PEER_SLOTS[i]}"
-        board="${MP_PEER_BOARD[slot]}"
-        name="${MP_PEER_NAME[slot]:0:12}"
-        printf -v head '%-12.12s' "${name}"
-        PEER_LINES[0]+=" ${TXT_ACCENT_SGR}${head}${TXT_RESET_SGR}"
-        for (( r = 0; r < 20; r++ )); do
-            line=""
-            for (( cell = 0; cell < BOARD_W; cell++ )); do
-                if [ "${#board}" -eq 200 ]; then
-                    render_peer_cell "${board:r * BOARD_W + cell:1}"
+declare -a PEER_COL_LINES=()
+render_peer_column() {
+    local i="${1}"
+    local r slot board line cell name head foot w
+    # The text rows (name, footer) are as wide as the bordered board below
+    # them, so a column is a rectangle at either cell width.
+    w=$(( MP_PEER_COL_W - 1 ))
+    slot="${MP_PEER_SLOTS[i]}"
+    board="${MP_PEER_BOARD[slot]}"
+    name="${MP_PEER_NAME[slot]:0:${w}}"
+    printf -v head '%-*.*s' "${w}" "${w}" "${name}"
+    PEER_COL_LINES[0]="${TXT_ACCENT_SGR}${head}${TXT_RESET_SGR}"
+    for (( r = 0; r < 20; r++ )); do
+        line=""
+        for (( cell = 0; cell < BOARD_W; cell++ )); do
+            if [ "${#board}" -eq 200 ]; then
+                render_peer_cell "${board:r * BOARD_W + cell:1}"
+            else
+                # No snapshot yet (or a malformed one): blanks of the
+                # width this level draws a cell at.
+                if [ "${MP_PEER_CELL_W}" -eq 2 ]; then
+                    RENDER_PEER_CELL="  "
                 else
                     RENDER_PEER_CELL=" "
                 fi
-                line+="${RENDER_PEER_CELL}"
-            done
-            PEER_LINES[r + 1]+=" |${line}|"
+            fi
+            line+="${RENDER_PEER_CELL}"
         done
-        # A player who is out is named by their place instead of by the
-        # garbage on its way to them: that is what became of them, and it
-        # is what the final screen ranks them by.
-        case "${MP_PEER_STATE[slot]}" in
-            ko|gone)
-                printf -v foot '%s %d' "${I18N[hud_peer_ko]}" \
-                    "${MP_PEER_PLACE[slot]:-0}"
-                ;;
-            *)
-                if [ "${MP_PEER_PENDING[slot]}" -gt 0 ]; then
-                    printf -v foot 'R%-4s %s%d' "${MP_PEER_ROWS[slot]}" \
-                        "${I18N[hud_peer_warn]}" "${MP_PEER_PENDING[slot]}"
-                else
-                    printf -v foot 'R%-4s' "${MP_PEER_ROWS[slot]}"
-                fi
-                ;;
-        esac
-        # Hard clamp: the frame diff relies on every line being exactly
-        # as wide as it says it is.
-        printf -v foot '%-12.12s' "${foot}"
-        PEER_LINES[BOARD_BOTTOM_ROW]+=" ${foot}"
+        PEER_COL_LINES[r + 1]="|${line}|"
     done
-    # Rows the loop above did not touch (there are none in level 2, since
-    # every row of the block carries something) still have to exist as
-    # blanks of the right width.
+    # A player who is out is named by their place instead of by the
+    # garbage on its way to them: that is what became of them, and it
+    # is what the final screen ranks them by.
+    case "${MP_PEER_STATE[slot]}" in
+        ko|gone)
+            printf -v foot '%s %d' "${I18N[hud_peer_ko]}" \
+                "${MP_PEER_PLACE[slot]:-0}"
+            ;;
+        *)
+            if [ "${MP_PEER_PENDING[slot]}" -gt 0 ]; then
+                printf -v foot 'R%-4s %s%d' "${MP_PEER_ROWS[slot]}" \
+                    "${I18N[hud_peer_warn]}" "${MP_PEER_PENDING[slot]}"
+            else
+                printf -v foot 'R%-4s' "${MP_PEER_ROWS[slot]}"
+            fi
+            ;;
+    esac
+    # Hard clamp: the frame diff relies on every line being exactly
+    # as wide as it says it is.
+    printf -v foot '%-*.*s' "${w}" "${w}" "${foot}"
+    PEER_COL_LINES[BOARD_BOTTOM_ROW]="${foot}"
+    return 0
+}
+
+# render_peers
+# Build the two opponent blocks of detail level 2 into PEER_LINES_LEFT and
+# PEER_LINES_RIGHT, one entry per row of the block (0..LAYOUT_H-1), each
+# exactly MP_PEER_COLS_LEFT resp. MP_PEER_COLS_RIGHT visible columns wide.
+# The seats are the ones the constants above describe: the opponents in
+# MP_PEER_SLOTS order take right, left, right, left, so the even indices
+# end up on the right of the own board and the odd ones on its left, each
+# further out than the pair before it. On the right the gap column goes
+# before a block, on the left after it, so the own board keeps exactly one
+# column of air on either side.
+render_peers() {
+    local i r outer
     for (( r = 0; r < LAYOUT_H; r++ )); do
-        if [ -z "${PEER_LINES[r]}" ]; then
-            printf -v row_line '%*s' "${MP_PEER_COLS}" ""
-            PEER_LINES[r]="${row_line}"
-        fi
+        PEER_LINES_LEFT[r]=""
+        PEER_LINES_RIGHT[r]=""
+    done
+    # Right side, near to far: indices 0, 2, ...
+    for (( i = 0; i < MP_PEER_COUNT; i += 2 )); do
+        render_peer_column "${i}"
+        for (( r = 0; r < LAYOUT_H; r++ )); do
+            PEER_LINES_RIGHT[r]+=" ${PEER_COL_LINES[r]}"
+        done
+    done
+    # Left side, far to near: the highest odd index sits outermost, so
+    # the near one (index 1) ends up right next to the own board.
+    outer=$(( MP_PEER_COUNT - 1 ))
+    if (( outer % 2 == 0 )); then
+        outer=$(( outer - 1 ))
+    fi
+    for (( i = outer; i >= 1; i -= 2 )); do
+        render_peer_column "${i}"
+        for (( r = 0; r < LAYOUT_H; r++ )); do
+            PEER_LINES_LEFT[r]+="${PEER_COL_LINES[r]} "
+        done
     done
     return 0
 }
@@ -1405,12 +1558,14 @@ draw_frame() {
     done
     FRAME_LINES[BOARD_BOTTOM_ROW]="${PANE_LEFT[BOARD_BOTTOM_ROW]} ${BOARD_BORDER} ${PANE_RIGHT[BOARD_BOTTOM_ROW]}"
 
-    # The opponents' mini boards are appended to every line of the block,
-    # each of them exactly MP_PEER_COLS visible columns wide - which is
-    # what keeps the line diff in render_flush safe.
+    # The opponents' boards are wrapped around every line of the block -
+    # the odd seats to its left, the even ones to its right (render_peers)
+    # - each side exactly MP_PEER_COLS_LEFT resp. MP_PEER_COLS_RIGHT
+    # visible columns wide, which is what keeps the line diff in
+    # render_flush safe.
     if [ "${MP_PEER_COLS}" -gt 0 ]; then
         for (( i = 0; i < LAYOUT_H; i++ )); do
-            FRAME_LINES[i]+="${PEER_LINES[i]}"
+            FRAME_LINES[i]="${PEER_LINES_LEFT[i]}${FRAME_LINES[i]}${PEER_LINES_RIGHT[i]}"
         done
     fi
 

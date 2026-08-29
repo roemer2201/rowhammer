@@ -1,3 +1,27 @@
+rowhammer (1.3.0) unstable; urgency=medium
+
+  * A session now holds five players instead of six (user decision):
+    yourself and four opponents. --mp-max takes 2..5 and defaults to 5.
+    Four opponents are what still seats symmetrically around the own
+    board, and one board fewer is what buys the wider cells below.
+  * The opponents are seated around the own board instead of all to its
+    right (user request): the first sits to its right, the second to its
+    left, the third further right, the fourth further left, so the screen
+    reads [5][3][self][2][4] and the own board keeps the middle whatever
+    the player count. The order is the order they joined in, so nobody's
+    board moves while the round runs.
+  * An opponent's board is drawn at the full cell width whenever the
+    terminal has room for it (user request): two characters per cell,
+    exactly the way the own board is drawn, with the same glyphs. A
+    terminal too narrow for that falls back to the previous half width
+    of one character per cell; the own board is never shrunk for it,
+    because the whole fixed layout stands on its 48 columns.
+  * A changed total width - a resize, a player joining the lobby -
+    recenters the block and repaints it in full, so the columns it gave
+    up cannot keep their old contents.
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 29 Aug 2026 12:00:00 +0200
+
 rowhammer (1.2.0) unstable; urgency=medium
 
   * The lobby survives its host (user request). When the host leaves the

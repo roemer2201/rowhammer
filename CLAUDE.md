@@ -1552,7 +1552,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   gewertet, gewonnen wie verloren (wie bei Time Attack und Hochwasser:
   es gibt keinen Zustand "unvollstaendig"). **Der erreichte Platz wird
   bewusst nicht gespeichert:** die Liste rangiert, was ein Spieler
-  getan hat, und das ist ueber Abende zu zweit und zu sechst
+  getan hat, und das ist ueber Abende zu zweit und zu fuenft
   vergleichbar - wer an einem bestimmten Abend gewonnen hat, nicht. Wie
   oft jemand gewonnen hat, steht dafuer in der Statistik (das
   `goal`-Feld des Modus, siehe unten).
@@ -2445,10 +2445,12 @@ im Code nur eine andere socat-Adresse: Prozessmodell (5.3), Protokoll
 
 ### 5.1 Spielerzahl und Spielmodus
 
-- **2 bis 6 Spieler** (Nutzerentscheidung): 2 ist das Minimum, 6 das
-  Maximum, und **eine Vorgabe dazwischen gibt es bewusst nicht** - der
+- **2 bis 5 Spieler** (Nutzerentscheidung, seit 1.3.0; bis 1.2.0 waren
+  es 6): 2 ist das Minimum, 5 das
+  Maximum - man selbst und vier Mitspieler -, und **eine Vorgabe
+  dazwischen gibt es bewusst nicht** - der
   Host entscheidet, wann gestartet wird. Die Lobby fuellt sich also,
-  bis er startet oder der sechste Platz belegt ist; der Starteintrag
+  bis er startet oder der fuenfte Platz belegt ist; der Starteintrag
   bleibt gesperrt (mit Hinweis), solange er allein dort sitzt. Eine
   erwartete Spielerzahl vorher festzulegen waere eine Zahl, die
   niemanden bindet: wer zu spaet kommt, findet die Sitzung ohnehin
@@ -2458,18 +2460,25 @@ im Code nur eine andere socat-Adresse: Prozessmodell (5.3), Protokoll
   Lobby-Eintrag ohnehin der Startknopf, und solange er allein sitzt,
   antwortet der Hub mit `ERR alone`.
   `--mp-max N` bleibt als **Obergrenze**, die der Host enger setzen
-  kann (2..6, Standard 6 = das technische Maximum) - etwa um eine
+  kann (2..5, Standard 5 = das technische Maximum) - etwa um eine
   Sitzung fuer genau drei Leute zuzumachen, statt den vierten von Hand
-  wieder hinauszubitten. Begruendung fuer das Maximum 6:
+  wieder hinauszubitten. Begruendung fuer das Maximum 5:
   - Rechenaufwand: Bash rendert jeden Frame als String; jedes zusaetzliche
-    Gegnerfeld kostet ~200 Zellen pro Frame. Ab etwa 6 Feldern ist die
-    Framerate auf schwachen Terminals/Hosts nicht mehr zu halten.
-  - Bildschirmbreite: ein Mini-Feld braucht 13 Spalten (siehe 5.6);
-    bei 4 Gegnern sind das 87 Spalten - schon mehr als die uebliche
-    80-Spalten-Breite.
+    Gegnerfeld kostet ~200 Zellen pro Frame, in voller Zellenbreite
+    (siehe 5.6) sogar die doppelte Zeichenmenge. Ab etwa 5 Feldern ist
+    die Framerate auf schwachen Terminals/Hosts nicht mehr zu halten.
+  - Bildschirmbreite: ein Gegnerfeld in voller Breite braucht 23
+    Spalten (siehe 5.6); bei 4 Gegnern sind das mit dem eigenen Feld
+    140 Spalten - schon fuer ein sehr breites Terminal. Der Rueckfall
+    auf die halbe Breite (13 Spalten je Gegner) kommt mit 100 Spalten
+    aus.
   - Garbage-Zielwahl wird ab ~4 Spielern ohne Zielauswahl-UI beliebig.
-  - Mehr als 6 Spieler waeren nur noch als reines Scoreboard sinnvoll;
-    das ist bewusst kein Ziel.
+  - Mehr als 5 Spieler waeren nur noch als reines Scoreboard sinnvoll;
+    das ist bewusst kein Ziel. **Die Aenderung von 6 auf 5** (1.3.0)
+    kommt aus derselben Ueberlegung: mit der vollen Zellenbreite ist
+    ein Gegnerfeld fast doppelt so breit wie zuvor, und vier Gegner
+    sind genau das, was sich noch symmetrisch um das eigene Feld
+    setzen laesst (zwei je Seite, siehe 5.6).
 - **Grundform:** "Versus" - jeder Spieler hat sein eigenes 10x20-Feld,
   alle starten mit demselben Seed (identische Steinfolge, Fairness).
   Wer oben rausbaut (Top-Out), scheidet aus und wird Zuschauer
@@ -2508,7 +2517,7 @@ zurueck (`hub_msg_setup`, `lib/hub.sh`). Die Entscheidungen dazu:
     das an den `STATE`-Zaehlern und beendet die Runde in dem Moment.
   Die beiden Grenzen sind die Konstanten der gleichnamigen
   Einzelspieler-Modi, nicht neue: derselbe Sprint ist derselbe Sprint,
-  ob allein oder zu sechst.
+  ob allein oder zu fuenft.
 - **In `sprint` und `ultra` endet die Runde nicht am vorletzten
   Ausscheiden.** Nur `survival` ist vorbei, sobald einer uebrig ist; in
   den beiden anderen entscheiden die Rows, und wer schon ausgeschieden
@@ -3037,23 +3046,56 @@ jede Stelle, die Empfangenes anfasst:
 Das bestehende Layout ist fest: linke Spalte 12 + 1 Abstand + Feld 22 +
 1 Abstand + rechte Spalte 12 = 48 Spalten, 22 Zeilen Minimum (seit
 0.22.0 zentriert, seit 0.26.0 ohne Statuszeilen, siehe 3.4). Die
-Mitspieler kommen **rechts daneben**,
-das eigene Feld bleibt unveraendert an seinem Platz; der Block wird dann
+Mitspieler sitzen **links und rechts daneben** (seit 1.3.0,
+Nutzerwunsch; bis 1.2.0 standen sie alle rechts),
+das eigene Feld bleibt unveraendert an seinem Platz und in der Mitte;
+der Block wird dann
 entsprechend breiter zentriert. Wo unten "Seitenleiste" steht, ist die
 rechte Spalte gemeint (die linke traegt seit 0.26.0 Hold und die
 eigenen Rundenzaehler und ist damit belegt).
+
+**Sitzordnung (seit 1.3.0, Nutzerwunsch).** Der erste Mitspieler sitzt
+**rechts** neben dem eigenen Feld, der zweite **links** davon, der
+dritte weiter rechts, der vierte weiter links - der Bildschirm liest
+sich also `[5][3][selbst][2][4]` (mit "selbst" als Spieler 1). Zwei
+Festlegungen dazu:
+
+- **Das eigene Feld bleibt in der Mitte**, egal wie viele Mitspieler
+  dazukommen. Der Blick liegt die ganze Runde auf dem eigenen Stapel;
+  ein Feld, das mit jedem Beitritt weiter nach links rutscht, muesste
+  jedes Mal neu gesucht werden. Deshalb wird abwechselnd rechts und
+  links angebaut statt der Reihe nach in eine Richtung.
+- **Die Reihenfolge ist die der Slots** (`MP_PEER_SLOTS`), also die des
+  Beitritts. Ein Mitspieler behaelt damit seinen Platz auf dem
+  Bildschirm, solange die Sitzung laeuft; nach Rows zu sortieren wuerde
+  die Felder waehrend der Runde tauschen lassen.
 
 Drei Detailstufen, automatisch nach verfuegbarer Terminalgroesse und
 Spielerzahl gewaehlt (`--mp-view auto|full|compact|score` erzwingt eine
 Stufe):
 
-- **Stufe 2 "full" - Mini-Feld je Gegner.** Ein Zeichen pro Zelle
-  (das eigene Feld nutzt zwei), also 10 Spalten Inhalt + Rahmen = 12,
-  plus 1 Spalte Abstand = **13 Spalten je Gegner**, 22 Zeilen hoch
-  (Kopfzeile mit Name/Slot, 20 Feldzeilen, Fusszeile mit
-  `Rows`/`pending`). Farben wie im eigenen Feld (Gold/Silber bleiben
-  erkennbar, Garbage dunkelgrau). Bedarf: `48 + n*13` Spalten -
-  61 (2 Spieler), 74 (3), 87 (4), 113 (6).
+- **Stufe 2 "full" - ein Feld je Gegner, in zwei Zellenbreiten.**
+  22 Zeilen hoch (Kopfzeile mit Namen, 20 Feldzeilen, Fusszeile mit
+  `Rows`/`pending`), Farben wie im eigenen Feld (Gold/Silber bleiben
+  erkennbar, Garbage dunkelgrau).
+  - **Volle Breite (seit 1.3.0, Nutzerwunsch):** zwei Zeichen je Zelle,
+    exakt wie das eigene Feld - 20 Spalten Inhalt + Rahmen = 22, plus 1
+    Spalte Abstand = **23 Spalten je Gegner**. Ein Gegnerfeld traegt
+    damit dieselben Glyphen wie das eigene (`##`/`%%`/`::` und die
+    Sorten-Glyphen aus `PIECE_GLYPH`) und liest sich in denselben
+    Proportionen. Bedarf: `48 + n*23` Spalten - 71 (2 Spieler),
+    94 (3), 117 (4), 140 (5).
+  - **Halbe Breite (die bisherige):** ein Zeichen je Zelle, also 10
+    Spalten Inhalt + Rahmen = 12, plus 1 Spalte Abstand = **13 Spalten
+    je Gegner**. Bedarf: `48 + n*13` Spalten - 61 (2 Spieler), 74 (3),
+    87 (4), 100 (5).
+  - **Gewaehlt wird die volle Breite, wenn sie passt**, sonst die
+    halbe. **Das eigene Feld wird dafuer nie verkleinert:** seine 48
+    Spalten sind der Block, auf dem das ganze feste Layout steht -
+    Seitenleisten, Rundenende-Kasten, Menues und die
+    Mindest-Terminalgroesse (3.4). Reicht der Platz fuer die vollen
+    Gegnerfelder nicht, weichen deshalb die Gegner auf die halbe
+    Breite aus und nicht das eigene Feld.
 - **Stufe 1 "compact" - Textzeile je Gegner.** Kein Feld, sondern je
   Gegner zwei Zeilen in der Seitenleiste:
   `<name8> R<rows> L<lines>` und ein 10 Zeichen breiter Stapelhoehen-
@@ -3068,11 +3110,22 @@ Stufe):
 Auswahlregel fuer `auto` (bei jedem Resize neu ausgewertet, der
 SIGWINCH-Pfad aus 0.19.0 ruft sie mit auf):
 
-1. Reicht `48 + n*13` Spalten und 22 Zeilen -> Stufe 2.
+1. Reicht `48 + n*13` Spalten und 22 Zeilen -> Stufe 2. Innerhalb der
+   Stufe entscheidet dann die Breite ueber die Zellenbreite: reichen
+   `48 + n*23` Spalten, kommen die Gegnerfelder in voller Breite, sonst
+   in halber.
 2. Sonst: reichen `22 - belegte Seitenleistenzeilen` fuer `2*n` Zeilen
    -> Stufe 1.
 3. Sonst -> Stufe 0. Unter 48x22 greift weiterhin die bestehende
    "resize me"-Overlay.
+
+Ein Wechsel der Gesamtbreite - Resize, ein Beitritt in der Lobby, ein
+erzwungener Modus, der erst jetzt passt - zentriert den Block neu und
+erzwingt einen vollstaendigen Neuaufbau (`RENDER_FULL`). Der
+Zeilen-Diff (4.3) ueberschreibt nur, was er schreibt; ohne das bliebe
+beim Schrumpfen die alte Ausgabe in den Spalten stehen, die der Block
+gerade aufgegeben hat - und weil die Gegner jetzt auch nach links
+wachsen, wandert dabei die linke Kante selbst.
 
 Nur in Stufe 2 sendet ein Client Feld-Snapshots; der Hub schaltet das je
 Client per `NEEDBOARD` (siehe 5.4), sodass kleine Terminals keine
@@ -3270,7 +3323,7 @@ Standard < Config < Env < CLI, wie in Abschnitt 6 gefordert):
 | `--mp-transport MODE` | `ROWHAMMER_MP_TRANSPORT` | `lan` (Standard) oder `unix` |
 | `--mp-port N` | `ROWHAMMER_MP_PORT` | TCP-/Beacon-Port, Standard 27301 (nur `lan`) |
 | `--mp-dir DIR` | `ROWHAMMER_MP_DIR` | Sitzungsverzeichnis (nur `unix`, siehe 5.2) |
-| `--mp-max N` | `ROWHAMMER_MP_MAX` | Obergrenze der Spielerzahl 2..6, Standard 6 (siehe 5.1) |
+| `--mp-max N` | `ROWHAMMER_MP_MAX` | Obergrenze der Spielerzahl 2..5, Standard 5 (siehe 5.1) |
 | `--mp-view MODE` | `ROWHAMMER_MP_VIEW` | `auto`, `full`, `compact`, `score` |
 | `--mp-target MODE` | `ROWHAMMER_MP_TARGET` | `random`, `all`, `even` (nur Host) |
 | `--mp-mode MODE` | `ROWHAMMER_MP_MODE` | `survival` (Standard), `sprint`, `ultra`: womit eine eroeffnete Sitzung startet (siehe 5.1) |
@@ -3625,9 +3678,9 @@ folgen fuenf Festlegungen:
   zehn Zellen). Ein Schnappschuss aendert typischerweise die ein bis
   vier Zeilen um den eben festgesetzten Stein; das ist der Unterschied
   zwischen rund 200 und rund 30 Byte je Aktualisierung. Ueberschlag mit
-  fuenf Mitspielern und einem Lock je Sekunde: gut 10 kB je Spielminute
+  vier Mitspielern und einem Lock je Sekunde: gut 8 kB je Spielminute
   fuer alle Mitspieler zusammen, gegenueber den rund 2 kB, die die
-  eigene Runde kostet (3.8) - eine Sechs-Spieler-Partie ueber fuenf
+  eigene Runde kostet (3.8) - eine Fuenf-Spieler-Partie ueber fuenf
   Minuten landet bei etwa 60 kB. Ohne diese Zeilen-Ablage waere es das
   Fuenf- bis Zehnfache. `DEMO_MAX` und das Aufraeumen bleiben deshalb
   unveraendert; auch fuenfzig Aufnahmen dieser Groesse sind wenige
@@ -4026,11 +4079,14 @@ Uebrige dort ist entschieden):
   Zielauswahl (Taste) gewuenscht ist, bleibt offen; die Tastenbelegung
   ist voll und die Bedienung skaliert schlecht.
 - **Spielerzahl:** entschieden (Nutzerentscheidung, siehe 5.1) -
-  **minimal 2, maximal 6, keine Vorgabe dazwischen**, der Host
-  entscheidet ueber den Start. Offen bleibt nur, ob 6 in der Praxis auf
+  **minimal 2, maximal 5, keine Vorgabe dazwischen**, der Host
+  entscheidet ueber den Start. Die Obergrenze ist mit 1.3.0 von 6 auf 5
+  gesunken (Nutzerentscheidung, Begruendung in 5.1). Offen bleibt nur,
+  ob 5 in der Praxis auf
   schwacher Hardware fluessig laeuft - gemessen wurde bisher gegen
   Test-Bots auf einem Rechner, nicht in einem echten Raum voller
-  Terminals.
+  Terminals; die volle Zellenbreite (5.6) verdoppelt dabei die
+  Zeichenmenge je Gegnerfeld, was zuerst dort auffallen wird.
 - **Demo-Aufzeichnung im Mehrspieler:** entschieden
   (Nutzerentscheidung, siehe 5.20) - **jeder Client zeichnet alle
   Teilnehmer auf** -, aber noch nicht gebaut: es ist der eine offene

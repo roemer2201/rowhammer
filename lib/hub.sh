@@ -1040,7 +1040,7 @@ hub_places_by_rows() {
         HUB_PLACE[winner]=1
         place=2
     fi
-    # Selection sort over at most six entries: shorter than any clever
+    # Selection sort over at most five entries: shorter than any clever
     # alternative and free at this size.
     while [ "${#left[@]}" -gt 0 ]; do
         best=0

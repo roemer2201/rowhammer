@@ -712,8 +712,8 @@ Options:
                 transport also for the socket).
                 Env: ROWHAMMER_MP_DIR
                 Default: ${XDG_RUNTIME_DIR}/rowhammer
-  --mp-max N    Upper bound on the players of a session, 2 to 6.
-                Env: ROWHAMMER_MP_MAX       Default: 6
+  --mp-max N    Upper bound on the players of a session, 2 to 5.
+                Env: ROWHAMMER_MP_MAX       Default: 5
   --mp-session NAME
                 Name of the session (1-16 characters of A-Z a-z 0-9
                 _ -), the way the others see it in their list.
