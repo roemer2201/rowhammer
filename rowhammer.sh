@@ -227,7 +227,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.2.0"
+ROWHAMMER_VERSION="1.3.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -369,10 +369,10 @@ MP_PORT="${ROWHAMMER_MP_PORT:-27301}"
 # Where the session's FIFOs live, and in the unix transport its socket.
 MP_DIR="${ROWHAMMER_MP_DIR:-${XDG_RUNTIME_DIR:-/tmp/rowhammer-$(id -u)}/rowhammer}"
 # Upper bound on the players of a session: 2 is the minimum a duel needs,
-# 6 the technical maximum (see CLAUDE.md 5.1 for why six). A host may set
+# 5 the technical maximum (see CLAUDE.md 5.1 for why five). A host may set
 # it lower to close a session for exactly three people instead of asking
 # a fourth to leave again.
-MP_MAX="${ROWHAMMER_MP_MAX:-6}"
+MP_MAX="${ROWHAMMER_MP_MAX:-5}"
 # Session name, also the name shown in the beacon and the file name of the
 # socket in the unix transport. The user name is a name the others
 # recognize; it is reduced to what a session name may hold.
@@ -749,12 +749,12 @@ if ! [[ "${MP_PORT}" =~ ^[0-9]{1,5}$ ]] || [ "${MP_PORT}" -lt 1 ] \
         "${SCRIPT_NAME}" "${MP_PORT}" >&2
     exit 2
 fi
-# Two is what a duel needs, six the technical maximum: beyond that the
-# opponents no longer fit next to the board and bash no longer renders
-# them fast enough (see CLAUDE.md 5.1).
+# Two is what a duel needs, five the technical maximum: four opponents are
+# what still fits around the own board at full cell width, and bash no
+# longer renders more of them fast enough (see CLAUDE.md 5.1).
 if ! [[ "${MP_MAX}" =~ ^[0-9]{1,2}$ ]] || [ "${MP_MAX}" -lt 2 ] \
-    || [ "${MP_MAX}" -gt 6 ]; then
-    printf '%s: --mp-max expects a player count in 2..6, got: %s\n' \
+    || [ "${MP_MAX}" -gt 5 ]; then
+    printf '%s: --mp-max expects a player count in 2..5, got: %s\n' \
         "${SCRIPT_NAME}" "${MP_MAX}" >&2
     exit 2
 fi

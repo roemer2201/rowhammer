@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.2.0
+**Version:** 1.3.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -71,7 +71,7 @@ Einstellungen und einer kurzen Anleitung;
 die besten
 10 Runden werden dauerhaft gespeichert. Seit 1.1.0 ist der
 **Mehrspieler** kein Platzhalter mehr, sondern eine Runde gegen zwei bis
-sechs Leute im lokalen Netz (siehe unten). Dazu kommen die Politur-Schritte
+fuenf Leute im lokalen Netz (siehe unten). Dazu kommen die Politur-Schritte
 aus Phase 4 - unter anderem waehlbare Farbschemata, Spielmodi
 (Marathon/Ultra/Sprint/Time Attack/Hochwasser), Anleitung, Lock Delay,
 der
@@ -150,7 +150,7 @@ Das Startmenue bietet:
   oder so dieselbe
   Leistung, und wer vorzeitig oben rausbaut, hat schlicht weniger
   davon
-- **Mehrspieler** - eine Runde im lokalen Netz gegen zwei bis sechs
+- **Mehrspieler** - eine Runde im lokalen Netz gegen zwei bis fuenf
   Leute: Sitzung eroeffnen, einer gefundenen beitreten oder eine Adresse
   von Hand eingeben (siehe [unten](#mehrspieler-im-lokalen-netz))
 - **Highscores** - fragt zuerst den Modus ab (**Marathon**, **Ultra**,
@@ -435,14 +435,14 @@ Umgesetzt:
   (Gold/Silber fuer Rang 1 und 2, Akzentfarbe fuer den Score)
 - Startmenue mit Einzelspieler, Mehrspieler, Highscores,
   Weltwunder, Statistik, Demos, Einstellungen und Anleitung
-- **Mehrspieler im lokalen Netz** (seit 1.1.0): zwei bis sechs Spieler,
+- **Mehrspieler im lokalen Netz** (seit 1.1.0): zwei bis fuenf Spieler,
   gemeinsame Steinfolge, Sitzungseinstellungen des Gastgebers (Modus
   mit der Siegbedingung - Ueberleben, Sprint oder Ultra - und ein
   Schalter fuer die Stoerreihen, anfangs aus), fuer alle sichtbar in
   der Lobby; Ausscheiden bei vollem Feld; Sitzungssuche per
   UDP-Broadcast oder Verbindung ueber eine eingegebene Adresse, Anzeige
-  der Mitspieler als Mini-Felder oder - bei schmalem Terminal - als
-  Kurzzeilen; eigene Bestenliste und eigener Statistik-Modus. Verlaesst
+  der Mitspieler als eigene Felder links und rechts vom eigenen oder -
+  bei schmalem Terminal - als Kurzzeilen; eigene Bestenliste und eigener Statistik-Modus. Verlaesst
   der Gastgeber die Lobby, uebernimmt sie der zuerst beigetretene
   Spieler und alle ziehen mit um (seit 1.2.0). Braucht `socat`
 - **Anleitung im Spiel:** zehn Bildschirme zu Spielprinzip,
@@ -532,7 +532,7 @@ Geplant:
 
 ## Mehrspieler im lokalen Netz
 
-Seit 1.1.0. **Zwei bis sechs Leute**, jeder an seinem eigenen Feld, alle
+Seit 1.1.0. **Zwei bis fuenf Leute**, jeder an seinem eigenen Feld, alle
 mit **derselben Steinfolge** - wer gewinnt, entscheidet das Spiel und
 nicht das Glueck. Wer oben aus dem Feld baut, scheidet aus und schaut
 den anderen zu.
@@ -599,10 +599,18 @@ anderen warten nicht. `Esc`/`x` oeffnet ein kleines Menue mit
 *Fortsetzen* und *Runde verlassen*; die Verbindung laeuft dabei weiter.
 Im HUD stehen links das Ziel des Modus (bei Sprint und Ultra), die
 wartenden Stoerreihen ("Muell", nur wenn sie eingeschaltet sind) und die
-Zahl der Spieler, die noch im Rennen sind ("Gegner"). Die Mitspieler zeigt das
-Spiel rechts neben dem Feld als **Mini-Felder**; ist das Terminal dafuer
-zu schmal, werden daraus zwei Zeilen bzw. eine Zeile je Gegner, sodass
-eine Runde auch im 48x22-Minimum laeuft (`--mp-view`).
+Zahl der Spieler, die noch im Rennen sind ("Gegner").
+
+**Die Mitspieler sitzen um das eigene Feld herum** (seit 1.3.0): der
+erste rechts daneben, der zweite links, der dritte weiter rechts, der
+vierte weiter links - das eigene Feld bleibt in der Mitte. Ist das
+Terminal breit genug, hat ein Gegnerfeld **dieselbe Breite wie das
+eigene** (zwei Zeichen je Zelle, 140 Spalten bei vier Gegnern); sonst
+werden daraus **halb so breite** Felder (ein Zeichen je Zelle, 100
+Spalten bei vier Gegnern). Das eigene Feld behaelt seine Groesse in
+jedem Fall. Reicht auch die halbe Breite nicht, werden aus den Gegnern
+zwei Zeilen bzw. eine Zeile je Gegner, sodass eine Runde auch im
+48x22-Minimum laeuft (`--mp-view`).
 
 **Gewertet wird nur die eigene Leistung:** die eigenen Rows kommen in
 eine eigene Bestenliste (*Highscores -> Mehrspieler*), zaehlen als

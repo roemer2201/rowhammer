@@ -761,8 +761,8 @@ Optionen:
                 "unix" auch fuer den Socket).
                 Env: ROWHAMMER_MP_DIR
                 Standard: ${XDG_RUNTIME_DIR}/rowhammer
-  --mp-max N    Obergrenze der Spielerzahl einer Sitzung, 2 bis 6.
-                Env: ROWHAMMER_MP_MAX       Standard: 6
+  --mp-max N    Obergrenze der Spielerzahl einer Sitzung, 2 bis 5.
+                Env: ROWHAMMER_MP_MAX       Standard: 5
   --mp-session NAME
                 Name der Sitzung (1-16 Zeichen aus A-Z a-z 0-9 _ -), so
                 wie die anderen sie in der Liste sehen.

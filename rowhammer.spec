@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.2.0
+Version:        1.3.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,17 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sat Aug 29 2026 roemer2201 <r.oliver@web.de> - 1.3.0-1
+- A session holds five players instead of six: yourself and four
+  opponents; --mp-max takes 2..5 and defaults to 5.
+- The opponents are seated around the own board - first to its right,
+  second to its left, third further right, fourth further left - so the
+  own board keeps the middle of the screen.
+- An opponent's board is drawn at the full cell width when the terminal
+  has room for it, at the previous half width otherwise; the own board
+  is never shrunk for it.
+- A changed total width recenters the block and repaints it in full.
+
 * Tue Aug 18 2026 roemer2201 <r.oliver@web.de> - 1.2.0-1
 - The lobby survives its host: when the host leaves, their hub is shut
   down and the session moves to the player who joined first, who starts
