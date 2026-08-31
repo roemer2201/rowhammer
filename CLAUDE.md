@@ -1015,6 +1015,9 @@ Entscheidungen dahinter:
 ### 4.1 Rahmenbedingungen
 
 - **Bash >= 4.0** (assoziative Arrays), Ziel: uebliche Linux-Distributionen.
+  Mit der Demo-Aufzeichnung des Mehrspielers steigt das Minimum auf
+  **4.3** (Namerefs, `declare -n` - fuenf Rundenzustaende gleichzeitig,
+  siehe 5.20); gebaut ist das noch nicht.
 - Keine harten Abhaengigkeiten ausser Coreutils; `tput` optional (Fallback auf
   feste ANSI-Sequenzen).
 - Farben ueber ANSI-Escape-Sequenzen (8/16 Farben als Basis, 256-Farben als
@@ -2178,7 +2181,9 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 (`DEMO_*_RE`). Erst der Kopf, dann die Steinfolge, dann die Ereignisse:
 
 ```
-version=2            Formatversion (jede andere wird abgelehnt)
+version=2            Formatversion (jede andere wird abgelehnt; die
+                     Version 3 des Mehrspielers ist in 5.20
+                     spezifiziert und noch nicht gebaut)
 game=0.52.0          Spielversion, die aufgenommen hat (nur Info)
 mode=marathon        marathon|ultra|sprint|timeattack|flood - die Regeln
 name=Player          Spielername
@@ -2403,11 +2408,12 @@ erkennt eine verstummte Sitzung von selbst (siehe 5.4/5.8). Dieser Abschnitt bes
 nicht mehr eine Absicht, sondern den gebauten Zustand; wo die Umsetzung
 von der urspruenglichen Spezifikation abweicht, steht es an Ort und
 Stelle. **Offen ist ein Punkt:** die Demo-Aufzeichnung einer
-Mehrspieler-Runde (5.20, Schritt 9). Sie braucht die Formatversion 3 mit
-den Peer-Ereignissen; bis dahin wird eine Mehrspieler-Runde bewusst
-**nicht** aufgezeichnet (`demo_record_start` lehnt einen Modus ab, den
-das Format nicht kennt) - eine Aufnahme im heutigen Format wuerde als
-Runde ablaufen, in der aus dem Nichts Stoerreihen erscheinen.
+Mehrspieler-Runde (5.20, Schritt 9). Sie braucht die Protokollversion 4
+(die Zuege aller Teilnehmer werden verteilt) und die Formatversion 3;
+bis dahin wird eine Mehrspieler-Runde bewusst **nicht** aufgezeichnet
+(`demo_record_start` lehnt einen Modus ab, den das Format nicht kennt) -
+eine Aufnahme im heutigen Format wuerde als Runde ablaufen, in der aus
+dem Nichts Stoerreihen erscheinen.
 
 Drei Nachrichten kamen beim Bauen hinzu, die die Nachrichtentabelle in
 5.4 so nicht hatte; sie sind dort mit aufgefuehrt und hier zusammen
@@ -2858,6 +2864,10 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   `PROMOTED`, `MIGRATE` und `CLOSED`, dazu der Sitzungsname als viertes
   Feld von `WELCOME` - eine umgezogene Sitzung soll unter ihrem eigenen
   Namen weiterlaufen und nicht unter dem des Nachfolgers.
+  **Version 4** ist spezifiziert, aber noch nicht gebaut (5.20): sie
+  verteilt die Zuege aller Teilnehmer (`ACT`, `PEERACT`) und stellt
+  `GARBAGE` und `QUEUE` einen Slot voran, damit eine Demo-Aufzeichnung
+  jeden Mitspieler nachspielen kann.
 - **Client -> Hub**
 
   | Nachricht | Felder | Bedeutung |
@@ -3299,9 +3309,11 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   Detailstufe neu (siehe 5.6).
 - **Demo-Schicht:** eine Mehrspieler-Runde wird wie jede andere
   mitgeschnitten, zeichnet aber **alle Teilnehmer** auf
-  (Nutzerentscheidung, Format und Grenzen siehe 5.20). Das ist die
-  einzige Stelle, an der das Demo-Format der Runde etwas hinzufuegen
-  muss, das nicht aus den eigenen Zuegen kommt.
+  (Nutzerentscheidung, Zielanforderung und Architektur siehe 5.20). Sie
+  ist damit die einzige Stelle, die nicht nur das Demo-Format erweitert,
+  sondern auch das Protokoll: die Zuege der Mitspieler kommen sonst
+  nirgends an, und ohne sie waere ein Gegner in der Wiedergabe nur ein
+  Standbild.
 - **Debug-Modus:** neue Datei `net.log` (auch die empfangenen Beacons,
   sie sind der erste Kontakt mit Fremddaten); `events.log` bekommt
   Mehrspieler-Ereignisse (Join/Leave, Garbage rein/raus, KO, Hub-Start).
@@ -3620,78 +3632,242 @@ stehen.
 
 Dieser Unterabschnitt gehoert zu **Phase 5** und steht trotzdem hier am
 Ende, damit die Nummerierung 5.11-5.19 (Phase 6) nicht wandert und die
-Verweise darauf im ganzen Dokument gueltig bleiben.
+Verweise darauf im ganzen Dokument gueltig bleiben. Er ist die
+**Spezifikation des offenen Schritts 9**; die abzuhakenden
+Arbeitsschritte stehen als 9.1 bis 9.14 in Abschnitt 7.
 
-**Jeder Client zeichnet alle Teilnehmer auf** (Nutzerentscheidung); die
-Datei waechst damit mit der Spielerzahl, was hinnehmbar ist. Die
-Aufzeichnung folgt im Uebrigen den Regeln aus 3.8 und 4.10 - sie
-zeichnet Zuege statt Bildschirmen auf, sie darf das Spiel nicht
-veraendern, sie wird beim echten Rundenende geschrieben, und eine
-Wiedergabe wird nie gewertet.
+**Warum eine Mehrspieler-Runde nicht wie jede andere aufgezeichnet
+wird.** Eine Demo speichert Zuege, keine Bildschirme (3.8). Die eigenen
+Zuege liegen vollstaendig vor; die **Zuege der Mitspieler kommen im
+gebauten Protokoll nirgends an** - uebertragen werden nur ihre Zaehler
+(`PEER`) und, nur in Detailstufe 2, Feld-Schnappschuesse (`PEERBOARD`,
+200 Zeichen, max. 5 Hz, siehe 5.6). Bis das behoben ist, wird eine
+Mehrspieler-Runde bewusst **gar nicht** aufgezeichnet: `demo_record_start`
+lehnt einen Modus ab, den `DEMO_MODE_RE` nicht kennt, denn eine Aufnahme
+im heutigen Format 2 liefe als Runde ab, in der aus dem Nichts
+Stoerreihen erscheinen.
 
-**Der eigene Spieler und die Mitspieler werden verschieden
-aufgezeichnet, weil ueber die Leitung Verschiedenes ankommt.** Die
-eigenen Zuege liegen vollstaendig vor und werden wie bisher notiert und
-bei der Wiedergabe durch dieselben Spielfunktionen nachgespielt. Die
-**Zuege der Mitspieler kommen nirgends an**: das Protokoll (5.4)
-uebertraegt ihre Zaehler (`PEER`, max. 10/s) und - nur in der
-Detailstufe 2 - Feld-Schnappschuesse (`PEERBOARD`, 200 Zeichen, max.
-5 Hz, siehe 5.6). Ein Mitspieler laesst sich deshalb nicht
-nachsimulieren, sondern nur so wiedergeben, wie er ankam. Daraus
-folgen fuenf Festlegungen:
+**Leitentscheidung: der Vollausbau** (Nutzerentscheidung). Eine Aufnahme
+ist eine **vollstaendige Aufzeichnung der Partie** und nicht die Sicht
+eines Einzelnen: sie traegt fuer **jeden** Teilnehmer denselben
+Ereignisstrom, den sie heute fuer den eigenen traegt, die Wiedergabe
+simuliert alle Felder gleichzeitig echt, und der Fokus wechselt waehrend
+der Wiedergabe frei mit den Pfeiltasten - der gewaehlte Spieler sitzt
+mittig, die uebrigen sitzen wie gewohnt um ihn herum (5.6).
 
-- **Aufgezeichnet wird, was empfangen wurde.** Fuer jeden Mitspieler
-  wandern die `PEER`-Zaehler und, sofern vorhanden, die
-  Feld-Schnappschuesse in die Datei. Die Wiedergabe zeigt die
-  Mitspieler damit exakt so, wie dieser Spieler sie waehrend der Runde
-  gesehen hat - eine persoenliche Aufnahme derselben Partie, kein
-  Mitschnitt aus der Vogelperspektive. Das ist ehrlicher, als es
-  klingt: was ein Spieler gesehen hat, ist genau das, worauf er
-  reagiert hat.
-- **Die Aufnahme erzwingt keine Schnappschuesse.** Ob `PEERBOARD`
-  ueberhaupt fliesst, entscheidet weiterhin `NEEDBOARD` und damit die
-  Detailstufe des Terminals (5.6). Die Aufzeichnung dort einzugreifen
-  zu lassen, waere ein doppelter Bruch: sie ist standardmaessig an, es
-  wuerde also faktisch immer jeder Client Schnappschuesse anfordern und
-  `NEEDBOARD` waere sinnlos - und die Regel "die Aufzeichnung aendert
-  das Spiel nicht" (3.8) faellt. Der Kopf der Datei vermerkt
-  stattdessen, was drinsteht (`peers=board` bzw. `peers=state`), und
-  eine Wiedergabe ohne Schnappschuesse zeigt die Mitspieler in der
-  Kompakt- bzw. Scoreboard-Ansicht. Wer volle Gegnerfelder in seiner
-  Aufnahme haben will, spielt in Detailstufe 2.
-- **Eingehende Garbage ist ein eigenes Ereignis.** Sie kommt vom Hub
-  (`GARBAGE <count> <hole>`) und laesst sich aus nichts ableiten, was
-  sonst in der Datei steht; ohne sie liefe das eigene Feld bei der
-  Wiedergabe auseinander. Sie bekommt deshalb einen Ereignisbuchstaben
-  mit Nutzlast, wie ihn 4.10 bisher nur fuer die Flutreihe des
-  Hochwasser-Modus kennt (`w<spalte>`) - dieselbe Bauart, nur mit
-  Anzahl und Lochspalte.
-- **Formatversion 3.** Der Kopf bekommt `players=`, den eigenen Slot,
-  je Mitspieler eine Namenszeile und den `peers=`-Vermerk oben; die
-  Ereignisliste bekommt die drei neuen Buchstaben (Peer-Zaehler,
-  Peer-Feldzeile, eingehende Garbage). Die Formatversion wird wie
-  beim Hochwasser-Modus (4.10) hochgezaehlt statt kompatibel erweitert
-  (Arbeitsregel "keine Abwaertskompatibilitaet").
-- **Feld-Schnappschuesse werden zeilenweise abgelegt, nicht als
-  200-Zeichen-Bloecke.** Notiert wird nur, was sich gegenueber dem
-  letzten Stand dieses Mitspielers geaendert hat (Zeilennummer plus die
-  zehn Zellen). Ein Schnappschuss aendert typischerweise die ein bis
-  vier Zeilen um den eben festgesetzten Stein; das ist der Unterschied
-  zwischen rund 200 und rund 30 Byte je Aktualisierung. Ueberschlag mit
-  vier Mitspielern und einem Lock je Sekunde: gut 8 kB je Spielminute
-  fuer alle Mitspieler zusammen, gegenueber den rund 2 kB, die die
-  eigene Runde kostet (3.8) - eine Fuenf-Spieler-Partie ueber fuenf
-  Minuten landet bei etwa 60 kB. Ohne diese Zeilen-Ablage waere es das
-  Fuenf- bis Zehnfache. `DEMO_MAX` und das Aufraeumen bleiben deshalb
-  unveraendert; auch fuenfzig Aufnahmen dieser Groesse sind wenige
-  Megabyte.
+Damit sind zwei aeltere Festlegungen dieses Abschnitts **ueberholt**,
+beide zugunsten derselben Ueberlegung:
 
-**Wiedergabe.** Die Demo-Uhr (4.10) treibt beide Seiten: das eigene
-Feld wird aus den Zuegen nachgespielt, die Mitspielerfelder werden zu
-ihren Zeitstempeln gesetzt. Tempo (0.25x bis 4x), Pause und die
-Rueckkehr zur Liste funktionieren damit unveraendert - sie haengen an
-der Uhr, nicht an der Art der Ereignisse. Der Kasten am Ende zeigt
-zusaetzlich die Platzierung der Runde.
+- **"Aufgezeichnet wird, was empfangen wurde"** - die persoenliche
+  Aufnahme aus Zaehlern und Feld-Schnappschuessen, mit dem Kopfvermerk
+  `peers=board` bzw. `peers=state`. Sie war die ehrliche Antwort,
+  solange die Zuege nicht uebertragen werden; ein Gegner in der
+  Bildmitte waere darin aber ein 5-Hz-Schnappschuss ohne fallenden
+  Stein, ohne Next und ohne Hold. Wer den Fokus frei setzen koennen
+  will, braucht die Zuege.
+- **Die Abhaengigkeit von der Detailstufe.** Mit den Zuegen ist eine
+  Aufnahme in jeder Detailstufe vollstaendig - auch eine im
+  Scoreboard-Modus gespielte Runde spielt mit vollen Gegnerfeldern ab.
+  Der Grundsatz dahinter bleibt unangetastet: **die Aufzeichnung
+  erzwingt keine Schnappschuesse** und aendert das Spiel nicht (3.8);
+  `NEEDBOARD` entscheidet weiter allein die Detailstufe.
+
+**Je Teilnehmer eine eigene Datei, lokal.** Eine zentrale Aufnahme beim
+Hub bringt nichts: er sieht dieselben Ereignisse wie jeder Client, die
+Datei laege nur beim Gastgeber, und ein Client, der ohnehin alles
+empfaengt, schreibt sie sich selbst. Im Uebrigen gelten die Regeln aus
+3.8 und 4.10 unveraendert - Ablage beim echten Rundenende, atomar,
+`DEMO_MAX`, Schutz ueber den Runden-Hash, und eine Wiedergabe wird nie
+gewertet.
+
+**Zielanforderung.**
+
+1. Eine Mehrspieler-Runde wird bei jedem Teilnehmer in seinem eigenen
+   Datenverzeichnis aufgezeichnet.
+2. Die Aufnahme ist vollstaendig und symmetrisch: jeder Teilnehmer ist
+   aus Zuegen reproduzierbar, kein Feld-Schnappschuss wird zur
+   Wiedergabe gebraucht.
+3. Die Aufnahme ist unabhaengig von der Detailstufe des aufzeichnenden
+   Terminals.
+4. Die Wiedergabe simuliert alle Felder durch dieselben Spielfunktionen
+   wie eine echte Runde (3.8).
+5. Der Fokus wechselt waehrend der Wiedergabe frei mit Pfeil
+   links/rechts; der fokussierte Spieler steht mittig, mit vollem HUD,
+   Hold und Next.
+6. Tempo (0.25x bis 4x), Pause und die Rueckkehr zur Liste
+   funktionieren unveraendert.
+7. Der Kasten am Ende nennt zusaetzlich die Platzierung der Runde.
+8. Die Aufzeichnung aendert das Spiel nicht: der Verkehr einer Runde
+   ist derselbe, ob `--demo-record on` oder `off` gesetzt ist.
+9. Eine Wiedergabe wird nie gewertet und sendet nie ein Byte.
+10. Eine von Hand bearbeitete Aufnahme kann weder Code ausfuehren noch
+    einen Prozess starten noch das Terminal uebernehmen (5.5).
+11. Einzelspieler-Aufnahmen im Format 2 bleiben lesbar.
+12. Eine an einem Verbindungsverlust abgebrochene Runde wird behalten
+    und als solche gekennzeichnet (`end=lost`).
+
+**Nicht Ziel:** die Gegnerfelder waehrend der laufenden Runde zu
+simulieren. Die Mini-Felder kommen im Spiel weiterhin aus den
+`PEERBOARD`-Schnappschuessen (5.6); nur die Wiedergabe simuliert.
+
+**Fuenf Rundenzustaende gleichzeitig: Namerefs.**
+Der Rundenzustand liegt in Globals - Brett, Instanztabellen, Queue,
+Beutel, der aktive Stein, die Zaehler, `LOCK_PENDING`, `GAME_OVER`, die
+Garbage-Warteschlange; die verbindliche Liste ist `game_reset`
+(`rowhammer.sh`). Fuenf davon gleichzeitig zu halten, ohne die ganze
+Rundenlogik zu parametrieren, loesen **Namerefs** (`declare -n`):
+
+```
+unset BOARD                      # eine vorhandene Array-Variable MUSS
+declare -g -n BOARD=D0_BOARD     # vorher weg - "unset -n" reicht NICHT
+declare -g -n BOARD=D1_BOARD     # danach beliebig umbindbar, ohne unset
+```
+
+Gemessen (Bash 5.2): indizierte Arrays, assoziative Arrays und Skalare
+funktionieren gleichermassen, Funktionen schreiben durch den Nameref auf
+den richtigen Slot, und **ein Kontextwechsel ueber 30 Namen kostet
+0,1 ms** - bei fuenf Wechseln je Frame und 30 fps sind das 1,5 % einer
+CPU. Der kopierende Weg (Zustaende hin- und herkopieren) waere ein
+Vielfaches davon und scheidet aus.
+
+Zwei Konsequenzen:
+
+- **Das Bash-Minimum steigt von 4.0 auf 4.3** (Namerefs, 2014). Das
+  Spiel bevorzugt ohnehin schon Bash 5 (`${EPOCHREALTIME}`, siehe 4.3);
+  Paketabhaengigkeiten, 4.1 und die README ziehen nach, und ein
+  Startcheck sagt es mit einer klaren Meldung statt mit einem
+  Syntaxfehler.
+- **Ein eigenes Modul `lib/state.sh`** haelt die Liste des
+  Rundenzustands und die drei Funktionen `state_new`, `state_bind` und
+  `state_release`. Die Liste ist damit die einzige Stelle, an der der
+  Rundenzustand aufgezaehlt wird - ein kuenftiger Zaehler wird dort
+  eingetragen, sonst nirgends.
+
+**Protokoll Version 4: die Zuege werden verteilt.**
+Das ist die Folgefrage, die Abschnitt 8 offen gelassen hat, und sie ist
+mit dem Vollausbau entschieden. Der Einwand von damals - jeder Client
+muesste bis zu vier fremde Runden mitsimulieren - **greift hier nicht**:
+uebertragen und mitgeschrieben werden die Zuege, simuliert wird erst bei
+der Wiedergabe.
+
+- **`ACT <t> <tokens>`** (Client -> Hub): die eigenen Ereignisse eines
+  Zeitfensters. `t` ist die Rundenzeit des ersten Tokens in
+  Millisekunden, `tokens` sind die Ereignisse im Alphabet der Demo mit
+  ihren Deltas (`120l60g0h`). Gesendet alle `MP_ACT_MS` (100 ms), wenn
+  etwas passiert ist - rund zehn Nachrichten je Sekunde und Spieler.
+- **`PEERACT <slot> <t> <tokens>`** (Hub -> alle ausser dem Absender):
+  unveraendert weitergereicht.
+- **`GARBAGE` und `QUEUE` bekommen einen Slot vorangestellt** und gehen
+  an alle statt nur an den Betroffenen. Sie sind die einzige Eingabe in
+  ein fremdes Feld, die nicht aus dessen Zuegen kommt, und der Hub ist
+  ihre Quelle (5.7).
+- Bandbreite: rund 40 B/s je Spieler an Zuegen, verteilt an vier
+  andere - unter 1 kB/s fuer die ganze Sitzung, gegen die 6 kB/s der
+  Schnappschuesse (5.4) also nichts.
+
+Drei Festlegungen dazu:
+
+- **Die Zeitbasis ist die Rundenzeit, nicht die Spieluhr.** Alle
+  Teilnehmer haengen am selben Countdown (`MP_START_MS`), das ist die
+  einzige gemeinsame Uhr. Die Demo-Uhr laeuft im Mehrspieler deshalb
+  **durchgehend** und bleibt insbesondere im Pausenmenue nicht stehen -
+  die Gegner spielen dort weiter (5.8), und ihre Zeitstempel kaemen
+  sonst gegen eine eingefrorene eigene Uhr. Im Einzelspieler bleibt es
+  bei der Spieluhr, dort haelt eine Pause die ganze Welt an.
+  Das behebt zugleich einen Fehler, der ohne diese Umstellung entstuende:
+  `demo_record_event` rechnet den Stempel aus `PLAY_MS` und `PLAY_LAST`,
+  und `play_clock_resume` zieht `PLAY_LAST` nach einem Menue auf
+  "jetzt" - der Wert faellt also hinter den zuletzt geschriebenen
+  zurueck, die Delta-Klemme auf 0 macht daraus lauter Nullen, und die
+  naechsten Sekunden Spiel liefen bei der Wiedergabe im Schwall ab.
+- **Das Protokoll gibt damit die Zuege der Gegner preis.** Ein
+  manipulierter Client koennte fremde Felder samt fallendem Stein
+  nachbauen; die Schnappschuesse liessen den aktiven Stein bisher
+  bewusst weg. Nach dem Vertrauensmodell in 5.5 ist das hinnehmbar -
+  Schummeln ist ausdruecklich kein Ausschlusskriterium, Prozess- und
+  Terminalsicherheit ist es. Es steht hier als bewusste Entscheidung und
+  nicht als Nebenwirkung.
+- **Gesendet wird immer**, nicht nur bei laufender Aufnahme. Sonst
+  aenderte die Aufzeichnung das Spiel (3.8), und `--demo-record off`
+  waere am Verkehr zu erkennen.
+
+**Demo-Format Version 3.**
+Der Lader nimmt **Version 2 und 3**, geschrieben wird 3. Eine
+Einzelspieler-Aufnahme ist eine echte Teilmenge, und die vorhandenen
+Aufnahmen - an denen Highscore-Eintraege haengen - bleiben damit
+lesbar. Das ist eine bewusste, eng begrenzte Ausnahme von der
+Arbeitsregel "keine Abwaertskompatibilitaet" (Abschnitt 6,
+Nutzerentscheidung), wie sie 4.5 fuer die Bestenlisten schon einmal
+getroffen hat.
+
+```
+version=3   game=1.4.0   mode=versus   name=...   date=...
+time=123456        eigene Spielzeit (HUD, Statistik)
+length=245000      Laenge der Zeitachse = Dauer der Runde
+end=over|goal|quit|lost
+players=4   slot=1   mpmode=survival   garbage=1   winner=2
+peer=0 Alice       je Teilnehmer eine Zeile
+peer=1 Bob
+pcs=IOTSZJL...     die gemeinsame Steinfolge - eine fuer alle
+p=1 120l           <slot> <delta zum letzten Ereignis DIESES slots><aktion>
+v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
+```
+
+- **Das Delta gilt je Slot, nicht global.** Die Zuege eines Gegners
+  treffen mit Netzverzoegerung ein und koennen aelter sein als das
+  zuletzt geschriebene Ereignis; je Slot bleibt jeder Strom monoton, und
+  die Wiedergabe fuehrt schlicht fuenf Cursor.
+- **Das Alphabet** sind die vorhandenen Buchstaben (`l r c a s h o g k`,
+  siehe 4.10) plus `y<nn><h>` eingehende Stoerreihen (Anzahl 01 bis 10,
+  Lochspalte 0 bis 9), `q<nn>` verbindliche Warteschlangenlaenge,
+  `n<n>` Ausscheiden mit Platz und `z<n>` Verbindungsverlust mit Platz.
+  `w<spalte>` bleibt dem Hochwasser-Modus. Die Datei kennt damit **nur
+  ihr eigenes Alphabet**: keine rohen Protokollzeilen, keine Wiedergabe
+  durch den Nachrichten-Dispatcher und keine Verb-Whitelist - eine
+  `.demo`-Datei ist Fremddatum im Sinne von 5.5, und was sie nicht
+  ausdruecken kann, kann sie auch nicht ausloesen.
+- **Eine Steinfolge fuer alle.** Der gemeinsame Seed (5.1) gibt jedem
+  dieselbe Folge, nur zu anderen Zeitpunkten. Der Aufzeichnende zieht
+  sie deshalb weit genug: er zaehlt die Locks in den fremden
+  Ereignisstroemen mit und fuellt die Folge aus seinem eigenen Beutel
+  nach, auch nachdem er selbst ausgeschieden ist. Vorziehen ist
+  unschaedlich, die Folge ist deterministisch.
+- **Die `v=`-Pruefpunkte** sind die Gegenprobe, nicht die Anzeigequelle:
+  die Wiedergabe vergleicht ihre Simulation mit den seinerzeit
+  gemeldeten Zaehlern und meldet eine Abweichung ins Debug-Log. Damit
+  wird eine ganze Fehlerklasse - die Simulation laeuft auseinander -
+  sichtbar statt still.
+
+**Wiedergabe.**
+Je Frame wird fuer jeden Slot umgebunden, alle faelligen Ereignisse
+werden angewandt, und ein Slot, dessen Brett sich geaendert hat, wird in
+die vorhandenen `MP_PEER_*`-Tabellen geschrieben; zuletzt wird auf den
+Fokus-Slot gebunden. Der Renderer bleibt dadurch fast unveraendert:
+
+- Der **fokussierte** Spieler ist der, auf den die Globals zeigen -
+  Spielfeld, HUD, Hold, Next und der Rundenende-Kasten funktionieren
+  ohne eine Zeile Aenderung.
+- Die **uebrigen** kommen wie im Spiel aus `MP_PEER_BOARD` und den
+  `MP_PEER_*`-Zaehlern, nur gefuellt aus der Simulation statt aus dem
+  Netz. `render_peer_column` bleibt, wie es ist.
+- **`MP_SLOT` ist der Fokus.** `mp_peer_count` schliesst genau diesen
+  Slot aus, und die Sitzordnung `[5][3][selbst][2][4]` (5.6) setzt ihn
+  in die Mitte. Ein Fokuswechsel ist damit: `MP_SLOT` setzen, den
+  Zustand umbinden, `RENDER_FULL` erzwingen.
+- Anders als im Spiel zeigen die Mini-Felder **den fallenden Stein**.
+  Der Schnappschuss liess ihn weg, weil er unterwegs veraltet waere
+  (5.4); in einer Wiedergabe gibt es dieses Problem nicht, und ein Feld
+  ohne fallenden Stein saehe neben vier anderen tot aus.
+- **Tasten:** Pfeil links/rechts waehlen den Fokus, umlaufend ueber die
+  belegten Slots; `-`/`+` stellen das Tempo. Beide sind heute doppelt
+  belegt (`LEFT`/`-` und `RIGHT`/`+`, siehe 3.8), es geht also keine
+  Funktion verloren. Die HUD-Zeile 18 nennt Tempo und Fokus.
+- **Die Blink-Animation laeuft nur fuer den Fokus.** `flash_rows` haelt
+  den Loop an (3.1); bei den uebrigen verschwindet die Reihe sofort,
+  denn alles andere hiesse, den Loop bis zu fuenfmal je Sekunde
+  anzuhalten.
+- Der Kasten am Ende hat genau acht Innenzeilen; die Platzierung
+  bezahlt die fuehrende Leerzeile.
 
 ## 6. Konventionen fuer alle Skripte
 
@@ -3843,18 +4019,92 @@ Die Schritte 1 bis 8 sowie 10 bis 12 sind mit `1.1.0` umgesetzt und samt
 ihrer Begruendung nach [HISTORY.md](HISTORY.md) gewandert; der aktuelle
 Zustand steht in Abschnitt 5. Offen ist ein Schritt:
 
-- [ ] **Schritt 9 - Demo-Aufzeichnung der Mehrspieler-Runde** (siehe 5.20).
-      Formatversion 3, Kopf mit Slots und Namen, Peer-Zaehler und
-      zeilenweise Peer-Schnappschuesse als Ereignisse, eingehende
-      Garbage als eigenes Ereignis, Wiedergabe mit nachgespieltem
-      eigenem Feld und gesetzten Gegnerfeldern. Bis dahin wird eine
-      Mehrspieler-Runde **nicht** aufgezeichnet: `demo_record_start`
-      lehnt einen Modus ab, den `DEMO_MODE_RE` nicht kennt, denn eine
-      Aufnahme im Format 2 liefe als Runde ab, in der aus dem Nichts
-      Stoerreihen erscheinen. Abnahme: die Wiedergabe einer
-      Vier-Spieler-Runde zeigt denselben Verlauf, den der aufzeichnende
-      Client gesehen hat, und eine Aufnahme aus Detailstufe 0/1 laeuft
-      ohne Gegnerfelder sauber durch.
+- [ ] **Schritt 9 - Demo-Aufzeichnung der Mehrspieler-Runde**
+      (Zielanforderung und Architektur siehe 5.20). Vollausbau: die
+      Zuege aller Teilnehmer werden verteilt und mitgeschrieben, die
+      Wiedergabe simuliert alle Felder gleichzeitig, und der Fokus
+      wechselt waehrend der Wiedergabe frei mit den Pfeiltasten. Bis das
+      steht, wird eine Mehrspieler-Runde **nicht** aufgezeichnet:
+      `demo_record_start` lehnt einen Modus ab, den `DEMO_MODE_RE` nicht
+      kennt, denn eine Aufnahme im Format 2 liefe als Runde ab, in der
+      aus dem Nichts Stoerreihen erscheinen.
+      **Gesamtabnahme:** die Wiedergabe einer Vier-Spieler-Runde zeigt
+      fuer jeden der vier denselben Verlauf wie die Runde selbst, in
+      jeder Detailstufe aufgenommen, und laesst sich waehrend des Laufs
+      zwischen ihnen umschalten.
+      Die Version bleibt waehrend der Arbeit auf `1.3.0` und steigt erst
+      mit Schritt 9.14 auf `1.4.0`; `2.0.0` bleibt dem Stand nach der
+      Entkopplung (Punkt darunter) vorbehalten.
+  - [ ] **9.1 Rundenzustand benennen.** Neues Modul `lib/state.sh` mit
+        der Liste des Rundenzustands und `state_new`, `state_bind`,
+        `state_release`. Noch ohne Nutzer - die Runde laeuft weiter auf
+        den Globals. Abnahme: ein Testskript legt fuenf Zustaende an,
+        schreibt in jeden und weist die Trennung nach; die Liste deckt
+        sich mit `game_reset`.
+  - [ ] **9.2 Bash-Minimum auf 4.3.** Startcheck mit klarer Meldung,
+        `debian/control`, `rowhammer.spec`, 4.1 und README nachziehen.
+        Abnahme: Start und `--help` unveraendert, die Meldung erscheint
+        bei kuenstlich gesetzter Bedingung.
+  - [ ] **9.3 Protokoll 4, Teil 1: `ACT`/`PEERACT`.** Nachrichtentabelle
+        und Muster in `lib/proto.sh`, Sammeln und Senden in `lib/mp.sh`
+        (`MP_ACT_MS`), Weiterreichen im Hub. Abnahme: Runde mit drei
+        `--mp-bot`, `net.log` zeigt die Stroeme, `tools/net-fuzz.sh`
+        bleibt sauber, die Runde spielt sich unveraendert.
+  - [ ] **9.4 Protokoll 4, Teil 2: `GARBAGE`/`QUEUE` mit Slot an alle.**
+        Abnahme: Stoerreihen kommen unveraendert an, und jeder Client
+        sieht auch die der anderen im `net.log`.
+  - [ ] **9.5 Lastprobe.** Fuenf Teilnehmer in Detailstufe 2:
+        `MP_POLL_MAX`, `MP_RATE_MAX` und den Hub-Tick gegen den neuen
+        Verkehr messen, Grenzen nachziehen falls noetig. Abnahme: keine
+        verworfene Nachricht, keine Ratenabschaltung, Framerate wie
+        vorher.
+  - [ ] **9.6 Format 3 schreiben.** Kopf, `p=`- und `v=`-Zeilen, neue
+        Ereignisbuchstaben, Demo-Uhr als Rundenuhr im Versus, `versus`
+        in `DEMO_MODE_RE`, `end=lost`, und `--mp-bot` zeichnet nicht
+        auf. Noch keine Wiedergabe. Abnahme: nach einer Runde liegt eine
+        lesbare Datei vor, deren Kopf und Stroeme sich mit `events.log`
+        decken.
+  - [ ] **9.7 Steinfolge fuer alle.** Die Folge aus dem eigenen Beutel
+        nachfuellen, solange irgendein Spieler noch Steine braucht -
+        auch nach dem eigenen Ausscheiden. Abnahme: der frueh
+        Ausgeschiedene hat in seiner Datei so viele Steine, wie der
+        Letzte im Feld verbraucht hat.
+  - [ ] **9.8 Format 3 lesen.** Neue Kopfschluessel (`peer=` ist der
+        erste wiederholbare), fuenf Ereignisstroeme, ein Muster je Feld,
+        Version 2 weiter akzeptiert. Abnahme: eine Format-2-Aufnahme
+        laedt unveraendert, praeparierte Muelldateien werden mit Grund
+        abgewiesen.
+  - [ ] **9.9 Wiedergabe: Zustaende aufbauen.** Je Slot ein Zustand,
+        initialisiert wie `game_reset`; Aufbau innerhalb der
+        Neustart-Schleife (Taste `r`), Rueckbau auf beiden
+        Rueckgabepfaden. Abnahme: eine Versus-Aufnahme startet, zeigt
+        fuenf leere Felder und laeuft bis zum Ende durch.
+  - [ ] **9.10 Wiedergabe: Ereignisse anwenden.** Ein Cursor je Slot,
+        Kontextwechsel, `MP_PEER_*` aus der Simulation fuellen (Brett
+        samt fallendem Stein), `flash_rows` nur fuer den Fokus. Abnahme:
+        die Wiedergabe zeigt denselben Verlauf wie die Runde - fuer
+        jeden Spieler.
+  - [ ] **9.11 Wiedergabe: Fokuswechsel.** Pfeiltasten waehlen den Slot,
+        Tempo auf `-`/`+`, HUD-Zeile nennt beides, `RENDER_FULL` beim
+        Wechsel. Abnahme: waehrend des Laufs umschalten; das gewaehlte
+        Feld steht mittig mit HUD, Hold und Next.
+  - [ ] **9.12 Rundenende.** Ausscheiden, Verbindungsverlust und Sieger
+        in der Anzeige, Platzierung im Kasten (er hat genau acht
+        Innenzeilen - die fuehrende Leerzeile bezahlt sie), `end=lost`
+        mit eigenem Text. Abnahme: der Kasten nennt Platz und Grund,
+        alle vier `end`-Werte sehen richtig aus.
+  - [ ] **9.13 Gegenprobe und Randfaelle.** Simulation gegen die
+        `v=`-Pruefpunkte mit Meldung ins Debug-Log; Verbindungsverlust,
+        Aufnahme aus Detailstufe 0/1, Sperre bei pausierter Runde,
+        EXIT-`trap`, Verknuepfung aus der Versus-Bestenliste ueber den
+        Runden-Hash. Abnahme: eine Vier-Spieler-Aufnahme laeuft ohne
+        eine einzige Abweichungsmeldung durch.
+  - [ ] **9.14 Doku, Texte, Version.** 5.20 auf den gebauten Zustand,
+        4.10 (Format 3), 5.4 (Protokoll 4), 5.6 (Fokus), 4.1 (Bash),
+        Abschnitt 8 nachziehen; README, Anleitungsseiten 9 und 10;
+        Punkt nach HISTORY.md; Version `1.4.0` an allen vier Stellen
+        samt Changelog-Strophen. Abnahme: `tools/release.sh --mode
+        check` ist gruen.
 - [ ] **Rest aus Schritt 1 - Entkopplung der Rundenlogik** (siehe 5.3).
       Der Mehrspieler brauchte davon nur, was er benutzt, und laeuft
       damit; vollstaendig entkoppelt ist die Rundenlogik aber nicht:
@@ -4090,20 +4340,24 @@ Uebrige dort ist entschieden):
 - **Demo-Aufzeichnung im Mehrspieler:** entschieden
   (Nutzerentscheidung, siehe 5.20) - **jeder Client zeichnet alle
   Teilnehmer auf** -, aber noch nicht gebaut: es ist der eine offene
-  Schritt der Phase 5, und bis dahin wird eine Mehrspieler-Runde
-  bewusst gar nicht aufgezeichnet. Offen bleibt eine Folgefrage, die erst das
-  Playtesting beantworten kann: die Mitspieler koennen nur so
-  aufgenommen werden, wie sie ankamen (Zaehler, und Feld-Schnappschuesse
-  nur in Detailstufe 2), weil ihre **Zuege nie uebertragen werden**.
-  Die Alternative waere, im Protokoll die Zuege statt der
-  Schnappschuesse zu verteilen - das kostet weniger Bandbreite (~40 B/s
-  je Spieler statt bis zu 1 kB/s), liefert exakte Gegnerfelder in jeder
-  Detailstufe und macht die Demo durchgehend zugbasiert, verlangt aber
-  von **jedem** Client, bis zu fuenf fremde Runden mitzusimulieren.
-  Genau diese Rechenlast war der Grund fuer die Schnappschuesse (5.6),
-  weshalb die Spezifikation bei ihnen bleibt; ob die Bash-Simulation
-  wirklich zu teuer ist, laesst sich mit dem Test-Bot messen, sobald
-  Schritt 6 steht.
+  Schritt der Phase 5 (Abschnitt 7, Schritte 9.1 bis 9.14), und bis
+  dahin wird eine Mehrspieler-Runde bewusst gar nicht aufgezeichnet.
+  Die frueher hier offene Folgefrage - ob die Mitspieler nur so
+  aufgenommen werden koennen, wie sie ankamen (Zaehler, und
+  Feld-Schnappschuesse nur in Detailstufe 2) - ist mit dem **Vollausbau**
+  beantwortet: **die Zuege werden verteilt** (Protokollversion 4), und
+  die Aufnahme wird dadurch vollstaendig und symmetrisch. Der Einwand,
+  der die Spezifikation bis dahin bei den Schnappschuessen hielt - jeder
+  Client muesste bis zu vier fremde Runden mitsimulieren -, greift dafuer
+  nicht: uebertragen und mitgeschrieben werden die Zuege, **simuliert
+  wird erst bei der Wiedergabe**. Die Mini-Felder der laufenden Runde
+  kommen unveraendert aus den Schnappschuessen (5.6). Ausschlaggebend
+  war der Wunsch, bei der Wiedergabe frei zwischen den Spielern
+  umschalten zu koennen: ein Gegner in der Bildmitte waere aus
+  Schnappschuessen ein 5-Hz-Standbild ohne fallenden Stein.
+  Offen bleibt nur, was das Playtesting beantworten kann: ob der
+  zusaetzliche Verkehr (unter 1 kB/s je Sitzung) auf schwacher Hardware
+  wirklich folgenlos bleibt - dafuer ist Schritt 9.5 die Lastprobe.
 - **Kein Reconnect in v1** (5.8). Falls sich Abbrueche im Alltag haeufen,
   waere ein Wiedereinstieg mit vollstaendiger Zustandsuebertragung ein
   eigener spaeterer Punkt.
