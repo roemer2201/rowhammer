@@ -109,6 +109,26 @@ MP_NEEDBOARD=0
 MP_LAST_STATE=""
 MP_NEXT_BOARD_MS=0
 MP_BOARD_MS=200
+# The move stream (ACT, protocol 4): what this player did since the last
+# window went out, as "<delta><action>" tokens in the demo format's own
+# alphabet (CLAUDE.md 4.10/5.20). MP_ACT_BUF collects them, MP_ACT_BASE_MS
+# is the round time the first token of the current window counts from,
+# MP_ACT_LAST_MS the round time of the last token collected, and
+# MP_ACT_NEXT_MS when the window is due.
+# The window is 100 ms: about ten messages a second while a player is
+# doing something, which is the same order as the counters (STATE) and
+# far below the rate limit - and short enough that a move is never held
+# back long enough to be noticed.
+# The 48 tokens are the protocol's own limit on the field (PROTO_ACT_RE);
+# reaching it inside one window would take a key repeat far beyond human
+# speed, but a full buffer is flushed early rather than truncated,
+# because a dropped move would make a recording diverge silently.
+MP_ACT_BUF=""
+MP_ACT_BASE_MS=0
+MP_ACT_LAST_MS=0
+MP_ACT_NEXT_MS=0
+MP_ACT_MS=100
+MP_ACT_MAX=48
 # How long the last message to a hub we are about to leave is given to
 # get out (mp_promote). Well below HUB_PROMOTE_MS, the window the old hub
 # waits in, and long enough for socat to move one line into a loopback
@@ -167,6 +187,10 @@ mp_reset() {
     MP_NEEDBOARD=0
     MP_LAST_STATE=""
     MP_NEXT_BOARD_MS=0
+    MP_ACT_BUF=""
+    MP_ACT_BASE_MS=0
+    MP_ACT_LAST_MS=0
+    MP_ACT_NEXT_MS=0
     MP_START_MS=0
     MP_VIEW_SENT=-1
     MP_HOST_SLOT=-1
@@ -311,6 +335,18 @@ mp_handle() {
                 DIRTY=1
             fi
             ;;
+        PEERACT)
+            # Another player's moves. Nothing is done with them during the
+            # round on purpose: the mini boards keep coming from the
+            # snapshots (PEERBOARD), because simulating four more rounds
+            # per frame is what the playback does, not the game
+            # (CLAUDE.md 5.20, "Nicht Ziel"). They are logged and, from
+            # step 9.6 on, written into the recording of this round.
+            slot="${PROTO_ARG[0]}"
+            if [ "${slot}" -lt "${MP_MAX}" ]; then
+                debug_event "mp: moves of slot ${slot} at ${PROTO_ARG[1]}: ${PROTO_ARG[2]}"
+            fi
+            ;;
         NEEDBOARD)
             MP_NEEDBOARD="${PROTO_ARG[0]}"
             ;;
@@ -342,19 +378,37 @@ mp_handle() {
             DIRTY=1
             ;;
         GARBAGE)
-            # Queued, not applied: garbage comes in at the next lock, never
-            # while a piece is falling, so the move in progress stays
-            # plannable (CLAUDE.md 5.7).
-            MP_PENDING=$(( MP_PENDING + ${PROTO_ARG[0]} ))
-            MP_HOLE="${PROTO_ARG[1]}"
-            debug_event "mp: ${PROTO_ARG[0]} garbage row(s) incoming, hole=${MP_HOLE}, queue=${MP_PENDING}"
-            DIRTY=1
+            # Since protocol 4 these come with the slot they are meant
+            # for and go to everybody, so a recording can follow every
+            # board (CLAUDE.md 5.20). Only our own rows are queued;
+            # somebody else's are noted and otherwise left alone - what a
+            # peer's queue looks like is what its PEER message says, and
+            # a second source for the same number could only drift away
+            # from it.
+            slot="${PROTO_ARG[0]}"
+            if [ "${slot}" -eq "${MP_SLOT}" ]; then
+                # Queued, not applied: garbage comes in at the next lock,
+                # never while a piece is falling, so the move in progress
+                # stays plannable (CLAUDE.md 5.7).
+                MP_PENDING=$(( MP_PENDING + ${PROTO_ARG[1]} ))
+                MP_HOLE="${PROTO_ARG[2]}"
+                debug_event "mp: ${PROTO_ARG[1]} garbage row(s) incoming, hole=${MP_HOLE}, queue=${MP_PENDING}"
+                DIRTY=1
+            else
+                debug_event "mp: ${PROTO_ARG[1]} garbage row(s) hole=${PROTO_ARG[2]} -> slot ${slot}"
+            fi
             ;;
         QUEUE)
-            # The hub cancelled part of our queue against a clear of ours
-            # and tells us what is left of it. Its number wins over ours.
-            MP_PENDING="${PROTO_ARG[0]}"
-            DIRTY=1
+            # The hub cancelled part of a queue against a clear and says
+            # what is left of it. Its number wins over ours - but only for
+            # our own queue; see GARBAGE above for the rest.
+            slot="${PROTO_ARG[0]}"
+            if [ "${slot}" -eq "${MP_SLOT}" ]; then
+                MP_PENDING="${PROTO_ARG[1]}"
+                DIRTY=1
+            else
+                debug_event "mp: queue of slot ${slot} is now ${PROTO_ARG[1]}"
+            fi
             ;;
         KO)
             slot="${PROTO_ARG[0]}"
@@ -500,6 +554,98 @@ mp_send_board() {
     MP_NEXT_BOARD_MS=$(( NOW_MS + MP_BOARD_MS ))
     proto_board_encode
     proto_msg BOARD "${PROTO_BOARD}"
+    net_send "${PROTO_LINE}" || :
+    return 0
+}
+
+# --- The move stream ------------------------------------------------------
+# mp_round_ms
+# The round time in milliseconds, into MP_ROUND_MS: how long ago the round
+# started for everybody. Deliberately not the play clock (PLAY_MS): the
+# round time is the one clock all participants share - they all hang off
+# the same countdown (MP_START_MS) - and a multiplayer round has no pause
+# that could stop it (CLAUDE.md 5.8/5.20). Clamped at zero so the
+# countdown before the start cannot produce a negative stamp.
+MP_ROUND_MS=0
+mp_round_ms() {
+    now_ms
+    MP_ROUND_MS=$(( NOW_MS - MP_START_MS ))
+    if [ "${MP_ROUND_MS}" -lt 0 ]; then
+        MP_ROUND_MS=0
+    fi
+    return 0
+}
+
+# mp_act_event ACTION
+# Note one thing this player did, for the move stream. Called from the
+# same places the demo recording is fed from, and for the same alphabet -
+# but always, not only while a recording runs: the traffic of a round has
+# to be the same whether --demo-record is on or off, or the setting would
+# be visible on the wire (CLAUDE.md 3.8).
+# Anything outside the move alphabet is dropped here rather than sent:
+# the flood row of the Hochwasser mode ("w<column>") is the one such event
+# today, it cannot occur in a multiplayer round, and a message the peers
+# would have to throw away should not be produced in the first place
+# (the same rule the player name goes through in proto_name).
+mp_act_event() {
+    local action="${1}" delta
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    [ "${MP_PHASE}" = "play" ] || return 0
+    [[ "${action}" =~ ^[acghklors]$ ]] || return 0
+    mp_round_ms
+    if [ -z "${MP_ACT_BUF}" ]; then
+        # First token of a window: it counts from the round time of the
+        # previous window's last token, so the deltas stay continuous
+        # across windows and a receiver never has to guess.
+        MP_ACT_BASE_MS="${MP_ACT_LAST_MS}"
+    fi
+    delta=$(( MP_ROUND_MS - MP_ACT_LAST_MS ))
+    # A clock that jumped backwards must not write a negative delta; the
+    # event then lands on the previous one's timestamp, exactly as the
+    # demo recording handles it.
+    if [ "${delta}" -lt 0 ]; then
+        delta=0
+    fi
+    # Six digits is what the field pattern allows per delta. A longer gap
+    # can only happen when a player does nothing for ten minutes, and the
+    # window below goes out long before that - but the clamp keeps this
+    # end from ever composing a line its own parser would reject.
+    if [ "${delta}" -gt 999999 ]; then
+        delta=999999
+    fi
+    MP_ACT_LAST_MS="${MP_ROUND_MS}"
+    MP_ACT_BUF+="${delta}${action}"
+    return 0
+}
+
+# mp_act_flush [force]
+# Send the collected moves as one ACT and start a new window. Called once
+# per tick from the game loop; it sends only when there is something to
+# send and the window is up, so a player who is not touching anything
+# produces no traffic at all. With an argument it sends regardless of the
+# window - which is what the end of a round needs, so the last few moves
+# before a top-out are not lost with the buffer.
+mp_act_flush() {
+    local force="${1:-0}" count
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    [ -n "${MP_ACT_BUF}" ] || return 0
+    now_ms
+    if [ "${force}" -ne 1 ]; then
+        # Count the tokens by their action letters: a full buffer goes out
+        # early, because the field cannot carry more and dropping a move
+        # would make a recording of this round diverge without saying so.
+        count="${MP_ACT_BUF//[^acghklors]/}"
+        if (( NOW_MS < MP_ACT_NEXT_MS && ${#count} < MP_ACT_MAX )); then
+            return 0
+        fi
+    fi
+    MP_ACT_NEXT_MS=$(( NOW_MS + MP_ACT_MS ))
+    proto_msg ACT "${MP_ACT_BASE_MS}" "${MP_ACT_BUF}"
+    # Emptied before the send, and a failed send is not retried: the moves
+    # are not one of the messages that have to arrive (CLEAR and TOPOUT
+    # are, see CLAUDE.md 5.9). Holding them back would grow the buffer
+    # past what the field can carry, on a link that is failing anyway.
+    MP_ACT_BUF=""
     net_send "${PROTO_LINE}" || :
     return 0
 }
@@ -1856,17 +2002,26 @@ mp_bot_main() {
             # piece's width, so the right-hand columns are regularly out
             # of reach, and a bot that kept pushing against the wall
             # would never drop another piece.
+            # Announced through the same funnel a player's keys go
+            # through, so a bot produces a real move stream: without it
+            # the streams could only ever be tested with as many
+            # terminals as players (CLAUDE.md 5.20).
             if [ "${CUR_ROT}" -ne "${want_rot}" ]; then
+                round_event c
                 try_rotate 1 || want_rot="${CUR_ROT}"
             elif [ "${CUR_X}" -gt "${want_x}" ]; then
+                round_event l
                 try_move -1 0 || want_x="${CUR_X}"
             elif [ "${CUR_X}" -lt "${want_x}" ]; then
+                round_event r
                 try_move 1 0 || want_x="${CUR_X}"
             else
+                round_event h
                 hard_drop
                 tick=0
             fi
             mp_send_state
+            mp_act_flush
             # Snapshots too, when somebody is drawing them: a bot that
             # showed up as an empty board would make the mini board view
             # untestable without a second terminal.

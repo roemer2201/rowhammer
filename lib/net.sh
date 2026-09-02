@@ -60,8 +60,13 @@ MP_LINE_MAX=512
 MP_POLL_MAX=16
 
 # Accepted rate per client, counted by the receiver (lib/proto.sh applies
-# it). Sixty-four messages a second is an order of magnitude above what a
-# well-behaved client sends (10 STATE/s plus 5 BOARD/s plus events).
+# it). Sixty-four messages a second is well above what a well-behaved
+# client sends: 10 STATE/s plus 5 BOARD/s plus, since protocol 4, up to
+# 10 ACT/s (MP_ACT_MS in lib/mp.sh) and the handful of CLEAR, APPLIED and
+# PONG a busy round produces - about thirty at the peak. The margin is
+# smaller than it was, and measuring it against five real players is what
+# step 9.5 of the roadmap is for; the limit is deliberately left where it
+# was until then, so that measurement starts from the known value.
 MP_RATE_MAX=64
 
 # How long a fresh connection has to produce a valid HELLO before the hub

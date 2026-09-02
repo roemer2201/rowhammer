@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: rowhammer
 Architecture: all
-Depends: bash (>= 4.0), ${misc:Depends}
+Depends: bash (>= 4.3), ${misc:Depends}
 Recommends: ncurses-bin, socat
 Description: Tetris-like terminal game written in pure bash
  rowhammer is a Tetris-like game that runs entirely in the terminal and

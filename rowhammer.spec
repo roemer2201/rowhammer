@@ -33,7 +33,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
 BuildRequires:  make
-Requires:       bash >= 4.0
+Requires:       bash >= 4.3
 # tput is optional: the game falls back to fixed ANSI sequences without it.
 Recommends:     ncurses
 # socat carries the multiplayer sessions (since 1.1.0). A Recommends and

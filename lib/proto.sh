@@ -50,7 +50,17 @@ fi
 # starts, and everybody else follows it there. A version 2 client would
 # sit in a lobby whose hub has quit and wait for a round that nobody can
 # start any more.
-PROTO_VERSION=3
+# Version 4 (step 9.3/9.4) distributes the moves: ACT carries a player's
+# own events and PEERACT hands them to everybody else, and GARBAGE and
+# QUEUE gained a slot and go to all instead of only to the player they
+# concern. That is what lets every client write a complete recording of a
+# multiplayer round - the counters and snapshots of version 3 describe a
+# round but cannot replay one (CLAUDE.md 5.20). A version 3 client would
+# ignore ACT and PEERACT (an unknown verb is dropped silently by design)
+# but would then misread the slot in GARBAGE as a row count and push a
+# wrong number of rows into its board - which is exactly why the version
+# number is raised rather than the messages extended compatibly.
+PROTO_VERSION=4
 
 # --- Field patterns -------------------------------------------------------
 # Every field of every message is checked against exactly one of these.
@@ -87,6 +97,19 @@ PROTO_CLOSE_RE='^(host|failed)$'
 # rows): "." empty, a piece type letter, "g"/"s" for a gold/silver square
 # cell and "x" for garbage.
 PROTO_BOARD_RE='^[.IOTSZJLgsx]{200}$'
+# A stream of moves (ACT, PEERACT): one or more "<delta><action>" tokens
+# written back to back, the delta in milliseconds since the previous token
+# of the same stream. The letters are the demo format's own alphabet for
+# what a player does (CLAUDE.md 4.10): l/r move, c/a rotate, s soft drop,
+# h hard drop, o hold, g a gravity step, k the lock delay running out.
+# Deliberately only those: the events a hub or a recording derives for
+# itself - incoming garbage, queue length, elimination - are not something
+# a client gets to claim.
+# Both bounds are what keeps the message inside MP_LINE_MAX: at most six
+# digits per delta (a token every ten minutes is not a stream any more)
+# and at most 48 tokens, so the field cannot exceed 336 characters however
+# it is composed.
+PROTO_ACT_RE='^([0-9]{1,6}[acghklors]){1,48}$'
 
 # --- Message table --------------------------------------------------------
 # One entry per verb: the number of arguments (without the verb) and the
@@ -96,7 +119,7 @@ PROTO_BOARD_RE='^[.IOTSZJLgsx]{200}$'
 # Classes: n = number, f = 0/1 flag, s = slot, N = name, S = peer state,
 # c = caps list, b = board snapshot, h = hole column, k = token,
 # e = error code, t = free text, m = multiplayer mode, a = IPv4 address,
-# C = reason a session closed.
+# C = reason a session closed, T = move token stream.
 declare -A PROTO_MSG=(
     # Client to hub.
     [HELLO]="n N c"
@@ -110,6 +133,15 @@ declare -A PROTO_MSG=(
     # the one number both ends have to agree on (see hub_msg_clear).
     [APPLIED]="n"
     [TOPOUT]=""
+    # The player's own moves of the last window: the round time the first
+    # token counts from, and the tokens themselves. Sent about ten times a
+    # second while something is happening, and always - not only while a
+    # demo is being recorded - because a round must not play differently
+    # depending on a local setting (CLAUDE.md 3.8/5.20). The round time
+    # rather than the play clock is the base: it is the one clock every
+    # participant shares (they all hang off the same countdown), and a
+    # multiplayer round has no pause that could stop it.
+    [ACT]="n T"
     # Whether this client is drawing the opponents' boards (detail level
     # 2, see render_peer_level in lib/render.sh). It is what lets the hub
     # ask for snapshots only while somebody is actually looking at them:
@@ -142,6 +174,13 @@ declare -A PROTO_MSG=(
     [START]="n"
     [PEER]="s n n n n n n n S"
     [PEERBOARD]="s b"
+    # One player's moves, passed on to everybody else unchanged. This is
+    # the message that makes a complete recording possible: the counters
+    # of PEER say how a round went, the moves say what happened in it, and
+    # only the second kind can be replayed through the game's own
+    # functions. It goes to everybody except the sender - a player is not
+    # their own peer, exactly as with PEER.
+    [PEERACT]="s n T"
     [NEEDBOARD]="f"
     # Who runs the lobby. Sent to a client when it is let in and again to
     # everybody whenever the role moves on - which happens when the
@@ -163,12 +202,20 @@ declare -A PROTO_MSG=(
     # over, or the takeover failed. Sent instead of leaving the clients to
     # find out by timeout.
     [CLOSED]="C"
-    [GARBAGE]="n h"
-    # The authoritative length of this client's garbage queue after the
-    # hub cancelled part of it against a clear. The hub owns that number
+    # Garbage rows dealt to a player: whose board they are going into,
+    # how many and the gap column. The slot came with protocol 4 - the
+    # rows used to go to the player they concerned and to nobody else,
+    # which is all the game needs but leaves everybody else unable to
+    # record the round: garbage is the one thing entering a board that
+    # does not come from its owner's moves, so without it a replay would
+    # show a stack growing out of nothing (CLAUDE.md 5.7/5.20).
+    [GARBAGE]="s n h"
+    # The authoritative length of a player's garbage queue after the hub
+    # cancelled part of it against a clear. The hub owns that number
     # because it owns the arithmetic; a second copy kept on the client
-    # could only ever drift away from it.
-    [QUEUE]="n"
+    # could only ever drift away from it. Slot-prefixed and sent to
+    # everybody for the same reason as GARBAGE above.
+    [QUEUE]="s n"
     [KO]="s n"
     [END]="s"
     [PING]="k"
@@ -201,6 +248,7 @@ proto_field_ok() {
         m) [[ "${2}" =~ ${PROTO_MPMODE_RE} ]] ;;
         a) [[ "${2}" =~ ${PROTO_ADDR_RE} ]] ;;
         C) [[ "${2}" =~ ${PROTO_CLOSE_RE} ]] ;;
+        T) [[ "${2}" =~ ${PROTO_ACT_RE} ]] ;;
         t) [[ "${2}" =~ ${PROTO_TEXT_RE} ]] ;;
         *) return 1 ;;
     esac

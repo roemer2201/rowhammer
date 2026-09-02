@@ -124,6 +124,24 @@ jobs:
         run: ./tools/key-scan.sh --gap 0.06 --silent
 
   # ---------------------------------------------------------------------
+  # Round state module: the multiplayer demo playback holds up to five
+  # rounds at once and switches between them with namerefs, so a slot
+  # leaking into another slot would show up as a replay that mixes two
+  # players' boards. The test also compares the module's variable list
+  # against game_reset, the other end of the same statement about what a
+  # round consists of.
+  # ---------------------------------------------------------------------
+  state-check:
+    name: Round state module test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Check slot separation and the state list
+        run: ./tools/state-check.sh --silent
+
+  # ---------------------------------------------------------------------
   # Multiplayer parsers: feed the transport filter, the message parser and
   # the beacon collector random and hostile lines and check that nothing
   # is executed, no control character gets through and nothing crashes.
