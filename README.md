@@ -692,7 +692,9 @@ falsch beschriftetes Paket zu bauen.
 
 ## Voraussetzungen
 
-- Bash >= 4.0 (empfohlen: Bash 5)
+- Bash >= 4.3 (empfohlen: Bash 5). Die 4.3 kommt von den Namerefs
+  (`declare -n`), mit denen die Wiedergabe einer Mehrspieler-Demo
+  mehrere Rundenzustaende gleichzeitig haelt
 - Ein Terminal mit ANSI-Farbunterstuetzung, mindestens 48x22 Zeichen
   (kleiner wird nicht gestartet; eine Verkleinerung waehrend des Spiels
   pausiert bis wieder genug Platz da ist)

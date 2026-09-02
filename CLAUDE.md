@@ -1014,10 +1014,19 @@ Entscheidungen dahinter:
 
 ### 4.1 Rahmenbedingungen
 
-- **Bash >= 4.0** (assoziative Arrays), Ziel: uebliche Linux-Distributionen.
-  Mit der Demo-Aufzeichnung des Mehrspielers steigt das Minimum auf
-  **4.3** (Namerefs, `declare -n` - fuenf Rundenzustaende gleichzeitig,
-  siehe 5.20); gebaut ist das noch nicht.
+- **Bash >= 4.3** (seit 1.3.0, Schritt 9.2): assoziative Arrays gaeben
+  sich mit 4.0 zufrieden, die **Namerefs** (`declare -n`) von
+  `lib/state.sh` nicht - sie halten fuenf Rundenzustaende gleichzeitig
+  und sind die Voraussetzung der Mehrspieler-Wiedergabe (siehe 5.20).
+  Einen Rueckfallweg gibt es dafuer nicht (die Alternative waere, den
+  ganzen Rundenzustand je Frame hin- und herzukopieren), deshalb ist es
+  eine harte Bedingung: der Startcheck in `rowhammer.sh` vergleicht
+  `BASH_VERSINFO` als eine Zahl (Major x 100 + Minor, damit 4.10 nicht
+  aelter aussieht als 4.3) und bricht mit der gefundenen Version in der
+  Meldung ab. Ziel bleiben die ueblichen Linux-Distributionen - Bash 4.3
+  ist von 2014, und `${EPOCHREALTIME}` (Bash 5) nutzt das Spiel ohnehin
+  schon, wo es da ist. `debian/control`, `rowhammer.spec` und die README
+  nennen dieselbe Zahl.
 - Keine harten Abhaengigkeiten ausser Coreutils; `tput` optional (Fallback auf
   feste ANSI-Sequenzen).
 - Farben ueber ANSI-Escape-Sequenzen (8/16 Farben als Basis, 256-Farben als
@@ -1087,11 +1096,13 @@ rowhammer/
     proto.sh           # Nachrichtentabelle, Parser mit Validierung
     hub.sh             # Sitzungslogik des Hubs (Lobby, Garbage, KO)
     mp.sh              # Client-Seite: Lobby, Peer-Zustaende, Anbindung
+    state.sh           # Rundenzustand benennen und umschalten (Namerefs)
   assets/
     wonders/           # ASCII-Art je Wunder und Baustufe
   tools/
     key-scan.sh        # Regressionstest der Eingabeschicht (Issue #7)
     net-fuzz.sh        # Fuzz-Test der Mehrspieler-Parser (siehe 5.5)
+    state-check.sh     # Regressionstest des Rundenzustands (siehe 5.20)
     release.sh         # Versions-Abgleich, Release-Notes, Release-Tag
     demo/              # Werkzeuge fuer die asciinema-Democlips
   .github/workflows/
@@ -1173,7 +1184,8 @@ Einstellungsmenue waehlbar und in der Config gespeichert),
 die Mehrspieler-Optionen `--mp-transport lan|unix`, `--mp-port N`,
 `--mp-dir DIR`, `--mp-max N`, `--mp-session NAME`,
 `--mp-view auto|full|compact|score`, `--mp-target random|all|even`,
-`--mp-host`, `--mp-join HOST[:PORT]` und `--mp-bot` (je mit
+`--mp-mode survival|sprint|ultra`, `--mp-garbage on|off`, `--mp-host`,
+`--mp-join HOST[:PORT]` und `--mp-bot` (je mit
 `ROWHAMMER_MP_*`-Variable, seit 1.1.0, siehe 5.10) sowie die drei
 internen Prozessmodi `--mp-hub`, `--mp-bridge` und `--mp-discover`,
 `--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
@@ -1916,7 +1928,8 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   `/usr/games/rowhammer`), und ein Layout-Wechsel ist nur im `Makefile`
   nachzuziehen. Das `%make_install`-Makro wird absichtlich nicht genutzt,
   weil es nicht auf jedem Build-Host definiert ist. Paket-Eigenschaften:
-  `BuildArch: noarch`, `Requires: bash >= 4.0`, `Recommends: ncurses`
+  `BuildArch: noarch`, `Requires: bash >= 4.3` (seit 9.2, siehe 4.1),
+  `Recommends: ncurses`
   (`tput` ist optional, siehe 4.1). `/usr/games` ist als Verzeichnis
   mitverpackt, weil es auf RPM-Distributionen nicht ueberall vom
   `filesystem`-Paket kommt (Mitbesitz ist bei RPM zulaessig); die
@@ -2408,8 +2421,13 @@ erkennt eine verstummte Sitzung von selbst (siehe 5.4/5.8). Dieser Abschnitt bes
 nicht mehr eine Absicht, sondern den gebauten Zustand; wo die Umsetzung
 von der urspruenglichen Spezifikation abweicht, steht es an Ort und
 Stelle. **Offen ist ein Punkt:** die Demo-Aufzeichnung einer
-Mehrspieler-Runde (5.20, Schritt 9). Sie braucht die Protokollversion 4
-(die Zuege aller Teilnehmer werden verteilt) und die Formatversion 3;
+Mehrspieler-Runde (5.20, Schritt 9). Ihr Unterbau steht seit den
+Schritten 9.1 bis 9.4: der Rundenzustand ist benannt und umschaltbar
+(`lib/state.sh`), das Bash-Minimum liegt bei 4.3, und die
+**Protokollversion 4** verteilt die Zuege aller Teilnehmer (`ACT`,
+`PEERACT`) und schickt `GARBAGE` und `QUEUE` mit Slot an alle. Was noch
+fehlt, ist die Formatversion 3 und die Wiedergabe selbst (Schritte 9.5
+bis 9.14);
 bis dahin wird eine Mehrspieler-Runde bewusst **nicht** aufgezeichnet
 (`demo_record_start` lehnt einen Modus ab, den das Format nicht kennt) -
 eine Aufnahme im heutigen Format wuerde als Runde ablaufen, in der aus
@@ -2717,10 +2735,12 @@ spielt voellig gleichwertig mit. Vier Gruende, warum die Verteilung an
 alle nicht ueber Multicast laeuft, obwohl der Hub dieselbe Nachricht
 oft an mehrere schickt:
 
-- **Die Nachrichten sind gar nicht dieselben.** `GARBAGE` geht an ein
-  Ziel, `NEEDBOARD` haengt am Terminal des einzelnen Clients, und ein
-  `PEER` geht an alle **ausser** dem Absender. Multicast lohnt erst,
-  wo wirklich alle dasselbe bekommen.
+- **Die Nachrichten sind gar nicht dieselben.** `NEEDBOARD` haengt am
+  Terminal des einzelnen Clients, und `PEER`, `PEERBOARD` und `PEERACT`
+  gehen an alle **ausser** dem Absender. Multicast lohnt erst, wo
+  wirklich alle dasselbe bekommen - und selbst `GARBAGE` und `QUEUE`,
+  die seit 9.4 an alle gehen, sind an genau einen Slot adressiert und
+  nur fuer ihn eine Anweisung; die uebrigen schreiben sie bloss mit.
 - **TCP bringt mit, was sonst nachzubauen waere.** Reihenfolge,
   Zustellung, Flusskontrolle und ein sauberes EOF beim Absturz eines
   Clients (an dem 5.8 den Verbindungsabbruch erkennt). Ueber UDP
@@ -2854,20 +2874,23 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   Grossbuchstaben. Unbekannte Verben werden ignoriert (Vorwaerts-
   kompatibilitaet), fehlerhafte Zeilen fuehren zum Verbindungsabbruch
   (siehe 5.5).
-- **Versionierung:** `PROTO_VERSION=3`. Der Hub lehnt abweichende
+- **Versionierung:** `PROTO_VERSION=4`. Der Hub lehnt abweichende
   Versionen im `HELLO` mit `ERR proto ...` ab. Gemaess der Arbeitsregel
   "keine Abwaertskompatibilitaet" wird das Protokoll bei Bedarf
-  hochgezaehlt statt kompatibel erweitert; genau das ist zweimal
+  hochgezaehlt statt kompatibel erweitert; genau das ist dreimal
   passiert. **Version 2** kam mit den Sitzungseinstellungen (1.1.0,
   siehe 5.1): `SETUP` in beide Richtungen. **Version 3** kam mit dem
   Gastgeberwechsel (1.2.0, siehe unten und 5.8): `HOST`, `PROMOTE`,
   `PROMOTED`, `MIGRATE` und `CLOSED`, dazu der Sitzungsname als viertes
   Feld von `WELCOME` - eine umgezogene Sitzung soll unter ihrem eigenen
   Namen weiterlaufen und nicht unter dem des Nachfolgers.
-  **Version 4** ist spezifiziert, aber noch nicht gebaut (5.20): sie
-  verteilt die Zuege aller Teilnehmer (`ACT`, `PEERACT`) und stellt
-  `GARBAGE` und `QUEUE` einen Slot voran, damit eine Demo-Aufzeichnung
-  jeden Mitspieler nachspielen kann.
+  **Version 4** (Schritte 9.3 und 9.4) verteilt die Zuege aller
+  Teilnehmer (`ACT`, `PEERACT`) und stellt `GARBAGE` und `QUEUE` einen
+  Slot voran, damit eine Demo-Aufzeichnung jeden Mitspieler nachspielen
+  kann (5.20). Ein Version-3-Client wuerde `ACT`/`PEERACT` stillschweigend
+  ignorieren (so ist ein unbekanntes Verb gedacht), aber den Slot in
+  `GARBAGE` als Reihenzahl lesen und die falsche Menge Stoerreihen
+  einschieben - genau dafuer gibt es diese Zahl.
 - **Client -> Hub**
 
   | Nachricht | Felder | Bedeutung |
@@ -2878,6 +2901,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `BOARD` | `<200 Zeichen>` | Feld-Snapshot, nur wenn der Hub `NEEDBOARD 1` gesetzt hat, max. 5/s |
   | `CLEAR` | `<lines> <silver> <gold>` | ein Reihenabbau als Angriffs-Meldung (Hub rechnet daraus die Garbage aus) |
   | `APPLIED` | `<count>` | eingeschobene Stoerreihen (seit 1.1.0, siehe unten) |
+  | `ACT` | `<t> <tokens>` | die eigenen Zuege eines Zeitfensters (seit 9.3, siehe unten) |
   | `VIEW` | `<0 oder 1>` | ob dieser Client die Gegnerfelder zeichnet (seit 1.1.0) |
   | `SETUP` | `<modus> <garbage>` | Sitzungseinstellungen, nur vom Gastgeber (seit 1.1.0, siehe 5.1) |
   | `PROMOTED` | `<port>` | "mein Hub laeuft auf diesem Port" - Antwort auf `PROMOTE` (seit 1.2.0) |
@@ -2900,9 +2924,10 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `START` | `<countdown_ms>` | Rundenstart |
   | `PEER` | `<slot> <lines> <rows> <level> <gold> <silver> <height> <pending> <state>` | Zustand eines Mitspielers |
   | `PEERBOARD` | `<slot> <200 Zeichen>` | Feld-Snapshot eines Mitspielers |
+  | `PEERACT` | `<slot> <t> <tokens>` | die Zuege eines Mitspielers, unveraendert weitergereicht (seit 9.3) |
   | `NEEDBOARD` | `<0 oder 1>` | ob dieser Client Snapshots senden soll (spart Last, wenn niemand Stufe 2 anzeigt) |
-  | `GARBAGE` | `<count> <hole>` | eingehende Stoerreihen, Lochspalte 0-9 |
-  | `QUEUE` | `<count>` | verbindliche Laenge der eigenen Warteschlange (seit 1.1.0) |
+  | `GARBAGE` | `<slot> <count> <hole>` | Stoerreihen fuer einen Spieler, Lochspalte 0-9; seit 9.4 mit Slot und an alle |
+  | `QUEUE` | `<slot> <count>` | verbindliche Laenge einer Warteschlange (seit 1.1.0; seit 9.4 mit Slot und an alle) |
   | `KO` | `<slot> <platz>` | Spieler ausgeschieden |
   | `END` | `<siegerslot>` | Runde vorbei |
   | `PING` | `<token>` | Lebendpruefung, alle 2 s |
@@ -3303,7 +3328,22 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   das die Verbindung nicht verhungern lassen: waehrend der Animation
   wird der Socket weiter geleert (Tastendruecke bleiben wie bisher
   verworfen).
-- **Seed:** `--seed` wird im Mehrspieler vom Hub-Seed uebersteuert; ein
+- **Seed:** der Hub-Seed passt seit Schritt 9.5 immer in das Zahlenfeld
+  des Protokolls (neun Stellen, `PROTO_NUM_RE`): `hub_start_round` nimmt
+  ihn modulo 1.000.000.000, egal ob er gewuerfelt wurde oder aus
+  `--seed` kam. Davor tat das keine der beiden Quellen - die Maske
+  `0x3FFFFFFF` reicht bis 1.073.741.823 und war damit in rund **7 % aller
+  Runden** zehnstellig, und `--seed` nimmt Ziffern beliebiger Laenge
+  entgegen. Die Folge war still und schwerwiegend: **jeder** Client wies
+  die `SEED`-Nachricht als fehlerhaft ab, behielt sein eigenes `RANDOM`
+  und spielte eine **andere Steinfolge** - genau die Fairness, fuer die
+  der gemeinsame Seed da ist (siehe 5.1), und auf dem Bildschirm stand
+  nichts davon. Gefunden hat es die Lastprobe aus 9.5, die den Fehler in
+  einem von drei Laeufen als verworfene Nachricht sichtbar machte; im
+  Code stand er, seit es den Seed gibt. Ein Seed, der von dem
+  gewuenschten abweicht, ist das erheblich kleinere Uebel als einer, den
+  niemand bekommt.
+- **Seed (CLI):** `--seed` wird im Mehrspieler vom Hub-Seed uebersteuert; ein
   gesetzter `--seed` beim Host wird zum Sitzungs-Seed.
 - **Terminalgroesse:** der SIGWINCH-Pfad waehlt zusaetzlich die
   Detailstufe neu (siehe 5.6).
@@ -3330,8 +3370,9 @@ Standard < Config < Env < CLI, wie in Abschnitt 6 gefordert):
 
 | Option | Umgebung | Bedeutung |
 | --- | --- | --- |
-| `--mp-host [NAME]` | `ROWHAMMER_MP_HOST` | Sitzung eroeffnen (Standardname = Benutzername) |
+| `--mp-host` | `ROWHAMMER_MP_HOST` | Sitzung eroeffnen (ein Schalter ohne Argument; den Namen setzt `--mp-session`) |
 | `--mp-join ZIEL` | `ROWHAMMER_MP_JOIN` | Beitreten: Sitzungsname oder `HOST[:PORT]` (siehe 5.2) |
+| `--mp-session NAME` | `ROWHAMMER_MP_SESSION` | Name der eroeffneten Sitzung, 1-16 Zeichen `[A-Za-z0-9_-]`; Vorgabe ist der Benutzername, auf dieses Muster reduziert (leeres Ergebnis wird `player`) |
 | `--mp-transport MODE` | `ROWHAMMER_MP_TRANSPORT` | `lan` (Standard) oder `unix` |
 | `--mp-port N` | `ROWHAMMER_MP_PORT` | TCP-/Beacon-Port, Standard 27301 (nur `lan`) |
 | `--mp-dir DIR` | `ROWHAMMER_MP_DIR` | Sitzungsverzeichnis (nur `unix`, siehe 5.2) |
@@ -3638,11 +3679,13 @@ Arbeitsschritte stehen als 9.1 bis 9.14 in Abschnitt 7.
 
 **Warum eine Mehrspieler-Runde nicht wie jede andere aufgezeichnet
 wird.** Eine Demo speichert Zuege, keine Bildschirme (3.8). Die eigenen
-Zuege liegen vollstaendig vor; die **Zuege der Mitspieler kommen im
-gebauten Protokoll nirgends an** - uebertragen werden nur ihre Zaehler
+Zuege liegen vollstaendig vor; die **Zuege der Mitspieler kamen bis
+Protokoll 3 nirgends an** - uebertragen wurden nur ihre Zaehler
 (`PEER`) und, nur in Detailstufe 2, Feld-Schnappschuesse (`PEERBOARD`,
-200 Zeichen, max. 5 Hz, siehe 5.6). Bis das behoben ist, wird eine
-Mehrspieler-Runde bewusst **gar nicht** aufgezeichnet: `demo_record_start`
+200 Zeichen, max. 5 Hz, siehe 5.6). Das ist mit Schritt 9.3 behoben
+(`ACT`/`PEERACT`, siehe unten); solange die Aufnahme selbst aber noch
+nicht gebaut ist, wird eine Mehrspieler-Runde weiterhin bewusst **gar
+nicht** aufgezeichnet: `demo_record_start`
 lehnt einen Modus ab, den `DEMO_MODE_RE` nicht kennt, denn eine Aufnahme
 im heutigen Format 2 liefe als Runde ab, in der aus dem Nichts
 Stoerreihen erscheinen.
@@ -3737,13 +3780,36 @@ Zwei Konsequenzen:
   Paketabhaengigkeiten, 4.1 und die README ziehen nach, und ein
   Startcheck sagt es mit einer klaren Meldung statt mit einem
   Syntaxfehler.
-- **Ein eigenes Modul `lib/state.sh`** haelt die Liste des
-  Rundenzustands und die drei Funktionen `state_new`, `state_bind` und
-  `state_release`. Die Liste ist damit die einzige Stelle, an der der
-  Rundenzustand aufgezaehlt wird - ein kuenftiger Zaehler wird dort
-  eingetragen, sonst nirgends.
+- **Ein eigenes Modul `lib/state.sh`** (gebaut mit 9.1) haelt die Liste
+  des Rundenzustands (`STATE_VARS`, je Eintrag die Art - indiziertes
+  Array, assoziatives Array oder Skalar - und der Name) und die
+  Funktionen `state_new`, `state_bind` und `state_release`; dazu kamen
+  beim Bauen `state_unbind` und `state_release_all`. Die Liste ist damit
+  die einzige Stelle, an der der Rundenzustand aufgezaehlt wird - ein
+  kuenftiger Zaehler wird dort eingetragen, sonst nirgends. Drei
+  Festlegungen aus der Umsetzung:
+  - **`state_unbind` musste dazu**, weil `unset` auf einem Nameref der
+    Referenz folgt und die Daten dahinter loescht statt den Zeiger. Nur
+    `unset -n` loest die Bindung; ohne diese Funktion gaebe es keinen
+    Weg zurueck zu gewoehnlichen Globals, den eine Wiedergabe beim
+    Verlassen braucht.
+  - **Die Sitzungs- und Schleifenzustaende bleiben draussen** (`DIRTY`,
+    `RENDER_FULL`, `GAME_EXIT`, `GAME_SUSPENDED`, `GAME_RESTART`,
+    `REDRAW_PENDING`, `NOW_MS`) und ebenso, was nur innerhalb eines Locks
+    lebt (`NEXT_TYPE`, `FULL_ROWS`, `FLASH_ROWS`). Eine Wiedergabe von
+    fuenf Runden zeichnet ein Bild und hat ein Abbruch-Flag; und was die
+    Funktion nicht ueberlebt, die es erzeugt hat, kann auch kein Slot
+    ueber einen Kontextwechsel tragen.
+  - **`tools/state-check.sh` haelt die Liste ehrlich** (Abnahme von 9.1,
+    im CI): es legt fuenf Slots an, schreibt in jeden - aus einer
+    Funktion heraus, so wie es die echten Rundenfunktionen tun - und
+    liest alle fuenf zurueck; und es liest die Zuweisungen aus
+    `game_reset` und verlangt, dass jede in `STATE_VARS` steht oder in
+    der kurzen Liste der Sitzungszustaende. Damit kann die Liste nicht
+    hinter dem Spiel zurueckbleiben, ohne dass es auffaellt.
 
-**Protokoll Version 4: die Zuege werden verteilt.**
+**Protokoll Version 4: die Zuege werden verteilt** (gebaut mit den
+Schritten 9.3 und 9.4).
 Das ist die Folgefrage, die Abschnitt 8 offen gelassen hat, und sie ist
 mit dem Vollausbau entschieden. Der Einwand von damals - jeder Client
 muesste bis zu vier fremde Runden mitsimulieren - **greift hier nicht**:
@@ -3751,19 +3817,86 @@ uebertragen und mitgeschrieben werden die Zuege, simuliert wird erst bei
 der Wiedergabe.
 
 - **`ACT <t> <tokens>`** (Client -> Hub): die eigenen Ereignisse eines
-  Zeitfensters. `t` ist die Rundenzeit des ersten Tokens in
-  Millisekunden, `tokens` sind die Ereignisse im Alphabet der Demo mit
-  ihren Deltas (`120l60g0h`). Gesendet alle `MP_ACT_MS` (100 ms), wenn
-  etwas passiert ist - rund zehn Nachrichten je Sekunde und Spieler.
+  Zeitfensters. `tokens` sind die Ereignisse im Alphabet der Demo mit
+  ihren Deltas (`120l60g0h`), `t` die Rundenzeit in Millisekunden, von
+  der das **erste** Delta zaehlt. Gesendet alle `MP_ACT_MS` (100 ms),
+  wenn etwas passiert ist - rund zehn Nachrichten je Sekunde und
+  Spieler. Drei Dinge, die beim Bauen festgelegt wurden:
+  - **`t` ist die Basis des Fensters, nicht der Zeitpunkt des ersten
+    Tokens.** Konkret: die Rundenzeit des letzten Tokens des
+    *vorherigen* Fensters (am Rundenanfang 0). Damit sind die Deltas
+    ueber Fenstergrenzen hinweg durchgehend - `ACT 0 53c` gefolgt von
+    `ACT 53 67c68c` -, und ein Empfaenger muss nie raten, worauf sich
+    das erste Delta bezieht. Die Alternative (`t` = Zeitpunkt des
+    ersten Tokens, dessen Delta dann immer 0) haette ein Byte je
+    Nachricht gekostet und dieselbe Information getragen.
+  - **Das Feld hat feste Grenzen** (`PROTO_ACT_RE`): hoechstens sechs
+    Ziffern je Delta und hoechstens 48 Tokens, zusammen also nie mehr
+    als 336 Zeichen - so kann die Nachricht `MP_LINE_MAX` (512) nicht
+    sprengen, wie auch immer sie zusammengesetzt ist. Ein volles
+    Fenster geht vorzeitig raus, statt gekuerzt zu werden: ein
+    verlorener Zug wuerde eine Aufnahme stillschweigend auseinander
+    laufen lassen.
+  - **Nur das Bewegungsalphabet** (`l r c a s h o g k`). Die Ereignisse,
+    die ein Hub oder eine Aufnahme selbst herleitet - eingehende
+    Stoerreihen, Warteschlangenlaenge, Ausscheiden - darf ein Client
+    nicht behaupten; und die Flutreihe `w<spalte>` gehoert dem
+    Hochwasser-Modus, der im Mehrspieler nicht vorkommt.
 - **`PEERACT <slot> <t> <tokens>`** (Hub -> alle ausser dem Absender):
-  unveraendert weitergereicht.
+  unveraendert weitergereicht. Der Hub schaut nicht hinein und merkt
+  sich nichts davon - es ist die einzige Nachricht, die er rein
+  weiterreicht, weil die Zuege fuer die Sitzungslogik nichts bedeuten
+  (was ein Abbau wert ist, rechnet er aus `CLEAR`). Angenommen nur von
+  einem Slot, der wirklich spielt.
 - **`GARBAGE` und `QUEUE` bekommen einen Slot vorangestellt** und gehen
   an alle statt nur an den Betroffenen. Sie sind die einzige Eingabe in
   ein fremdes Feld, die nicht aus dessen Zuegen kommt, und der Hub ist
-  ihre Quelle (5.7).
+  ihre Quelle (5.7). **Handeln darf nur der genannte Slot**: die
+  anderen schreiben die Zeile mit und lassen ihre eigene Warteschlange
+  in Ruhe - was die Warteschlange eines Mitspielers ist, sagt dessen
+  `PEER`, und eine zweite Quelle fuer dieselbe Zahl koennte von ihr nur
+  abweichen.
+- **Gesammelt wird an derselben Stelle wie fuer die Aufnahme.** Die
+  zehn Stellen, an denen einer Runde etwas zustoesst, rufen seit 9.3
+  `round_event` (`rowhammer.sh`) statt `demo_record_event`; der Trichter
+  gibt das Ereignis an beide Verbraucher desselben Alphabets weiter -
+  die Aufzeichnung und den Zugstrom. Auch der Test-Bot (`--mp-bot`)
+  geht durch ihn, sonst waeren die Stroeme nur mit so vielen Terminals
+  zu testen wie Spielern.
 - Bandbreite: rund 40 B/s je Spieler an Zuegen, verteilt an vier
   andere - unter 1 kB/s fuer die ganze Sitzung, gegen die 6 kB/s der
   Schnappschuesse (5.4) also nichts.
+- **Nachgemessen (Schritt 9.5).** Fuenf Teilnehmer in Detailstufe 2 - ein
+  zeichnender Client in einem 200x50-Terminal, der als Einziger
+  Schnappschuesse anfordert (und sie damit fuer alle einschaltet), dazu
+  vier Test-Bots -, je drei Laeufe mit und ohne die neuen Nachrichten:
+
+  | Groesse | Protokoll 3 | Protokoll 4 | Grenze |
+  | --- | --- | --- | --- |
+  | Nachrichten je Client und Sekunde (Spitze) | 10 | 17 | `MP_RATE_MAX` 64 |
+  | empfangene Zeilen je Client und Sekunde (Spitze) | 45 | 63 | 800 (16 je Tick x 50 Ticks) |
+  | Nachrichten des Hubs je Sekunde (Spitze, alle Clients) | 144 | 221 | - |
+  | `PING`-Abstand des Hubs | 2000-2049 ms | 2001-2058 ms | Soll 2000 ms |
+  | Bilder je Sekunde beim zeichnenden Client | 7,4-8,0 | 6,7-9,1 | - |
+  | verworfene Nachrichten / Raten-Abschaltungen | 0 / 0 | 0 / 0 | 0 |
+
+  Der Zugstrom kostet also gut zwei Drittel mehr Nachrichten und bleibt
+  bei einem Viertel der Ratengrenze; die Empfangsseite liegt unter einem
+  Zehntel dessen, was ein Tick abraeumen kann. **Keine der beiden
+  Grenzen wird nachgezogen** - eine Zahl, die nicht annaehernd erreicht
+  wird, enger zu ziehen bringt nichts, und weiter zu ziehen gaebe nur
+  einem Fluter mehr Raum. Der Hub-Tick von 50 ms haelt mit: sein `PING`
+  weicht wie vorher um hoechstens 58 ms vom Soll ab. Die Bildrate liegt
+  im selben Streubereich wie vorher (Mittel 7,5 gegen 7,7 bei drei
+  Laeufen je Seite, der beste Einzellauf ist einer der neuen) - eine
+  Verschlechterung ist nicht messbar, die Stichprobe ist aber klein:
+  die Test-Bots bauen sich nach 4 bis 7 Sekunden selbst tot, und so lang
+  ist das Vollast-Fenster je Lauf.
+- **Was die Lastprobe gefunden hat**, war kein Kapazitaetsproblem,
+  sondern ein Fehler, den es seit der Einfuehrung des gemeinsamen Seeds
+  gab: ein zehnstelliger Seed passte nicht in das Zahlenfeld des
+  Protokolls und wurde von **jedem** Client verworfen (siehe 5.9,
+  "Seed"). Er ist mit 9.5 behoben.
 
 Drei Festlegungen dazu:
 
@@ -4035,29 +4168,32 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
       Die Version bleibt waehrend der Arbeit auf `1.3.0` und steigt erst
       mit Schritt 9.14 auf `1.4.0`; `2.0.0` bleibt dem Stand nach der
       Entkopplung (Punkt darunter) vorbehalten.
-  - [ ] **9.1 Rundenzustand benennen.** Neues Modul `lib/state.sh` mit
+  - [x] **9.1 Rundenzustand benennen.** Neues Modul `lib/state.sh` mit
         der Liste des Rundenzustands und `state_new`, `state_bind`,
         `state_release`. Noch ohne Nutzer - die Runde laeuft weiter auf
         den Globals. Abnahme: ein Testskript legt fuenf Zustaende an,
         schreibt in jeden und weist die Trennung nach; die Liste deckt
         sich mit `game_reset`.
-  - [ ] **9.2 Bash-Minimum auf 4.3.** Startcheck mit klarer Meldung,
+  - [x] **9.2 Bash-Minimum auf 4.3.** Startcheck mit klarer Meldung,
         `debian/control`, `rowhammer.spec`, 4.1 und README nachziehen.
         Abnahme: Start und `--help` unveraendert, die Meldung erscheint
         bei kuenstlich gesetzter Bedingung.
-  - [ ] **9.3 Protokoll 4, Teil 1: `ACT`/`PEERACT`.** Nachrichtentabelle
+  - [x] **9.3 Protokoll 4, Teil 1: `ACT`/`PEERACT`.** Nachrichtentabelle
         und Muster in `lib/proto.sh`, Sammeln und Senden in `lib/mp.sh`
         (`MP_ACT_MS`), Weiterreichen im Hub. Abnahme: Runde mit drei
         `--mp-bot`, `net.log` zeigt die Stroeme, `tools/net-fuzz.sh`
         bleibt sauber, die Runde spielt sich unveraendert.
-  - [ ] **9.4 Protokoll 4, Teil 2: `GARBAGE`/`QUEUE` mit Slot an alle.**
+  - [x] **9.4 Protokoll 4, Teil 2: `GARBAGE`/`QUEUE` mit Slot an alle.**
         Abnahme: Stoerreihen kommen unveraendert an, und jeder Client
         sieht auch die der anderen im `net.log`.
-  - [ ] **9.5 Lastprobe.** Fuenf Teilnehmer in Detailstufe 2:
+  - [x] **9.5 Lastprobe.** Fuenf Teilnehmer in Detailstufe 2:
         `MP_POLL_MAX`, `MP_RATE_MAX` und den Hub-Tick gegen den neuen
         Verkehr messen, Grenzen nachziehen falls noetig. Abnahme: keine
         verworfene Nachricht, keine Ratenabschaltung, Framerate wie
-        vorher.
+        vorher. Zahlen und Aufbau in 5.20 ("Nachgemessen"); keine der
+        beiden Grenzen musste nachgezogen werden. Die Probe hat dafuer
+        einen alten Fehler gefunden - ein zehnstelliger Seed, den jeder
+        Client verwarf (siehe 5.9, "Seed") -, der mit ihr behoben ist.
   - [ ] **9.6 Format 3 schreiben.** Kopf, `p=`- und `v=`-Zeilen, neue
         Ereignisbuchstaben, Demo-Uhr als Rundenuhr im Versus, `versus`
         in `DEMO_MODE_RE`, `end=lost`, und `--mp-bot` zeichnet nicht
@@ -4355,9 +4491,13 @@ Uebrige dort ist entschieden):
   war der Wunsch, bei der Wiedergabe frei zwischen den Spielern
   umschalten zu koennen: ein Gegner in der Bildmitte waere aus
   Schnappschuessen ein 5-Hz-Standbild ohne fallenden Stein.
-  Offen bleibt nur, was das Playtesting beantworten kann: ob der
-  zusaetzliche Verkehr (unter 1 kB/s je Sitzung) auf schwacher Hardware
-  wirklich folgenlos bleibt - dafuer ist Schritt 9.5 die Lastprobe.
+  Der zusaetzliche Verkehr ist mit Schritt 9.5 gemessen und folgenlos:
+  17 Nachrichten je Client und Sekunde in der Spitze gegen eine Grenze
+  von 64, Empfangsseite unter einem Zehntel der Tick-Kapazitaet, Bildrate
+  im bisherigen Streubereich (Tabelle in 5.20). Offen bleibt nur, was
+  eine Messung auf einem Rechner nicht beantworten kann: wie sich das in
+  einem echten Raum voller Terminals und auf schwacher Hardware
+  anfuehlt.
 - **Kein Reconnect in v1** (5.8). Falls sich Abbrueche im Alltag haeufen,
   waere ein Wiedereinstieg mit vollstaendiger Zustandsuebertragung ein
   eigener spaeterer Punkt.

@@ -57,11 +57,22 @@ MP_LINE_MAX=512
 # a single frame; whatever is left waits in the socket buffer for the next
 # tick, and a peer that keeps it up runs into the rate limit in
 # lib/proto.sh long before the buffer matters.
+# Sixteen lines at the loop's 50 ticks a second is a drain capacity of
+# 800 lines a second. Measured in step 9.5 with five participants in
+# detail level 2, the busiest client received 63 a second - under a tenth
+# of it - so this number stays as it is too.
 MP_POLL_MAX=16
 
 # Accepted rate per client, counted by the receiver (lib/proto.sh applies
-# it). Sixty-four messages a second is an order of magnitude above what a
-# well-behaved client sends (10 STATE/s plus 5 BOARD/s plus events).
+# it). Sixty-four messages a second is well above what a well-behaved
+# client sends: 10 STATE/s plus 5 BOARD/s plus, since protocol 4, up to
+# 10 ACT/s (MP_ACT_MS in lib/mp.sh) and the handful of CLEAR, APPLIED and
+# PONG a busy round produces. Measured in step 9.5 with five participants
+# in detail level 2: the busiest client peaked at 17 messages a second,
+# about a quarter of this limit (it was 10/s before ACT existed). The
+# limit therefore stays where it is - there is no point tightening a
+# number that is not close to being reached, and loosening it would only
+# give a flooder more room.
 MP_RATE_MAX=64
 
 # How long a fresh connection has to produce a valid HELLO before the hub

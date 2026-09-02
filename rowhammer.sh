@@ -809,8 +809,18 @@ fi
 # --- Prerequisites --------------------------------------------------------
 # Associative arrays (piece tables) and fractional read timeouts need
 # bash 4; EPOCHREALTIME (bash 5) is optional and has a fallback.
-if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
-    die "bash >= 4.0 is required, this is bash ${BASH_VERSION}"
+# CHANGE 2026-09-02: the minimum moved from 4.0 up to 4.3 (bash 4.3,
+# 2014) because of namerefs, "declare -n": lib/state.sh binds the round
+# state to one of several slots with them, which is what lets the
+# multiplayer demo playback hold five rounds at once and simulate all of
+# them (CLAUDE.md 5.20). There is no fallback for it - the alternative
+# would be copying the whole round state back and forth per frame - so
+# this is a hard requirement rather than a degraded mode.
+# Checked as one number (major * 100 + minor) so 4.10 would not compare
+# as older than 4.3, and reported with the version found: the message a
+# user gets has to say what is wrong, not just that something is.
+if (( BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1] < 403 )); then
+    die "bash >= 4.3 is required (namerefs), this is bash ${BASH_VERSION}"
 fi
 # CHANGE 2026-08-02: the tty check moved below the library modules and
 # the --reset block. --reset only deletes files and prints a report, so
@@ -844,7 +854,11 @@ TERM_RESIZED=0
 # take the piece stream from a recording during playback, and the
 # renderer reads it as well, so the flags have to exist before either
 # module runs.
-for _lib in debug config i18n demo pieces board squares highscore save stats wonders input render menu net proto hub mp; do
+# state comes early and is deliberately sourced although nothing binds a
+# slot yet: it only declares the round state list and its three helpers,
+# and a library the game never loads is one that rots unnoticed. The
+# playback of a multiplayer demo is what will bind slots (CLAUDE.md 5.20).
+for _lib in debug config i18n state demo pieces board squares highscore save stats wonders input render menu net proto hub mp; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -1443,6 +1457,25 @@ time_attack_budget() {
     return 0
 }
 
+# round_event ACTION
+# One thing that happened to this round, handed to everybody who has to
+# know about it. Two consumers today, both reading the same alphabet (the
+# demo format's, see CLAUDE.md 4.10): the recording of this round, and -
+# in a multiplayer session - the move stream that goes to the other
+# players so their clients can record this round as well (5.20).
+# A funnel rather than two calls at each of the ten sites: the two are
+# fed by definition from the same places with the same letters, and a
+# future third consumer should not mean editing ten call sites again.
+# Note what does not gate it: the demo recorder is a no-op when nothing
+# is being recorded, and the move stream is sent whether or not a
+# recording runs - a round has to produce the same traffic either way,
+# or --demo-record would be visible on the wire.
+round_event() {
+    demo_record_event "${1}"
+    mp_act_event "${1}"
+    return 0
+}
+
 # update_speed: derive level and gravity interval from the physical lines
 # cleared this round (one level per 10 lines, speed from LEVEL_SPEEDS).
 update_speed() {
@@ -1694,6 +1727,11 @@ record_round() {
 # the same rule.
 round_finish() {
     if [ "${MP_ACTIVE}" -eq 1 ]; then
+        # The moves still in the window go out first, and unconditionally:
+        # the last few before a top-out are the ones that led to it, and
+        # they would otherwise be lost with the buffer - a recording made
+        # by the other players would end a move or two early.
+        mp_act_flush 1
         mp_send_topout
         return 0
     fi
@@ -1762,6 +1800,10 @@ flood_raise() {
     # Recorded before the effect, and recorded even when the rise ends
     # the round: the replay applies the same event to the same board and
     # therefore reaches the same ending.
+    # Straight to the recorder rather than through round_event: this is
+    # the one event of the alphabet that never happens in a multiplayer
+    # round (Hochwasser is a singleplayer mode, see CLAUDE.md 5.1), so
+    # there is nothing to tell the other players about.
     demo_record_event "w${hole}"
     if ! board_flood_row "${hole}"; then
         GAME_OVER=1
@@ -2236,35 +2278,34 @@ handle_key() {
     if [ "${PAUSED}" -eq 1 ]; then
         return 0
     fi
-    # Each of these actions is handed to the demo recorder before it is
-    # carried out (demo_record_event is a no-op when nothing is being
-    # recorded). Before, not after, so the event carries the play time the
-    # key was pressed at rather than the time the action - a hard drop
-    # with its row flash, say - happened to finish; and blocked attempts
-    # are recorded too, because the replay runs them against the same
-    # board and they are blocked there as well.
+    # Each of these actions is handed to round_event before it is carried
+    # out. Before, not after, so the event carries the play time the key
+    # was pressed at rather than the time the action - a hard drop with
+    # its row flash, say - happened to finish; and blocked attempts are
+    # recorded too, because the replay runs them against the same board
+    # and they are blocked there as well.
     case "${KEY}" in
-        LEFT|"${KEY_LEFT}")   demo_record_event l; try_move -1 0 || : ;;
-        RIGHT|"${KEY_RIGHT}") demo_record_event r; try_move 1 0 || : ;;
-        "${KEY_ROT_CW}")      demo_record_event c; try_rotate 1 || : ;;
-        "${KEY_ROT_CCW}")     demo_record_event a; try_rotate -1 || : ;;
+        LEFT|"${KEY_LEFT}")   round_event l; try_move -1 0 || : ;;
+        RIGHT|"${KEY_RIGHT}") round_event r; try_move 1 0 || : ;;
+        "${KEY_ROT_CW}")      round_event c; try_rotate 1 || : ;;
+        "${KEY_ROT_CCW}")     round_event a; try_rotate -1 || : ;;
         DOWN|"${KEY_SOFT}")
             # Soft drop earns no points (cleared rows are the only
             # score source); it just pulls the piece down early.
-            demo_record_event s
+            round_event s
             step_down
             now_ms
             LAST_FALL="${NOW_MS}"
             ;;
         UP|SPACE|"${KEY_HARD}")
-            demo_record_event h
+            round_event h
             hard_drop
             ;;
         # CHANGE 2026-07-30 (user decision): w replaced 2 as the fixed
         # secondary hold key. It sits below the rotation keys a/d on the
         # left hand and is free since the hard drop gave up its letter.
         w|"${KEY_HOLD}")
-            demo_record_event o
+            round_event o
             hold_piece
             ;;
     esac
@@ -2392,6 +2433,11 @@ game_run() {
             if [ "${GAME_OVER}" -eq 0 ]; then
                 mp_send_state
                 mp_send_board
+                # The moves of the last window. Behind the counters
+                # because it is the cheaper message of the two and has
+                # no deadline of its own: it goes out when its window is
+                # up, and an empty window sends nothing at all.
+                mp_act_flush
             fi
         fi
         # A resize just happened: read_key cleared the screen (and may have
@@ -2454,12 +2500,12 @@ game_run() {
                     # are recorded like the player's keys, so a replay
                     # needs no timers of its own: it simply applies the
                     # events on the timeline they were recorded at.
-                    demo_record_event k
+                    round_event k
                     lock_and_next
                 fi
             elif (( NOW_MS - LAST_FALL >= FALL_MS )); then
                 LAST_FALL="${NOW_MS}"
-                demo_record_event g
+                round_event g
                 step_down
             fi
         fi

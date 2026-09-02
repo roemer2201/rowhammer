@@ -439,6 +439,7 @@ hub_client_msg() {
         STATE)  hub_msg_state "${slot}" ;;
         BOARD)  hub_msg_board "${slot}" ;;
         CLEAR)  hub_msg_clear "${slot}" ;;
+        ACT)    hub_msg_act "${slot}" ;;
         APPLIED) hub_msg_applied "${slot}" ;;
         TOPOUT) hub_msg_topout "${slot}" ;;
         PONG)   : ;;
@@ -881,9 +882,36 @@ hub_deal() {
     local slot="${1}" count="${2}" hole="${3}"
     [ "${count}" -gt 0 ] || return 0
     HUB_PENDING[slot]=$(( ${HUB_PENDING[slot]} + count ))
-    proto_msg GARBAGE "${count}" "${hole}"
-    hub_send "${slot}" "${PROTO_LINE}" || :
+    # Addressed to one player and sent to all (protocol 4): the rows are
+    # the one thing that enters a board without coming from its owner's
+    # moves, so every client needs to see them to be able to record the
+    # round (CLAUDE.md 5.20). Only the slot named acts on them - the
+    # others merely write them down.
+    proto_msg GARBAGE "${slot}" "${count}" "${hole}"
+    hub_bcast "${PROTO_LINE}"
     debug_event "hub: ${count} garbage row(s) hole=${hole} -> slot ${slot} (${HUB_NAME[slot]}), queue=${HUB_PENDING[slot]}"
+    return 0
+}
+
+# hub_msg_act SLOT: ACT <t> <tokens>
+# A player's moves of the last window, passed on to everybody else as
+# PEERACT. The hub does not look inside the token stream and does not
+# keep it: it is the one message it purely relays, because the moves mean
+# nothing to the session logic - what a clear is worth is computed from
+# CLEAR, what a round costs is decided by TOPOUT and the clock. Every
+# client needs them though, and the hub is the only path between clients
+# (CLAUDE.md 5.20).
+# Only from a player who is actually playing: a spectator has no moves to
+# report, and a lobby that relayed them would be sending its members
+# something they cannot place anywhere.
+# The stream is validated by proto_parse before it gets here (PROTO_ACT_RE
+# is the whole check - characters and length), so relaying it is passing
+# on something already proven to be well formed, not trusting the sender.
+hub_msg_act() {
+    local slot="${1}"
+    [ "${HUB_STATE[slot]}" = "play" ] || return 0
+    proto_msg PEERACT "${slot}" "${PROTO_ARG[0]}" "${PROTO_ARG[1]}"
+    hub_bcast "${PROTO_LINE}" "${slot}"
     return 0
 }
 
@@ -910,8 +938,11 @@ hub_msg_clear() {
     fi
     if [ "${cancel}" -gt 0 ]; then
         HUB_PENDING[slot]=$(( ${HUB_PENDING[slot]} - cancel ))
-        proto_msg QUEUE "${HUB_PENDING[slot]}"
-        hub_send "${slot}" "${PROTO_LINE}" || :
+        # Like GARBAGE above: the correction belongs to one player and is
+        # told to everybody, so a recording follows every queue and not
+        # only its own.
+        proto_msg QUEUE "${slot}" "${HUB_PENDING[slot]}"
+        hub_bcast "${PROTO_LINE}"
     fi
     debug_event "hub: slot ${slot} cleared ${lines} row(s) (silver=${PROTO_ARG[1]} gold=${PROTO_ARG[2]}): attack=${HUB_ATTACK} cancelled=${cancel}"
     hub_targets "${slot}" "$(( HUB_ATTACK - cancel ))"
@@ -990,6 +1021,22 @@ hub_start_round() {
     if [ -z "${seed}" ]; then
         seed=$(( (RANDOM << 15 | RANDOM) & 0x3FFFFFFF ))
     fi
+    # Whatever the seed came from, it has to fit the number field of the
+    # protocol - nine digits (PROTO_NUM_RE, lib/proto.sh). Neither source
+    # respected that: the mask above reaches 0x3FFFFFFF and is therefore
+    # ten digits in about 7% of all rounds, and --seed accepts digits of
+    # any length. Found by the load probe of step 9.5, and it had been
+    # there since the seed was introduced.
+    # The consequence was silent and bad: every client rejected the SEED
+    # message as malformed, kept the RANDOM it already had, and each of
+    # them played a different piece sequence - the very fairness the
+    # shared seed exists for (CLAUDE.md 5.1), with nothing on screen to
+    # say so. A seed that differs from the one asked for is a far smaller
+    # thing than a seed nobody gets.
+    # Twice, so an overlong --seed that wrapped into a negative value in
+    # bash arithmetic still lands in 0..999999999 rather than carrying a
+    # minus sign onto the wire.
+    seed=$(( (seed % 1000000000 + 1000000000) % 1000000000 ))
     for (( i = 0; i < MP_MAX; i++ )); do
         [ -n "${HUB_ID[i]}" ] || continue
         HUB_STATE[i]="play"

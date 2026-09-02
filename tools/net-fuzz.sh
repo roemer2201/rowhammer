@@ -284,6 +284,19 @@ HOSTILE=(
     'STATE $(touch CANARY) 0 0 0 0 0 0'
     'GARBAGE $(touch CANARY) 0'
     'GARBAGE 1;touch CANARY 0'
+    # The same fields once more in the shape protocol 4 gave them: the
+    # slot in front, so the field that is used as an array index and in a
+    # numeric comparison on the client is fuzzed in its own position.
+    'GARBAGE $(touch CANARY) 1 0'
+    'GARBAGE 0 $(touch CANARY) 0'
+    'GARBAGE a[$(touch CANARY)] 1 0'
+    'GARBAGE 0 1 $(touch CANARY)'
+    'GARBAGE 99 1 0'
+    'GARBAGE -1 1 0'
+    'QUEUE $(touch CANARY) 0'
+    'QUEUE a[$(touch CANARY)] 0'
+    'QUEUE 0 $(touch CANARY)'
+    'QUEUE 99 0'
     'KO 0 $((1+1))'
     # Arithmetic injection: the classic way an unchecked number turns
     # into code inside $(( )).
@@ -316,6 +329,21 @@ HOSTILE=(
     'BOARD tooshort'
     'PING abc'
     'END x'
+    # The move stream (protocol 4). It is the one field made of a repeated
+    # pattern rather than a single value, so it gets its own cases: a
+    # command substitution where a delta belongs, a letter outside the
+    # move alphabet, a token without a delta, an event only a hub may
+    # produce, and both ends of the length limit.
+    'ACT $(touch CANARY) 120l'
+    'ACT 0 120l$(touch CANARY)'
+    'ACT 0 a[$(touch CANARY)]l'
+    'ACT 0 120z'
+    'ACT 0 l'
+    'ACT 0 120w3'
+    'ACT 0 1234567l'
+    'ACT 0'
+    'PEERACT $(touch CANARY) 0 1l'
+    'PEERACT 0 1l'
 )
 for c in "${HOSTILE[@]}"; do
     check_line "${c}"
@@ -358,7 +386,7 @@ fi
 log "${SCRIPT_NAME}: ${RANDOM_CASES} random cases (seed ${FUZZ_SEED})"
 RANDOM="${FUZZ_SEED}"
 ALPHABET=(A B C Z 0 1 9 ' ' '$' '(' ')' '`' ';' '|' '&' '*' '.' '/' '\' '-' '_' '[' ']' '{' '}' '%' '!' '#' "'" '"' $'\t' $'\033')
-VERBS=(HELLO READY STATE BOARD CLEAR APPLIED TOPOUT PONG BYE WELCOME ROSTER SEED START PEER PEERBOARD NEEDBOARD GARBAGE QUEUE KO END PING ERR XXXX)
+VERBS=(HELLO READY STATE BOARD CLEAR APPLIED TOPOUT PONG BYE WELCOME ROSTER SEED START PEER PEERBOARD NEEDBOARD GARBAGE QUEUE KO END PING ERR ACT PEERACT XXXX)
 for (( n = 0; n < RANDOM_CASES; n++ )); do
     len=$(( RANDOM % 40 ))
     line="${VERBS[RANDOM % ${#VERBS[@]}]} "
