@@ -187,6 +187,10 @@ be resumed any more."
     # (highscores, statistics) and it names itself wherever a round names
     # its mode.
     [mode_versus]="Multiplayer"
+    # The short form for the demo list, which leaves the mode eight
+    # columns (demo_scan in lib/demo.sh) - the same reason Time Attack
+    # and Hochwasser have one.
+    [mode_versus_short]="Versus"
     # The entry_* forms are the bracketed description the three pickers put
     # behind the name; menu_mode_entries (lib/menu.sh) pads the names so the
     # descriptions line up in one column (see lib/lang/de.sh).

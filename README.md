@@ -89,7 +89,8 @@ gemeinsame Steinfolge, Sitzungseinstellungen des Gastgebers,
 Stoerreihen, Ausscheiden und Sieger - laeuft seit 1.1.0, und seit 1.2.0
 uebersteht eine Lobby auch den Weggang ihres Gastgebers. **`2.0.0` ist
 fuer den fertigen Mehrspieler reserviert**; offen ist bis dahin die
-Demo-Aufzeichnung einer Mehrspieler-Runde. Danach folgt der
+Demo-**Wiedergabe** einer Mehrspieler-Runde - aufgezeichnet wird sie
+inzwischen, mit den Zuegen aller Teilnehmer. Danach folgt der
 Server-Betrieb darum herum (Phase 6: Accounts, Web-Highscore, Liga;
 siehe Roadmap in [CLAUDE.md](CLAUDE.md)).
 
@@ -224,7 +225,10 @@ Das Startmenue bietet:
   `*` markiert und bleiben darueber hinaus erhalten (verknuepft ueber
   einen Hash im Dateinamen). Dieselbe Verknuepfung nutzt die
   Highscore-Liste in der Gegenrichtung: dort startet Enter die
-  Aufzeichnung des ausgewaehlten Eintrags
+  Aufzeichnung des ausgewaehlten Eintrags. Eine **Mehrspieler-Runde**
+  wird ebenfalls aufgezeichnet - mit den Zuegen aller Teilnehmer -, ihre
+  Wiedergabe kommt aber erst noch: bis dahin steht sie in der Liste und
+  meldet beim Abspielen, dass sie noch nicht gespielt werden kann
 - **Einstellungen** - Tastenbelegung aendern, **Sprache waehlen**
   (`Automatisch`, `Deutsch` oder `English`; die Auswahl gilt sofort,
   ohne Neustart), Farbschema waehlen

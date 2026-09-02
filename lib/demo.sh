@@ -36,12 +36,29 @@
 #       between bash releases - a seed would replay differently on a
 #       different bash. The literal stream costs one byte per piece.
 #
+#   Multiplayer. A versus round is recorded the same way, only for
+#   everybody at once: every participant gets a stream of their own
+#   ("p=<slot> <delta><action>"), fed from this player's own keys and
+#   from the moves the hub passes on (PEERACT, protocol 4). That is what
+#   makes the recording a recording of the party rather than of one seat
+#   in it - the playback can put any of them in the middle and simulate
+#   all of them (CLAUDE.md 5.20). Three things only the hub knows go into
+#   the streams as well, because no move produces them: incoming garbage,
+#   the authoritative queue length and an elimination. Beside them the
+#   file carries checkpoints ("v=<slot> ..."): the counters the hub
+#   reported for a player, so a replay can tell whether its simulation
+#   still agrees with the round it is replaying.
+#
 #   Timing. Every event carries the round's play time (PLAY_MS, pauses
-#   excluded) as a delta to the event before it. Playback runs its own
-#   clock over that timeline, so the replay is paced exactly like the
-#   round was, can be slowed down or sped up (DEMO_SPEEDS) and can be
-#   paused - and no drift can accumulate, because the clock is compared
-#   against absolute timestamps rather than slept through per event.
+#   excluded) as a delta to the event before it - in a versus round the
+#   round clock instead (mp_round_ms), the one clock all participants
+#   share: they all hang off the same countdown, and a multiplayer round
+#   has no pause that could stop it (CLAUDE.md 5.8/5.20). Playback runs
+#   its own clock over that timeline, so the replay is paced exactly
+#   like the round was, can be slowed down or sped up (DEMO_SPEEDS) and
+#   can be paused - and no drift can accumulate, because the clock is
+#   compared against absolute timestamps rather than slept through per
+#   event.
 #
 #   Storage. During the round the events go to a file on a RAM disk
 #   (XDG_RUNTIME_DIR, /dev/shm; see demo_tmp_base) in batches of
@@ -99,7 +116,19 @@ DEMO_FILE_EXT=".demo"
 # it does carry mean exactly what they always did - but the rule is the
 # rule, and a reader that has to decide which older versions are close
 # enough is exactly what this single number exists to avoid.
-DEMO_FORMAT_VERSION=2
+# Version 3 (step 9.6) added the multiplayer: the session block of the
+# header, one event stream per participant and the checkpoints of what
+# the hub reported about them.
+DEMO_FORMAT_VERSION=3
+# The oldest version still read. Version 2 is the one deliberate
+# exception to "no backward compatibility" in this format (CLAUDE.md
+# 5.20/6, user decision), and it costs nothing: a singleplayer recording
+# of version 3 is written exactly as version 2 was - the whole
+# multiplayer section only exists in a versus recording - so a version 2
+# file is a version 3 file that could not have had one. Throwing away the
+# recordings the highscore entries hang off for a section they never
+# could have carried would be a loss without a gain.
+DEMO_FORMAT_MIN_VERSION=2
 
 # How many recordings are kept. Ten like the highscore lists, and for the
 # same reason: it is the number a player still finds their way around in.
@@ -128,7 +157,7 @@ DEMO_SPEED_DEFAULT=2
 # (rowhammer.sh, HS_FIELD_NAME_RE in lib/highscore.sh).
 DEMO_NUM_RE='^[0-9]{1,9}$'
 DEMO_NAME_RE='^[A-Za-z0-9_ -]{1,16}$'
-DEMO_MODE_RE='^(marathon|ultra|sprint|timeattack|flood)$'
+DEMO_MODE_RE='^(marathon|ultra|sprint|timeattack|flood|versus)$'
 DEMO_DATE_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$'
 DEMO_PCS_RE='^[IOTSZJL]{1,80}$'
 # One event: the play-time delta in milliseconds since the previous event
@@ -147,7 +176,36 @@ DEMO_PCS_RE='^[IOTSZJL]{1,80}$'
 # gap column is drawn from RANDOM, and a replay that guessed it would
 # play a different round from the one recorded.
 DEMO_EVENT_RE='^([0-9]{1,7})([lrcashogk]|w[0-9])$'
-DEMO_END_RE='^(over|goal|quit)$'
+# A versus recording spells its events "p=<slot> <delta><action>" instead,
+# one line per event and the delta counted against the previous event of
+# that same slot: the moves of an opponent arrive with the network's
+# delay and can be older than the last line written, while each single
+# stream stays in order, so five cursors are all a replay needs
+# (CLAUDE.md 5.20). Four letters come on top of the alphabet above, all
+# of them things no move produces and only the hub knows:
+#   y<nn><h>  <nn> garbage rows arrived, their gap in column <h>
+#   q<nn>     the hub's authoritative length of that player's queue
+#   n<n>      knocked out, taking place <n>
+#   z<n>      lost the connection, taking place <n>
+# Their payloads are fixed width because the tokens of the move stream
+# are written back to back (PROTO_ACT_RE): a digit count that varied
+# could not be told from the next token's delta. "w<column>" stays with
+# the Hochwasser mode, which is a singleplayer mode and cannot occur here.
+# The counters the hub reported for a player go into the file as their
+# own line, "v=<slot> <lines> <rows> <level> <gold> <silver> <height>",
+# and they are positional: a checkpoint holds for the moment that slot's
+# stream has reached the last event written before it. That is the reason
+# it carries no timestamp of its own - it is not a thing that happened,
+# it is a statement about the stream around it.
+DEMO_END_RE='^(over|goal|quit|lost)$'
+# The two header fields of a versus recording that are not plain numbers:
+# what the session was set to (the hub's own list of modes, CLAUDE.md
+# 5.1) and one participant, "<slot> <name>". The name pattern is the
+# protocol's, not DEMO_NAME_RE: these names came off the wire and were
+# validated there, and the space DEMO_NAME_RE allows would swallow the
+# field separator.
+DEMO_MPMODE_RE='^(survival|sprint|ultra)$'
+DEMO_PEER_RE='^[0-9] [A-Za-z0-9_-]{1,16}$'
 
 # --- Recording state ------------------------------------------------------
 # Whether the running round is being recorded, the RAM disk file it is
@@ -158,6 +216,33 @@ DEMO_TMP_FILE=""
 DEMO_BUF=()
 DEMO_PIECES=""
 DEMO_LAST_MS=0
+
+# --- Multiplayer recording state ------------------------------------------
+# Only a versus round fills any of this. DEMO_MP says whether the running
+# recording holds a session at all - it is what routes an event into a
+# slot's stream instead of the single one - and DEMO_MP_SLOT is the seat
+# this player sat in.
+DEMO_MP=0
+DEMO_MP_SLOT=0
+# Per slot: the round time of that slot's last recorded event (the deltas
+# are counted against it), the counters of the checkpoint waiting to be
+# written, when the last checkpoint for that slot was written, and the
+# place of an elimination whose kind is not settled yet (see
+# demo_record_ko).
+DEMO_SLOT_LAST_MS=()
+DEMO_V_PEND=()
+DEMO_V_LAST_MS=()
+DEMO_KO_PEND=()
+# End of the recorded timeline, taken when the round ended rather than
+# when the recording is closed: between the two lies the name prompt, and
+# the round clock does not stop for it (demo_mark_end).
+DEMO_END_MS=0
+# How far apart two checkpoints of the same slot are at the closest, in
+# milliseconds of that slot's stream. A checkpoint is a cross-check and
+# nothing else, so one a second is plenty - the counters change with
+# every lock (the stack height does), and writing one per reported change
+# would multiply the size of a five player recording for no gain.
+DEMO_V_MS=1000
 
 # --- Playback state -------------------------------------------------------
 # DEMO_PLAYING is read outside this module: queue_fill (lib/pieces.sh)
@@ -242,7 +327,7 @@ demo_tmp_base() {
 # reason to keep a player from playing, so it only reports into the debug
 # log and leaves the round alone.
 demo_record_start() {
-    local mode="${1}"
+    local mode="${1}" i
     # A replay runs through game_reset as well; it must not touch the
     # recording state at all - hence before the discard below, which is
     # there so a new round replaces a recording left over from one that
@@ -254,15 +339,11 @@ demo_record_start() {
     if [ "${DEMO_RECORD}" != "on" ]; then
         return 0
     fi
-    # A mode this format does not know is not recorded. Today that is
-    # exactly one: the multiplayer (1.1.0). A versus round cannot be
-    # replayed from this format at all - the moves of the opponents are
-    # never transmitted, so a recording of one has to carry what arrived
-    # of them instead, which is a format of its own (CLAUDE.md 5.20, open
-    # step 9 of phase 5). Writing a file that says "marathon" over a
-    # round that was nothing of the sort would be worse than not writing
-    # one: it would replay as a round with garbage rows appearing out of
-    # nowhere.
+    # A mode this format does not know is not recorded: a file saying
+    # "marathon" over a round that was nothing of the sort would be worse
+    # than no file at all - it would replay as a round with garbage rows
+    # appearing out of nowhere. Since format 3 (step 9.6) the versus mode
+    # is one this format does know.
     if ! [[ "${mode}" =~ ${DEMO_MODE_RE} ]]; then
         debug_event "demo: mode '${mode}' is not recordable, round is not recorded"
         return 0
@@ -288,6 +369,29 @@ demo_record_start() {
     DEMO_BUF=()
     DEMO_PIECES=""
     DEMO_LAST_MS=0
+    DEMO_END_MS=0
+    # A versus round records everybody, so it needs a stream per seat and
+    # the seat this player is in. Without a slot there is nothing to
+    # record into - which cannot happen (the hub hands one out before the
+    # round starts) but must not end up writing into index -1 if it ever
+    # does.
+    DEMO_MP=0
+    if [ "${mode}" = "versus" ]; then
+        if [ "${MP_SLOT}" -lt 0 ] || [ "${MP_SLOT}" -ge "${MP_MAX}" ]; then
+            debug_event "demo: no slot in this session, round is not recorded"
+            demo_record_discard
+            return 0
+        fi
+        DEMO_MP=1
+        DEMO_MP_SLOT="${MP_SLOT}"
+        for (( i = 0; i < MP_MAX; i++ )); do
+            DEMO_SLOT_LAST_MS[i]=0
+            DEMO_V_PEND[i]=""
+            DEMO_V_LAST_MS[i]=0
+            DEMO_KO_PEND[i]=""
+        done
+        debug_event "demo: recording a versus round as slot ${DEMO_MP_SLOT} (mode=${MP_MODE} garbage=${MP_GARBAGE})"
+    fi
     debug_event "demo: recording round (mode=${mode}) to ${DEMO_TMP_FILE}"
     return 0
 }
@@ -304,34 +408,319 @@ demo_record_piece() {
     return 0
 }
 
-# demo_record_event ACTION
-# Append one event, stamped with the play time it happened at. The
-# timestamp is computed the way play_clock_tick would compute it, but
-# without writing it back: recording must never change how the round
-# plays, and PLAY_MS is what the Sprint mode and the HUD read. Only
-# NOW_MS is refreshed, which every caller in the game loop re-reads
-# anyway. Not called while the round is paused (the game loop and
-# handle_key skip everything that could record then), so the stale
-# PLAY_LAST of a pause can never leak into a delta.
-demo_record_event() {
-    local ts delta
-    if [ "${DEMO_RECORDING}" -eq 0 ]; then
+# demo_stamp
+# The clock this recording runs on, into DEMO_STAMP_MS. A versus round
+# uses the round clock: it is the one clock every participant shares, and
+# a stream fed from several of them can only be laid out on a clock they
+# all agree on (CLAUDE.md 5.20). Everywhere else it is the play clock,
+# computed the way play_clock_tick would compute it but without writing
+# it back - recording must never change how the round plays, and PLAY_MS
+# is what the Sprint mode and the HUD read. Only NOW_MS is refreshed,
+# which every caller in the game loop re-reads anyway.
+DEMO_STAMP_MS=0
+demo_stamp() {
+    if [ "${DEMO_MP}" -eq 1 ]; then
+        mp_round_ms
+        DEMO_STAMP_MS="${MP_ROUND_MS}"
         return 0
     fi
     now_ms
-    ts=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
-    delta=$(( ts - DEMO_LAST_MS ))
+    DEMO_STAMP_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
+    return 0
+}
+
+# demo_buf_full
+# Write the buffer out once it has grown to DEMO_FLUSH_MAX lines. Its own
+# helper because four places append to the buffer now.
+demo_buf_full() {
+    if [ "${#DEMO_BUF[@]}" -ge "${DEMO_FLUSH_MAX}" ]; then
+        demo_flush
+    fi
+    return 0
+}
+
+# demo_slot_event SLOT T ACTION
+# Append one event to a slot's stream, T being the round time it happened
+# at. The delta is counted against that slot's own last event, which is
+# what lets the streams of five players share one file in arrival order.
+# Everything that keeps the deltas non-negative works on that per-slot
+# clock: an event stamped earlier than the slot's last one lands on it
+# rather than going backwards. That is the ordinary case for the three
+# things the hub sends (garbage, queue, elimination): they are stamped
+# when they arrive here, while a peer's moves reach us up to one send
+# window (MP_ACT_MS) later than they happened. The stream is off by at
+# most that window for the one token after such an event and back in step
+# afterwards - and the effects themselves are queued rather than applied,
+# so what they do to a board does not move at all.
+demo_slot_event() {
+    local slot="${1}" t="${2}" action="${3}" delta
+    delta=$(( t - DEMO_SLOT_LAST_MS[slot] ))
+    if [ "${delta}" -lt 0 ]; then
+        delta=0
+    fi
+    # Seven digits is what the event pattern allows; a gap that long
+    # cannot arise in a round, but a clamp here keeps this end from ever
+    # writing a line its own reader would reject.
+    if [ "${delta}" -gt 9999999 ]; then
+        delta=9999999
+    fi
+    # Advanced by the delta actually written, not to T: after a clamp the
+    # two differ, and the file is the truth the replay follows.
+    DEMO_SLOT_LAST_MS[slot]=$(( DEMO_SLOT_LAST_MS[slot] + delta ))
+    DEMO_BUF+=("p=${slot} ${delta}${action}")
+    demo_buf_full
+    return 0
+}
+
+# demo_record_event ACTION
+# One thing this player did, appended to the recording. In a versus round
+# it goes into this player's own stream, everywhere else into the single
+# one. Not called while the round is paused (the game loop and handle_key
+# skip everything that could record then), so the stale PLAY_LAST of a
+# pause can never leak into a delta.
+demo_record_event() {
+    local delta
+    if [ "${DEMO_RECORDING}" -eq 0 ]; then
+        return 0
+    fi
+    demo_stamp
+    if [ "${DEMO_MP}" -eq 1 ]; then
+        demo_slot_event "${DEMO_MP_SLOT}" "${DEMO_STAMP_MS}" "${1}"
+        demo_own_checkpoint
+        return 0
+    fi
+    delta=$(( DEMO_STAMP_MS - DEMO_LAST_MS ))
     # A clock that jumped backwards (NTP step) must not write a negative
     # delta into the file; the event then simply lands on the previous
     # event's timestamp.
     if [ "${delta}" -lt 0 ]; then
         delta=0
     fi
-    DEMO_LAST_MS="${ts}"
+    DEMO_LAST_MS="${DEMO_STAMP_MS}"
     DEMO_BUF+=("e=${delta}${1}")
-    if [ "${#DEMO_BUF[@]}" -ge "${DEMO_FLUSH_MAX}" ]; then
-        demo_flush
+    demo_buf_full
+    return 0
+}
+
+# demo_mark_end
+# Where the recorded timeline ends. Called by record_round (rowhammer.sh)
+# before it does anything else, because "anything else" includes asking
+# for the player's name - and the round clock of a versus recording keeps
+# running while somebody types. A singleplayer recording does not need
+# the mark (its timeline ends at PLAY_MS, which is final by then) but
+# takes it all the same: one moment, one meaning.
+demo_mark_end() {
+    if [ "${DEMO_RECORDING}" -eq 0 ]; then
+        return 0
     fi
+    demo_stamp
+    DEMO_END_MS="${DEMO_STAMP_MS}"
+    return 0
+}
+
+# --- The other players ----------------------------------------------------
+# Everything below is fed from lib/mp.sh and does nothing unless a versus
+# round is being recorded. The guard is repeated in each of them rather
+# than asked at the call sites: a recording that is not running must not
+# be something the message handlers have to think about.
+
+# demo_slot_ok SLOT
+# True for a seat this session actually has. The hub is not trusted
+# either (CLAUDE.md 5.5) and the protocol's slot field is a single digit,
+# which is wider than any session: a number past the last seat would grow
+# the per-slot tables and write a player into the file who never sat
+# down. Asked at the entry points below rather than in demo_slot_event,
+# so every value coming from outside is checked where it comes in.
+demo_slot_ok() {
+    [ "${1}" -ge 0 ] && [ "${1}" -lt "${MP_MAX}" ]
+}
+
+# demo_record_peer_act SLOT T TOKENS
+# The moves of another player, as they arrived (PEERACT): T is the round
+# time the first delta counts from, the tokens are "<delta><action>" back
+# to back. They are taken apart here and written as that slot's own
+# events, so the file holds one kind of stream for everybody and the
+# reader never has to know which of them came off the wire.
+# The tokens have been through the protocol parser already; they are
+# taken apart again with a pattern of their own all the same - a stream
+# that does not match stops being read instead of putting a letter the
+# alphabet does not have into the file.
+demo_record_peer_act() {
+    local slot="${1}" t="${2}" rest="${3}"
+    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    demo_slot_ok "${slot}" || return 0
+    [ "${slot}" -ne "${DEMO_MP_SLOT}" ] || return 0
+    while [ -n "${rest}" ]; do
+        [[ "${rest}" =~ ^([0-9]{1,6})([acghklors])(.*)$ ]] || break
+        t=$(( t + 10#${BASH_REMATCH[1]} ))
+        demo_slot_event "${slot}" "${t}" "${BASH_REMATCH[2]}"
+        rest="${BASH_REMATCH[3]}"
+    done
+    # A checkpoint waiting for this slot goes out behind the moves it
+    # describes; see demo_record_peer_state for why it waits at all.
+    demo_checkpoint_flush "${slot}"
+    return 0
+}
+
+# demo_record_peer_state SLOT LINES ROWS LEVEL GOLD SILVER HEIGHT
+# The counters the hub reported for another player (PEER). They are not
+# written straight away but kept until that slot's next moves have been
+# written (demo_record_peer_act). The reason is the order the two leave
+# the player they describe: their game loop sends its counters at the end
+# of the tick and flushes its move window afterwards, so the counters can
+# be up to one window ahead of the moves that produced them. A checkpoint
+# placed there would accuse a correct replay of having diverged.
+# Only the latest is kept - a checkpoint is a cross-check, and the newest
+# one is the only interesting one.
+demo_record_peer_state() {
+    local slot="${1}"
+    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    demo_slot_ok "${slot}" || return 0
+    [ "${slot}" -ne "${DEMO_MP_SLOT}" ] || return 0
+    DEMO_V_PEND[slot]="${2} ${3} ${4} ${5} ${6} ${7}"
+    return 0
+}
+
+# demo_checkpoint_flush SLOT
+# Write the checkpoint waiting for a slot, at most every DEMO_V_MS of
+# that slot's stream. Measured on the stream rather than on the clock, so
+# the spacing means the same thing when the file is read as when it was
+# written.
+demo_checkpoint_flush() {
+    local slot="${1}"
+    [ -n "${DEMO_V_PEND[slot]}" ] || return 0
+    (( DEMO_SLOT_LAST_MS[slot] - DEMO_V_LAST_MS[slot] >= DEMO_V_MS )) || return 0
+    DEMO_V_LAST_MS[slot]="${DEMO_SLOT_LAST_MS[slot]}"
+    DEMO_BUF+=("v=${slot} ${DEMO_V_PEND[slot]}")
+    DEMO_V_PEND[slot]=""
+    demo_buf_full
+    return 0
+}
+
+# demo_own_checkpoint
+# The same cross-check for this player's own seat, taken from the live
+# counters right behind the event that changed them. Worth having even
+# though nothing came over the network for it: our own stream and our own
+# counters were produced by the same process, so a replay that disagrees
+# with them is a replay that got the game wrong - which is exactly what
+# these checkpoints are for.
+demo_own_checkpoint() {
+    local slot="${DEMO_MP_SLOT}"
+    (( DEMO_SLOT_LAST_MS[slot] - DEMO_V_LAST_MS[slot] >= DEMO_V_MS )) || return 0
+    DEMO_V_LAST_MS[slot]="${DEMO_SLOT_LAST_MS[slot]}"
+    proto_stack_height
+    DEMO_BUF+=("v=${slot} ${CLEARED_TOTAL} ${ROW_CREDIT} ${LEVEL} ${GOLD_COUNT} ${SILVER_COUNT} ${PROTO_HEIGHT}")
+    demo_buf_full
+    return 0
+}
+
+# demo_record_garbage SLOT COUNT HOLE
+# Garbage rows on their way to a player, exactly as the hub announced
+# them - for every slot, not only for our own: the recording follows
+# every board, and this is the one thing that happens to a board without
+# a move behind it. The rows are noted where they arrive, not where they
+# are pushed in; when that is depends on the player's next lock, which
+# the replay works out for itself.
+# Both numbers are clamped into the width of the token. The hub caps an
+# attack at ten rows and the gap is a column, so neither clamp can bite
+# on anything this game sends; they are there because the hub is not
+# something this end gets to trust (CLAUDE.md 5.5).
+demo_record_garbage() {
+    local slot="${1}" count="${2}" hole="${3}" token
+    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    demo_slot_ok "${slot}" || return 0
+    [ "${count}" -ge 1 ] || return 0
+    [ "${count}" -le 99 ] || count=99
+    [ "${hole}" -le 9 ] || hole=9
+    printf -v token 'y%02d%d' "${count}" "${hole}"
+    demo_stamp
+    demo_slot_event "${slot}" "${DEMO_STAMP_MS}" "${token}"
+    return 0
+}
+
+# demo_record_queue SLOT COUNT
+# What the hub says is left of a player's queue after a clear of theirs
+# cancelled part of it. The authoritative number, which is why it is
+# recorded at all: a replay that added the garbage up itself would drift
+# away from the round the moment the first attack was cancelled.
+demo_record_queue() {
+    local slot="${1}" count="${2}" token
+    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    demo_slot_ok "${slot}" || return 0
+    [ "${count}" -le 99 ] || count=99
+    printf -v token 'q%02d' "${count}"
+    demo_stamp
+    demo_slot_event "${slot}" "${DEMO_STAMP_MS}" "${token}"
+    return 0
+}
+
+# demo_record_ko SLOT PLACE
+# A player is out of the round, with the place they took. Not written
+# yet: the hub's KO says the same thing for somebody who topped out and
+# for somebody whose connection died, and the recording tells the two
+# apart ("n" and "z"). Which it was follows in the roster a moment later,
+# and demo_record_peer_status writes the event then - or, if the round
+# ends before any roster arrives, demo_ko_flush does.
+demo_record_ko() {
+    local slot="${1}" place="${2}"
+    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    demo_slot_ok "${slot}" || return 0
+    [ -z "${DEMO_KO_PEND[slot]}" ] || return 0
+    [ "${place}" -le 9 ] || place=9
+    DEMO_KO_PEND[slot]="${place}"
+    return 0
+}
+
+# demo_record_peer_status SLOT STATE
+# What the roster says a player is doing. Only one thing is taken from
+# it: it settles an elimination that is waiting for its kind.
+demo_record_peer_status() {
+    local slot="${1}" state="${2}"
+    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    demo_slot_ok "${slot}" || return 0
+    [ -n "${DEMO_KO_PEND[slot]}" ] || return 0
+    demo_stamp
+    case "${state}" in
+        ko)   demo_ko_write "${slot}" "n" "${DEMO_STAMP_MS}" ;;
+        gone) demo_ko_write "${slot}" "z" "${DEMO_STAMP_MS}" ;;
+    esac
+    return 0
+}
+
+# demo_ko_write SLOT LETTER T
+# Write the elimination that was waiting for this slot, at round time T.
+demo_ko_write() {
+    local slot="${1}"
+    demo_slot_event "${slot}" "${3}" "${2}${DEMO_KO_PEND[slot]}"
+    DEMO_KO_PEND[slot]=""
+    return 0
+}
+
+# demo_ko_flush
+# Settle every elimination still waiting when the recording is closed. A
+# round that ended on the knock-out deciding it is the ordinary case
+# here: the hub sends its ROSTER on the pass after the KO, and this
+# client is already closing its books by then. They are written as
+# knock-outs, which is what an elimination is unless a roster said
+# otherwise - and a player whose connection died has left a trail the
+# round itself does not need this event to show.
+# Stamped with the end of the timeline (demo_mark_end) rather than with
+# "now": this runs after the name prompt, and a person typing must not
+# push an event of the round past the length the file says it had.
+demo_ko_flush() {
+    local i
+    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    for (( i = 0; i < MP_MAX; i++ )); do
+        [ -n "${DEMO_KO_PEND[i]}" ] || continue
+        demo_ko_write "${i}" "n" "${DEMO_END_MS}"
+    done
     return 0
 }
 
@@ -375,6 +764,11 @@ demo_record_discard() {
     DEMO_BUF=()
     DEMO_PIECES=""
     DEMO_LAST_MS=0
+    DEMO_END_MS=0
+    # Back to a singleplayer recording: the per-slot tables belong to the
+    # session that is over, and leaving the flag set would route the next
+    # round's events into a stream nobody asked for.
+    DEMO_MP=0
     return 0
 }
 
@@ -393,11 +787,15 @@ demo_record_discard() {
 # A round without a single event is dropped: it was started and left
 # again, and an empty recording is only noise in the list.
 demo_record_finish() {
-    local end="${1}" hash="${2:--}" name path tmp i suffix written
+    local end="${1}" hash="${2:--}" name path tmp i suffix written players=0
     local -a lines
     if [ "${DEMO_RECORDING}" -eq 0 ]; then
         return 0
     fi
+    # Before the buffer goes out for the last time: an elimination still
+    # waiting for the roster that would have named its kind is written
+    # now, or it is lost with the buffer.
+    demo_ko_flush
     demo_flush || return 0
     if [ ! -s "${DEMO_TMP_FILE}" ]; then
         debug_event "demo: round had no events, recording dropped"
@@ -438,13 +836,26 @@ demo_record_finish() {
     # two write commands, both of which can be checked (see below).
     lines=(
         '# rowhammer demo recording. Parsed and validated on load, never sourced.'
-        '# pcs = the piece stream, e = <play time delta in ms><action>.'
+        '# pcs = the piece stream, e = <play time delta in ms><action>,'
+        '# p = <slot> <round time delta in ms><action>, v = a counter checkpoint.'
         "version=${DEMO_FORMAT_VERSION}"
         "game=${ROWHAMMER_VERSION}"
         "mode=${GAME_MODE}"
         "name=${PLAYER_NAME}"
         "date=$(date '+%Y-%m-%d %H:%M')"
         "time=${PLAY_MS}"
+    )
+    # The session block, and only in a versus recording - which is what
+    # keeps a singleplayer recording of this version exactly what it was
+    # in version 2 (see DEMO_FORMAT_MIN_VERSION).
+    # "time" stays this player's own play time, the number the HUD showed
+    # and the statistics take; "length" is how long the round went on,
+    # which is a different thing the moment somebody tops out early and
+    # watches the rest of it.
+    if [ "${DEMO_MP}" -eq 1 ]; then
+        lines+=("length=${DEMO_END_MS}")
+    fi
+    lines+=(
         "lines=${CLEARED_TOTAL}"
         "rows=${ROW_CREDIT}"
         "level=${LEVEL}"
@@ -455,6 +866,31 @@ demo_record_finish() {
         "goal=${GOAL_REACHED}"
         "end=${end}"
     )
+    if [ "${DEMO_MP}" -eq 1 ]; then
+        for (( i = 0; i < MP_MAX; i++ )); do
+            [ -n "${MP_PEER_NAME[i]}" ] || continue
+            players=$(( players + 1 ))
+        done
+        lines+=(
+            "players=${players}"
+            "slot=${DEMO_MP_SLOT}"
+            "mpmode=${MP_MODE}"
+            "garbage=${MP_GARBAGE}"
+        )
+        # Only when there is one: a round this client left before the hub
+        # called it has no winner, and a number standing in for "none"
+        # would be a number somebody reads as a slot.
+        if [ "${MP_WINNER}" -ge 0 ]; then
+            lines+=("winner=${MP_WINNER}")
+        fi
+        # One line per seat, this player's own included: the replay puts
+        # a name over every board it draws, and the "name" field above
+        # only says who was sitting in front of this screen.
+        for (( i = 0; i < MP_MAX; i++ )); do
+            [ -n "${MP_PEER_NAME[i]}" ] || continue
+            lines+=("peer=${i} ${MP_PEER_NAME[i]}")
+        done
+    fi
     # The stream is cut into lines of at most 80 letters so no line of
     # the file grows unbounded (DEMO_PCS_RE caps it at that length).
     for (( i = 0; i < ${#DEMO_PIECES}; i += 80 )); do
@@ -491,7 +927,11 @@ demo_record_finish() {
         demo_record_discard
         return 0
     fi
-    debug_event "demo: recording saved to ${path} (end=${end} time=${PLAY_MS}ms rows=${ROW_CREDIT} pieces=${#DEMO_PIECES})"
+    if [ "${DEMO_MP}" -eq 1 ]; then
+        debug_event "demo: recording saved to ${path} (end=${end} time=${PLAY_MS}ms length=${DEMO_END_MS}ms rows=${ROW_CREDIT} pieces=${#DEMO_PIECES} players=${players} slot=${DEMO_MP_SLOT} winner=${MP_WINNER})"
+    else
+        debug_event "demo: recording saved to ${path} (end=${end} time=${PLAY_MS}ms rows=${ROW_CREDIT} pieces=${#DEMO_PIECES})"
+    fi
     demo_record_discard
     demo_prune "${path}"
     return 0
@@ -653,7 +1093,7 @@ demo_header_read() {
     while IFS= read -r line; do
         case "${line}" in
             '#'*|'') continue ;;
-            pcs=*|e=*) break ;;
+            pcs=*|e=*|p=*|v=*) break ;;
         esac
         key="${line%%=*}"
         val="${line#*=}"
@@ -691,6 +1131,26 @@ demo_header_read() {
                 [[ "${val}" =~ ${DEMO_END_RE} ]] || return 1
                 DEMO_HDR_END="${val}"
                 ;;
+            # The session block of a versus recording (format 3). Checked
+            # for shape here and otherwise left alone: what the playback
+            # of one needs from it is picked up where the playback is
+            # built (step 9.8), and this function is what the demo list
+            # calls for every file in the directory.
+            length|players|winner)
+                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || return 1
+                ;;
+            slot)
+                [[ "${val}" =~ ^[0-9]$ ]] || return 1
+                ;;
+            mpmode)
+                [[ "${val}" =~ ${DEMO_MPMODE_RE} ]] || return 1
+                ;;
+            garbage)
+                [[ "${val}" =~ ^[01]$ ]] || return 1
+                ;;
+            peer)
+                [[ "${val}" =~ ${DEMO_PEER_RE} ]] || return 1
+                ;;
             # The remaining header fields (game, level, gold, silver,
             # rowhammers, pieces) are informational for a human reading
             # the file; like name, lines and goal above they are checked
@@ -700,13 +1160,20 @@ demo_header_read() {
             *) return 1 ;;
         esac
     done < "${file}"
-    if [ "${version}" -ne "${DEMO_FORMAT_VERSION}" ]; then
+    if [ "${version}" -lt "${DEMO_FORMAT_MIN_VERSION}" ] || \
+       [ "${version}" -gt "${DEMO_FORMAT_VERSION}" ]; then
         return 1
     fi
     # A recording without these is not replayable: the mode decides the
     # rules of the round, the ending decides what the final box says.
     if [ -z "${DEMO_HDR_MODE}" ] || [ -z "${DEMO_HDR_END}" ] || \
        [ -z "${DEMO_HDR_DATE}" ]; then
+        return 1
+    fi
+    # A versus round is what the multiplayer section was added for, so a
+    # file claiming one in a version that has no such section is not a
+    # short recording of one - it is a file somebody edited.
+    if [ "${DEMO_HDR_MODE}" = "versus" ] && [ "${version}" -lt 3 ]; then
         return 1
     fi
     return 0
@@ -721,6 +1188,14 @@ demo_header_read() {
 demo_load() {
     local file="${1}" line key val t=0 body=0
     if ! demo_header_read "${file}"; then
+        return 1
+    fi
+    # A versus recording is written since step 9.6 and read since step
+    # 9.8; until then it is refused here rather than half-read. Its
+    # streams are keyed by slot, and taking them for the single stream
+    # below would replay one board out of five boards' events.
+    if [ "${DEMO_HDR_MODE}" = "versus" ]; then
+        debug_event "demo: ${file} is a versus recording, which cannot be replayed yet"
         return 1
     fi
     DEMO_PLAY_PIECES=""
@@ -751,8 +1226,9 @@ demo_load() {
             # stream would otherwise pass unread: a file that has one is
             # not a recording this game wrote, and is rejected rather
             # than half-read.
-            version|game|mode|name|date|time|lines|rows|level|gold| \
-            silver|rowhammers|pieces|goal|end)
+            version|game|mode|name|date|time|length|lines|rows|level|gold| \
+            silver|rowhammers|pieces|goal|end|players|slot|mpmode|garbage| \
+            winner|peer)
                 [ "${body}" -eq 0 ] || return 1
                 ;;
             *) return 1 ;;
@@ -1020,6 +1496,7 @@ demo_scan() {
             sprint)     mode_label="${I18N[mode_sprint]}" ;;
             timeattack) mode_label="${I18N[mode_timeattack_short]}" ;;
             flood)      mode_label="${I18N[mode_flood_short]}" ;;
+            versus)     mode_label="${I18N[mode_versus_short]}" ;;
             *)          mode_label="${I18N[mode_marathon]}" ;;
         esac
         fmt_duration $(( DEMO_HDR_TIME / 1000 ))

@@ -2194,20 +2194,24 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 (`DEMO_*_RE`). Erst der Kopf, dann die Steinfolge, dann die Ereignisse:
 
 ```
-version=2            Formatversion (jede andere wird abgelehnt; die
-                     Version 3 des Mehrspielers ist in 5.20
-                     spezifiziert und noch nicht gebaut)
+version=3            Formatversion (2 und 3 werden gelesen, 3 wird
+                     geschrieben - siehe unten)
 game=0.52.0          Spielversion, die aufgenommen hat (nur Info)
-mode=marathon        marathon|ultra|sprint|timeattack|flood - die Regeln
+mode=marathon        marathon|ultra|sprint|timeattack|flood|versus
 name=Player          Spielername
 date=2026-08-03 21:40
 time=123456          Spielzeit der Runde in Millisekunden
 lines=42 rows=98 level=4 gold=1 silver=2 rowhammers=1 pieces=57
 goal=0               ob das Modus-Ziel erreicht wurde
-end=over             over|goal|quit - wie die Runde endete
+end=over             over|goal|quit|lost - wie die Runde endete
 pcs=IOTSZJLIOT...    die Steinfolge (Zeilen zu hoechstens 80 Buchstaben)
 e=120l               ein Ereignis: Zeitdelta in ms + Aktionsbuchstabe
 ```
+
+Eine **Mehrspieler-Aufnahme** (seit Schritt 9.6) traegt darueber hinaus
+einen Sitzungsblock und einen Ereignisstrom je Teilnehmer; beides steht
+mit seinen Entscheidungen in 5.20. Der Rest dieses Abschnitts gilt fuer
+beide Sorten.
 
 Das Ereignis-Alphabet ist bewusst ein Buchstabe je Sache, die einer
 Runde zustossen kann: `l`/`r` links/rechts, `c`/`a` Drehen im/gegen den
@@ -2229,6 +2233,21 @@ raet, spielte eine andere Runde. Mit ihr wanderte die Formatversion von
 korrekt ablaufen, aber die Regel "keine Abwaertskompatibilitaet" gilt
 auch hier, und genau die Frage, welche alten Versionen nahe genug sind,
 soll diese eine Zahl ersparen.
+
+**Version 3** (Schritt 9.6) kam mit dem Mehrspieler und ist die eine
+Stelle, an der das Format doch kulant ist: gelesen werden **2 und 3**
+(`DEMO_FORMAT_MIN_VERSION`), geschrieben wird 3. Das ist die bewusste,
+eng begrenzte Ausnahme von der Arbeitsregel (Abschnitt 6,
+Nutzerentscheidung, so schon in 5.20 vorgesehen), und sie kostet nichts:
+eine **Einzelspieler-Aufnahme der Version 3 ist byteweise die der
+Version 2** - der ganze Sitzungsblock existiert nur in einer
+Versus-Aufnahme -, eine Version-2-Datei ist also eine Version-3-Datei
+ohne einen Abschnitt, den sie gar nicht haben konnte. Die Aufnahmen, an
+denen Highscore-Eintraege haengen, dafuer wegzuwerfen waere ein Verlust
+ohne Gegenwert. Umgekehrt gilt die Strenge weiter: eine hoehere Version
+faellt heraus, und eine Datei, die `mode=versus` in einer Version ohne
+Sitzungsblock behauptet, ebenfalls - das ist keine kurze Aufnahme,
+sondern eine bearbeitete Datei.
 
 **Zeit.** Jedes Ereignis traegt die **Spielzeit** (`PLAY_MS`, Pausen
 also ausgenommen) als Delta zum vorherigen. Beim Laden werden die Deltas
@@ -2425,13 +2444,15 @@ Mehrspieler-Runde (5.20, Schritt 9). Ihr Unterbau steht seit den
 Schritten 9.1 bis 9.4: der Rundenzustand ist benannt und umschaltbar
 (`lib/state.sh`), das Bash-Minimum liegt bei 4.3, und die
 **Protokollversion 4** verteilt die Zuege aller Teilnehmer (`ACT`,
-`PEERACT`) und schickt `GARBAGE` und `QUEUE` mit Slot an alle. Was noch
-fehlt, ist die Formatversion 3 und die Wiedergabe selbst (Schritte 9.5
-bis 9.14);
-bis dahin wird eine Mehrspieler-Runde bewusst **nicht** aufgezeichnet
-(`demo_record_start` lehnt einen Modus ab, den das Format nicht kennt) -
-eine Aufnahme im heutigen Format wuerde als Runde ablaufen, in der aus
-dem Nichts Stoerreihen erscheinen.
+`PEERACT`) und schickt `GARBAGE` und `QUEUE` mit Slot an alle. Seit
+Schritt 9.6 wird eine Mehrspieler-Runde damit auch wirklich
+**aufgezeichnet** - vollstaendig, mit einem Ereignisstrom je Teilnehmer,
+im **Demo-Format 3** (4.10/5.20). Was noch fehlt, ist die **Wiedergabe**
+(Schritte 9.7 bis 9.14): eine Versus-Aufnahme steht in der Demo-Liste,
+laesst sich aber noch nicht abspielen (`demo_load` weist sie mit einer
+Meldung ab, statt sie als Einzelspieler-Runde halb zu lesen - ihre
+Stroeme sind nach Slot geordnet, und einer davon fuer alle gehalten
+ergaebe ein Brett aus den Ereignissen von fuenfen).
 
 Drei Nachrichten kamen beim Bauen hinzu, die die Nachrichtentabelle in
 5.4 so nicht hatte; sie sind dort mit aufgefuehrt und hier zusammen
@@ -3683,12 +3704,16 @@ Zuege liegen vollstaendig vor; die **Zuege der Mitspieler kamen bis
 Protokoll 3 nirgends an** - uebertragen wurden nur ihre Zaehler
 (`PEER`) und, nur in Detailstufe 2, Feld-Schnappschuesse (`PEERBOARD`,
 200 Zeichen, max. 5 Hz, siehe 5.6). Das ist mit Schritt 9.3 behoben
-(`ACT`/`PEERACT`, siehe unten); solange die Aufnahme selbst aber noch
-nicht gebaut ist, wird eine Mehrspieler-Runde weiterhin bewusst **gar
-nicht** aufgezeichnet: `demo_record_start`
-lehnt einen Modus ab, den `DEMO_MODE_RE` nicht kennt, denn eine Aufnahme
-im heutigen Format 2 liefe als Runde ab, in der aus dem Nichts
-Stoerreihen erscheinen.
+(`ACT`/`PEERACT`, siehe unten), und seit Schritt 9.6 wird eine
+Mehrspieler-Runde damit aufgezeichnet - als **Format 3** (unten), mit
+einem Ereignisstrom je Teilnehmer. Bis dahin wurde sie bewusst gar nicht
+aufgezeichnet, weil eine Aufnahme im Format 2 als Runde abgelaufen
+waere, in der aus dem Nichts Stoerreihen erscheinen. **Abspielen laesst
+sie sich noch nicht** (Schritte 9.7 bis 9.14): `demo_load` weist eine
+Versus-Aufnahme mit einer Meldung ab, statt sie halb zu lesen. In der
+Demo-Liste steht sie mit Datum, "Versus", Zeit und Rows wie jede andere;
+das ist der ehrlichere Zwischenstand als eine Aufnahme, die im
+Verzeichnis liegt und in der Liste fehlt.
 
 **Leitentscheidung: der Vollausbau** (Nutzerentscheidung). Eine Aufnahme
 ist eine **vollstaendige Aufzeichnung der Partie** und nicht die Sicht
@@ -3924,7 +3949,7 @@ Drei Festlegungen dazu:
   aenderte die Aufzeichnung das Spiel (3.8), und `--demo-record off`
   waere am Verkehr zu erkennen.
 
-**Demo-Format Version 3.**
+**Demo-Format Version 3** (geschrieben seit Schritt 9.6).
 Der Lader nimmt **Version 2 und 3**, geschrieben wird 3. Eine
 Einzelspieler-Aufnahme ist eine echte Teilmenge, und die vorhandenen
 Aufnahmen - an denen Highscore-Eintraege haengen - bleiben damit
@@ -3946,10 +3971,34 @@ p=1 120l           <slot> <delta zum letzten Ereignis DIESES slots><aktion>
 v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
 ```
 
+- **"Teilmenge" heisst woertlich: eine Einzelspieler-Aufnahme der
+  Version 3 ist byteweise die der Version 2.** Der ganze Block oben -
+  `length`, `players`, `slot`, `mpmode`, `garbage`, `winner`, `peer=`,
+  `p=` und `v=` - wird nur in einer Versus-Aufnahme geschrieben, und die
+  vier Einzelspieler-Modi behalten ihren einen Strom `e=`. Es waere
+  gleichmaessiger gewesen, auch dort `p=0` zu schreiben; dann waere
+  aber der Schritt, der das Format schreibt (9.6), derselbe geworden,
+  der jede vorhandene Wiedergabe bricht - und zwischen ihm und dem
+  Schritt, der das neue Lesen bringt (9.8), stuenden Aufnahmen, die
+  niemand ansehen kann. Der Leser hat es trotzdem nur mit **einem**
+  Modell zu tun: `e=` fuellt Strom 0, `p=<n>` fuellt Strom n.
+  `length` fehlt aus demselben Grund im Einzelspieler - dort ist es
+  `time`; und `winner` fehlt, wenn es keinen gibt (eine Runde, die
+  dieser Client vor dem Ende verlassen hat), statt eine Zahl
+  hinzuschreiben, die jemand als Slot liest.
 - **Das Delta gilt je Slot, nicht global.** Die Zuege eines Gegners
   treffen mit Netzverzoegerung ein und koennen aelter sein als das
   zuletzt geschriebene Ereignis; je Slot bleibt jeder Strom monoton, und
-  die Wiedergabe fuehrt schlicht fuenf Cursor.
+  die Wiedergabe fuehrt schlicht fuenf Cursor. Was diese Monotonie
+  sichert, ist eine Klemme auf 0 - dieselbe, die eine rueckwaerts
+  gesprungene Uhr abfaengt. Sie greift regelmaessig bei den drei
+  Ereignissen, die vom Hub kommen (`y`, `q`, `n`/`z`): die werden
+  gestempelt, wenn sie eintreffen, waehrend die Zuege eines Gegners bis
+  zu ein Sendefenster (`MP_ACT_MS`) aelter sind als ihre Ankunft. Der
+  betroffene Strom ist danach fuer genau ein Ereignis um hoechstens
+  dieses Fenster gestaucht und laeuft dann wieder richtig; die Wirkung
+  der Ereignisse selbst verschiebt sich gar nicht, denn Stoerreihen
+  werden eingereiht und erst beim naechsten Lock eingeschoben.
 - **Das Alphabet** sind die vorhandenen Buchstaben (`l r c a s h o g k`,
   siehe 4.10) plus `y<nn><h>` eingehende Stoerreihen (Anzahl 01 bis 10,
   Lochspalte 0 bis 9), `q<nn>` verbindliche Warteschlangenlaenge,
@@ -3959,17 +4008,64 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   durch den Nachrichten-Dispatcher und keine Verb-Whitelist - eine
   `.demo`-Datei ist Fremddatum im Sinne von 5.5, und was sie nicht
   ausdruecken kann, kann sie auch nicht ausloesen.
+  Die Nutzlasten sind **feste Breiten**, weil die Tokens im Protokoll
+  ohne Trenner aneinanderstossen (`PROTO_ACT_RE`): eine variable
+  Ziffernzahl waere vom Delta des naechsten Tokens nicht zu
+  unterscheiden. Zahlen, die nicht hineinpassen, werden beim Schreiben
+  gekappt (99 Reihen, Spalte 9, Platz 9) - kein Wert, den dieses Spiel
+  je sendet, aber der Hub ist nichts, dem dieses Ende glauben muesste
+  (5.5).
+- **`y` und `q` werden fuer jeden Slot notiert**, auch fuer die
+  Mitspieler: Stoerreihen sind das Einzige, was einem Brett ohne einen
+  Zug dahinter zustoesst, und was ein Abbau von einer Warteschlange
+  weggekuerzt hat, ist die Rechnung des Hubs - eine Wiedergabe, die die
+  Reihen selbst zusammenzaehlt, liefe beim ersten verrechneten Angriff
+  auseinander.
+- **`n` und `z` werden verzoegert geschrieben.** Das `KO` des Hubs sagt
+  fuer einen Top-Out dasselbe wie fuer eine gerissene Verbindung; welches
+  von beiden es war, steht erst im `ROSTER`, das einen Hub-Tick spaeter
+  kommt. Der Platz wird deshalb vorgemerkt und der Buchstabe gesetzt,
+  wenn der Roster ihn nennt - und beim Schliessen der Aufnahme als `n`,
+  falls die Runde vorher zu Ende war (der Normalfall beim
+  entscheidenden Ausscheiden).
 - **Eine Steinfolge fuer alle.** Der gemeinsame Seed (5.1) gibt jedem
   dieselbe Folge, nur zu anderen Zeitpunkten. Der Aufzeichnende zieht
   sie deshalb weit genug: er zaehlt die Locks in den fremden
   Ereignisstroemen mit und fuellt die Folge aus seinem eigenen Beutel
   nach, auch nachdem er selbst ausgeschieden ist. Vorziehen ist
-  unschaedlich, die Folge ist deterministisch.
+  unschaedlich, die Folge ist deterministisch. (Das ist Schritt 9.7;
+  bis dahin steht in einer Aufnahme nur die Folge, die dieser Client
+  selbst gezogen hat.)
 - **Die `v=`-Pruefpunkte** sind die Gegenprobe, nicht die Anzeigequelle:
   die Wiedergabe vergleicht ihre Simulation mit den seinerzeit
   gemeldeten Zaehlern und meldet eine Abweichung ins Debug-Log. Damit
   wird eine ganze Fehlerklasse - die Simulation laeuft auseinander -
-  sichtbar statt still.
+  sichtbar statt still. Drei Festlegungen dazu:
+  - **Sie sind positionsgebunden und tragen deshalb keinen
+    Zeitstempel.** Ein Pruefpunkt gilt fuer den Moment, in dem der Strom
+    seines Slots das letzte vor ihm geschriebene Ereignis erreicht hat.
+    Er ist kein Ereignis, sondern eine Aussage ueber den Strom um ihn
+    herum.
+  - **Er wird hinter die Zuege gelegt, die er beschreibt.** Ein
+    Mitspieler schickt am Ende seines Ticks erst seine Zaehler (`STATE`)
+    und danach sein Zugfenster: die Zahlen koennen also bis zu ein
+    Fenster vor den Zuegen ankommen, die sie erzeugt haben. Ein dort
+    abgelegter Pruefpunkt wuerde einer korrekten Wiedergabe eine
+    Abweichung vorwerfen. Also wird der zuletzt gemeldete Stand
+    aufgehoben und erst hinter dem naechsten `PEERACT` dieses Slots
+    geschrieben.
+  - **Hoechstens einer je Sekunde und Slot** (`DEMO_V_MS`, gemessen auf
+    der Uhr des Stroms). Die Zaehler aendern sich bei jedem Lock (schon
+    wegen der Stapelhoehe), und einen Pruefpunkt je gemeldeter Aenderung
+    zu schreiben wuerde eine Fuenf-Spieler-Aufnahme vervielfachen, ohne
+    mehr zu pruefen. Den eigenen Slot schreibt der Aufzeichnende dabei
+    aus seinen **lebenden** Zaehlern mit: er kam nie ueber das Netz und
+    ist damit die schaerfste Probe darauf, ob die Wiedergabe das Spiel
+    richtig nachspielt.
+- **Ein Test-Bot (`--mp-bot`) zeichnet nicht auf.** Seine Runden sind
+  Testverkehr, und seine Aufnahmen laegen in einem Datenverzeichnis als
+  echte - sie zaehlten gegen `DEMO_MAX` und verdraengten Runden, die
+  jemand gespielt hat.
 
 **Wiedergabe.**
 Je Frame wird fuer jeden Slot umgebunden, alle faelligen Ereignisse
@@ -4156,11 +4252,12 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
       (Zielanforderung und Architektur siehe 5.20). Vollausbau: die
       Zuege aller Teilnehmer werden verteilt und mitgeschrieben, die
       Wiedergabe simuliert alle Felder gleichzeitig, und der Fokus
-      wechselt waehrend der Wiedergabe frei mit den Pfeiltasten. Bis das
-      steht, wird eine Mehrspieler-Runde **nicht** aufgezeichnet:
-      `demo_record_start` lehnt einen Modus ab, den `DEMO_MODE_RE` nicht
-      kennt, denn eine Aufnahme im Format 2 liefe als Runde ab, in der
-      aus dem Nichts Stoerreihen erscheinen.
+      wechselt waehrend der Wiedergabe frei mit den Pfeiltasten.
+      Aufgezeichnet wird seit 9.6; bis dahin wurde eine
+      Mehrspieler-Runde bewusst **nicht** aufgezeichnet, weil eine
+      Aufnahme im Format 2 als Runde abliefe, in der aus dem Nichts
+      Stoerreihen erscheinen. Bis 9.8 die neuen Stroeme lesen kann,
+      laesst sich eine Versus-Aufnahme noch nicht abspielen.
       **Gesamtabnahme:** die Wiedergabe einer Vier-Spieler-Runde zeigt
       fuer jeden der vier denselben Verlauf wie die Runde selbst, in
       jeder Detailstufe aufgenommen, und laesst sich waehrend des Laufs
@@ -4194,12 +4291,20 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
         beiden Grenzen musste nachgezogen werden. Die Probe hat dafuer
         einen alten Fehler gefunden - ein zehnstelliger Seed, den jeder
         Client verwarf (siehe 5.9, "Seed") -, der mit ihr behoben ist.
-  - [ ] **9.6 Format 3 schreiben.** Kopf, `p=`- und `v=`-Zeilen, neue
+  - [x] **9.6 Format 3 schreiben.** Kopf, `p=`- und `v=`-Zeilen, neue
         Ereignisbuchstaben, Demo-Uhr als Rundenuhr im Versus, `versus`
         in `DEMO_MODE_RE`, `end=lost`, und `--mp-bot` zeichnet nicht
         auf. Noch keine Wiedergabe. Abnahme: nach einer Runde liegt eine
         lesbare Datei vor, deren Kopf und Stroeme sich mit `events.log`
-        decken.
+        decken. Geprueft an einer Runde mit zwei Test-Bots: Kopf,
+        Ereignisstroeme, Pruefpunkte und die Plaetze der Ausgeschiedenen
+        decken sich mit dem `events.log` des aufzeichnenden Clients.
+        Der Sitzungsblock ist auf eine Versus-Aufnahme beschraenkt, damit
+        eine Einzelspieler-Aufnahme bleibt, was sie war - sie wird
+        weiterhin unveraendert aufgezeichnet und abgespielt (siehe
+        5.20). Eine Versus-Aufnahme steht in der Demo-Liste und wird
+        beim Abspielen mit einer Meldung abgewiesen, bis 9.8 sie lesen
+        kann.
   - [ ] **9.7 Steinfolge fuer alle.** Die Folge aus dem eigenen Beutel
         nachfuellen, solange irgendein Spieler noch Steine braucht -
         auch nach dem eigenen Ausscheiden. Abnahme: der frueh
@@ -4475,9 +4580,11 @@ Uebrige dort ist entschieden):
   Zeichenmenge je Gegnerfeld, was zuerst dort auffallen wird.
 - **Demo-Aufzeichnung im Mehrspieler:** entschieden
   (Nutzerentscheidung, siehe 5.20) - **jeder Client zeichnet alle
-  Teilnehmer auf** -, aber noch nicht gebaut: es ist der eine offene
-  Schritt der Phase 5 (Abschnitt 7, Schritte 9.1 bis 9.14), und bis
-  dahin wird eine Mehrspieler-Runde bewusst gar nicht aufgezeichnet.
+  Teilnehmer auf** -, und seit Schritt 9.6 tut er das auch: eine
+  Mehrspieler-Runde wird als Format 3 aufgezeichnet. Offen bleibt die
+  **Wiedergabe** (Abschnitt 7, Schritte 9.7 bis 9.14) - bis dahin steht
+  eine Versus-Aufnahme in der Demo-Liste, laesst sich aber nicht
+  abspielen.
   Die frueher hier offene Folgefrage - ob die Mitspieler nur so
   aufgenommen werden koennen, wie sie ankamen (Zaehler, und
   Feld-Schnappschuesse nur in Detailstufe 2) - ist mit dem **Vollausbau**

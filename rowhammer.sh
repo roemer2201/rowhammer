@@ -1577,6 +1577,10 @@ record_round() {
         return 0
     fi
     ROUND_RECORDED=1
+    # Where the recorded timeline ends, taken before anything below can
+    # take time: the name prompt waits for a person, and the round clock
+    # a multiplayer recording runs on does not stop for one (lib/demo.sh).
+    demo_mark_end
     # Which name this round is filed under (2026-08-03, user request).
     # The name from the settings is the default and the prompt offers it
     # preselected, so keeping it costs one Enter; what is typed instead
@@ -1705,7 +1709,14 @@ record_round() {
     # really ended - a round suspended into the main menu keeps recording
     # and is stored when it is finished for good.
     local demo_end="quit"
-    if [ "${GOAL_REACHED}" -eq 1 ]; then
+    if [ "${MP_ACTIVE}" -eq 1 ] && [ "${MP_ERROR}" = "lost" ]; then
+        # A multiplayer round that ended because the session did: the
+        # rows count like those of any aborted round, but the recording
+        # says why it stops where it stops - the four boards beside this
+        # one simply went quiet, and a replay showing that as a top-out
+        # would be telling a different story (CLAUDE.md 5.20).
+        demo_end="lost"
+    elif [ "${GOAL_REACHED}" -eq 1 ]; then
         demo_end="goal"
     elif [ "${GAME_OVER}" -eq 1 ]; then
         demo_end="over"
@@ -2417,6 +2428,12 @@ game_run() {
                 # what was cleared was cleared (CLAUDE.md 5.8).
                 GAME_OVER=1
                 MP_ENDED=1
+                # Both ways in here are the same thing for this round,
+                # so both say so: mp_poll sets this on an end of file,
+                # while a hub that simply went quiet leaves it unset -
+                # and the recording of this round takes it as the reason
+                # it stops where it stops (end=lost, see record_round).
+                MP_ERROR="lost"
                 debug_event "mp: connection lost or silent, ending the round"
             fi
             if [ "${MP_ENDED}" -eq 1 ] && [ "${ROUND_RECORDED}" -eq 0 ]; then
