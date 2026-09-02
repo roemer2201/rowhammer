@@ -1184,7 +1184,8 @@ Einstellungsmenue waehlbar und in der Config gespeichert),
 die Mehrspieler-Optionen `--mp-transport lan|unix`, `--mp-port N`,
 `--mp-dir DIR`, `--mp-max N`, `--mp-session NAME`,
 `--mp-view auto|full|compact|score`, `--mp-target random|all|even`,
-`--mp-host`, `--mp-join HOST[:PORT]` und `--mp-bot` (je mit
+`--mp-mode survival|sprint|ultra`, `--mp-garbage on|off`, `--mp-host`,
+`--mp-join HOST[:PORT]` und `--mp-bot` (je mit
 `ROWHAMMER_MP_*`-Variable, seit 1.1.0, siehe 5.10) sowie die drei
 internen Prozessmodi `--mp-hub`, `--mp-bridge` und `--mp-discover`,
 `--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
@@ -3354,8 +3355,9 @@ Standard < Config < Env < CLI, wie in Abschnitt 6 gefordert):
 
 | Option | Umgebung | Bedeutung |
 | --- | --- | --- |
-| `--mp-host [NAME]` | `ROWHAMMER_MP_HOST` | Sitzung eroeffnen (Standardname = Benutzername) |
+| `--mp-host` | `ROWHAMMER_MP_HOST` | Sitzung eroeffnen (ein Schalter ohne Argument; den Namen setzt `--mp-session`) |
 | `--mp-join ZIEL` | `ROWHAMMER_MP_JOIN` | Beitreten: Sitzungsname oder `HOST[:PORT]` (siehe 5.2) |
+| `--mp-session NAME` | `ROWHAMMER_MP_SESSION` | Name der eroeffneten Sitzung, 1-16 Zeichen `[A-Za-z0-9_-]`; Vorgabe ist der Benutzername, auf dieses Muster reduziert (leeres Ergebnis wird `player`) |
 | `--mp-transport MODE` | `ROWHAMMER_MP_TRANSPORT` | `lan` (Standard) oder `unix` |
 | `--mp-port N` | `ROWHAMMER_MP_PORT` | TCP-/Beacon-Port, Standard 27301 (nur `lan`) |
 | `--mp-dir DIR` | `ROWHAMMER_MP_DIR` | Sitzungsverzeichnis (nur `unix`, siehe 5.2) |
