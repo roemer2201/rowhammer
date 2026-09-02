@@ -299,6 +299,10 @@ mp_handle() {
                 MP_PEER_NAME[slot]="${PROTO_ARG[1]}"
                 MP_PEER_READY[slot]="${PROTO_ARG[2]}"
                 MP_PEER_STATE[slot]="${PROTO_ARG[3]}"
+                # The roster is the only message that tells a top-out
+                # from a lost connection: the KO before it says the same
+                # thing for both, and the recording keeps them apart.
+                demo_record_peer_status "${slot}" "${PROTO_ARG[3]}"
             fi
             ;;
         SEED)
@@ -325,6 +329,14 @@ mp_handle() {
                 MP_PEER_HEIGHT[slot]="${PROTO_ARG[6]}"
                 MP_PEER_PENDING[slot]="${PROTO_ARG[7]}"
                 MP_PEER_STATE[slot]="${PROTO_ARG[8]}"
+                # The counters go into the recording as a checkpoint, so
+                # a replay can tell whether its simulation of this player
+                # still agrees with the round it is replaying. The
+                # pending queue is not among them: it is the one number
+                # the stream carries by itself (the y and q events).
+                demo_record_peer_state "${slot}" "${PROTO_ARG[1]}" \
+                    "${PROTO_ARG[2]}" "${PROTO_ARG[3]}" "${PROTO_ARG[4]}" \
+                    "${PROTO_ARG[5]}" "${PROTO_ARG[6]}"
                 DIRTY=1
             fi
             ;;
@@ -336,15 +348,16 @@ mp_handle() {
             fi
             ;;
         PEERACT)
-            # Another player's moves. Nothing is done with them during the
-            # round on purpose: the mini boards keep coming from the
-            # snapshots (PEERBOARD), because simulating four more rounds
-            # per frame is what the playback does, not the game
-            # (CLAUDE.md 5.20, "Nicht Ziel"). They are logged and, from
-            # step 9.6 on, written into the recording of this round.
+            # Another player's moves: written into the recording of this
+            # round and otherwise left alone. Nothing is done with them
+            # while the round runs, on purpose - the mini boards keep
+            # coming from the snapshots (PEERBOARD), because simulating
+            # four more rounds per frame is what the playback does, not
+            # the game (CLAUDE.md 5.20, "Nicht Ziel").
             slot="${PROTO_ARG[0]}"
             if [ "${slot}" -lt "${MP_MAX}" ]; then
                 debug_event "mp: moves of slot ${slot} at ${PROTO_ARG[1]}: ${PROTO_ARG[2]}"
+                demo_record_peer_act "${slot}" "${PROTO_ARG[1]}" "${PROTO_ARG[2]}"
             fi
             ;;
         NEEDBOARD)
@@ -386,6 +399,10 @@ mp_handle() {
             # a second source for the same number could only drift away
             # from it.
             slot="${PROTO_ARG[0]}"
+            # Into the recording for every slot, our own included: a
+            # board's garbage is the one thing that happens to it without
+            # a move behind it, so a replay cannot work it out on its own.
+            demo_record_garbage "${slot}" "${PROTO_ARG[1]}" "${PROTO_ARG[2]}"
             if [ "${slot}" -eq "${MP_SLOT}" ]; then
                 # Queued, not applied: garbage comes in at the next lock,
                 # never while a piece is falling, so the move in progress
@@ -403,6 +420,11 @@ mp_handle() {
             # what is left of it. Its number wins over ours - but only for
             # our own queue; see GARBAGE above for the rest.
             slot="${PROTO_ARG[0]}"
+            # Recorded for every slot, and for the same reason as the
+            # garbage above: what a clear cancelled is the hub's
+            # arithmetic, and a replay adding the rows up itself would
+            # drift away from the round at the first cancelled attack.
+            demo_record_queue "${slot}" "${PROTO_ARG[1]}"
             if [ "${slot}" -eq "${MP_SLOT}" ]; then
                 MP_PENDING="${PROTO_ARG[1]}"
                 DIRTY=1
@@ -414,6 +436,9 @@ mp_handle() {
             slot="${PROTO_ARG[0]}"
             if [ "${slot}" -lt "${MP_MAX}" ]; then
                 MP_PEER_PLACE[slot]="${PROTO_ARG[1]}"
+                # Noted for the recording, written once the roster says
+                # whether this was a top-out or a lost connection.
+                demo_record_ko "${slot}" "${PROTO_ARG[1]}"
                 MP_PEER_STATE[slot]="ko"
                 if [ "${slot}" -eq "${MP_SLOT}" ]; then
                     MP_PLACE="${PROTO_ARG[1]}"
@@ -1925,6 +1950,12 @@ mp_bot_main() {
     # part of the game logic that renders on its own; switching it off is
     # what keeps this loop silent (see flash_rows in rowhammer.sh).
     FLASH_CYCLES=0
+    # And nothing may be kept either: a bot's rounds are test traffic,
+    # and their recordings would sit in a data directory as real ones,
+    # counting against DEMO_MAX and pushing out rounds somebody played.
+    # Switched off here rather than asked for at the call site, so a bot
+    # is off the books whatever --demo-record says.
+    DEMO_RECORD="off"
     if ! mp_join_target "${target}"; then
         die "bot could not join ${target}"
     fi

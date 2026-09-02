@@ -200,6 +200,10 @@ nicht mehr fortsetzbar."
     # Einzelspieler-Menue, aber in den beiden Ruecksichten (Highscores,
     # Statistik) und ueberall dort, wo eine Runde ihren Modus nennt.
     [mode_versus]="Mehrspieler"
+    # Die Kurzform fuer die Demo-Liste, die dem Modus acht Spalten laesst
+    # (demo_scan in lib/demo.sh) - derselbe Grund wie bei Time Attack und
+    # Hochwasser.
+    [mode_versus_short]="Versus"
     [entry_marathon]="(endlos, bis Game Over)"
     [entry_ultra]="(%s Rows auf Zeit)"
     [entry_sprint]="(%s Minuten auf Rows)"
