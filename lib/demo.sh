@@ -48,6 +48,14 @@
 #   file carries checkpoints ("v=<slot> ..."): the counters the hub
 #   reported for a player, so a replay can tell whether its simulation
 #   still agrees with the round it is replaying.
+#   Everybody plays the same sequence from the same shared seed, only at
+#   their own pace, so the piece stream is drawn out far enough for the
+#   participant who got furthest into it and not only for this one
+#   (demo_pieces_topup) - a player who topped out in the first minute
+#   still records the pieces the last one standing was dealt.
+#   Reading it back knows one model for both kinds of recording: "e="
+#   fills stream 0, "p=<n>" fills stream n, and a singleplayer recording
+#   simply has nothing but stream 0 (demo_load, demo_stream_bind).
 #
 #   Timing. Every event carries the round's play time (PLAY_MS, pauses
 #   excluded) as a delta to the event before it - in a versus round the
@@ -94,7 +102,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.1  (2026-08-11)
+# Version: 0.5.0  (2026-09-02)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -205,7 +213,17 @@ DEMO_END_RE='^(over|goal|quit|lost)$'
 # validated there, and the space DEMO_NAME_RE allows would swallow the
 # field separator.
 DEMO_MPMODE_RE='^(survival|sprint|ultra)$'
-DEMO_PEER_RE='^[0-9] [A-Za-z0-9_-]{1,16}$'
+DEMO_PEER_RE='^([0-9]) ([A-Za-z0-9_-]{1,16})$'
+# One event of a versus stream, as the value of a "p=" line: the slot,
+# then the delta and the action written back to back the way the move
+# stream sends them. The payload widths are the ones the writer uses
+# (demo_record_garbage, demo_record_queue, demo_ko_write) and they are
+# fixed for the reason given above, so the pattern can spell them out.
+DEMO_MP_EVENT_RE='^([0-9]) ([0-9]{1,7})([lrcashogk]|y[0-9]{3}|q[0-9]{2}|[nz][0-9])$'
+# One checkpoint, as the value of a "v=" line: the slot and the six
+# counters the hub reported for it (lines, rows, level, gold, silver,
+# stack height), in the order STATE puts them on the wire.
+DEMO_CHECK_RE='^([0-9]) ([0-9]{1,9} [0-9]{1,9} [0-9]{1,9} [0-9]{1,9} [0-9]{1,9} [0-9]{1,9})$'
 
 # --- Recording state ------------------------------------------------------
 # Whether the running round is being recorded, the RAM disk file it is
@@ -233,6 +251,13 @@ DEMO_SLOT_LAST_MS=()
 DEMO_V_PEND=()
 DEMO_V_LAST_MS=()
 DEMO_KO_PEND=()
+# How many pieces that slot has taken out of the sequence: one per spawn,
+# counted from the events that cause one (see demo_slot_event). It is
+# what the piece stream is topped up against when the recording is closed
+# (demo_pieces_topup) - everybody plays the same sequence, so the file
+# has to hold as many pieces as the player who got furthest into it, not
+# as many as this one drew.
+DEMO_SLOT_SPAWNS=()
 # End of the recorded timeline, taken when the round ended rather than
 # when the recording is closed: between the two lies the name prompt, and
 # the round clock does not stop for it (demo_mark_end).
@@ -256,8 +281,42 @@ DEMO_SPEED=100
 DEMO_SPEED_LABEL="1.00x"
 DEMO_PLAY_PIECES=""
 DEMO_PLAY_POS=0
+
+# --- The loaded event streams ---------------------------------------------
+# A recording holds one stream per participant: "e=" fills stream 0,
+# "p=<n>" fills stream n, which is the whole difference between a
+# singleplayer and a versus recording as far as the reader is concerned
+# (CLAUDE.md 5.20). Each stream lives in backing arrays of its own,
+# "<prefix><slot>_<field>", and the four names below are namerefs into
+# one of them - the same trick lib/state.sh uses for the round state, and
+# for the same reason: the playback works on one stream at a time and
+# must not copy four arrays to change which one that is.
+#   T  absolute timestamp of each event, in milliseconds of the round
+#   A  its action token
+#   CN a checkpoint's position: the number of that stream's events that
+#      had been written before it (a checkpoint is not a thing that
+#      happened but a statement about the stream around it, so it has a
+#      position rather than a time)
+#   CV the six counters of that checkpoint, as one string
+DEMO_STREAM_PREFIX="DEMOEV"
+# How many streams a recording may have. The format's limit, not the
+# session's MP_MAX: a recording is a file, and it must not become
+# unreadable because the session watching it was started with a smaller
+# --mp-max than the session that played it. Five is what --mp-max accepts
+# at the most (see rowhammer.sh), so no recording of this game can hold
+# more.
+DEMO_STREAM_MAX=5
+# Which stream the four names point at, -1 while they are still the plain
+# arrays this module starts with (see demo_stream_bind).
+DEMO_STREAM_SLOT=-1
 DEMO_EV_T=()
 DEMO_EV_A=()
+DEMO_CK_N=()
+DEMO_CK_V=()
+# Which slots the loaded recording actually has, and the name of each -
+# an unoccupied seat has an empty name. Filled by demo_header_read from
+# the "peer=" lines; a singleplayer recording has none of them.
+DEMO_PEER_NAME=()
 # Play time the replay has reached, in milliseconds of the recorded
 # round: the playback loop advances it by the real time between two
 # passes scaled by DEMO_SPEED, and every event is due once it has passed
@@ -273,6 +332,22 @@ DEMO_HDR_DATE=""
 DEMO_HDR_TIME=0
 DEMO_HDR_ROWS=0
 DEMO_HDR_END="quit"
+# The session block of a versus recording, empty for every other mode.
+# DEMO_HDR_MP is what tells the two apart everywhere below - a reader
+# asking "is this a versus recording" is asking whether there is a
+# session, not what the mode string says.
+# DEMO_HDR_LENGTH is how long the round went on, which is a different
+# number from DEMO_HDR_TIME the moment this player topped out early and
+# watched the rest of it; DEMO_HDR_SLOT is the seat they sat in and
+# DEMO_HDR_WINNER is -1 when the recording names no winner (a round this
+# client left before the hub called it).
+DEMO_HDR_MP=0
+DEMO_HDR_LENGTH=0
+DEMO_HDR_PLAYERS=0
+DEMO_HDR_SLOT=0
+DEMO_HDR_MPMODE=""
+DEMO_HDR_GARBAGE=0
+DEMO_HDR_WINNER=-1
 
 # Entries of the demo list screen, filled by demo_scan: the file paths,
 # the menu labels belonging to them and, per entry, whether the recording
@@ -389,6 +464,9 @@ demo_record_start() {
             DEMO_V_PEND[i]=""
             DEMO_V_LAST_MS[i]=0
             DEMO_KO_PEND[i]=""
+            # One already: every round opens with the spawn game_reset
+            # does before a single event can have happened.
+            DEMO_SLOT_SPAWNS[i]=1
         done
         debug_event "demo: recording a versus round as slot ${DEMO_MP_SLOT} (mode=${MP_MODE} garbage=${MP_GARBAGE})"
     fi
@@ -467,6 +545,16 @@ demo_slot_event() {
     # Advanced by the delta actually written, not to T: after a clamp the
     # two differ, and the file is the truth the replay follows.
     DEMO_SLOT_LAST_MS[slot]=$(( DEMO_SLOT_LAST_MS[slot] + delta ))
+    # The three events that can take a piece out of the sequence: a lock
+    # (hard drop or expired lock delay) always spawns the next one, a
+    # hold spawns one the first time it is used. Counting every hold is
+    # deliberately generous - a refused hold and a later swap take none -
+    # because the count only decides how far the piece stream is drawn
+    # ahead (demo_pieces_topup), and drawing too far costs a byte while
+    # drawing too short would cut a replay off.
+    case "${action}" in
+        h|k|o) DEMO_SLOT_SPAWNS[slot]=$(( DEMO_SLOT_SPAWNS[slot] + 1 )) ;;
+    esac
     DEMO_BUF+=("p=${slot} ${delta}${action}")
     demo_buf_full
     return 0
@@ -772,6 +860,51 @@ demo_record_discard() {
     return 0
 }
 
+# demo_pieces_topup
+# Draw the piece sequence far enough ahead for every participant of a
+# versus round, not just for this one. All of them play the same sequence
+# from the same shared seed (CLAUDE.md 5.1), only at their own pace: a
+# player who is still building when this one is long out has taken more
+# pieces out of it than this client ever drew, and a recording that stops
+# at this client's own draws would leave that board without pieces
+# halfway through the replay. So the stream is carried on out of this
+# session's own bag - the very bag those pieces would have come from -
+# until it covers the player who got furthest.
+# Called once when the recording is closed rather than kept topped up as
+# the round runs: how far anybody got is only known when it is over, and
+# doing it here costs the round nothing at all. The bag is where this
+# client's own draws left it (queue_fill is the only thing that takes
+# from it, and it stopped when this player did), so carrying on with it
+# continues the one sequence rather than starting a second one. RANDOM is
+# re-seeded per round from the hub's SEED and game_reset empties the bag,
+# so drawing further here cannot move the next round of the session
+# either.
+# Drawing too far is harmless - one byte per piece, and the replay simply
+# does not ask for them - which is why the estimate behind
+# DEMO_SLOT_SPAWNS may be generous.
+demo_pieces_topup() {
+    local i want=0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    for (( i = 0; i < MP_MAX; i++ )); do
+        if [ "${DEMO_SLOT_SPAWNS[i]}" -gt "${want}" ]; then
+            want="${DEMO_SLOT_SPAWNS[i]}"
+        fi
+    done
+    # A round holds PREVIEW_COUNT + 1 pieces in the queue on top of the
+    # ones it has spawned (queue_fill, lib/pieces.sh) - the three
+    # previews and the piece that spawns next - and every one of them was
+    # drawn from the sequence.
+    want=$(( want + PREVIEW_COUNT + 1 ))
+    while [ "${#DEMO_PIECES}" -lt "${want}" ]; do
+        if [ "${#BAG[@]}" -eq 0 ]; then
+            bag_refill
+        fi
+        DEMO_PIECES+="${BAG[0]}"
+        BAG=("${BAG[@]:1}")
+    done
+    return 0
+}
+
 # demo_record_finish END [HASH]
 # Close the recording of a finished round and move it into the data
 # directory. END is how the round ended: "goal" (Ultra target reached or
@@ -831,6 +964,9 @@ demo_record_finish() {
         demo_record_discard
         return 0
     fi
+    # Before the piece stream goes into the header below: in a versus
+    # round it has to cover every participant, not only this one.
+    demo_pieces_topup
     # Header and piece stream, assembled as lines before anything is
     # written: that way the whole recording leaves the process in exactly
     # two write commands, both of which can be checked (see below).
@@ -928,7 +1064,11 @@ demo_record_finish() {
         return 0
     fi
     if [ "${DEMO_MP}" -eq 1 ]; then
-        debug_event "demo: recording saved to ${path} (end=${end} time=${PLAY_MS}ms length=${DEMO_END_MS}ms rows=${ROW_CREDIT} pieces=${#DEMO_PIECES} players=${players} slot=${DEMO_MP_SLOT} winner=${MP_WINNER})"
+        # The per-slot spawn counts go into the line as well: they are
+        # what the piece stream was drawn out to (demo_pieces_topup), so
+        # this is where a stream too short for one of the boards would
+        # show up.
+        debug_event "demo: recording saved to ${path} (end=${end} time=${PLAY_MS}ms length=${DEMO_END_MS}ms rows=${ROW_CREDIT} pieces=${#DEMO_PIECES} spawns=${DEMO_SLOT_SPAWNS[*]} players=${players} slot=${DEMO_MP_SLOT} winner=${MP_WINNER})"
     else
         debug_event "demo: recording saved to ${path} (end=${end} time=${PLAY_MS}ms rows=${ROW_CREDIT} pieces=${#DEMO_PIECES})"
     fi
@@ -1073,6 +1213,34 @@ demo_prune() {
     return 0
 }
 
+# demo_reject REASON [VALUE]
+# Refuse the recording being read, saying why. The reason goes into the
+# debug log rather than onto the screen: the player is told once, in
+# their own language, that a recording cannot be played (demo_invalid,
+# lib/lang), while which field of which file was wrong is a diagnosis and
+# belongs where the game keeps its diagnoses (CLAUDE.md 4.6). Callers use
+# it as "... || { demo_reject '...'; return 1; }" - it returns 1 itself
+# so a caller may also end on it.
+# VALUE is the offending field, and it goes through "printf %q" because a
+# recording is foreign data (CLAUDE.md 5.5): the rejected value is
+# exactly the one that may hold control bytes, and net.log quotes the
+# wire for the same reason. It never reaches the terminal either way -
+# the game owns that screen - but a log somebody reads with "cat" must
+# not carry escape sequences out of a file this game refused.
+DEMO_READ_FILE=""
+# It is also cut to its first 40 characters: no field of a hand-edited
+# file has a length this end guarantees, and a hundred kilobyte line
+# would go into the log in full otherwise. Forty is plenty to see what
+# went wrong with a field whose longest legal form is a date.
+demo_reject() {
+    local detail=""
+    if [ "$#" -gt 1 ]; then
+        printf -v detail ' %q' "${2:0:40}"
+    fi
+    debug_event "demo: ${DEMO_READ_FILE}: ${1}${detail}"
+    return 1
+}
+
 # demo_header_read FILE
 # Read and validate the header of a recording into the DEMO_HDR_*
 # globals. Stops at the first non-header line, so listing the directory
@@ -1080,14 +1248,31 @@ demo_prune() {
 # Returns 1 for a file that is not a valid recording of this format
 # version; the caller shows it as defective rather than dropping it
 # silently, so a broken file can still be deleted from the menu.
+# Every field has a pattern of its own, and the cross-checks that need
+# more than one field - a session block belongs to a versus recording and
+# to no other, its seats have to add up - run after the loop, because the
+# keys may stand in any order in the file.
 demo_header_read() {
-    local file="${1}" line key val version=0
+    local file="${1}" line key val version=0 slot name i peers=0
+    DEMO_READ_FILE="${file}"
     DEMO_HDR_MODE=""
     DEMO_HDR_DATE=""
     DEMO_HDR_TIME=0
     DEMO_HDR_ROWS=0
     DEMO_HDR_END=""
+    DEMO_HDR_MP=0
+    DEMO_HDR_LENGTH=-1
+    DEMO_HDR_PLAYERS=0
+    DEMO_HDR_SLOT=-1
+    DEMO_HDR_MPMODE=""
+    DEMO_HDR_GARBAGE=0
+    DEMO_HDR_WINNER=-1
+    DEMO_PEER_NAME=()
+    for (( i = 0; i < DEMO_STREAM_MAX; i++ )); do
+        DEMO_PEER_NAME[i]=""
+    done
     if [ ! -r "${file}" ]; then
+        demo_reject "not readable"
         return 1
     fi
     while IFS= read -r line; do
@@ -1099,57 +1284,85 @@ demo_header_read() {
         val="${line#*=}"
         case "${key}" in
             version)
-                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad version" "${val}"; return 1; }
                 version=$(( 10#${val} ))
                 ;;
             mode)
-                [[ "${val}" =~ ${DEMO_MODE_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_MODE_RE} ]] || { demo_reject "bad mode" "${val}"; return 1; }
                 DEMO_HDR_MODE="${val}"
                 ;;
             name)
-                [[ "${val}" =~ ${DEMO_NAME_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_NAME_RE} ]] || { demo_reject "bad name" "${val}"; return 1; }
                 ;;
             date)
-                [[ "${val}" =~ ${DEMO_DATE_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_DATE_RE} ]] || { demo_reject "bad date" "${val}"; return 1; }
                 DEMO_HDR_DATE="${val}"
                 ;;
             time)
-                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad time" "${val}"; return 1; }
                 DEMO_HDR_TIME=$(( 10#${val} ))
                 ;;
             rows)
-                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad rows" "${val}"; return 1; }
                 DEMO_HDR_ROWS=$(( 10#${val} ))
                 ;;
             lines)
-                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad lines" "${val}"; return 1; }
                 ;;
             goal)
-                [[ "${val}" =~ ^[01]$ ]] || return 1
+                [[ "${val}" =~ ^[01]$ ]] || { demo_reject "bad goal" "${val}"; return 1; }
                 ;;
             end)
-                [[ "${val}" =~ ${DEMO_END_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_END_RE} ]] || { demo_reject "bad end" "${val}"; return 1; }
                 DEMO_HDR_END="${val}"
                 ;;
-            # The session block of a versus recording (format 3). Checked
-            # for shape here and otherwise left alone: what the playback
-            # of one needs from it is picked up where the playback is
-            # built (step 9.8), and this function is what the demo list
-            # calls for every file in the directory.
-            length|players|winner)
-                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || return 1
+            # The session block of a versus recording (format 3). Each
+            # key is kept: the playback needs the seats to draw and the
+            # rules the round was played under, and "length" is the
+            # timeline it runs along.
+            length)
+                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad length" "${val}"; return 1; }
+                DEMO_HDR_LENGTH=$(( 10#${val} ))
+                ;;
+            players)
+                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad players" "${val}"; return 1; }
+                DEMO_HDR_PLAYERS=$(( 10#${val} ))
+                ;;
+            # Both are seat numbers, and both are checked against the
+            # number of streams right here rather than at the
+            # cross-checks below: they are used to index a per-seat table
+            # there, and a digit the format allows (0-9) reaches further
+            # than any session does.
+            winner)
+                [[ "${val}" =~ ^[0-9]$ ]] || { demo_reject "bad winner" "${val}"; return 1; }
+                [ "${val}" -lt "${DEMO_STREAM_MAX}" ] || { demo_reject "winner slot ${val} out of range"; return 1; }
+                DEMO_HDR_WINNER=$(( 10#${val} ))
                 ;;
             slot)
-                [[ "${val}" =~ ^[0-9]$ ]] || return 1
+                [[ "${val}" =~ ^[0-9]$ ]] || { demo_reject "bad slot" "${val}"; return 1; }
+                [ "${val}" -lt "${DEMO_STREAM_MAX}" ] || { demo_reject "own slot ${val} out of range"; return 1; }
+                DEMO_HDR_SLOT=$(( 10#${val} ))
                 ;;
             mpmode)
-                [[ "${val}" =~ ${DEMO_MPMODE_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_MPMODE_RE} ]] || { demo_reject "bad mpmode" "${val}"; return 1; }
+                DEMO_HDR_MPMODE="${val}"
                 ;;
             garbage)
-                [[ "${val}" =~ ^[01]$ ]] || return 1
+                [[ "${val}" =~ ^[01]$ ]] || { demo_reject "bad garbage" "${val}"; return 1; }
+                DEMO_HDR_GARBAGE=$(( 10#${val} ))
                 ;;
+            # The one header key that may appear more than once - one
+            # line per seat of the session. A seat named twice is a file
+            # somebody edited, not a recording with two names for one
+            # board.
             peer)
-                [[ "${val}" =~ ${DEMO_PEER_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_PEER_RE} ]] || { demo_reject "bad peer" "${val}"; return 1; }
+                slot="${BASH_REMATCH[1]}"
+                name="${BASH_REMATCH[2]}"
+                [ "${slot}" -lt "${DEMO_STREAM_MAX}" ] || { demo_reject "peer slot ${slot} out of range"; return 1; }
+                [ -z "${DEMO_PEER_NAME[slot]}" ] || { demo_reject "peer slot ${slot} named twice"; return 1; }
+                DEMO_PEER_NAME[slot]="${name}"
+                peers=$(( peers + 1 ))
                 ;;
             # The remaining header fields (game, level, gold, silver,
             # rowhammers, pieces) are informational for a human reading
@@ -1157,50 +1370,145 @@ demo_header_read() {
             # for shape but not kept, because the replay recomputes every
             # counter as it runs.
             game|level|gold|silver|rowhammers|pieces) ;;
-            *) return 1 ;;
+            *) demo_reject "unknown header key" "${key}"; return 1 ;;
         esac
     done < "${file}"
     if [ "${version}" -lt "${DEMO_FORMAT_MIN_VERSION}" ] || \
        [ "${version}" -gt "${DEMO_FORMAT_VERSION}" ]; then
+        demo_reject "format version ${version} is not read by this build"
         return 1
     fi
     # A recording without these is not replayable: the mode decides the
     # rules of the round, the ending decides what the final box says.
     if [ -z "${DEMO_HDR_MODE}" ] || [ -z "${DEMO_HDR_END}" ] || \
        [ -z "${DEMO_HDR_DATE}" ]; then
+        demo_reject "header is missing mode, end or date"
         return 1
     fi
-    # A versus round is what the multiplayer section was added for, so a
-    # file claiming one in a version that has no such section is not a
-    # short recording of one - it is a file somebody edited.
-    if [ "${DEMO_HDR_MODE}" = "versus" ] && [ "${version}" -lt 3 ]; then
-        return 1
+    if [ "${DEMO_HDR_MODE}" = "versus" ]; then
+        # A versus round is what the multiplayer section was added for,
+        # so a file claiming one in a version that has no such section is
+        # not a short recording of one - it is a file somebody edited.
+        if [ "${version}" -lt 3 ]; then
+            demo_reject "versus recording in format version ${version}"
+            return 1
+        fi
+        DEMO_HDR_MP=1
+        # The session has to add up: a duel needs two seats, "players"
+        # has to be the number of "peer" lines, and the seat this
+        # recording was made in - and the winner, when it names one - has
+        # to be one of them. A slot outside its own session would send
+        # the playback looking for a board that was never there.
+        if [ "${DEMO_HDR_PLAYERS}" -lt 2 ] || \
+           [ "${DEMO_HDR_PLAYERS}" -gt "${DEMO_STREAM_MAX}" ]; then
+            demo_reject "session has ${DEMO_HDR_PLAYERS} players"
+            return 1
+        fi
+        if [ "${peers}" -ne "${DEMO_HDR_PLAYERS}" ]; then
+            demo_reject "${peers} peer lines for ${DEMO_HDR_PLAYERS} players"
+            return 1
+        fi
+        if [ "${DEMO_HDR_SLOT}" -lt 0 ] || \
+           [ -z "${DEMO_PEER_NAME[DEMO_HDR_SLOT]}" ]; then
+            demo_reject "own slot ${DEMO_HDR_SLOT} is not a seat of this session"
+            return 1
+        fi
+        if [ "${DEMO_HDR_WINNER}" -ge 0 ] && \
+           [ -z "${DEMO_PEER_NAME[DEMO_HDR_WINNER]}" ]; then
+            demo_reject "winner ${DEMO_HDR_WINNER} is not a seat of this session"
+            return 1
+        fi
+        if [ -z "${DEMO_HDR_MPMODE}" ] || [ "${DEMO_HDR_LENGTH}" -lt 0 ]; then
+            demo_reject "session block is missing mpmode or length"
+            return 1
+        fi
+    else
+        # And the other way round: a session block in a singleplayer
+        # recording describes a round that cannot have had one.
+        if [ "${peers}" -gt 0 ] || [ "${DEMO_HDR_PLAYERS}" -gt 0 ] || \
+           [ "${DEMO_HDR_SLOT}" -ge 0 ] || [ "${DEMO_HDR_WINNER}" -ge 0 ] || \
+           [ -n "${DEMO_HDR_MPMODE}" ] || [ "${DEMO_HDR_LENGTH}" -ge 0 ]; then
+            demo_reject "session block in a ${DEMO_HDR_MODE} recording"
+            return 1
+        fi
+        # One seat all the same, so a caller has the same shape in front
+        # of it either way: stream 0 is this player, and there is nobody
+        # else. The timeline of a singleplayer round is its play time.
+        DEMO_HDR_PLAYERS=1
+        DEMO_HDR_SLOT=0
+        DEMO_HDR_LENGTH="${DEMO_HDR_TIME}"
     fi
     return 0
 }
 
+# demo_stream_new
+# Create the backing arrays of every stream, empty. Called once per load,
+# so a recording never sees the events of the one watched before it.
+demo_stream_new() {
+    local i field
+    for (( i = 0; i < DEMO_STREAM_MAX; i++ )); do
+        for field in T A CN CV; do
+            declare -g -a "${DEMO_STREAM_PREFIX}${i}_${field}=()"
+        done
+    done
+    return 0
+}
+
+# demo_stream_bind SLOT
+# Point DEMO_EV_T, DEMO_EV_A, DEMO_CK_N and DEMO_CK_V at one stream. From
+# here on everything that reads them reads that participant, without
+# knowing which one it is - the same arrangement lib/state.sh makes for
+# the round state, and with the same first-bind quirk: a name that
+# already holds an array cannot be turned into a nameref, so the plain
+# arrays this module starts with have to go first. A plain "unset" is
+# right there and wrong afterwards, where it would follow the reference
+# and delete a stream instead of the pointer to it; every later bind is a
+# reassignment, which bash allows.
+demo_stream_bind() {
+    local slot="${1}"
+    [[ "${slot}" =~ ^[0-9]$ ]] || return 1
+    [ "${slot}" -lt "${DEMO_STREAM_MAX}" ] || return 1
+    # Already there: the parse loop asks once per line and a recording
+    # has thousands of them, so the common case must not cost four
+    # nameref assignments.
+    [ "${DEMO_STREAM_SLOT}" -ne "${slot}" ] || return 0
+    if [ "${DEMO_STREAM_SLOT}" -lt 0 ]; then
+        unset DEMO_EV_T DEMO_EV_A DEMO_CK_N DEMO_CK_V
+    fi
+    declare -g -n "DEMO_EV_T=${DEMO_STREAM_PREFIX}${slot}_T"
+    declare -g -n "DEMO_EV_A=${DEMO_STREAM_PREFIX}${slot}_A"
+    declare -g -n "DEMO_CK_N=${DEMO_STREAM_PREFIX}${slot}_CN"
+    declare -g -n "DEMO_CK_V=${DEMO_STREAM_PREFIX}${slot}_CV"
+    DEMO_STREAM_SLOT="${slot}"
+    return 0
+}
+
 # demo_load FILE
-# Read a recording completely: header, piece stream and the event list,
-# whose deltas are accumulated into absolute play-time stamps here (the
-# playback loop compares them against its clock, so no drift can build up
-# over a long demo). Returns 1 on any invalid line - a recording is
-# replayed as a whole or not at all.
+# Read a recording completely: header, piece stream and the event
+# streams, whose deltas are accumulated into absolute timestamps here
+# (the playback loop compares them against its clock, so no drift can
+# build up over a long demo). Returns 1 on any invalid line - a recording
+# is replayed as a whole or not at all, and the debug log says what was
+# wrong with it.
+# One model for both kinds of recording: "e=" fills stream 0, "p=<n>"
+# fills stream n. A singleplayer recording has nothing but stream 0, so
+# everything reading DEMO_EV_T after a load of one finds exactly what it
+# found before the streams existed.
 demo_load() {
-    local file="${1}" line key val t=0 body=0
+    local file="${1}" line key val slot t action counters body=0 events=0
+    local -a acc=()
     if ! demo_header_read "${file}"; then
         return 1
     fi
-    # A versus recording is written since step 9.6 and read since step
-    # 9.8; until then it is refused here rather than half-read. Its
-    # streams are keyed by slot, and taking them for the single stream
-    # below would replay one board out of five boards' events.
-    if [ "${DEMO_HDR_MODE}" = "versus" ]; then
-        debug_event "demo: ${file} is a versus recording, which cannot be replayed yet"
-        return 1
-    fi
     DEMO_PLAY_PIECES=""
-    DEMO_EV_T=()
-    DEMO_EV_A=()
+    demo_stream_new
+    for (( slot = 0; slot < DEMO_STREAM_MAX; slot++ )); do
+        acc[slot]=0
+    done
+    # Bound to a stream from the first line on, so the parse loop can
+    # append without asking whether anything is bound yet. Which stream
+    # it ends on does not matter; the load fixes it below.
+    demo_stream_bind 0 || return 1
     while IFS= read -r line; do
         case "${line}" in
             '#'*|'') continue ;;
@@ -1209,15 +1517,60 @@ demo_load() {
         val="${line#*=}"
         case "${key}" in
             pcs)
-                [[ "${val}" =~ ${DEMO_PCS_RE} ]] || return 1
+                [[ "${val}" =~ ${DEMO_PCS_RE} ]] || { demo_reject "bad piece line" "${val}"; return 1; }
                 DEMO_PLAY_PIECES+="${val}"
                 body=1
                 ;;
+            # The single stream of a singleplayer recording. It is
+            # stream 0, and it is the only one such a file may have.
             e)
-                [[ "${val}" =~ ${DEMO_EVENT_RE} ]] || return 1
-                t=$(( t + 10#${BASH_REMATCH[1]} ))
+                [ "${DEMO_HDR_MP}" -eq 0 ] || { demo_reject "single stream in a versus recording"; return 1; }
+                [[ "${val}" =~ ${DEMO_EVENT_RE} ]] || { demo_reject "bad event" "${val}"; return 1; }
+                # Taken out of BASH_REMATCH before anything else runs:
+                # demo_stream_bind matches a pattern of its own and would
+                # overwrite it (as would any other [[ =~ ]] in between).
+                t=$(( acc[0] + 10#${BASH_REMATCH[1]} ))
+                action="${BASH_REMATCH[2]}"
+                acc[0]="${t}"
+                demo_stream_bind 0 || return 1
                 DEMO_EV_T+=("${t}")
-                DEMO_EV_A+=("${BASH_REMATCH[2]}")
+                DEMO_EV_A+=("${action}")
+                body=1
+                ;;
+            # One participant's stream. The delta counts against that
+            # slot's own last event, which is why every slot carries an
+            # accumulator of its own: the streams are interleaved in
+            # arrival order, and only within one of them is the time
+            # monotonic (CLAUDE.md 5.20).
+            p)
+                [ "${DEMO_HDR_MP}" -eq 1 ] || { demo_reject "versus stream in a ${DEMO_HDR_MODE} recording"; return 1; }
+                [[ "${val}" =~ ${DEMO_MP_EVENT_RE} ]] || { demo_reject "bad versus event" "${val}"; return 1; }
+                slot="${BASH_REMATCH[1]}"
+                t=$(( acc[slot] + 10#${BASH_REMATCH[2]} ))
+                action="${BASH_REMATCH[3]}"
+                # Range first, seat second: the slot field is a single
+                # digit and reaches further than the table it indexes.
+                [ "${slot}" -lt "${DEMO_STREAM_MAX}" ] || { demo_reject "event slot ${slot} out of range"; return 1; }
+                [ -n "${DEMO_PEER_NAME[slot]}" ] || { demo_reject "event for empty slot ${slot}"; return 1; }
+                acc[slot]="${t}"
+                demo_stream_bind "${slot}" || return 1
+                DEMO_EV_T+=("${t}")
+                DEMO_EV_A+=("${action}")
+                body=1
+                ;;
+            # A checkpoint. It has no time of its own: it holds for the
+            # moment its slot's stream has reached the last event written
+            # before it, so what is stored is that event count.
+            v)
+                [ "${DEMO_HDR_MP}" -eq 1 ] || { demo_reject "checkpoint in a ${DEMO_HDR_MODE} recording"; return 1; }
+                [[ "${val}" =~ ${DEMO_CHECK_RE} ]] || { demo_reject "bad checkpoint" "${val}"; return 1; }
+                slot="${BASH_REMATCH[1]}"
+                counters="${BASH_REMATCH[2]}"
+                [ "${slot}" -lt "${DEMO_STREAM_MAX}" ] || { demo_reject "checkpoint slot ${slot} out of range"; return 1; }
+                [ -n "${DEMO_PEER_NAME[slot]}" ] || { demo_reject "checkpoint for empty slot ${slot}"; return 1; }
+                demo_stream_bind "${slot}" || return 1
+                DEMO_CK_N+=("${#DEMO_EV_T[@]}")
+                DEMO_CK_V+=("${counters}")
                 body=1
                 ;;
             # The header keys, already validated by demo_header_read -
@@ -1229,15 +1582,40 @@ demo_load() {
             version|game|mode|name|date|time|length|lines|rows|level|gold| \
             silver|rowhammers|pieces|goal|end|players|slot|mpmode|garbage| \
             winner|peer)
-                [ "${body}" -eq 0 ] || return 1
+                [ "${body}" -eq 0 ] || { demo_reject "header key '${key}' behind the stream"; return 1; }
                 ;;
-            *) return 1 ;;
+            *) demo_reject "unknown key" "${key}"; return 1 ;;
         esac
     done < "${file}"
-    if [ "${#DEMO_EV_T[@]}" -eq 0 ] || [ -z "${DEMO_PLAY_PIECES}" ]; then
+    if [ -z "${DEMO_PLAY_PIECES}" ]; then
+        demo_reject "no piece stream"
         return 1
     fi
-    debug_event "demo: loaded ${file} (${#DEMO_EV_T[@]} events, ${#DEMO_PLAY_PIECES} pieces, ${DEMO_HDR_TIME}ms)"
+    # Every seat of the session has to have played: a board without a
+    # single event is a participant the recording cannot show, and for a
+    # singleplayer recording this is the "round without events" case the
+    # writer refuses to store in the first place.
+    for (( slot = 0; slot < DEMO_STREAM_MAX; slot++ )); do
+        if [ "${DEMO_HDR_MP}" -eq 1 ]; then
+            [ -n "${DEMO_PEER_NAME[slot]}" ] || continue
+        else
+            [ "${slot}" -eq 0 ] || continue
+        fi
+        demo_stream_bind "${slot}" || return 1
+        if [ "${#DEMO_EV_T[@]}" -eq 0 ]; then
+            demo_reject "slot ${slot} has no events"
+            return 1
+        fi
+        events=$(( events + ${#DEMO_EV_T[@]} ))
+    done
+    # Left bound to this recording's own seat: it is the one a playback
+    # starts on, and for a singleplayer recording it is stream 0.
+    demo_stream_bind "${DEMO_HDR_SLOT}" || return 1
+    if [ "${DEMO_HDR_MP}" -eq 1 ]; then
+        debug_event "demo: loaded ${file} (versus, ${DEMO_HDR_PLAYERS} players, own slot ${DEMO_HDR_SLOT}, ${events} events, ${#DEMO_PLAY_PIECES} pieces, ${DEMO_HDR_LENGTH}ms)"
+    else
+        debug_event "demo: loaded ${file} (${events} events, ${#DEMO_PLAY_PIECES} pieces, ${DEMO_HDR_TIME}ms)"
+    fi
     return 0
 }
 
@@ -1315,6 +1693,18 @@ demo_play() {
         i18n_lines demo_invalid
         menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
         debug_event "demo: refused to play invalid recording ${file}"
+        return 1
+    fi
+    # A versus recording is written since step 9.6 and read since step
+    # 9.8; playing one is what the steps after this build (CLAUDE.md,
+    # roadmap 9.9 to 9.12). Until then it is turned down here rather than
+    # in demo_load, and with a message of its own: the file is not
+    # damaged, this build simply cannot show it yet, and telling somebody
+    # their intact recording is broken would invite them to delete it.
+    if [ "${DEMO_HDR_MP}" -eq 1 ]; then
+        i18n_lines demo_versus
+        menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
+        debug_event "demo: ${file} is a versus recording, which cannot be replayed yet"
         return 1
     fi
     count="${#DEMO_EV_T[@]}"
