@@ -2270,6 +2270,13 @@ statt aus dem Beutel. Damit stimmen Vorschau und Spawn-Reihenfolge
 gleichermassen. Laeuft die Folge einer von Hand bearbeiteten Datei aus,
 faellt die Wiedergabe auf den normalen Beutel zurueck (mit Vermerk im
 Debug-Log), statt abzubrechen.
+In einer **Mehrspieler-Aufnahme** ist die Folge dieselbe fuer alle - der
+gemeinsame Seed gibt jedem dieselbe, nur zu anderen Zeitpunkten (5.1) -,
+und sie wird beim Schliessen der Aufnahme so weit nachgezogen, wie der
+Teilnehmer gekommen ist, der am weitesten kam (`demo_pieces_topup`,
+Begruendung in 5.20). Sonst haette die Aufnahme eines frueh
+Ausgeschiedenen nur die Steine, die er selbst gezogen hat, und den
+uebrigen Brettern gingen sie mitten in der Wiedergabe aus.
 
 **Ablage.** Waehrend der Runde wird ausschliesslich auf eine **RAM-Disk**
 geschrieben (`XDG_RUNTIME_DIR`, sonst `/dev/shm`, als letzter Ausweg
@@ -2447,12 +2454,15 @@ Schritten 9.1 bis 9.4: der Rundenzustand ist benannt und umschaltbar
 `PEERACT`) und schickt `GARBAGE` und `QUEUE` mit Slot an alle. Seit
 Schritt 9.6 wird eine Mehrspieler-Runde damit auch wirklich
 **aufgezeichnet** - vollstaendig, mit einem Ereignisstrom je Teilnehmer,
-im **Demo-Format 3** (4.10/5.20). Was noch fehlt, ist die **Wiedergabe**
-(Schritte 9.7 bis 9.14): eine Versus-Aufnahme steht in der Demo-Liste,
-laesst sich aber noch nicht abspielen (`demo_load` weist sie mit einer
-Meldung ab, statt sie als Einzelspieler-Runde halb zu lesen - ihre
-Stroeme sind nach Slot geordnet, und einer davon fuer alle gehalten
-ergaebe ein Brett aus den Ereignissen von fuenfen).
+im **Demo-Format 3** (4.10/5.20); seit Schritt 9.7 reicht ihre
+Steinfolge fuer jeden Teilnehmer und nicht nur fuer den
+aufzeichnenden, und seit Schritt 9.8 wird eine solche Aufnahme auch
+wieder **gelesen** - Sitzungsblock, fuenf Stroeme und Pruefpunkte. Was
+noch fehlt, ist die **Wiedergabe** (Schritte 9.9 bis 9.14): eine
+Versus-Aufnahme steht in der Demo-Liste und laedt, das Abspielen weist
+`demo_play` aber mit einer eigenen Meldung ab - sie ist nicht
+beschaedigt, es gibt fuer sie nur noch keine Wiedergabe, und ihr das zu
+sagen ist etwas anderes, als sie fuer defekt zu erklaeren.
 
 Drei Nachrichten kamen beim Bauen hinzu, die die Nachrichtentabelle in
 5.4 so nicht hatte; sie sind dort mit aufgefuehrt und hier zusammen
@@ -3708,12 +3718,15 @@ Protokoll 3 nirgends an** - uebertragen wurden nur ihre Zaehler
 Mehrspieler-Runde damit aufgezeichnet - als **Format 3** (unten), mit
 einem Ereignisstrom je Teilnehmer. Bis dahin wurde sie bewusst gar nicht
 aufgezeichnet, weil eine Aufnahme im Format 2 als Runde abgelaufen
-waere, in der aus dem Nichts Stoerreihen erscheinen. **Abspielen laesst
-sie sich noch nicht** (Schritte 9.7 bis 9.14): `demo_load` weist eine
-Versus-Aufnahme mit einer Meldung ab, statt sie halb zu lesen. In der
-Demo-Liste steht sie mit Datum, "Versus", Zeit und Rows wie jede andere;
-das ist der ehrlichere Zwischenstand als eine Aufnahme, die im
-Verzeichnis liegt und in der Liste fehlt.
+waere, in der aus dem Nichts Stoerreihen erscheinen. Gelesen wird sie
+seit Schritt 9.8. **Abspielen laesst sie sich noch nicht** (Schritte 9.9
+bis 9.14): `demo_play` weist eine geladene Versus-Aufnahme mit einer
+eigenen Meldung ab - nicht mit der fuer eine beschaedigte Datei, denn
+das ist sie nicht, und wem man seine intakte Aufnahme fuer defekt
+erklaert, der loescht sie. In der Demo-Liste steht sie mit Datum,
+"Versus", Zeit und Rows wie jede andere; das ist der ehrlichere
+Zwischenstand als eine Aufnahme, die im Verzeichnis liegt und in der
+Liste fehlt.
 
 **Leitentscheidung: der Vollausbau** (Nutzerentscheidung). Eine Aufnahme
 ist eine **vollstaendige Aufzeichnung der Partie** und nicht die Sicht
@@ -3949,7 +3962,8 @@ Drei Festlegungen dazu:
   aenderte die Aufzeichnung das Spiel (3.8), und `--demo-record off`
   waere am Verkehr zu erkennen.
 
-**Demo-Format Version 3** (geschrieben seit Schritt 9.6).
+**Demo-Format Version 3** (geschrieben seit Schritt 9.6, gelesen seit
+Schritt 9.8).
 Der Lader nimmt **Version 2 und 3**, geschrieben wird 3. Eine
 Einzelspieler-Aufnahme ist eine echte Teilmenge, und die vorhandenen
 Aufnahmen - an denen Highscore-Eintraege haengen - bleiben damit
@@ -4028,14 +4042,60 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   wenn der Roster ihn nennt - und beim Schliessen der Aufnahme als `n`,
   falls die Runde vorher zu Ende war (der Normalfall beim
   entscheidenden Ausscheiden).
-- **Eine Steinfolge fuer alle.** Der gemeinsame Seed (5.1) gibt jedem
-  dieselbe Folge, nur zu anderen Zeitpunkten. Der Aufzeichnende zieht
-  sie deshalb weit genug: er zaehlt die Locks in den fremden
-  Ereignisstroemen mit und fuellt die Folge aus seinem eigenen Beutel
-  nach, auch nachdem er selbst ausgeschieden ist. Vorziehen ist
-  unschaedlich, die Folge ist deterministisch. (Das ist Schritt 9.7;
-  bis dahin steht in einer Aufnahme nur die Folge, die dieser Client
-  selbst gezogen hat.)
+- **Eine Steinfolge fuer alle** (gebaut mit Schritt 9.7). Der gemeinsame
+  Seed (5.1) gibt jedem dieselbe Folge, nur zu anderen Zeitpunkten. Der
+  Aufzeichnende zieht sie deshalb weit genug: er zaehlt je Slot die
+  Ereignisse mit, die einen Stein aus der Folge nehmen, und fuellt die
+  Folge beim Schliessen der Aufnahme aus seinem **eigenen Beutel** bis
+  zum Bedarf des Spielers nach, der am weitesten gekommen ist - auch
+  nachdem er selbst ausgeschieden ist (`demo_pieces_topup` in
+  `lib/demo.sh`). Vier Festlegungen dazu:
+  - **Gezaehlt wird grosszuegig.** Steinverbrauchend sind der Lock
+    (`h` und `k`, er setzt immer den naechsten Stein) und das Hold
+    (`o`, nur beim ersten Mal). Jedes Hold mitzuzaehlen zieht die Folge
+    ein paar Steine zu weit; das kostet ein Byte je Stein, waehrend eine
+    zu kurze Folge eine Wiedergabe mittendrin abschneiden wuerde. Genau
+    deshalb muss die Zahl auch nicht aus den Stroemen simuliert werden.
+  - **Nachgefuellt wird am Ende, nicht waehrend der Runde.** Wie weit
+    jemand gekommen ist, steht erst fest, wenn sie vorbei ist, und an
+    dieser Stelle kostet die Schleife die Runde nichts mehr.
+  - **Aus dem eigenen Beutel.** Er steht genau dort, wo die eigenen
+    Zuege ihn gelassen haben - `queue_fill` ist das Einzige, was aus ihm
+    nimmt -, und `RANDOM` wird je Runde aus dem `SEED` des Hubs neu
+    gesetzt, waehrend `game_reset` den Beutel leert. Weiterziehen setzt
+    also die eine Folge fort und kann die naechste Runde der Sitzung
+    nicht verschieben.
+  - **Der Bedarf ist Spawns + `PREVIEW_COUNT` + 1.** Ein Brett hat neben
+    den gespawnten Steinen immer die drei Vorschauen und den naechsten
+    in der Queue, und auch die sind aus der Folge gezogen.
+- **Der Leser kennt nur ein Modell** (`demo_load` in `lib/demo.sh`, seit
+  Schritt 9.8): `e=` fuellt Strom 0, `p=<n>` fuellt Strom n, und eine
+  Einzelspieler-Aufnahme hat schlicht nichts ausser Strom 0. Vier
+  Festlegungen dazu:
+  - **Je Strom vier Arrays**, angesprochen ueber **Namerefs**
+    (`demo_stream_bind`) - dieselbe Loesung wie fuer den Rundenzustand in
+    `lib/state.sh` und aus demselben Grund: gearbeitet wird immer auf
+    einem Strom, und ihn zu wechseln darf nicht heissen, vier Arrays zu
+    kopieren. Alles, was `DEMO_EV_T`/`DEMO_EV_A` bisher las, liest nach
+    dem Laden einer Einzelspieler-Aufnahme genau das, was es vorher las.
+  - **Die Deltas werden je Strom aufsummiert**, mit einem Akkumulator je
+    Slot: die Stroeme liegen in der Reihenfolge ihres Eintreffens in der
+    Datei, und monoton ist die Zeit nur innerhalb eines von ihnen (siehe
+    oben).
+  - **Ein Pruefpunkt wird an die Zahl der Ereignisse gebunden**, die
+    sein Strom bis dorthin hat, nicht an eine Zeit - er ist eine Aussage
+    ueber den Strom, keine ueber die Uhr (siehe unten).
+  - **Ein Sitzungsblock gehoert einer Versus-Aufnahme und nur ihr.**
+    Beide Richtungen werden geprueft: ein `peer=`, `players=` oder ein
+    `p=`-Strom in einer Marathon-Aufnahme faellt ebenso heraus wie ein
+    `e=` in einer Versus-Aufnahme. Dazu muessen die Sitzungsangaben
+    zusammenpassen (mindestens zwei Plaetze, so viele `peer=`-Zeilen wie
+    `players`, eigener Slot und Sieger unter ihnen, jeder Strom auf
+    einem besetzten Platz, kein Platz ohne Ereignisse). Abgewiesen wird
+    **mit Grund** ins Debug-Log (`demo_reject`): auf dem Bildschirm
+    steht die eine uebersetzte Meldung, welches Feld welcher Datei nicht
+    passte, ist eine Diagnose und gehoert dorthin, wo dieses Spiel seine
+    Diagnosen fuehrt (4.6).
 - **Die `v=`-Pruefpunkte** sind die Gegenprobe, nicht die Anzeigequelle:
   die Wiedergabe vergleicht ihre Simulation mit den seinerzeit
   gemeldeten Zaehlern und meldet eine Abweichung ins Debug-Log. Damit
@@ -4256,8 +4316,8 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
       Aufgezeichnet wird seit 9.6; bis dahin wurde eine
       Mehrspieler-Runde bewusst **nicht** aufgezeichnet, weil eine
       Aufnahme im Format 2 als Runde abliefe, in der aus dem Nichts
-      Stoerreihen erscheinen. Bis 9.8 die neuen Stroeme lesen kann,
-      laesst sich eine Versus-Aufnahme noch nicht abspielen.
+      Stoerreihen erscheinen. Gelesen wird sie seit 9.8; bis 9.9 bis
+      9.12 die Wiedergabe bauen, laesst sie sich noch nicht abspielen.
       **Gesamtabnahme:** die Wiedergabe einer Vier-Spieler-Runde zeigt
       fuer jeden der vier denselben Verlauf wie die Runde selbst, in
       jeder Detailstufe aufgenommen, und laesst sich waehrend des Laufs
@@ -4305,16 +4365,34 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
         5.20). Eine Versus-Aufnahme steht in der Demo-Liste und wird
         beim Abspielen mit einer Meldung abgewiesen, bis 9.8 sie lesen
         kann.
-  - [ ] **9.7 Steinfolge fuer alle.** Die Folge aus dem eigenen Beutel
+  - [x] **9.7 Steinfolge fuer alle.** Die Folge aus dem eigenen Beutel
         nachfuellen, solange irgendein Spieler noch Steine braucht -
         auch nach dem eigenen Ausscheiden. Abnahme: der frueh
         Ausgeschiedene hat in seiner Datei so viele Steine, wie der
-        Letzte im Feld verbraucht hat.
-  - [ ] **9.8 Format 3 lesen.** Neue Kopfschluessel (`peer=` ist der
+        Letzte im Feld verbraucht hat. Geprueft an einer
+        Drei-Spieler-Runde mit zwei Test-Bots, in der der aufzeichnende
+        Client als Erster ausschied: er selbst hatte 12 Steine
+        verbraucht, der Weiterspielende 14, und in der Datei stehen 18
+        (14 + Vorschau) - dieselben 18, die der Beutel des Bots aus dem
+        gemeinsamen Seed gezogen hatte, Buchstabe fuer Buchstabe.
+        Gezaehlt wird je Slot in `demo_slot_event`, nachgezogen beim
+        Schliessen der Aufnahme (`demo_pieces_topup`, siehe 5.20).
+  - [x] **9.8 Format 3 lesen.** Neue Kopfschluessel (`peer=` ist der
         erste wiederholbare), fuenf Ereignisstroeme, ein Muster je Feld,
         Version 2 weiter akzeptiert. Abnahme: eine Format-2-Aufnahme
         laedt unveraendert, praeparierte Muelldateien werden mit Grund
-        abgewiesen.
+        abgewiesen. Geprueft an der Aufnahme aus 9.7 (drei Stroeme, 146
+        Ereignisse, Pruefpunkte an ihrer Position) und an 29
+        praeparierten Dateien - Sitzungsblock in beiden Richtungen
+        falsch, Slots ausserhalb der Sitzung, verstuemmelte Tokens,
+        Kopfzeilen hinter dem Strom, Version zu alt und zu neu sowie
+        ANSI-Sequenzen, `$(...)`, Backticks und eine 100-kB-Zeile: jede
+        mit ihrem Grund im Debug-Log abgewiesen, kein Befehl
+        ausgefuehrt. Eine Format-2-Aufnahme und eine
+        Einzelspieler-Aufnahme der Version 3 spielen unveraendert.
+        Bis 9.9 die Wiedergabe baut, weist `demo_play` eine geladene
+        Versus-Aufnahme mit einer eigenen Meldung ab (`demo_versus`) -
+        nicht mit der fuer eine beschaedigte Datei.
   - [ ] **9.9 Wiedergabe: Zustaende aufbauen.** Je Slot ein Zustand,
         initialisiert wie `game_reset`; Aufbau innerhalb der
         Neustart-Schleife (Taste `r`), Rueckbau auf beiden
@@ -4581,10 +4659,12 @@ Uebrige dort ist entschieden):
 - **Demo-Aufzeichnung im Mehrspieler:** entschieden
   (Nutzerentscheidung, siehe 5.20) - **jeder Client zeichnet alle
   Teilnehmer auf** -, und seit Schritt 9.6 tut er das auch: eine
-  Mehrspieler-Runde wird als Format 3 aufgezeichnet. Offen bleibt die
-  **Wiedergabe** (Abschnitt 7, Schritte 9.7 bis 9.14) - bis dahin steht
-  eine Versus-Aufnahme in der Demo-Liste, laesst sich aber nicht
-  abspielen.
+  Mehrspieler-Runde wird als Format 3 aufgezeichnet, seit 9.7 mit einer
+  Steinfolge, die fuer jeden Teilnehmer reicht, und seit 9.8 wird sie
+  auch wieder gelesen. Offen bleibt die
+  **Wiedergabe** (Abschnitt 7, Schritte 9.9 bis 9.14) - bis dahin steht
+  eine Versus-Aufnahme in der Demo-Liste und laedt, laesst sich aber
+  nicht abspielen.
   Die frueher hier offene Folgefrage - ob die Mitspieler nur so
   aufgenommen werden koennen, wie sie ankamen (Zaehler, und
   Feld-Schnappschuesse nur in Detailstufe 2) - ist mit dem **Vollausbau**

@@ -328,6 +328,14 @@ aus einer anderen Version und kann nicht
 abgespielt werden.
 
 Du kannst sie im Demo-Menue loeschen."
+    # Not a defect: a versus recording is complete and intact, this
+    # build just has no playback for it yet (roadmap 9.9 to 9.12). It
+    # must not read like demo_invalid, which invites deleting the file.
+    [demo_versus]="Das ist die Aufzeichnung einer
+Mehrspieler-Runde. Sie ist vollstaendig,
+aber die Wiedergabe dafuer wird gerade
+gebaut und kommt in einer der naechsten
+Versionen."
 
     # --- HUD --------------------------------------------------------------
     # The left pane gives a label six columns; anything longer is cut
