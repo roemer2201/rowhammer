@@ -56,6 +56,13 @@
 #   Reading it back knows one model for both kinds of recording: "e="
 #   fills stream 0, "p=<n>" fills stream n, and a singleplayer recording
 #   simply has nothing but stream 0 (demo_load, demo_stream_bind).
+#   Playing it back knows the same one model: the recording's seats get a
+#   round state each (lib/state.sh), every one of them is started by the
+#   very game_reset a live round starts with, and the seat the screen is
+#   centred on is the one those names are bound to - a singleplayer
+#   recording is then simply a session of one (demo_play_states_build).
+#   The others are drawn from the MP_PEER_* tables the live round draws
+#   opponents from, so the renderer needs to know nothing about replays.
 #
 #   Timing. Every event carries the round's play time (PLAY_MS, pauses
 #   excluded) as a delta to the event before it - in a versus round the
@@ -102,7 +109,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.5.0  (2026-09-02)
+# Version: 0.6.0  (2026-09-02)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -281,6 +288,27 @@ DEMO_SPEED=100
 DEMO_SPEED_LABEL="1.00x"
 DEMO_PLAY_PIECES=""
 DEMO_PLAY_POS=0
+
+# The seats of the recording being played and the state behind them.
+# DEMO_SEATS lists the occupied seat numbers - one entry for a
+# singleplayer recording, one per participant for a versus one, and not
+# necessarily 0..n-1: the format allows a session whose seats have gaps,
+# and a playback that assumed otherwise would look for a board that was
+# never there. Every one of them gets a round state of its own
+# (lib/state.sh), so the ordinary round functions can run in it.
+# DEMO_FOCUS is the seat the screen is centred on: its round state is
+# what the board, the HUD, Hold and Next are drawn from, and the others
+# sit around it (CLAUDE.md 5.6). DEMO_STATES says whether those states
+# are built, so leaving the playback tears down exactly once.
+DEMO_SEATS=()
+DEMO_FOCUS=0
+DEMO_STATES=0
+# How long the replay runs, in milliseconds of the recorded round. For a
+# versus recording that is the length of the round and not this player's
+# play time - the two part company the moment they top out early and
+# watch the rest of it. demo_header_read sets DEMO_HDR_LENGTH to the play
+# time for every other mode, so this is one number for both.
+DEMO_TIMELINE_MS=0
 
 # --- The loaded event streams ---------------------------------------------
 # A recording holds one stream per participant: "e=" fills stream 0,
@@ -1673,6 +1701,108 @@ demo_apply() {
     return 0
 }
 
+# demo_seats_scan
+# Fill DEMO_SEATS with the seats the loaded recording has, in order, and
+# set DEMO_FOCUS to the one it was made in. The seats of a versus
+# recording are the ones with a name; every other mode has exactly one,
+# which demo_header_read has already normalised to seat 0 - so a caller
+# has the same shape in front of it either way.
+demo_seats_scan() {
+    local i
+    DEMO_SEATS=()
+    DEMO_FOCUS="${DEMO_HDR_SLOT}"
+    if [ "${DEMO_HDR_MP}" -eq 0 ]; then
+        DEMO_SEATS=("${DEMO_HDR_SLOT}")
+        return 0
+    fi
+    for (( i = 0; i < DEMO_STREAM_MAX; i++ )); do
+        [ -n "${DEMO_PEER_NAME[i]}" ] || continue
+        DEMO_SEATS+=("${i}")
+    done
+    [ "${#DEMO_SEATS[@]}" -gt 0 ] || return 1
+    return 0
+}
+
+# demo_play_states_build
+# Give every seat a round state and start a round in it - board, bag,
+# preview and first piece, exactly as a live round begins, because it is
+# the very same game_reset that begins it. The pieces come from the
+# recorded stream rather than the bag (DEMO_PLAYING is set, see
+# queue_fill), and each seat reads that stream at a pace of its own:
+# DEMO_PLAY_POS is part of the round state, so every seat starts at the
+# beginning of the one sequence they all shared (CLAUDE.md 5.1).
+# Called from inside the restart loop of demo_play, so "r" starts the
+# recording over for every seat and not just for the one on screen.
+# Leaves the focus seat bound, which is the seat the frame is drawn from.
+demo_play_states_build() {
+    local slot
+    for slot in "${DEMO_SEATS[@]}"; do
+        state_bind "${slot}" || return 1
+        DEMO_STATES=1
+        DEMO_PLAY_POS=0
+        game_reset "${DEMO_HDR_MODE}"
+        # The garbage queue is session state in a live round - mp_reset
+        # zeroes it once, before the round begins - so game_reset does
+        # not touch it. Here every seat is its own round and gets its
+        # own empty queue.
+        MP_PENDING=0
+        MP_HOLE=0
+    done
+    state_bind "${DEMO_FOCUS}" || return 1
+    return 0
+}
+
+# demo_play_states_release
+# Hand the round state back: the slots are dropped and the plain globals
+# a live round runs on take their place again (state_unbind). Called on
+# every path out of demo_play, and harmless when nothing was built.
+demo_play_states_release() {
+    [ "${DEMO_STATES}" -eq 1 ] || return 0
+    state_release_all
+    DEMO_STATES=0
+    return 0
+}
+
+# demo_play_peers_begin
+# Dress the session up for a versus playback: the opponents' seats, the
+# rules the round was played under, and the seat the screen is centred
+# on. The renderer needs nothing else - it reads the same MP_PEER_*
+# tables it reads in a live round, and MP_SLOT is the seat it leaves out
+# of them, which is the focus (CLAUDE.md 5.20).
+# The boards stay empty here; filling them from the simulation is what
+# the next step does.
+demo_play_peers_begin() {
+    local slot
+    mp_reset
+    MP_ACTIVE=1
+    # The recording may come from a larger session than this client would
+    # open itself, so the peer tables cover every seat the format allows
+    # rather than this client's --mp-max.
+    MP_SEATS="${MP_SEAT_MAX}"
+    MP_SLOT="${DEMO_FOCUS}"
+    MP_STATE="play"
+    MP_PHASE="play"
+    MP_MODE="${DEMO_HDR_MPMODE}"
+    MP_GARBAGE="${DEMO_HDR_GARBAGE}"
+    for slot in "${DEMO_SEATS[@]}"; do
+        MP_PEER_NAME[slot]="${DEMO_PEER_NAME[slot]}"
+        MP_PEER_STATE[slot]="play"
+    done
+    return 0
+}
+
+# demo_play_peers_end
+# Take the session dress off again. A playback is the one place MP_ACTIVE
+# is set without a link behind it, so it is also the one place that has
+# to be sure it is cleared - a menu entered with it still set would draw
+# opponents that are not there.
+demo_play_peers_end() {
+    [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    MP_ACTIVE=0
+    mp_reset
+    return 0
+}
+
 # demo_play FILE
 # Replay one recording. Runs its own loop instead of game_run: there is no
 # input to react to here, the timeline drives everything, and the round
@@ -1695,26 +1825,30 @@ demo_play() {
         debug_event "demo: refused to play invalid recording ${file}"
         return 1
     fi
-    # A versus recording is written since step 9.6 and read since step
-    # 9.8; playing one is what the steps after this build (CLAUDE.md,
-    # roadmap 9.9 to 9.12). Until then it is turned down here rather than
-    # in demo_load, and with a message of its own: the file is not
-    # damaged, this build simply cannot show it yet, and telling somebody
-    # their intact recording is broken would invite them to delete it.
-    if [ "${DEMO_HDR_MP}" -eq 1 ]; then
-        i18n_lines demo_versus
+    if ! demo_seats_scan; then
+        i18n_lines demo_invalid
         menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
-        debug_event "demo: ${file} is a versus recording, which cannot be replayed yet"
+        debug_event "demo: refused to play ${file}, it has no seat to play"
         return 1
     fi
-    count="${#DEMO_EV_T[@]}"
+    DEMO_TIMELINE_MS="${DEMO_HDR_LENGTH}"
+    # A versus recording plays every seat, and the events that drive them
+    # are the next step's business (CLAUDE.md, roadmap 9.10). Until then
+    # its boards stand empty and only its clock runs, which is what an
+    # empty event count below makes the loop do; a singleplayer recording
+    # keeps running off its one stream, the one demo_load left bound.
+    if [ "${DEMO_HDR_MP}" -eq 1 ]; then
+        count=0
+        demo_play_peers_begin
+    else
+        count="${#DEMO_EV_T[@]}"
+    fi
     DEMO_SPEED_IDX="${DEMO_SPEED_DEFAULT}"
     demo_speed_apply
     while :; do
         restart=0
         DEMO_PLAYING=1
         DEMO_ENDED=0
-        DEMO_PLAY_POS=0
         DEMO_CLOCK_MS=0
         idx=0
         rem=0
@@ -1725,10 +1859,20 @@ demo_play() {
         HSS_LAST_RANK=0
         HSA_LAST_RANK=0
         HSF_LAST_RANK=0
-        # Sets up board, bag, counters and the first piece exactly like a
-        # live round - only the pieces come from the recorded stream,
-        # because DEMO_PLAYING is set (see queue_fill).
-        game_reset "${DEMO_HDR_MODE}"
+        HSV_LAST_RANK=0
+        # One round state per seat, each started the way a live round
+        # starts - inside the restart loop, so "r" begins the recording
+        # again for all of them. Leaves the focus seat bound, which is
+        # the state every frame below is drawn from.
+        if ! demo_play_states_build; then
+            debug_event "demo: could not build the round state of ${file}"
+            demo_play_states_release
+            demo_play_peers_end
+            DEMO_PLAYING=0
+            i18n_lines demo_invalid
+            menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
+            return 1
+        fi
         PAUSED=0
         RENDER_FULL=1
         DIRTY=1
@@ -1766,9 +1910,11 @@ demo_play() {
                     fi
                     ;;
                 "${KEY_QUIT}"|ESC)
-                    debug_event "demo: playback left at ${DEMO_CLOCK_MS}ms of ${DEMO_HDR_TIME}ms"
+                    debug_event "demo: playback left at ${DEMO_CLOCK_MS}ms of ${DEMO_TIMELINE_MS}ms"
                     DEMO_PLAYING=0
                     DEMO_ENDED=0
+                    demo_play_states_release
+                    demo_play_peers_end
                     return 0
                     ;;
                 r)
@@ -1812,17 +1958,17 @@ demo_play() {
                 # the time counter (and the Sprint countdown) run like it
                 # did in the recorded round.
                 PLAY_MS="${DEMO_CLOCK_MS}"
-                if [ "${PLAY_MS}" -gt "${DEMO_HDR_TIME}" ]; then
-                    PLAY_MS="${DEMO_HDR_TIME}"
+                if [ "${PLAY_MS}" -gt "${DEMO_TIMELINE_MS}" ]; then
+                    PLAY_MS="${DEMO_TIMELINE_MS}"
                 fi
                 # The recording ends when its last event has been applied
-                # and its play time is up - the tail after the last action
+                # and its timeline is up - the tail after the last action
                 # belongs to the round as much as the rest.
                 if [ "${idx}" -ge "${count}" ] && \
-                   [ "${DEMO_CLOCK_MS}" -ge "${DEMO_HDR_TIME}" ]; then
+                   [ "${DEMO_CLOCK_MS}" -ge "${DEMO_TIMELINE_MS}" ]; then
                     DEMO_ENDED=1
                     DIRTY=1
-                    debug_event "demo: playback finished (${DEMO_HDR_TIME}ms, rows=${ROW_CREDIT})"
+                    debug_event "demo: playback finished (${DEMO_TIMELINE_MS}ms, rows=${ROW_CREDIT})"
                 fi
             fi
             if [ "${DIRTY}" -eq 1 ]; then

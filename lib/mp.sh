@@ -28,7 +28,7 @@
 #   are worth (see lib/hub.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.2.0  (2026-08-11)
+# Version: 1.3.0  (2026-09-02)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -166,6 +166,19 @@ MP_PEER_PENDING=()
 MP_PEER_PLACE=()
 MP_PEER_BOARD=()
 
+# How many seats those tables cover. In a session that is this client's
+# own MP_MAX - a hub may never seat more than the client can show, which
+# is what mp_hub_start clamps against. A demo playback sets it to
+# MP_SEAT_MAX instead: a recording is a file, and it must not lose seats
+# because the session watching it was started with a smaller --mp-max
+# than the session that played it (the same reasoning DEMO_STREAM_MAX
+# stands on, lib/demo.sh).
+# MP_SEAT_MAX is the technical maximum, the 5 that --mp-max accepts at
+# the most (see rowhammer.sh); mp_reset initialises that many entries, so
+# no seat a playback opens is ever an unset one.
+MP_SEAT_MAX=5
+MP_SEATS="${MP_MAX:-5}"
+
 # mp_reset
 # Clear the whole session state. Called before every join attempt, so a
 # second session never inherits anything from the first.
@@ -202,7 +215,13 @@ mp_reset() {
     MP_LAST_RX_MS="${NOW_MS}"
     MP_MODE="survival"
     MP_GARBAGE=0
-    for (( i = 0; i < MP_MAX; i++ )); do
+    # Back to the session's own size; a playback that widened it has
+    # given the tables back by the time this runs.
+    MP_SEATS="${MP_MAX}"
+    # Every technically possible seat, not just MP_SEATS of them: the
+    # ones beyond it are what a demo playback of a larger session opens,
+    # and they have to hold a value rather than nothing.
+    for (( i = 0; i < MP_SEAT_MAX; i++ )); do
         MP_PEER_NAME[i]=""
         MP_PEER_READY[i]=0
         MP_PEER_STATE[i]="lobby"
@@ -230,7 +249,7 @@ mp_peer_count() {
     local i
     MP_PEER_COUNT=0
     MP_PEER_SLOTS=()
-    for (( i = 0; i < MP_MAX; i++ )); do
+    for (( i = 0; i < MP_SEATS; i++ )); do
         [ -n "${MP_PEER_NAME[i]}" ] || continue
         [ "${i}" -ne "${MP_SLOT}" ] || continue
         MP_PEER_SLOTS+=("${i}")
@@ -251,7 +270,7 @@ mp_alive_count() {
     if [ "${MP_STATE}" = "play" ]; then
         MP_ALIVE=1
     fi
-    for (( i = 0; i < MP_MAX; i++ )); do
+    for (( i = 0; i < MP_SEATS; i++ )); do
         [ -n "${MP_PEER_NAME[i]}" ] || continue
         [ "${i}" -ne "${MP_SLOT}" ] || continue
         case "${MP_PEER_STATE[i]}" in
@@ -556,6 +575,12 @@ MP_VIEW_SENT=-1
 mp_send_view() {
     local want=0
     [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    # A demo playback draws the very same opponent boards and therefore
+    # runs through the same decision, but it has nobody to report to: a
+    # replay never sends a byte (CLAUDE.md 5.20). net_send would refuse
+    # it anyway for want of a link; saying so here keeps that from being
+    # the reason.
+    [ "${DEMO_PLAYING}" -eq 0 ] || return 0
     if [ "${1}" -ge 2 ]; then
         want=1
     fi

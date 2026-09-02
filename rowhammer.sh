@@ -854,10 +854,9 @@ TERM_RESIZED=0
 # take the piece stream from a recording during playback, and the
 # renderer reads it as well, so the flags have to exist before either
 # module runs.
-# state comes early and is deliberately sourced although nothing binds a
-# slot yet: it only declares the round state list and its three helpers,
-# and a library the game never loads is one that rots unnoticed. The
-# playback of a multiplayer demo is what will bind slots (CLAUDE.md 5.20).
+# state comes before demo: the playback binds one round state per seat of
+# the recording it plays (demo_play_states_build, CLAUDE.md 5.20), so the
+# list and its helpers have to exist before that module runs.
 for _lib in debug config i18n state demo pieces board squares highscore save stats wonders input render menu net proto hub mp; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
