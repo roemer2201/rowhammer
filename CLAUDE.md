@@ -3328,7 +3328,22 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   das die Verbindung nicht verhungern lassen: waehrend der Animation
   wird der Socket weiter geleert (Tastendruecke bleiben wie bisher
   verworfen).
-- **Seed:** `--seed` wird im Mehrspieler vom Hub-Seed uebersteuert; ein
+- **Seed:** der Hub-Seed passt seit Schritt 9.5 immer in das Zahlenfeld
+  des Protokolls (neun Stellen, `PROTO_NUM_RE`): `hub_start_round` nimmt
+  ihn modulo 1.000.000.000, egal ob er gewuerfelt wurde oder aus
+  `--seed` kam. Davor tat das keine der beiden Quellen - die Maske
+  `0x3FFFFFFF` reicht bis 1.073.741.823 und war damit in rund **7 % aller
+  Runden** zehnstellig, und `--seed` nimmt Ziffern beliebiger Laenge
+  entgegen. Die Folge war still und schwerwiegend: **jeder** Client wies
+  die `SEED`-Nachricht als fehlerhaft ab, behielt sein eigenes `RANDOM`
+  und spielte eine **andere Steinfolge** - genau die Fairness, fuer die
+  der gemeinsame Seed da ist (siehe 5.1), und auf dem Bildschirm stand
+  nichts davon. Gefunden hat es die Lastprobe aus 9.5, die den Fehler in
+  einem von drei Laeufen als verworfene Nachricht sichtbar machte; im
+  Code stand er, seit es den Seed gibt. Ein Seed, der von dem
+  gewuenschten abweicht, ist das erheblich kleinere Uebel als einer, den
+  niemand bekommt.
+- **Seed (CLI):** `--seed` wird im Mehrspieler vom Hub-Seed uebersteuert; ein
   gesetzter `--seed` beim Host wird zum Sitzungs-Seed.
 - **Terminalgroesse:** der SIGWINCH-Pfad waehlt zusaetzlich die
   Detailstufe neu (siehe 5.6).
@@ -3851,6 +3866,37 @@ der Wiedergabe.
 - Bandbreite: rund 40 B/s je Spieler an Zuegen, verteilt an vier
   andere - unter 1 kB/s fuer die ganze Sitzung, gegen die 6 kB/s der
   Schnappschuesse (5.4) also nichts.
+- **Nachgemessen (Schritt 9.5).** Fuenf Teilnehmer in Detailstufe 2 - ein
+  zeichnender Client in einem 200x50-Terminal, der als Einziger
+  Schnappschuesse anfordert (und sie damit fuer alle einschaltet), dazu
+  vier Test-Bots -, je drei Laeufe mit und ohne die neuen Nachrichten:
+
+  | Groesse | Protokoll 3 | Protokoll 4 | Grenze |
+  | --- | --- | --- | --- |
+  | Nachrichten je Client und Sekunde (Spitze) | 10 | 17 | `MP_RATE_MAX` 64 |
+  | empfangene Zeilen je Client und Sekunde (Spitze) | 45 | 63 | 800 (16 je Tick x 50 Ticks) |
+  | Nachrichten des Hubs je Sekunde (Spitze, alle Clients) | 144 | 221 | - |
+  | `PING`-Abstand des Hubs | 2000-2049 ms | 2001-2058 ms | Soll 2000 ms |
+  | Bilder je Sekunde beim zeichnenden Client | 7,4-8,0 | 6,7-9,1 | - |
+  | verworfene Nachrichten / Raten-Abschaltungen | 0 / 0 | 0 / 0 | 0 |
+
+  Der Zugstrom kostet also gut zwei Drittel mehr Nachrichten und bleibt
+  bei einem Viertel der Ratengrenze; die Empfangsseite liegt unter einem
+  Zehntel dessen, was ein Tick abraeumen kann. **Keine der beiden
+  Grenzen wird nachgezogen** - eine Zahl, die nicht annaehernd erreicht
+  wird, enger zu ziehen bringt nichts, und weiter zu ziehen gaebe nur
+  einem Fluter mehr Raum. Der Hub-Tick von 50 ms haelt mit: sein `PING`
+  weicht wie vorher um hoechstens 58 ms vom Soll ab. Die Bildrate liegt
+  im selben Streubereich wie vorher (Mittel 7,5 gegen 7,7 bei drei
+  Laeufen je Seite, der beste Einzellauf ist einer der neuen) - eine
+  Verschlechterung ist nicht messbar, die Stichprobe ist aber klein:
+  die Test-Bots bauen sich nach 4 bis 7 Sekunden selbst tot, und so lang
+  ist das Vollast-Fenster je Lauf.
+- **Was die Lastprobe gefunden hat**, war kein Kapazitaetsproblem,
+  sondern ein Fehler, den es seit der Einfuehrung des gemeinsamen Seeds
+  gab: ein zehnstelliger Seed passte nicht in das Zahlenfeld des
+  Protokolls und wurde von **jedem** Client verworfen (siehe 5.9,
+  "Seed"). Er ist mit 9.5 behoben.
 
 Drei Festlegungen dazu:
 
@@ -4140,11 +4186,14 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
   - [x] **9.4 Protokoll 4, Teil 2: `GARBAGE`/`QUEUE` mit Slot an alle.**
         Abnahme: Stoerreihen kommen unveraendert an, und jeder Client
         sieht auch die der anderen im `net.log`.
-  - [ ] **9.5 Lastprobe.** Fuenf Teilnehmer in Detailstufe 2:
+  - [x] **9.5 Lastprobe.** Fuenf Teilnehmer in Detailstufe 2:
         `MP_POLL_MAX`, `MP_RATE_MAX` und den Hub-Tick gegen den neuen
         Verkehr messen, Grenzen nachziehen falls noetig. Abnahme: keine
         verworfene Nachricht, keine Ratenabschaltung, Framerate wie
-        vorher.
+        vorher. Zahlen und Aufbau in 5.20 ("Nachgemessen"); keine der
+        beiden Grenzen musste nachgezogen werden. Die Probe hat dafuer
+        einen alten Fehler gefunden - ein zehnstelliger Seed, den jeder
+        Client verwarf (siehe 5.9, "Seed") -, der mit ihr behoben ist.
   - [ ] **9.6 Format 3 schreiben.** Kopf, `p=`- und `v=`-Zeilen, neue
         Ereignisbuchstaben, Demo-Uhr als Rundenuhr im Versus, `versus`
         in `DEMO_MODE_RE`, `end=lost`, und `--mp-bot` zeichnet nicht
@@ -4442,9 +4491,13 @@ Uebrige dort ist entschieden):
   war der Wunsch, bei der Wiedergabe frei zwischen den Spielern
   umschalten zu koennen: ein Gegner in der Bildmitte waere aus
   Schnappschuessen ein 5-Hz-Standbild ohne fallenden Stein.
-  Offen bleibt nur, was das Playtesting beantworten kann: ob der
-  zusaetzliche Verkehr (unter 1 kB/s je Sitzung) auf schwacher Hardware
-  wirklich folgenlos bleibt - dafuer ist Schritt 9.5 die Lastprobe.
+  Der zusaetzliche Verkehr ist mit Schritt 9.5 gemessen und folgenlos:
+  17 Nachrichten je Client und Sekunde in der Spitze gegen eine Grenze
+  von 64, Empfangsseite unter einem Zehntel der Tick-Kapazitaet, Bildrate
+  im bisherigen Streubereich (Tabelle in 5.20). Offen bleibt nur, was
+  eine Messung auf einem Rechner nicht beantworten kann: wie sich das in
+  einem echten Raum voller Terminals und auf schwacher Hardware
+  anfuehlt.
 - **Kein Reconnect in v1** (5.8). Falls sich Abbrueche im Alltag haeufen,
   waere ein Wiedereinstieg mit vollstaendiger Zustandsuebertragung ein
   eigener spaeterer Punkt.

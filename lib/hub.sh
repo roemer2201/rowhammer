@@ -1021,6 +1021,22 @@ hub_start_round() {
     if [ -z "${seed}" ]; then
         seed=$(( (RANDOM << 15 | RANDOM) & 0x3FFFFFFF ))
     fi
+    # Whatever the seed came from, it has to fit the number field of the
+    # protocol - nine digits (PROTO_NUM_RE, lib/proto.sh). Neither source
+    # respected that: the mask above reaches 0x3FFFFFFF and is therefore
+    # ten digits in about 7% of all rounds, and --seed accepts digits of
+    # any length. Found by the load probe of step 9.5, and it had been
+    # there since the seed was introduced.
+    # The consequence was silent and bad: every client rejected the SEED
+    # message as malformed, kept the RANDOM it already had, and each of
+    # them played a different piece sequence - the very fairness the
+    # shared seed exists for (CLAUDE.md 5.1), with nothing on screen to
+    # say so. A seed that differs from the one asked for is a far smaller
+    # thing than a seed nobody gets.
+    # Twice, so an overlong --seed that wrapped into a negative value in
+    # bash arithmetic still lands in 0..999999999 rather than carrying a
+    # minus sign onto the wire.
+    seed=$(( (seed % 1000000000 + 1000000000) % 1000000000 ))
     for (( i = 0; i < MP_MAX; i++ )); do
         [ -n "${HUB_ID[i]}" ] || continue
         HUB_STATE[i]="play"
