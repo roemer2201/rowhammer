@@ -19,18 +19,22 @@
 #   counter is added to it and nowhere else. It is kept in step with
 #   game_reset (rowhammer.sh), which is the other end of the same list -
 #   what a round resets is what a round consists of.
-#   No user of this module exists yet: the game still runs on the plain
-#   globals, and step 9.9 is where the playback starts binding slots.
+#   Its user is the demo playback (lib/demo.sh): it builds one slot per
+#   seat of the recording, runs every one of them through game_reset and
+#   binds the seat the screen is centred on. A live round never touches
+#   this module - it has one state and the plain globals are it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
 # Program flow (how a caller uses it):
+#   0. state_globals_new - (implicit) the plain globals the modules
+#      declare at load time; state_unbind restores exactly these.
 #   1. state_new SLOT   - create the backing variables of one slot.
 #   2. state_bind SLOT  - point the round state names at that slot.
 #   3. ... run the ordinary round functions, they write into the slot ...
 #   4. state_bind OTHER - switch to another slot (no unbinding needed).
 #   5. state_release SLOT - drop a slot's variables when it is done.
 #
-# Version: 1.0.0  (2026-09-02)
+# Version: 1.1.0  (2026-09-02)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -112,6 +116,13 @@ STATE_VARS=(
     # every simulated player has a queue of their own (CLAUDE.md 5.7).
     s:MP_PENDING
     s:MP_HOLE
+    # How far this round has read into the recorded piece stream. Round
+    # state although it exists only during a playback: every participant
+    # of a versus round draws from the same sequence (one seed, see
+    # CLAUDE.md 5.1) but at a pace of their own, so the position in it is
+    # exactly as personal as the queue it fills. A live round leaves it
+    # alone - queue_fill only asks for it while DEMO_PLAYING is set.
+    s:DEMO_PLAY_POS
 )
 
 # Prefix of the backing variables. Slot 2's board lives in RSTATE2_BOARD;
@@ -198,11 +209,35 @@ state_bind() {
     return 0
 }
 
+# state_globals_new
+# Declare every round state name as a plain, empty variable of its kind.
+# The state the modules start the process in, rebuilt.
+state_globals_new() {
+    local entry kind name
+    for entry in "${STATE_VARS[@]}"; do
+        kind="${entry%%:*}"
+        name="${entry#*:}"
+        case "${kind}" in
+            a) declare -g -a "${name}=()" ;;
+            A) declare -g -A "${name}=()" ;;
+            s) declare -g "${name}=" ;;
+            *) return 1 ;;
+        esac
+    done
+    return 0
+}
+
 # state_unbind
-# Drop the namerefs and leave the round state names undefined, so the
-# game can go back to plain globals (a playback returning to the menu).
-# "unset -n" is the point here: a plain unset would follow the reference
-# and delete the slot's data instead of the pointer to it.
+# Drop the namerefs and put plain globals back in their place, so the
+# process is where it was before anything was bound (a playback returning
+# to the menu, which the next round then starts from).
+# Two things matter here. "unset -n" rather than "unset": a plain unset
+# would follow the reference and delete the slot's data instead of the
+# pointer to it. And the names are re-declared rather than left
+# undefined: bash would create an *indexed* array for the next
+# "INSTANCE_CUT=()" that comes along, and the two instance tables are
+# associative - a round after a playback would then key them by a number
+# it never meant.
 state_unbind() {
     local entry name
     [ "${STATE_SLOT}" -ge 0 ] || return 0
@@ -210,6 +245,7 @@ state_unbind() {
         name="${entry#*:}"
         unset -n "${name}"
     done
+    state_globals_new
     STATE_SLOT=-1
     return 0
 }

@@ -226,9 +226,10 @@ Das Startmenue bietet:
   einen Hash im Dateinamen). Dieselbe Verknuepfung nutzt die
   Highscore-Liste in der Gegenrichtung: dort startet Enter die
   Aufzeichnung des ausgewaehlten Eintrags. Eine **Mehrspieler-Runde**
-  wird ebenfalls aufgezeichnet - mit den Zuegen aller Teilnehmer -, ihre
-  Wiedergabe kommt aber erst noch: bis dahin steht sie in der Liste und
-  meldet beim Abspielen, dass sie noch nicht gespielt werden kann
+  wird ebenfalls aufgezeichnet - mit den Zuegen aller Teilnehmer - und
+  laesst sich starten: sie zeigt die Sitzordnung der Runde und laeuft
+  ihre Zeit ab. Die Bretter bleiben dabei noch leer; sie zu fuellen ist
+  der naechste Schritt
 - **Einstellungen** - Tastenbelegung aendern, **Sprache waehlen**
   (`Automatisch`, `Deutsch` oder `English`; die Auswahl gilt sofort,
   ohne Neustart), Farbschema waehlen

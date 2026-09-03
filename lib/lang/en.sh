@@ -310,13 +310,6 @@ cannot be brought back."
 another version and cannot be played.
 
 You can delete it in the demo menu."
-    # Not a defect: a versus recording is complete and intact, this
-    # build just has no playback for it yet (roadmap 9.9 to 9.12). It
-    # must not read like demo_invalid, which invites deleting the file.
-    [demo_versus]="This is the recording of a multiplayer
-round. It is complete, but the playback for
-it is still being built and arrives in one
-of the next versions."
 
     # --- HUD --------------------------------------------------------------
     [hud_hold]="Hold"

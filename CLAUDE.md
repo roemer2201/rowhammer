@@ -2457,12 +2457,13 @@ Schritt 9.6 wird eine Mehrspieler-Runde damit auch wirklich
 im **Demo-Format 3** (4.10/5.20); seit Schritt 9.7 reicht ihre
 Steinfolge fuer jeden Teilnehmer und nicht nur fuer den
 aufzeichnenden, und seit Schritt 9.8 wird eine solche Aufnahme auch
-wieder **gelesen** - Sitzungsblock, fuenf Stroeme und Pruefpunkte. Was
-noch fehlt, ist die **Wiedergabe** (Schritte 9.9 bis 9.14): eine
-Versus-Aufnahme steht in der Demo-Liste und laedt, das Abspielen weist
-`demo_play` aber mit einer eigenen Meldung ab - sie ist nicht
-beschaedigt, es gibt fuer sie nur noch keine Wiedergabe, und ihr das zu
-sagen ist etwas anderes, als sie fuer defekt zu erklaeren.
+wieder **gelesen** - Sitzungsblock, fuenf Stroeme und Pruefpunkte. Seit
+Schritt 9.9 **startet** sie und laeuft ihre Zeitachse ab: jeder Sitzplatz
+hat einen eigenen Rundenzustand (`lib/state.sh`), der Bildschirm sitzt
+auf dem Platz, in dem aufgezeichnet wurde, und die Mitspieler stehen mit
+ihren Feldern darum herum. Was noch fehlt, ist der Inhalt dieser Felder
+(Schritte 9.10 bis 9.14): die Ereignisstroeme werden noch nicht
+angewandt, die Bretter bleiben also leer und nur die Uhr laeuft.
 
 Drei Nachrichten kamen beim Bauen hinzu, die die Nachrichtentabelle in
 5.4 so nicht hatte; sie sind dort mit aufgefuehrt und hier zusammen
@@ -3719,14 +3720,14 @@ Mehrspieler-Runde damit aufgezeichnet - als **Format 3** (unten), mit
 einem Ereignisstrom je Teilnehmer. Bis dahin wurde sie bewusst gar nicht
 aufgezeichnet, weil eine Aufnahme im Format 2 als Runde abgelaufen
 waere, in der aus dem Nichts Stoerreihen erscheinen. Gelesen wird sie
-seit Schritt 9.8. **Abspielen laesst sie sich noch nicht** (Schritte 9.9
-bis 9.14): `demo_play` weist eine geladene Versus-Aufnahme mit einer
-eigenen Meldung ab - nicht mit der fuer eine beschaedigte Datei, denn
-das ist sie nicht, und wem man seine intakte Aufnahme fuer defekt
-erklaert, der loescht sie. In der Demo-Liste steht sie mit Datum,
-"Versus", Zeit und Rows wie jede andere; das ist der ehrlichere
-Zwischenstand als eine Aufnahme, die im Verzeichnis liegt und in der
-Liste fehlt.
+seit Schritt 9.8, und seit Schritt 9.9 **laeuft sie auch ab** - mit einem
+Rundenzustand je Sitzplatz und der Sitzordnung der Runde, aber noch mit
+leeren Brettern: die Ereignisstroeme anzuwenden ist Schritt 9.10.
+Die Meldung, mit der `demo_play` eine Versus-Aufnahme bis dahin
+abgewiesen hat, ist mit 9.9 entfallen (`demo_versus` in beiden
+Sprachdateien); sie war der ehrliche Zwischenstand, solange es gar keine
+Wiedergabe gab - nicht die Meldung fuer eine beschaedigte Datei, denn
+das war die Aufnahme nie.
 
 **Leitentscheidung: der Vollausbau** (Nutzerentscheidung). Eine Aufnahme
 ist eine **vollstaendige Aufzeichnung der Partie** und nicht die Sicht
@@ -4158,6 +4159,50 @@ Fokus-Slot gebunden. Der Renderer bleibt dadurch fast unveraendert:
 - Der Kasten am Ende hat genau acht Innenzeilen; die Platzierung
   bezahlt die fuehrende Leerzeile.
 
+Die Zustaende dahinter stehen seit Schritt 9.9
+(`demo_seats_scan`, `demo_play_states_build`,
+`demo_play_states_release`, `demo_play_peers_begin`/`_end` in
+`lib/demo.sh`). Fuenf Festlegungen aus dieser Umsetzung:
+
+- **Ein Modell fuer beide Sorten Aufnahme, auch beim Abspielen.** Die
+  Sitzplaetze einer Aufnahme bekommen je einen Rundenzustand, jeder wird
+  von genau dem `game_reset` begonnen, mit dem eine echte Runde beginnt,
+  und der Bildschirm haengt am gebundenen Platz - eine
+  Einzelspieler-Aufnahme ist dann schlicht eine Sitzung zu einem
+  (dieselbe Vereinheitlichung, die `demo_load` schon fuer die Stroeme
+  macht). Das kostet die alte Einzelspieler-Wiedergabe nichts und
+  erspart einen zweiten Weg, der neben dem ersten mitgepflegt werden
+  muesste.
+- **Die Sitzplaetze werden gelesen, nicht gezaehlt.** `demo_seats_scan`
+  sammelt die Plaetze mit Namen ein, statt `0..players-1` anzunehmen:
+  das Format erlaubt eine Sitzung mit Luecken (`demo_header_read`
+  prueft die Zahl der `peer=`-Zeilen, nicht ihre Nummern), und eine
+  Wiedergabe, die das anders sieht, sucht ein Brett, das es nie gab.
+- **Die Zeitachse ist `length`, nicht `time`.** Die beiden gehen
+  auseinander, sobald der Aufzeichnende frueh ausgeschieden ist und den
+  Rest zugesehen hat; die Wiedergabe laeuft ueber die Runde und nicht
+  ueber seine Spielzeit. Fuer jeden anderen Modus setzt
+  `demo_header_read` `length` auf die Spielzeit, sodass es eine Zahl
+  fuer beide ist (`DEMO_TIMELINE_MS`).
+- **Der Stand im Steinstrom ist Rundenzustand.** `DEMO_PLAY_POS` steht
+  deshalb in `STATE_VARS` (`lib/state.sh`): alle ziehen aus derselben
+  Folge (ein Seed, 5.1), aber jeder in seinem eigenen Tempo - die
+  Position darin ist so persoenlich wie die Queue, die sie fuellt.
+- **Der Rueckbau stellt die Globals wieder her, nicht nur die Zeiger.**
+  `state_unbind` deklariert die Namen des Rundenzustands hinterher neu
+  (`state_globals_new`), statt sie undefiniert zu lassen: `INSTANCE_CUT`
+  und `INSTANCE_SQUARED` sind assoziativ, und ein `=()` auf einen
+  undefinierten Namen macht daraus ein indiziertes Array - die Runde
+  nach einer Wiedergabe wuerde die Instanztabellen dann ueber eine Zahl
+  fuehren, die sie nie gemeint hat. Der Rueckbau laeuft auf jedem Weg
+  aus `demo_play` heraus.
+- **Die Peer-Tabellen decken nicht `--mp-max` Plaetze ab, sondern alle
+  moeglichen** (`MP_SEATS`/`MP_SEAT_MAX` in `lib/mp.sh`, in einer
+  Sitzung `MP_MAX`). Eine Aufnahme ist eine Datei, und sie soll keine
+  Mitspieler verlieren, weil die Sitzung, die sie ansieht, mit einem
+  kleineren `--mp-max` gestartet wurde als die, die sie gespielt hat -
+  dieselbe Ueberlegung, auf der `DEMO_STREAM_MAX` steht.
+
 ## 6. Konventionen fuer alle Skripte
 
 Fuer **jedes** Bash-Skript in diesem Repo gelten verbindlich die
@@ -4316,8 +4361,9 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
       Aufgezeichnet wird seit 9.6; bis dahin wurde eine
       Mehrspieler-Runde bewusst **nicht** aufgezeichnet, weil eine
       Aufnahme im Format 2 als Runde abliefe, in der aus dem Nichts
-      Stoerreihen erscheinen. Gelesen wird sie seit 9.8; bis 9.9 bis
-      9.12 die Wiedergabe bauen, laesst sie sich noch nicht abspielen.
+      Stoerreihen erscheinen. Gelesen wird sie seit 9.8 und laeuft seit
+      9.9 ab; bis 9.10 bis 9.12 die Wiedergabe fertig bauen, bleiben ihre
+      Bretter dabei leer.
       **Gesamtabnahme:** die Wiedergabe einer Vier-Spieler-Runde zeigt
       fuer jeden der vier denselben Verlauf wie die Runde selbst, in
       jeder Detailstufe aufgenommen, und laesst sich waehrend des Laufs
@@ -4390,14 +4436,28 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
         mit ihrem Grund im Debug-Log abgewiesen, kein Befehl
         ausgefuehrt. Eine Format-2-Aufnahme und eine
         Einzelspieler-Aufnahme der Version 3 spielen unveraendert.
-        Bis 9.9 die Wiedergabe baut, weist `demo_play` eine geladene
+        Bis 9.9 die Wiedergabe baut, wies `demo_play` eine geladene
         Versus-Aufnahme mit einer eigenen Meldung ab (`demo_versus`) -
-        nicht mit der fuer eine beschaedigte Datei.
-  - [ ] **9.9 Wiedergabe: Zustaende aufbauen.** Je Slot ein Zustand,
+        nicht mit der fuer eine beschaedigte Datei; mit 9.9 ist diese
+        Meldung entfallen.
+  - [x] **9.9 Wiedergabe: Zustaende aufbauen.** Je Slot ein Zustand,
         initialisiert wie `game_reset`; Aufbau innerhalb der
         Neustart-Schleife (Taste `r`), Rueckbau auf beiden
         Rueckgabepfaden. Abnahme: eine Versus-Aufnahme startet, zeigt
         fuenf leere Felder und laeuft bis zum Ende durch.
+        Geprueft an einer echten Drei-Spieler-Runde (ein Client, zwei
+        Test-Bots, Stoerreihen an): die Aufnahme startet, zeigt das
+        eigene Feld in der Mitte und die beiden Mitspieler mit Namen auf
+        ihren Plaetzen der Runde, laeuft ihre 5882 ms ab und endet im
+        Demo-Kasten; `events.log` nennt drei Rundenstarts, einen je
+        Sitzplatz. Dieselbe Aufnahme mit `--mp-max 2` zeigt weiterhin
+        beide Mitspieler (`MP_SEATS`, siehe 5.20). Rueckbau geprueft,
+        indem im selben Prozess hinterher eine Marathon-Runde gespielt
+        wurde - Brett, Beutel und Instanztabellen arbeiten wie zuvor -,
+        und die Wiedergabe einer Einzelspieler-Aufnahme laeuft
+        unveraendert, obwohl sie jetzt denselben Weg nimmt.
+        Aufgeraeumt: `state_unbind` stellt die Globals wieder her und
+        `tools/state-check.sh` prueft das mit (siehe 5.20).
   - [ ] **9.10 Wiedergabe: Ereignisse anwenden.** Ein Cursor je Slot,
         Kontextwechsel, `MP_PEER_*` aus der Simulation fuellen (Brett
         samt fallendem Stein), `flash_rows` nur fuer den Fokus. Abnahme:

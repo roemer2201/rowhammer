@@ -28,8 +28,9 @@
 #   1. Parse arguments and resolve the repository root.
 #   2. Source lib/state.sh.
 #   3. Separation: create five slots, write, read back, compare.
-#   4. Rebinding: prove a bound slot survives a detour to another slot
-#      and that state_release/state_unbind leave nothing behind.
+#   4. Rebinding: prove a bound slot survives a detour to another slot,
+#      that state_release leaves nothing behind, and that state_unbind
+#      puts the plain globals back the way the modules declared them.
 #   5. Completeness: compare STATE_VARS against the assignments in
 #      game_reset.
 #   6. Report the number of checks and exit non-zero on any failure.
@@ -37,7 +38,7 @@
 # Usage:
 #   state-check.sh [-v|--verbose] [-s|--silent] [-h|--help]
 #
-# Version: 1.0.0  (2026-09-02)
+# Version: 1.1.0  (2026-09-02)
 
 set -euo pipefail
 
@@ -197,11 +198,22 @@ check "slot 1 survives a detour" "111" "${ROW_CREDIT}"
 state_bind 3
 check "slot 3 survives a detour" "333" "${ROW_CREDIT}"
 
-# state_unbind must remove the pointer, not the data behind it.
+# state_unbind must remove the pointer, not the data behind it, and it
+# has to put plain globals back in its place: a round started after a
+# playback runs on them, and the two instance tables have to be
+# associative again or it would key them by a number it never meant.
 state_unbind
 check "unbind clears the slot marker" "-1" "${STATE_SLOT}"
 check "unbind leaves the data"        "333" "${RSTATE3_ROW_CREDIT}"
-check "unbind leaves no nameref"      "1" "$(declare -p ROW_CREDIT >/dev/null 2>&1; printf '%d' "$?")"
+check "unbind leaves no nameref"      "" \
+    "$(declare -p ROW_CREDIT 2>/dev/null | grep -o -- '-n')"
+check "unbind restores a plain global" "0" \
+    "$(declare -p ROW_CREDIT >/dev/null 2>&1; printf '%d' "$?")"
+check "unbind restores the array kind" "-a" \
+    "$(declare -p BOARD | cut -d' ' -f2)"
+check "unbind restores the table kind" "-A" \
+    "$(declare -p INSTANCE_CUT | cut -d' ' -f2)"
+check "unbind restores it empty"       "0" "${#BOARD[@]}"
 
 # Releasing a slot drops its backing variables; releasing the bound slot
 # has to unbind it first rather than leave dangling names behind.
