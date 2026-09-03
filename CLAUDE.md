@@ -2461,9 +2461,13 @@ wieder **gelesen** - Sitzungsblock, fuenf Stroeme und Pruefpunkte. Seit
 Schritt 9.9 **startet** sie und laeuft ihre Zeitachse ab: jeder Sitzplatz
 hat einen eigenen Rundenzustand (`lib/state.sh`), der Bildschirm sitzt
 auf dem Platz, in dem aufgezeichnet wurde, und die Mitspieler stehen mit
-ihren Feldern darum herum. Was noch fehlt, ist der Inhalt dieser Felder
-(Schritte 9.10 bis 9.14): die Ereignisstroeme werden noch nicht
-angewandt, die Bretter bleiben also leer und nur die Uhr laeuft.
+ihren Feldern darum herum. Seit Schritt 9.10 haben diese Felder auch
+ihren Inhalt: die Ereignisstroeme werden angewandt, jeder Sitzplatz
+spielt seine Runde wirklich noch einmal, und was daraus wird, steht in
+den Mitspieler-Tabellen, aus denen auch eine laufende Runde ihre Gegner
+zeichnet. Was noch fehlt (Schritte 9.11 bis 9.14), ist die Bedienung -
+der Fokus laesst sich waehrend der Wiedergabe noch nicht wechseln - und
+der Kasten am Ende.
 
 Drei Nachrichten kamen beim Bauen hinzu, die die Nachrichtentabelle in
 5.4 so nicht hatte; sie sind dort mit aufgefuehrt und hier zusammen
@@ -3720,9 +3724,10 @@ Mehrspieler-Runde damit aufgezeichnet - als **Format 3** (unten), mit
 einem Ereignisstrom je Teilnehmer. Bis dahin wurde sie bewusst gar nicht
 aufgezeichnet, weil eine Aufnahme im Format 2 als Runde abgelaufen
 waere, in der aus dem Nichts Stoerreihen erscheinen. Gelesen wird sie
-seit Schritt 9.8, und seit Schritt 9.9 **laeuft sie auch ab** - mit einem
-Rundenzustand je Sitzplatz und der Sitzordnung der Runde, aber noch mit
-leeren Brettern: die Ereignisstroeme anzuwenden ist Schritt 9.10.
+seit Schritt 9.8, seit Schritt 9.9 **laeuft sie auch ab** - mit einem
+Rundenzustand je Sitzplatz und der Sitzordnung der Runde -, und seit
+Schritt 9.10 spielt jeder dieser Sitzplaetze seine Runde wirklich noch
+einmal (siehe "Wiedergabe" unten).
 Die Meldung, mit der `demo_play` eine Versus-Aufnahme bis dahin
 abgewiesen hat, ist mit 9.9 entfallen (`demo_versus` in beiden
 Sprachdateien); sie war der ehrliche Zwischenstand, solange es gar keine
@@ -4203,6 +4208,63 @@ Die Zustaende dahinter stehen seit Schritt 9.9
   kleineren `--mp-max` gestartet wurde als die, die sie gespielt hat -
   dieselbe Ueberlegung, auf der `DEMO_STREAM_MAX` steht.
 
+**Die Ereignisse werden seit Schritt 9.10 angewandt** (`demo_step`,
+`demo_peer_publish`, `demo_cursors_reset`, `demo_events_left` und die
+vier neuen Buchstaben in `demo_apply`/`demo_apply_out`, alle in
+`lib/demo.sh`). Damit spielt jeder Sitzplatz seine Runde wirklich noch
+einmal, durch dieselben Spielfunktionen; die Bretter der Mitspieler
+stehen in denselben `MP_PEER_*`-Tabellen, aus denen eine laufende Runde
+ihre Gegner zeichnet, sodass der Renderer von der Wiedergabe nichts
+wissen muss. Sechs Festlegungen aus dieser Umsetzung:
+
+- **Ein Cursor je Sitzplatz, kein Cursor je Datei.** Monoton ist die
+  Zeit nur innerhalb eines Stroms (siehe oben); ein gemeinsamer Cursor
+  ueber die Datei muesste sie neu sortieren, um dasselbe zu leisten.
+  Damit ein Durchlauf der Schleife nicht fuer jeden Sitzplatz dessen
+  Strom binden muss, nur um nachzusehen, steht der Zeitstempel des
+  naechsten Ereignisses je Sitzplatz daneben (`DEMO_NEXT_MS`, -1 fuer
+  einen erschoepften Strom). Gebunden - Zustand und Strom - wird erst
+  ein Sitzplatz, der wirklich etwas zu tun hat.
+- **Die vier Hub-Buchstaben sind Eingaben in den Rundenzustand, keine
+  Sonderwege.** `y<nn><h>` legt die Stoerreihen in die Warteschlange
+  desselben `MP_PENDING`/`MP_HOLE`, aus dem `mp_apply_garbage` sie beim
+  naechsten Lock einschiebt - der Weg einer echten Runde, also landen
+  die Reihen in genau dem Lock, in dem sie damals landeten. `q<nn>`
+  **setzt** die Laenge, statt abzuziehen: verrechnet hat der Hub, und
+  eine Wiedergabe, die selbst rechnet, laeuft beim ersten
+  gekuerzten Angriff auseinander. `n<n>`/`z<n>` beenden den Sitzplatz
+  (`GAME_OVER`) und schreiben Zustand und Platz in die
+  Mitspieler-Tabellen, wo die Gegnerspalte sie liest.
+- **Die Mini-Bretter der Wiedergabe tragen den fallenden Stein.** Der
+  Schnappschuss der laufenden Runde laesst ihn weg, weil er unterwegs
+  veralten wuerde (5.4); eine Wiedergabe hat keinen Weg, auf dem etwas
+  veralten koennte, und ein Brett ohne fallenden Stein saehe neben vier
+  anderen tot aus. Gebaut wird es aus `proto_board_encode` plus den vier
+  Zellen des Steins - dieselbe Kodierung, die auch ueber die Leitung
+  ginge, damit `render_peer_column` unveraendert bleibt.
+- **Veroeffentlicht wird nur, was sich geruehrt hat.** `demo_peer_publish`
+  laeuft je Sitzplatz erst, wenn dort ein Ereignis angewandt wurde -
+  ohne Ereignis aendert sich an einem Brett nichts, auch die Gravitation
+  ist eines. Aus demselben Grund meldet `demo_step` zurueck, ob
+  ueberhaupt etwas passiert ist: der Bildschirm wird nur dann neu
+  gebaut, genau wie im Spiel.
+- **Eine Wiedergabe sendet nichts und verbucht nichts, obwohl sie durch
+  den Mehrspieler-Code laeuft.** Sie setzt `MP_ACTIVE`, damit der
+  Renderer die Gegner zeichnet, hat aber keine Leitung dahinter. Ohne
+  Guard meldete das Ende einer simulierten Runde einen Top-Out
+  (`round_finish` -> `mp_send_topout` setzt `MP_STATE`) und ein
+  Zugfenster liefe in einem Puffer voll, den niemand leert. Die Guards
+  sitzen dort, wo diese **Nebenwirkungen** entstehen - `round_finish`
+  (`rowhammer.sh`), `mp_act_event`, `mp_send_clear` und das `APPLIED`
+  aus `mp_apply_garbage` (`lib/mp.sh`) -, nicht in `net_send`: das ist
+  der Transport, und er kennt keine Spielregeln.
+- **Die Sitzung wird bei jedem Neustart neu aufgesetzt.**
+  `demo_play_peers_begin` steht deshalb **in** der Restart-Schleife und
+  vor dem Aufbau der Rundenzustaende: `r` muss den Mitspielern ihre
+  leeren Bretter und ihren Zustand "spielt" zurueckgeben, und das
+  `mp_reset` darin loescht die Garbage-Warteschlange, die
+  `demo_play_states_build` gleich darauf je Sitzplatz vergibt.
+
 ## 6. Konventionen fuer alle Skripte
 
 Fuer **jedes** Bash-Skript in diesem Repo gelten verbindlich die
@@ -4362,8 +4424,10 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
       Mehrspieler-Runde bewusst **nicht** aufgezeichnet, weil eine
       Aufnahme im Format 2 als Runde abliefe, in der aus dem Nichts
       Stoerreihen erscheinen. Gelesen wird sie seit 9.8 und laeuft seit
-      9.9 ab; bis 9.10 bis 9.12 die Wiedergabe fertig bauen, bleiben ihre
-      Bretter dabei leer.
+      9.9 ab; seit 9.10 spielt dabei jeder Sitzplatz seine Runde
+      wirklich noch einmal. Was 9.11 bis 9.13 noch fertig bauen, ist die
+      Bedienung (Fokuswechsel), der Kasten am Ende und die Gegenprobe
+      gegen die Pruefpunkte.
       **Gesamtabnahme:** die Wiedergabe einer Vier-Spieler-Runde zeigt
       fuer jeden der vier denselben Verlauf wie die Runde selbst, in
       jeder Detailstufe aufgenommen, und laesst sich waehrend des Laufs
@@ -4458,11 +4522,25 @@ Zustand steht in Abschnitt 5. Offen ist ein Schritt:
         unveraendert, obwohl sie jetzt denselben Weg nimmt.
         Aufgeraeumt: `state_unbind` stellt die Globals wieder her und
         `tools/state-check.sh` prueft das mit (siehe 5.20).
-  - [ ] **9.10 Wiedergabe: Ereignisse anwenden.** Ein Cursor je Slot,
+  - [x] **9.10 Wiedergabe: Ereignisse anwenden.** Ein Cursor je Slot,
         Kontextwechsel, `MP_PEER_*` aus der Simulation fuellen (Brett
         samt fallendem Stein), `flash_rows` nur fuer den Fokus. Abnahme:
         die Wiedergabe zeigt denselben Verlauf wie die Runde - fuer
-        jeden Spieler.
+        jeden Spieler. Geprueft an einer echten Drei-Spieler-Runde
+        (ein Client, zwei Test-Bots, Stoerreihen an): beim Abspielen
+        stapeln sich die beiden Bot-Bretter genau wie in der Runde, sie
+        scheiden mit ihren Plaetzen 3 und 2 aus, der Sieger bleibt
+        stehen, und die Wiedergabe endet auf ihrer Zeitachse. Dazu eine
+        von Hand gebaute Aufnahme mit den drei Ereignissen, die kein
+        Zug erzeugt: die zwei Stoerreihen (`y023`) stehen mit ihrem Loch
+        in Spalte 3 im Brett des Fokus, die Warteschlangenlaenge folgt
+        dem `q`-Ereignis und der Ausgeschiedene traegt "K.O. 3" in
+        seiner Fusszeile. Die Detailstufen 1 und 0 zeigen dieselbe
+        Simulation als Zaehler und Hoehenbalken, eine
+        Einzelspieler-Aufnahme laeuft unveraendert, und die Runde nach
+        einer Wiedergabe hat weder Gegner noch fremden Zustand.
+        Aufgeraeumt: die Guards, die eine Wiedergabe davon abhalten, ihr
+        simuliertes Rundenende als eigenes zu melden (siehe 5.20).
   - [ ] **9.11 Wiedergabe: Fokuswechsel.** Pfeiltasten waehlen den Slot,
         Tempo auf `-`/`+`, HUD-Zeile nennt beides, `RENDER_FULL` beim
         Wechsel. Abnahme: waehrend des Laufs umschalten; das gewaehlte
@@ -4722,9 +4800,10 @@ Uebrige dort ist entschieden):
   Mehrspieler-Runde wird als Format 3 aufgezeichnet, seit 9.7 mit einer
   Steinfolge, die fuer jeden Teilnehmer reicht, und seit 9.8 wird sie
   auch wieder gelesen. Offen bleibt die
-  **Wiedergabe** (Abschnitt 7, Schritte 9.9 bis 9.14) - bis dahin steht
-  eine Versus-Aufnahme in der Demo-Liste und laedt, laesst sich aber
-  nicht abspielen.
+  **Wiedergabe** (Abschnitt 7, Schritte 9.11 bis 9.14): seit 9.9 startet
+  eine Versus-Aufnahme, und seit 9.10 spielt jeder Sitzplatz darin seine
+  Runde wirklich noch einmal - was fehlt, ist der Fokuswechsel, der
+  Kasten am Ende und die Gegenprobe gegen die Pruefpunkte.
   Die frueher hier offene Folgefrage - ob die Mitspieler nur so
   aufgenommen werden koennen, wie sie ankamen (Zaehler, und
   Feld-Schnappschuesse nur in Detailstufe 2) - ist mit dem **Vollausbau**

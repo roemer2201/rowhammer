@@ -212,7 +212,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.2.0  (2026-08-18)
+# Version: 1.2.1  (2026-09-03)
 
 set -euo pipefail
 
@@ -1736,6 +1736,15 @@ record_round() {
 # mode, which cannot occur in a multiplayer round) so all three follow
 # the same rule.
 round_finish() {
+    # A playback dresses the session up to draw the opponents (MP_ACTIVE
+    # is set without a link behind it, see demo_play_peers_begin), so the
+    # end of a simulated round would otherwise report a top-out and mark
+    # this client as knocked out. A replay neither banks nor sends
+    # anything - what became of a seat comes out of the recording
+    # (demo_apply_out), not out of this end.
+    if [ "${DEMO_PLAYING}" -eq 1 ]; then
+        return 0
+    fi
     if [ "${MP_ACTIVE}" -eq 1 ]; then
         # The moves still in the window go out first, and unconditionally:
         # the last few before a top-out are the ones that led to it, and
@@ -1899,6 +1908,14 @@ flash_rows() {
     if [ "${FLASH_CYCLES}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
         return 0
     fi
+    # In a multiplayer playback only the seat on screen blinks: the
+    # animation holds the whole loop for its ~280 ms, and doing that for
+    # every simulated board would stop the replay once per clear per
+    # player (CLAUDE.md 5.20). The rows of the others simply vanish, which
+    # is what they do in the mini board of a live round too.
+    if [ "${DEMO_SIM_FOCUS}" -eq 0 ]; then
+        return 0
+    fi
     local y i ms="${FLASH_MS}"
     FLASH_ROWS=()
     for y in "${FULL_ROWS[@]}"; do
@@ -1927,13 +1944,13 @@ flash_rows() {
         # clear - the moment the hub has the most to say. The link is
         # therefore drained here too; key presses stay swallowed, as they
         # always were.
-        if [ "${MP_ACTIVE}" -eq 1 ]; then
+        if [ "${MP_ACTIVE}" -eq 1 ] && [ "${DEMO_PLAYING}" -eq 0 ]; then
             mp_poll || :
         fi
         FLASH_STATE=0
         draw_frame
         key_drain "${ms}"
-        if [ "${MP_ACTIVE}" -eq 1 ]; then
+        if [ "${MP_ACTIVE}" -eq 1 ] && [ "${DEMO_PLAYING}" -eq 0 ]; then
             mp_poll || :
         fi
     done
