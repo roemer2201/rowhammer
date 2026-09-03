@@ -28,7 +28,7 @@
 #   are worth (see lib/hub.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.3.0  (2026-09-02)
+# Version: 1.4.0  (2026-09-03)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -640,6 +640,12 @@ mp_round_ms() {
 mp_act_event() {
     local action="${1}" delta
     [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    # A playback runs the very same round functions and therefore reaches
+    # here, with MP_ACTIVE set for the renderer's sake and no link behind
+    # it (demo_play_peers_begin). It has nothing to report: the moves it
+    # is replaying came out of a recording, and a window buffered here
+    # would only grow (CLAUDE.md 5.20).
+    [ "${DEMO_PLAYING}" -eq 0 ] || return 0
     [ "${MP_PHASE}" = "play" ] || return 0
     [[ "${action}" =~ ^[acghklors]$ ]] || return 0
     mp_round_ms
@@ -707,6 +713,10 @@ mp_act_flush() {
 # twenty rows" impossible (CLAUDE.md 5.4).
 mp_send_clear() {
     [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    # A playback clears rows on five simulated boards and reports none of
+    # them: it has no link, and the attacks of that round were settled
+    # when it was played (CLAUDE.md 5.20).
+    [ "${DEMO_PLAYING}" -eq 0 ] || return 0
     proto_msg CLEAR "${1}" "${2}" "${3}"
     net_send "${PROTO_LINE}" || :
     return 0
@@ -754,8 +764,13 @@ mp_apply_garbage() {
     for (( i = 0; i < n; i++ )); do
         board_flood_row "${MP_HOLE}" || break
     done
-    proto_msg APPLIED "${n}"
-    net_send "${PROTO_LINE}" || :
+    # A playback pushes the very same rows into its simulated boards and
+    # has nobody to tell about it - the queue it works off came out of
+    # the recording (see demo_apply).
+    if [ "${DEMO_PLAYING}" -eq 0 ]; then
+        proto_msg APPLIED "${n}"
+        net_send "${PROTO_LINE}" || :
+    fi
     debug_event "mp: applied ${n} garbage row(s) with hole=${MP_HOLE}"
     DIRTY=1
     if board_top_out; then
