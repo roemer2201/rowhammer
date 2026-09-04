@@ -468,7 +468,11 @@ durchzureichen:
    startet (seit 0.52.0, siehe 4.5) und die Tasten der Wiedergabe. Die
    Zeile fuer den neuen Weg hat der Einleitungsabsatz bezahlt: die Seite
    sass mit 18 Zeilen schon auf `MENU_BODY_MAX`, und der Absatz sagte in
-   fuenf Zeilen, was in vieren steht.
+   fuenf Zeilen, was in vieren steht. Dieselbe Rechnung noch einmal fuer
+   die Zeile des Fokuswechsels (1.4.0, siehe 5.20): der Absatz sagt es
+   jetzt in drei Zeilen. Die Tastenzeilen selbst sind unveraendert aus
+   dem laufenden Zustand gelesen - dass die Pfeile den Spieler waehlen
+   und `-`/`+` das Tempo, sind zwei Zeilen und nicht mehr eine.
 
 10. Mehrspieler (seit 1.1.0): dass jeder sein eigenes Feld mit
    derselben Steinfolge spielt, dass abgebaute Reihen dem Gegner
@@ -832,10 +836,14 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
 
 - Pausetaste (`p`) oder Leertaste haelt an und laeuft weiter; angezeigt
   wird das ueber denselben "PAUSED"-Kasten wie im Spiel.
-- Pfeil links/rechts stellt das Tempo in fuenf Stufen von **0.25x bis
-  4x** (`DEMO_SPEEDS`). Die aktuelle Stufe steht im HUD in der linken
-  Spalte (Zeile 18, Label "Demo") - die einzige Angabe, die dem Bild
-  sonst fehlen wuerde.
+- `-` und `+` stellen das Tempo in fuenf Stufen von **0.25x bis 4x**
+  (`DEMO_SPEEDS`). Die aktuelle Stufe steht im HUD in der linken Spalte
+  (Zeile 18, Label "Demo") - die einzige Angabe, die dem Bild sonst
+  fehlen wuerde. Bis 1.3.0 stellten die Pfeiltasten dasselbe mit; sie
+  waehlen seit 1.4.0 den Sitzplatz einer Mehrspieler-Aufnahme (5.20),
+  weshalb das Tempo allein bei `-`/`+` liegt. In einer
+  Einzelspieler-Aufnahme gibt es nichts zu waehlen und die Pfeile tun
+  entsprechend nichts.
 - Quit-Taste (`x`) oder `ESC` kehrt zur Liste zurueck (zu der, aus der
   die Wiedergabe gestartet wurde - Demo-Liste oder Bestenliste), `r`
   spielt eine durchgelaufene Demo noch einmal von vorn.
@@ -2286,10 +2294,11 @@ Nummerierung folgt der Entstehungsreihenfolge und bleibt deshalb stabil
 zu Phase 5 gehoert.
 
 Was am Mehrspieler noch fehlt, fuehrt [TODO.md](TODO.md): die
-**Bedienung** der Demo-Wiedergabe (Spezifikation in 5.20).
-Aufgezeichnet, gelesen und abgespielt wird eine Mehrspieler-Runde
-bereits - nur der Fokus laesst sich waehrend der Wiedergabe noch nicht
-wechseln.
+**Gegenprobe** der Demo-Wiedergabe gegen die `v=`-Pruefpunkte samt ihrer
+Randfaelle (Spezifikation in 5.20). Aufgezeichnet, gelesen, abgespielt
+und bedient wird eine Mehrspieler-Runde bereits - der Fokus wechselt
+waehrend der Wiedergabe mit den Pfeiltasten, und der Kasten am Ende
+nennt Platz und Grund.
 
 Drei Nachrichten kamen beim Bauen hinzu, die die urspruengliche
 Spezifikation nicht hatte; sie stehen in der Nachrichtentabelle 5.4 und
@@ -3932,17 +3941,73 @@ Fokus-Slot gebunden. Der Renderer bleibt dadurch fast unveraendert:
   Der Schnappschuss liess ihn weg, weil er unterwegs veraltet waere
   (5.4); in einer Wiedergabe gibt es dieses Problem nicht, und ein Feld
   ohne fallenden Stein saehe neben vier anderen tot aus.
-- **Tasten** (noch offen, siehe TODO.md): Pfeil links/rechts sollen den
-  Fokus waehlen, umlaufend ueber die belegten Slots; `-`/`+` stellen
-  dann das Tempo. Beide sind heute doppelt belegt (`LEFT`/`-` und
-  `RIGHT`/`+`, siehe 3.8), es geht also keine Funktion verloren. Die
-  HUD-Zeile 18 nennt danach Tempo und Fokus.
+- **Tasten:** Pfeil links/rechts waehlen den Fokus, umlaufend ueber die
+  belegten Slots (`demo_focus_step`/`demo_focus_set` in `lib/demo.sh`);
+  `-`/`+` stellen das Tempo. Beide Paare lagen zuvor auf demselben
+  Tempo (`LEFT`/`-` und `RIGHT`/`+`, siehe 3.8), das Aufteilen hat also
+  keine Funktion gekostet - und die Pfeile sind das, womit in diesem
+  Spiel jede Liste durchgegangen wird, was die Sitzplaetze sind. Eine
+  Aufnahme mit einem einzigen Sitzplatz hat schlicht nichts zum
+  Weiterschalten. Drei Festlegungen aus der Umsetzung:
+  - **Der abtretende Sitzplatz wird erst veroeffentlicht.** Solange er
+    der Fokus war, wurde er aus dem Rundenzustand gezeichnet und
+    `demo_step` hat ihn nie in die `MP_PEER_*`-Tabellen geschrieben;
+    ohne das naehme er seinen Platz als Gegnerspalte mit einem Bild von
+    sich ein, das so alt ist wie der letzte Fokuswechsel.
+  - **Die Spieluhr wird mitgenommen.** `PLAY_MS` steht in `STATE_VARS`,
+    jeder Sitzplatz hat also eine eigene, und der Loop schreibt die
+    Demo-Uhr nur in den gerade gebundenen - und nur, solange die
+    Wiedergabe laeuft. Ein Fokuswechsel **nach** dem Ende zeigte sonst
+    als Endzeit dieses Sitzplatzes irgendeinen frueheren Moment.
+  - **Der Fokus ueberlebt den Neustart** (`r`): wem jemand folgen
+    wollte, dem wollte er auch durch die zweite Runde folgen.
+  Die HUD-Zeile 18 nennt weiter das Tempo, Zeile 19 den Namen des
+  Sitzplatzes im Fokus - mit `>` davor wie der Cursor der
+  Bestenlisten-Liste (4.5) und ueber die volle Breite der Spalte statt
+  als Wert hinter einer Beschriftung: ein Name darf 16 Zeichen haben
+  und ist das einzige Wort auf der Zeile. Er ist das Einzige, was der
+  Bildschirm sonst nicht sagt - die Gegner tragen ihren Namen ueber
+  ihrer Spalte, das mittlere Feld nie, weil es in einer echten Runde
+  das eigene ist.
 - **Die Blink-Animation laeuft nur fuer den Fokus.** `flash_rows` haelt
   den Loop an (3.1); bei den uebrigen verschwindet die Reihe sofort,
   denn alles andere hiesse, den Loop bis zu fuenfmal je Sekunde
   anzuhalten.
-- Der Kasten am Ende hat genau acht Innenzeilen; die Platzierung soll
-  die fuehrende Leerzeile bezahlen (noch offen, siehe TODO.md).
+- **Der Kasten am Ende nennt Platz und Grund** - beides fuer den
+  Sitzplatz im Fokus und nicht fuer die Aufnahme, denn der Fokus wandert
+  (`demo_focus_outcome` in `lib/demo.sh`, gelesen von
+  `render_status_box`). Er hat weiter genau acht Innenzeilen: die
+  Platzierung bezahlt die **fuehrende Leerzeile**, die eine
+  Einzelspieler-Aufnahme unveraendert behaelt - sie hat keinen Platz zu
+  nennen. Vier Festlegungen dazu:
+  - **Aufgeschrieben ist nur der Grund des Aufzeichnenden** (`end=`).
+    Fuer jeden anderen Sitzplatz wird er aus dem gelesen, was aus ihm
+    geworden ist: `ko` heisst oben rausgebaut, `gone` Verbindung weg,
+    und wer am Ende noch stand, bekommt "Runde zu Ende" - "Abgebrochen"
+    (der Spieler ist gegangen) kann kein Ereignisstrom zeigen.
+  - **`end=lost` hat einen eigenen Text** ("Verbindung weg"), statt wie
+    bisher unter "Abgebrochen" zu fallen: eine gerissene Leitung ist
+    kein Aufgeben.
+  - **Der Sieger wird beim Erreichen des Endes markiert**
+    (`demo_finish_marks`). Fuer ihn gibt es kein Ereignis - `n` und `z`
+    sind, wie man die Runde verlaesst, und er hat keines von beidem
+    getan -, also nennt ihn der Kopf der Datei (`winner=`). Ohne das
+    saesse das siegreiche Brett in Rundenkleidung da, waehrend jede
+    andere Spalte zeigt, wie sie ausging. Im Fokus steht dann
+    "GEWONNEN", in der Gegnerspalte "SIEG".
+  - **Der K.O.-Kasten wartet auf den Platz.** In der Wiedergabe fallen
+    Top-Out und Ausscheiden auseinander: das Brett endet, wo es endete,
+    der Platz kommt mit dem `n`/`z`, das der Hub eine Weile spaeter
+    schickte. Bis dahin bleibt der Kasten weg - er verdeckte sonst ein
+    Brett, um "Platz 0" zu sagen. In einer echten Runde liegt dazwischen
+    ein Roundtrip, hier steht es in der Aufnahme.
+- **Ausscheiden und Verbindungsverlust stehen verschieden da.** Der Fuss
+  einer Gegnerspalte trennt seither `K.O. <platz>` (oben rausgebaut) von
+  `Weg <platz>` (Verbindung weg) und kennt mit `SIEG` einen dritten
+  Ausgang, den nur eine fertig gelaufene Wiedergabe setzt. Bis dahin
+  las sich beides als `K.O.`, obwohl es zwei verschiedene Dinge sind -
+  und in einer Wiedergabe ist der Fuss der einzige Ort, an dem sie
+  ueberhaupt stehen koennen.
 
 Die Zustaende dahinter
 (`demo_seats_scan`, `demo_play_states_build`,

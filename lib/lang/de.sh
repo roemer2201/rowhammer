@@ -275,6 +275,7 @@ und die Leertaste."
     [key_arrow_down]="Pfeil runter"
     [key_space_up]="Leertaste, Pfeil hoch"
     [key_arrows_lr]="Pfeil links/rechts"
+    [key_minus_plus]="-  /  +"
 
     # --- Text input -------------------------------------------------------
     [input_hint_type]="Tippen ersetzt den markierten Text."
@@ -352,8 +353,15 @@ Du kannst sie im Demo-Menue loeschen."
     [hud_alive]="Gegner"
     # Ein Zeichen je Marke, mehr ist neben einem Mini-Feld nicht zu
     # haben: Stoerreihen im Anflug und ein ausgeschiedener Spieler.
+    # Die drei Ausgaenge stehen im Fuss einer Gegnerspalte, hinter der
+    # jeweils der Platz folgt (ausser beim Sieger, der Platz 1 ist):
+    # oben rausgebaut, Verbindung weg, und - nur in einer Wiedergabe -
+    # der Spieler, der am Ende noch stand. Hoechstens vier Zeichen, die
+    # halbe Zellenbreite laesst einer Spalte nur zwoelf.
     [hud_peer_warn]="!"
     [hud_peer_ko]="K.O."
+    [hud_peer_gone]="Weg"
+    [hud_peer_win]="SIEG"
 
     # --- Result box over the board ----------------------------------------
     # Every line lives inside a box 18 columns wide; the headlines are
@@ -374,6 +382,11 @@ Du kannst sie im Demo-Menue loeschen."
     [box_end_over]="  Game Over"
     [box_end_goal]="  Ziel erreicht"
     [box_end_quit]="  Abgebrochen"
+    # Zwei weitere Ausgaenge, die nur eine Wiedergabe kennt: die Runde
+    # riss an der Verbindung ab (end=lost), und der Sitzplatz stand am
+    # Ende noch, ohne dass ueber ihn sonst etwas zu sagen waere.
+    [box_end_lost]="  Verbindung weg"
+    [box_end_round]="  Runde zu Ende"
     [box_restart]="  r = neu"
     [box_menu]="  %s = Menue"
     [box_demo_again]="  r = nochmal"
@@ -622,10 +635,9 @@ fliessen immer in Weltwunder und Statistik
 ein."
     [help_p8_head]="Demos (Menuepunkt \"Demos\"):
 
-Jede gespielte Runde wird mitgeschnitten und
-kann spaeter noch einmal angesehen werden.
-Aufgezeichnet werden die Zuege, nicht das
-Bild - die Wiedergabe spielt die Runde neu.
+Jede Runde wird mitgeschnitten und kann noch
+einmal angesehen werden. Aufgezeichnet werden
+die Zuege - die Wiedergabe spielt sie neu ab.
 "
     [help_p8_kept]="Aufbewahrt werden die %d neuesten Runden;"
     [help_p8_mid]="Aufnahmen mit * halten noch einen Highscore
@@ -637,6 +649,7 @@ Die Highscore-Liste spielt sie mit Enter ab.
 Waehrend der Wiedergabe:"
     [help_demo_pause]="Pause / weiter"
     [help_demo_speed]="Tempo"
+    [help_demo_focus]="Spieler waehlen"
     [help_demo_back]="Zurueck"
 
     # --- One-time rename of the Marathon highscore file (0.51.0) ----------

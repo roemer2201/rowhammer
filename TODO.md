@@ -84,22 +84,22 @@ sind zwei Punkte:
       aller Teilnehmer werden verteilt und mitgeschrieben, die
       Wiedergabe simuliert alle Felder gleichzeitig, und der Fokus
       wechselt waehrend der Wiedergabe frei mit den Pfeiltasten.
-      **Stand:** die Teilschritte 9.1 bis 9.10 sind erledigt (siehe
+      **Stand:** die Teilschritte 9.1 bis 9.12 sind erledigt (siehe
       HISTORY.md) - eine Runde wird aufgezeichnet, wieder gelesen, und
       beim Abspielen spielt jeder Sitzplatz seine Runde wirklich noch
-      einmal. Es fehlen die Bedienung, der Kasten am Ende und die
-      Gegenprobe.
+      einmal; der Fokus wechselt mit den Pfeiltasten, und der Kasten am
+      Ende nennt Platz und Grund. Es fehlen die Gegenprobe und die Doku.
       **Gesamtabnahme:** die Wiedergabe einer Vier-Spieler-Runde zeigt
       fuer jeden der vier denselben Verlauf wie die Runde selbst, in
       jeder Detailstufe aufgenommen, und laesst sich waehrend des Laufs
       zwischen ihnen umschalten.
       Die Version bleibt waehrend der Arbeit auf `1.3.0` und steigt erst
       mit Schritt 9.14 auf `1.4.0`.
-  - [ ] **9.11 Wiedergabe: Fokuswechsel.** Pfeiltasten waehlen den Slot,
+  - [x] **9.11 Wiedergabe: Fokuswechsel.** Pfeiltasten waehlen den Slot,
         Tempo auf `-`/`+`, HUD-Zeile nennt beides, `RENDER_FULL` beim
         Wechsel. Abnahme: waehrend des Laufs umschalten; das gewaehlte
         Feld steht mittig mit HUD, Hold und Next.
-  - [ ] **9.12 Rundenende.** Ausscheiden, Verbindungsverlust und Sieger
+  - [x] **9.12 Rundenende.** Ausscheiden, Verbindungsverlust und Sieger
         in der Anzeige, Platzierung im Kasten (er hat genau acht
         Innenzeilen - die fuehrende Leerzeile bezahlt sie), `end=lost`
         mit eigenem Text. Abnahme: der Kasten nennt Platz und Grund,
@@ -110,9 +110,11 @@ sind zwei Punkte:
         EXIT-`trap`, Verknuepfung aus der Versus-Bestenliste ueber den
         Runden-Hash. Abnahme: eine Vier-Spieler-Aufnahme laeuft ohne
         eine einzige Abweichungsmeldung durch.
-  - [ ] **9.14 Doku, Texte, Version.** 5.20 auf den gebauten Zustand,
+  - [ ] **9.14 Doku, Texte, Version.** 5.20 ist mit 9.11/9.12 bereits
+        auf den gebauten Stand gezogen (Tasten, Kasten, HUD-Zeile 19),
+        ebenso 3.5, 3.8 und die Anleitungsseite 9; offen sind
         4.10 (Format 3), 5.4 (Protokoll 4), 5.6 (Fokus), 4.1 (Bash) und
-        diese Liste nachziehen; README, Anleitungsseiten 9 und 10;
+        diese Liste; README, Anleitungsseite 10;
         Punkt nach HISTORY.md; Version `1.4.0` an allen vier Stellen
         samt Changelog-Strophen. Abnahme: `tools/release.sh --mode
         check` ist gruen.

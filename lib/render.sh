@@ -785,6 +785,18 @@ render_pane_left() {
     # replayed Ultra or Sprint run keeps showing its own two lines.
     if [ "${DEMO_PLAYING}" -eq 1 ]; then
         pane_stat 18 "${I18N[hud_demo]}" "${DEMO_SPEED_LABEL}"
+        # Focus of a versus playback (1.4.0): whose board is in the
+        # middle. It is the one thing the screen cannot say by itself -
+        # the opponents carry their names above their columns, the
+        # centre board never did, because in a live round it is yours.
+        # The name gets the whole line rather than a label and five
+        # columns: a name may be 16 characters and it is the only word
+        # on it. The ">" reads as the selection it is, the same mark the
+        # highscore browser puts in front of the entry it has picked.
+        if [ "${MP_ACTIVE:-0}" -eq 1 ]; then
+            printf -v line ' >%-10.10s' "${MP_PEER_NAME[DEMO_FOCUS]}"
+            PANE_LEFT[19]="${line}"
+        fi
     fi
     return 0
 }
@@ -833,18 +845,46 @@ render_status_box() {
     # the same eight body lines as the game over box below, so the
     # borders sit in the same place either way.
     if [ "${DEMO_PLAYING}" -eq 1 ] && [ "${DEMO_ENDED}" -eq 1 ]; then
-        local -a demo_body=("")
+        local -a demo_body=()
+        # How the round ended for the seat in focus, and the place it
+        # took. Both are about that seat and not about the recording:
+        # the focus moves, and every seat of a versus recording is
+        # played in full (see demo_focus_outcome in lib/demo.sh).
+        demo_focus_outcome
+        # A versus box spends its leading blank line on the place; a
+        # singleplayer one has no place to name and keeps it. Either way
+        # the body is eight lines, so the borders sit where they sit in
+        # every other ending of this box.
+        if [ "${DEMO_HDR_MP}" -eq 0 ]; then
+            demo_body+=("")
+        fi
         demo_body+=("${I18N[box_demo_end]}")
         printf -v line "${I18N[box_rows]}" "${ROW_CREDIT}"
         demo_body+=("${line}")
         fmt_duration $(( PLAY_MS / 1000 ))
         printf -v line "${I18N[box_time]}" "${FMT_DURATION}"
         demo_body+=("${line}")
-        # How the recorded round ended, which the counters alone do not
-        # say: a top-out, a reached goal or a round left from the menu.
-        case "${DEMO_HDR_END}" in
+        if [ "${DEMO_HDR_MP}" -eq 1 ]; then
+            if [ "${DEMO_FOCUS_PLACE}" -gt 0 ]; then
+                printf -v line "${I18N[box_mp_place]}" "${DEMO_FOCUS_PLACE}"
+                demo_body+=("${line}")
+            else
+                # A round this client left before it was decided knows
+                # no places at all - not even for the seat that was
+                # still standing.
+                demo_body+=("")
+            fi
+        fi
+        # How the round ended, which the counters alone do not say: a
+        # top-out, a reached goal, a round left from the menu, a
+        # connection that died - or, in a versus recording, the seat
+        # that was still standing when it was over.
+        case "${DEMO_FOCUS_END}" in
+            win)  demo_body+=("${I18N[box_mp_win]}") ;;
             over) demo_body+=("${I18N[box_end_over]}") ;;
             goal) demo_body+=("${I18N[box_end_goal]}") ;;
+            lost) demo_body+=("${I18N[box_end_lost]}") ;;
+            end)  demo_body+=("${I18N[box_end_round]}") ;;
             *)    demo_body+=("${I18N[box_end_quit]}") ;;
         esac
         demo_body+=("${I18N[box_demo_again]}")
@@ -866,6 +906,19 @@ render_status_box() {
     # player's board is full - it is over when the hub says so.
     if [ "${MP_ACTIVE:-0}" -eq 1 ] \
         && { [ "${MP_ENDED}" -eq 1 ] || [ "${GAME_OVER}" -eq 1 ]; }; then
+        # In a replay the two do not arrive together: the board tops out
+        # where it topped out, while the place comes with the elimination
+        # the hub announced a moment later ("n"/"z", see demo_apply_out).
+        # Until then there is nothing to say that the frozen board does
+        # not already say, and a box claiming place 0 would cover it to
+        # say it. A live round has the same gap between its own top-out
+        # and the hub's KO, but there it is the width of one round trip;
+        # here it is however long the recording says, which can be a
+        # second and more of a board nobody can see any more.
+        if [ "${DEMO_PLAYING}" -eq 1 ] && [ "${MP_ENDED}" -eq 0 ] \
+            && [ "${MP_PLACE}" -eq 0 ]; then
+            return 0
+        fi
         local -a mp_body=("")
         if [ "${MP_ENDED}" -eq 1 ]; then
             if [ "${MP_PLACE}" -eq 1 ]; then
@@ -1323,11 +1376,22 @@ render_peer_column() {
     done
     # A player who is out is named by their place instead of by the
     # garbage on its way to them: that is what became of them, and it
-    # is what the final screen ranks them by.
+    # is what the final screen ranks them by. The three ways out read
+    # differently because they are different things: a stack that hit
+    # the ceiling, a connection that died, and the seat that was still
+    # standing at the end ("win", set by a finished playback - a live
+    # round has the box over the board for that).
     case "${MP_PEER_STATE[slot]}" in
-        ko|gone)
+        ko)
             printf -v foot '%s %d' "${I18N[hud_peer_ko]}" \
                 "${MP_PEER_PLACE[slot]:-0}"
+            ;;
+        gone)
+            printf -v foot '%s %d' "${I18N[hud_peer_gone]}" \
+                "${MP_PEER_PLACE[slot]:-0}"
+            ;;
+        win)
+            printf -v foot '%s' "${I18N[hud_peer_win]}"
             ;;
         *)
             if [ "${MP_PEER_PENDING[slot]}" -gt 0 ]; then
@@ -1406,8 +1470,14 @@ render_pane_peers() {
         printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
         PANE_RIGHT[row]="${line}"
         case "${MP_PEER_STATE[slot]}" in
-            ko|gone)
+            ko)
                 printf -v line ' %-11s' "${I18N[hud_peer_ko]}"
+                ;;
+            gone)
+                printf -v line ' %-11s' "${I18N[hud_peer_gone]}"
+                ;;
+            win)
+                printf -v line ' %-11s' "${I18N[hud_peer_win]}"
                 ;;
             *)
                 # Ten characters of bar for twenty rows of board, so one

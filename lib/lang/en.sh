@@ -259,6 +259,7 @@ the game over screen."
     [key_arrow_down]="arrow down"
     [key_space_up]="space, arrow up"
     [key_arrows_lr]="arrow left/right"
+    [key_minus_plus]="-  /  +"
 
     # --- Text input -------------------------------------------------------
     [input_hint_type]="Typing replaces the marked text."
@@ -331,9 +332,15 @@ You can delete it in the demo menu."
     [hud_garbage]="Garb"
     [hud_alive]="Alive"
     # One character per marker, which is all there is room for next to a
-    # mini board: garbage incoming, and a player who is out.
+    # mini board: garbage incoming, and a player who is out. The three
+    # ways out are followed by the place taken (except for the winner,
+    # who is place 1): topped out, connection gone, and - only in a
+    # playback - the seat still standing at the end. Four characters at
+    # most; the half cell width leaves a column just twelve.
     [hud_peer_warn]="!"
     [hud_peer_ko]="K.O."
+    [hud_peer_gone]="Gone"
+    [hud_peer_win]="WIN"
 
     # --- Result box over the board ----------------------------------------
     [box_paused]="      PAUSED      "
@@ -351,6 +358,11 @@ You can delete it in the demo menu."
     [box_end_over]="  Game Over"
     [box_end_goal]="  Goal reached"
     [box_end_quit]="  Given up"
+    # Two more endings only a playback knows: the round broke off with
+    # the connection (end=lost), and the seat was still standing at the
+    # end with nothing else to say about it.
+    [box_end_lost]="  Connection lost"
+    [box_end_round]="  Round over"
     [box_restart]="  r = restart"
     [box_menu]="  %s = menu"
     [box_demo_again]="  r = again"
@@ -581,9 +593,8 @@ always feed the wonders and the statistics."
     [help_p8_head]="Demos (\"Demos\" menu entry):
 
 Every round played is recorded and can be
-watched again later. What is recorded are
-the moves, not the screen - a replay really
-plays the round once more.
+watched again later. Recorded are the moves,
+not the screen - a replay really plays them.
 "
     [help_p8_kept]="The %d newest rounds are kept;"
     [help_p8_mid]="recordings marked * still hold a highscore
@@ -595,6 +606,7 @@ The highscore lists play them with Enter.
 During a replay:"
     [help_demo_pause]="Pause / resume"
     [help_demo_speed]="Speed"
+    [help_demo_focus]="Pick a player"
     [help_demo_back]="Back"
 
     # --- One-time rename of the Marathon highscore file (0.51.0) ----------
