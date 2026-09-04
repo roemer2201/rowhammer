@@ -1,26 +1,38 @@
 # HISTORY.md - rowhammer
 
-Diese Datei ist das **Archiv der erledigten Punkte** aus der Roadmap
-(CLAUDE.md, Abschnitt 7). Ein Punkt wird hierher verschoben, sobald er
-umgesetzt ist; die Roadmap in CLAUDE.md fuehrt damit nur noch, was
-tatsaechlich offen ist.
+Diese Datei ist das **Archiv der erledigten Punkte** aus
+[TODO.md](TODO.md). Ein Punkt wird hierher verschoben, sobald er
+umgesetzt ist; TODO.md fuehrt damit nur noch, was tatsaechlich offen ist.
+
+**Wo steht was:**
+
+| Datei | Inhalt |
+| --- | --- |
+| **HISTORY.md** (diese) | Archiv der erledigten Punkte, nach Version |
+| [TODO.md](TODO.md) | offene Punkte - Roadmap und Entscheidungen |
+| [CLAUDE.md](CLAUDE.md) | technisches Konzept und Arbeitskonventionen |
+| [README.md](README.md) | Anleitung fuer Spielerinnen und Spieler |
 
 **Lesehinweis - was hier steht und was nicht:**
 
 - Jeder Eintrag beschreibt den Stand **zum Zeitpunkt seiner Umsetzung**,
   samt der damaligen Begruendung. Das ist der Zweck dieser Datei: sie
-  bewahrt das "warum", das aus einem Diff nicht mehr hervorgeht.
+  bewahrt das "warum", das aus einem Diff nicht mehr hervorgeht. Ein
+  _"Vorzustand: ..."_ nennt dabei, was die Version abgeloest hat - die
+  Beschreibung in CLAUDE.md fuehrt nur den heutigen Stand.
 - Der **aktuelle** Zustand einer Funktion steht **nicht hier**, sondern in
   CLAUDE.md (Abschnitte 1 bis 5: Spielkonzept, technisches Konzept,
   Mehrspieler-Spezifikation) und - fuer alles Spielersichtbare - in der
   README.md. Wo eine spaetere Version einen Eintrag ueberholt hat, steht
   darunter eine Zeile _"Spaeter ueberholt: ..."_ mit dem Verweis auf die
   abloesende Version.
+- **Nackte Abschnittsnummern** ("siehe 3.1", "siehe 5.20") verweisen
+  immer auf **CLAUDE.md**.
 - Im Zweifel gilt CLAUDE.md/README.md, nicht diese Datei.
 
-Arbeitsregel dazu (siehe CLAUDE.md Abschnitt 6): Wer einen Roadmap-Punkt
-abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md 1-5 und
-die README.md den neuen Zustand richtig beschreiben.
+Arbeitsregel dazu (siehe CLAUDE.md Abschnitt 6): Wer einen Punkt aus
+TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
+1-5 und die README.md den neuen Zustand richtig beschreiben.
 
 ## Uebersicht
 
@@ -71,6 +83,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 0.41.0 | Umschaltbarer Render-Modus (`partial`/`full`) | 4.3 |
 | 0.42.0 | Time-Attack-Modus samt Bestenliste, Statistik je Modus | 3.5, 3.6, 4.5 |
 | 0.43.0 | "Neustarten" im Pausenmenue | 3.1, 3.3 |
+| 0.44.0 | Weltwunder-Kosten x100 (Groessenordnung des Originals) | 3.3 |
 | 0.45.0 | Namensabfrage am Rundenende (vormarkierte Vorgabe) | 3.7, 4.3, 4.5 |
 | 0.46.0 | Demo-Aufzeichnung und Demo-Player | 3.5, 3.8, 4.10 |
 | 0.47.0 | Vollstaendige Statistik je Spielmodus | 4.5 |
@@ -88,6 +101,7 @@ die README.md den neuen Zustand richtig beschreiben.
 | 1.0.4 | Beutel des Randomizers auf 63 Steine (Dynamik der Spezialbloecke) | 3.1 |
 | 1.1.0 | Mehrspieler im lokalen Netz (Phase 5, Schritte 1-8 und 10-12) | 5.1-5.10 |
 | 1.2.0 | Gastgeberwechsel: die Lobby ueberlebt ihren Gastgeber; Client-Timeouts | 5.1, 5.4, 5.8 |
+| 1.3.0 | Fuenf Spieler, Sitzordnung um das eigene Feld, volle Zellenbreite; Unterbau und Aufzeichnung der Mehrspieler-Demo (Teilschritte 9.1-9.10) | 4.1, 4.10, 5.1, 5.4, 5.6, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1110,8 +1124,8 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
 - [x] **Mehrsprachige Oberflaeche** (Version 0.48.0, Roadmap-Punkt aus
       Phase 4; aktueller Stand siehe 4.11): Bis dahin standen die
       Menuetexte deutsch und die HUD-Beschriftungen samt `--help`
-      englisch im Code - eine feste Mischung, die die offene Frage
-      "UI-Sprache" (Abschnitt 8) nur konservierte. Seither kommt jeder
+      englisch im Code - eine feste Mischung, die die damals offene
+      Frage "UI-Sprache" nur konservierte. Seither kommt jeder
       spielersichtbare Text aus einer Tabelle, und die Sprache ist eine
       Laufzeit-Entscheidung. Die Entscheidungen dahinter:
       - **Ein assoziatives Array statt einer Lookup-Funktion.** Die
@@ -1577,6 +1591,39 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
       _Spaeter ueberholt: 1.1.0 - der Mehrspieler waechst bis zu seiner
       Fertigstellung in der `1.x`-Reihe, und `2.0.0` ist fuer den Stand
       reserviert, an dem Phase 5 wirklich abgeschlossen ist._
+- [x] **Spielzeit der Namensabfrage auf die Millisekunde; Versionszeile
+      in der README** (Version 1.0.3, Nutzerwunsch; aktueller Stand
+      siehe 3.7 und 4.9).
+      - Der Bildschirm der Namensabfrage zeigt die Spielzeit seither mit
+        `fmt_duration_ms` (MM:SS.mmm), und zwar **in jedem Modus**.
+        _Vorzustand: er zeigte `fmt_duration` (MM:SS) und schnitt damit
+        ausgerechnet die Stellen ab, die im Ultra ueber den Platz
+        entscheiden, den derselbe Bildschirm eine Zeile tiefer nennt -
+        zwei Versuche auf dasselbe Ziel landen oft in derselben Sekunde,
+        weshalb die Ultra-Liste Millisekunden speichert._ Fuer alle Modi
+        gleich, weil ein Bildschirm eine Zahl nicht in zwei Formen
+        zeigen soll, je nachdem welcher Modus lief. Der
+        Rundenende-Kasten blieb unberuehrt: dort ist die Zeit im Ultra
+        ohnehin schon millisekundengenau, und in den anderen Modi ist
+        sie nicht die Wertung, sondern eine Randnotiz.
+      - Die README nennt ihre Version in einer eigenen Zeile
+        `**Version:** X.Y.Z` unter der Ueberschrift, und
+        `tools/release.sh --mode check` prueft sie mit - eine von Hand
+        gepflegte Nummer in einer Doku-Datei ist die erste, die
+        veraltet, und ein Besucher glaubt ihr. Damit kennt das Werkzeug
+        vier Stellen mit der Version statt drei.
+- [x] **Beutel des Randomizers auf 63 Steine** (Version 1.0.4,
+      Nutzerentscheidung; aktueller Stand siehe 3.1): neun vollstaendige
+      Saetze der sieben Sorten, als Ganzes gemischt (`BAG_SETS` in
+      `lib/pieces.sh`).
+      _Vorzustand: ein Beutel aus sieben Steinen. Dessen gleichmaessige
+      Ausgabe - zwei gleiche Sorten liegen hoechstens zwoelf Steine
+      auseinander - ist genau das, was ein Quadrat schwer macht, denn es
+      braucht vier zueinander passende Teile._ Der lange Beutel bringt
+      beides zurueck: die Haeufung gleicher Sorten, aus der ein
+      Gold-Quadrat ueberhaupt erst wird, und die Duerre, die es zu einer
+      Entscheidung macht. Die Garantie bleibt dieselbe - ueber einen
+      vollen Beutel kommt jede Sorte gleich oft.
 
 
 ## Phase 5 - Mehrspieler (umgesetzt, Version 1.1.0)
@@ -1727,12 +1774,17 @@ anders aussieht.
       Beacon-Sammler ist mit gefuzzt - er ist der erste Parser, den ein
       Fremder ohne jede Verbindung erreicht. Der Lauf ist Teil der CI.
 
-Bewusst **nicht** umgesetzt und weiterhin offen: die Aufzeichnung einer
-Mehrspieler-Runde als Demo (Schritt 9). Sie braucht das Format 3 aus
-5.20 mit den Peer-Ereignissen; eine Runde in Formatversion 2 zu
-schreiben, waere schlimmer als keine - sie liefe als Runde ab, in der
-aus dem Nichts Stoerreihen erscheinen. `demo_record_start` lehnt einen
-unbekannten Modus deshalb ausdruecklich ab.
+Bewusst **nicht** umgesetzt und zu diesem Zeitpunkt offen: die
+Aufzeichnung einer Mehrspieler-Runde als Demo (Schritt 9). Sie braucht
+das Format 3 aus 5.20 mit den Peer-Ereignissen; eine Runde in
+Formatversion 2 zu schreiben, waere schlimmer als keine - sie liefe als
+Runde ab, in der aus dem Nichts Stoerreihen erscheinen.
+`demo_record_start` lehnt einen unbekannten Modus deshalb ausdruecklich
+ab.
+
+_Spaeter ueberholt: 1.3.0 (siehe unten) baut den Unterbau und schreibt
+das Format 3; aufgezeichnet und gelesen wird eine Mehrspieler-Runde
+seitdem._
 
 
 ## Gastgeberwechsel im Mehrspieler (umgesetzt, Version 1.2.0)
@@ -1831,3 +1883,196 @@ Abbruch).
       Spielfeld stehen bleibt (CLAUDE.md 4.3). `net_send` umleitet
       deshalb die Fehlerausgabe der ganzen Gruppe und behaelt dabei den
       Fehlerstatus.
+
+
+## Fuenf Spieler und Sitzordnung (umgesetzt, Version 1.3.0)
+
+Zwei Nutzerentscheidungen zur Darstellung der Mitspieler, die zusammen
+gehoeren: eine kleinere Sitzung, dafuer groessere Felder. Der aktuelle
+Zustand steht in CLAUDE.md 5.1 (Spielerzahl) und 5.6 (Darstellung).
+
+- [x] **Eine Sitzung fasst fuenf statt sechs Spieler** - man selbst und
+      vier Mitspieler; `--mp-max` nimmt 2..5 und steht standardmaessig
+      auf 5. Vier Gegner sind genau das, was sich noch symmetrisch um
+      das eigene Feld setzen laesst, und ein Feld weniger bezahlt die
+      breiteren Zellen darunter.
+      _Vorzustand: bis 1.2.0 waren es sechs Spieler (`MP_MAX` bis 6);
+      die Begruendung fuer die Obergrenze - Rechenaufwand,
+      Bildschirmbreite, Zielwahl - steht unveraendert in 5.1._
+- [x] **Die Mitspieler sitzen um das eigene Feld herum**
+      (Nutzerwunsch), nicht mehr alle rechts davon: der erste rechts,
+      der zweite links, der dritte weiter rechts, der vierte weiter
+      links, sodass der Bildschirm `[5][3][selbst][2][4]` liest. Das
+      eigene Feld behaelt die Mitte, wie viele Mitspieler auch
+      dazukommen - der Blick liegt die ganze Runde auf dem eigenen
+      Stapel, und ein Feld, das mit jedem Beitritt weiter nach links
+      rutschte, muesste jedes Mal neu gesucht werden. Die Reihenfolge
+      ist die des Beitritts (`MP_PEER_SLOTS`), damit waehrend der Runde
+      kein Feld den Platz wechselt.
+- [x] **Ein Gegnerfeld hat die volle Zellenbreite, wenn das Terminal sie
+      hergibt** (Nutzerwunsch): zwei Zeichen je Zelle, exakt wie das
+      eigene Feld und mit denselben Glyphen, also 23 Spalten je Gegner
+      (140 bei vier Gegnern). Passt das nicht, faellt die Anzeige auf
+      die bisherige halbe Breite zurueck (ein Zeichen je Zelle, 13
+      Spalten je Gegner, 100 bei vieren). **Das eigene Feld wird dafuer
+      nie verkleinert** - auf seinen 48 Spalten steht das ganze feste
+      Layout (Seitenleisten, Rundenende-Kasten, Menues, das
+      Terminal-Minimum, siehe 3.4).
+- [x] **Eine geaenderte Gesamtbreite zeichnet den Block vollstaendig
+      neu** (`RENDER_FULL`) - ein Resize, ein Beitritt in der Lobby, ein
+      erzwungener Modus, der erst jetzt passt. Der Zeilen-Diff (4.3)
+      ueberschreibt nur, was er schreibt; ohne das bliebe beim
+      Schrumpfen die alte Ausgabe in den aufgegebenen Spalten stehen -
+      und weil die Gegner jetzt auch nach links wachsen, wandert dabei
+      die linke Kante selbst.
+
+## Mehrspieler-Demo: Unterbau und Aufzeichnung (umgesetzt, Version 1.3.0)
+
+Die Teilschritte 9.1 bis 9.10 des Punkts "Demo-Aufzeichnung der
+Mehrspieler-Runde" (Zielanforderung und Architektur in 5.20). Die
+restlichen Teilschritte 9.11 bis 9.14 - Fokuswechsel, Kasten am Ende,
+Gegenprobe, Doku - stehen weiter in [TODO.md](TODO.md); erst sie heben
+die Version auf `1.4.0`.
+
+- [x] **9.1 Rundenzustand benennen.** Neues Modul `lib/state.sh` mit der
+      Liste des Rundenzustands (`STATE_VARS`) und `state_new`,
+      `state_bind`, `state_release`; beim Bauen kamen `state_unbind` und
+      `state_release_all` dazu. Noch ohne Nutzer - die Runde lief
+      weiter auf den Globals. Abnahme: `tools/state-check.sh` legt fuenf
+      Zustaende an, schreibt aus einer Funktion heraus in jeden und
+      liest alle fuenf zurueck; ausserdem liest es die Zuweisungen aus
+      `game_reset` und verlangt, dass jede in `STATE_VARS` steht oder in
+      der kurzen Liste der Sitzungszustaende.
+- [x] **9.2 Bash-Minimum auf 4.3.** Startcheck mit klarer Meldung,
+      `debian/control`, `rowhammer.spec`, CLAUDE.md 4.1 und README
+      nachgezogen. Abnahme: Start und `--help` unveraendert, die Meldung
+      erscheint bei kuenstlich gesetzter Bedingung.
+      _Vorzustand: das Minimum war Bash 4.0 (assoziative Arrays); die
+      Namerefs von `lib/state.sh` heben es auf 4.3 (2014). Einen
+      Rueckfallweg gibt es nicht - die Alternative waere, den ganzen
+      Rundenzustand je Frame hin- und herzukopieren._
+- [x] **9.3 Protokoll 4, Teil 1: `ACT`/`PEERACT`.** Nachrichtentabelle
+      und Muster in `lib/proto.sh`, Sammeln und Senden in `lib/mp.sh`
+      (`MP_ACT_MS`), Weiterreichen im Hub. Die zehn Stellen, an denen
+      einer Runde etwas zustoesst, rufen seither `round_event`
+      (`rowhammer.sh`) statt `demo_record_event` - ein Trichter, der das
+      Ereignis an beide Verbraucher desselben Alphabets weitergibt.
+      Abnahme: Runde mit drei `--mp-bot`, `net.log` zeigt die Stroeme,
+      `tools/net-fuzz.sh` bleibt sauber, die Runde spielt sich
+      unveraendert.
+- [x] **9.4 Protokoll 4, Teil 2: `GARBAGE`/`QUEUE` mit Slot an alle.**
+      Abnahme: Stoerreihen kommen unveraendert an, und jeder Client
+      sieht auch die der anderen im `net.log`.
+      _Vorzustand: beide Nachrichten gingen ohne Slot nur an den
+      Betroffenen. Ein Version-3-Client wuerde den vorangestellten Slot
+      als Reihenzahl lesen und die falsche Menge Stoerreihen
+      einschieben - genau dafuer wurde die Protokollversion
+      hochgezaehlt._
+- [x] **9.5 Lastprobe.** Fuenf Teilnehmer in Detailstufe 2 - ein
+      zeichnender Client in einem 200x50-Terminal, der als Einziger
+      Schnappschuesse anfordert (und sie damit fuer alle einschaltet),
+      dazu vier Test-Bots -, je drei Laeufe mit und ohne die neuen
+      Nachrichten:
+
+      | Groesse | Protokoll 3 | Protokoll 4 | Grenze |
+      | --- | --- | --- | --- |
+      | Nachrichten je Client und Sekunde (Spitze) | 10 | 17 | `MP_RATE_MAX` 64 |
+      | empfangene Zeilen je Client und Sekunde (Spitze) | 45 | 63 | 800 (16 je Tick x 50 Ticks) |
+      | Nachrichten des Hubs je Sekunde (Spitze, alle Clients) | 144 | 221 | - |
+      | `PING`-Abstand des Hubs | 2000-2049 ms | 2001-2058 ms | Soll 2000 ms |
+      | Bilder je Sekunde beim zeichnenden Client | 7,4-8,0 | 6,7-9,1 | - |
+      | verworfene Nachrichten / Raten-Abschaltungen | 0 / 0 | 0 / 0 | 0 |
+
+      Der Zugstrom kostet gut zwei Drittel mehr Nachrichten und bleibt
+      bei einem Viertel der Ratengrenze; die Empfangsseite liegt unter
+      einem Zehntel dessen, was ein Tick abraeumen kann. **Keine der
+      beiden Grenzen wurde nachgezogen** - eine Zahl, die nicht
+      annaehernd erreicht wird, enger zu ziehen bringt nichts, und
+      weiter zu ziehen gaebe nur einem Fluter mehr Raum. Der Hub-Tick
+      von 50 ms haelt mit. Die Bildrate liegt im selben Streubereich wie
+      vorher (Mittel 7,5 gegen 7,7 bei drei Laeufen je Seite, der beste
+      Einzellauf ist einer der neuen) - eine Verschlechterung ist nicht
+      messbar, die Stichprobe ist aber klein: die Test-Bots bauen sich
+      nach 4 bis 7 Sekunden selbst tot, und so lang ist das
+      Vollast-Fenster je Lauf.
+- [x] **Ein Seed, den jeder Client verwarf** - der Fehler, den die
+      Lastprobe gefunden hat. Er stand im Code, seit es den gemeinsamen
+      Seed gibt: die Maske `0x3FFFFFFF` reicht bis 1.073.741.823 und war
+      damit in rund **7 % aller Runden** zehnstellig, `--seed` nimmt
+      Ziffern beliebiger Laenge. Beides passte nicht in das neunstellige
+      Zahlenfeld des Protokolls (`PROTO_NUM_RE`), also wies **jeder**
+      Client die `SEED`-Nachricht als fehlerhaft ab, behielt sein
+      eigenes `RANDOM` und spielte eine **andere Steinfolge** - genau
+      die Fairness, fuer die der gemeinsame Seed da ist, und auf dem
+      Bildschirm stand nichts davon. `hub_start_round` nimmt den Seed
+      seither modulo 1.000.000.000: ein Seed, der vom gewuenschten
+      abweicht, ist das erheblich kleinere Uebel als einer, den niemand
+      bekommt.
+- [x] **9.6 Format 3 schreiben.** Kopf, `p=`- und `v=`-Zeilen, neue
+      Ereignisbuchstaben, Demo-Uhr als Rundenuhr im Versus, `versus` in
+      `DEMO_MODE_RE`, `end=lost`, und `--mp-bot` zeichnet nicht auf.
+      Noch keine Wiedergabe. Abnahme an einer Runde mit zwei Test-Bots:
+      Kopf, Ereignisstroeme, Pruefpunkte und die Plaetze der
+      Ausgeschiedenen decken sich mit dem `events.log` des
+      aufzeichnenden Clients. Der Sitzungsblock ist auf eine
+      Versus-Aufnahme beschraenkt, damit eine Einzelspieler-Aufnahme
+      bleibt, was sie war. Eine Versus-Aufnahme stand in der Demo-Liste
+      und wurde beim Abspielen mit einer Meldung abgewiesen, bis 9.8 sie
+      lesen konnte.
+- [x] **9.7 Steinfolge fuer alle.** Die Folge aus dem eigenen Beutel
+      nachfuellen, solange irgendein Spieler noch Steine braucht - auch
+      nach dem eigenen Ausscheiden (`demo_pieces_topup`, gezaehlt je
+      Slot in `demo_slot_event`). Abnahme an einer Drei-Spieler-Runde
+      mit zwei Test-Bots, in der der aufzeichnende Client als Erster
+      ausschied: er selbst hatte 12 Steine verbraucht, der
+      Weiterspielende 14, und in der Datei stehen 18 (14 + Vorschau) -
+      dieselben 18, die der Beutel des Bots aus dem gemeinsamen Seed
+      gezogen hatte, Buchstabe fuer Buchstabe.
+- [x] **9.8 Format 3 lesen.** Neue Kopfschluessel (`peer=` ist der erste
+      wiederholbare), fuenf Ereignisstroeme ueber Namerefs, ein Muster je
+      Feld, Version 2 weiter akzeptiert. Abnahme an der Aufnahme aus 9.7
+      (drei Stroeme, 146 Ereignisse, Pruefpunkte an ihrer Position) und
+      an 29 praeparierten Dateien - Sitzungsblock in beiden Richtungen
+      falsch, Slots ausserhalb der Sitzung, verstuemmelte Tokens,
+      Kopfzeilen hinter dem Strom, Version zu alt und zu neu sowie
+      ANSI-Sequenzen, `$(...)`, Backticks und eine 100-kB-Zeile: jede
+      mit ihrem Grund im Debug-Log abgewiesen, kein Befehl ausgefuehrt.
+      Eine Format-2-Aufnahme und eine Einzelspieler-Aufnahme der Version
+      3 spielen unveraendert.
+- [x] **9.9 Wiedergabe: Zustaende aufbauen.** Je Sitzplatz ein Zustand,
+      initialisiert von genau dem `game_reset`, mit dem eine echte Runde
+      beginnt; Aufbau innerhalb der Neustart-Schleife (Taste `r`),
+      Rueckbau auf beiden Rueckgabepfaden (`demo_seats_scan`,
+      `demo_play_states_build`, `demo_play_states_release`,
+      `demo_play_peers_begin`/`_end` in `lib/demo.sh`). Abnahme an einer
+      echten Drei-Spieler-Runde (ein Client, zwei Test-Bots, Stoerreihen
+      an): die Aufnahme startet, zeigt das eigene Feld in der Mitte und
+      die beiden Mitspieler mit Namen auf ihren Plaetzen der Runde,
+      laeuft ihre 5882 ms ab und endet im Demo-Kasten; `events.log`
+      nennt drei Rundenstarts, einen je Sitzplatz. Dieselbe Aufnahme mit
+      `--mp-max 2` zeigt weiterhin beide Mitspieler (`MP_SEATS`).
+      Rueckbau geprueft, indem im selben Prozess hinterher eine
+      Marathon-Runde gespielt wurde - Brett, Beutel und Instanztabellen
+      arbeiten wie zuvor. Aufgeraeumt: `state_unbind` stellt die Globals
+      wieder her, und `tools/state-check.sh` prueft das mit.
+- [x] **9.10 Wiedergabe: Ereignisse anwenden.** Ein Cursor je Sitzplatz,
+      Kontextwechsel, `MP_PEER_*` aus der Simulation gefuellt (Brett
+      samt fallendem Stein), `flash_rows` nur fuer den Fokus
+      (`demo_step`, `demo_peer_publish`, `demo_cursors_reset`,
+      `demo_events_left` und die vier Hub-Buchstaben in
+      `demo_apply`/`demo_apply_out`). Abnahme an einer echten
+      Drei-Spieler-Runde: beim Abspielen stapeln sich die beiden
+      Bot-Bretter genau wie in der Runde, sie scheiden mit ihren
+      Plaetzen 3 und 2 aus, der Sieger bleibt stehen, und die Wiedergabe
+      endet auf ihrer Zeitachse. Dazu eine von Hand gebaute Aufnahme mit
+      den drei Ereignissen, die kein Zug erzeugt: die zwei Stoerreihen
+      (`y023`) stehen mit ihrem Loch in Spalte 3 im Brett des Fokus, die
+      Warteschlangenlaenge folgt dem `q`-Ereignis und der
+      Ausgeschiedene traegt "K.O. 3" in seiner Fusszeile. Die
+      Detailstufen 1 und 0 zeigen dieselbe Simulation als Zaehler und
+      Hoehenbalken, eine Einzelspieler-Aufnahme laeuft unveraendert, und
+      die Runde nach einer Wiedergabe hat weder Gegner noch fremden
+      Zustand. Aufgeraeumt: die Guards in `round_finish`,
+      `mp_act_event`, `mp_send_clear` und `mp_apply_garbage`, die eine
+      Wiedergabe davon abhalten, ihr simuliertes Rundenende als eigenes
+      zu melden.
