@@ -1,10 +1,31 @@
 # CLAUDE.md - rowhammer
 
-Diese Datei gibt Claude Code (und menschlichen Mitwirkenden) den Kontext,
-das Konzept und die Arbeitsregeln fuer dieses Repository. Sie beschreibt
-den **aktuellen** Stand und das, was noch aussteht; die abgeschlossenen
-Roadmap-Punkte samt ihrer Begruendung liegen im Archiv
-[HISTORY.md](HISTORY.md).
+Diese Datei gibt Claude Code (und menschlichen Mitwirkenden) das
+**technische Konzept** dieses Repositorys: wie das Spiel aufgebaut ist,
+warum es so aufgebaut ist, und nach welchen Regeln daran gearbeitet
+wird. Sie beschreibt den **aktuellen** Stand.
+
+**Wo steht was:**
+
+| Datei | Inhalt |
+| --- | --- |
+| **CLAUDE.md** (diese) | technisches Konzept und Arbeitskonventionen |
+| [TODO.md](TODO.md) | offene Punkte - Roadmap und Entscheidungen |
+| [HISTORY.md](HISTORY.md) | Archiv der erledigten Punkte, nach Version |
+| [README.md](README.md) | Anleitung fuer Spielerinnen und Spieler |
+
+Die Aufteilung ist eine Arbeitsregel (Abschnitt 6) und keine blosse
+Ordnung: Was eine Funktion **heute** tut, steht hier; **was sie
+abgeloest hat** und warum, steht in HISTORY.md beim jeweiligen
+Versionseintrag; **was noch fehlt**, in TODO.md. Eine Angabe steht
+jeweils an genau einer Stelle, die anderen verweisen darauf.
+
+Gliederung: Abschnitt 1 und 2 ordnen das Projekt ein, 3 beschreibt das
+Spielkonzept, 4 die technische Umsetzung, 5 den Mehrspieler und den
+geplanten Server-Betrieb, 6 die verbindlichen Konventionen. Die
+Nummerierung ist stabil - rund hundert Kommentare in `rowhammer.sh`,
+`lib/*.sh` und den Workflows verweisen mit ihr auf einzelne Abschnitte
+("siehe CLAUDE.md 5.20").
 
 ## 1. Projektueberblick
 
@@ -16,8 +37,9 @@ Terminal laeuft. Vorbild ist **"The New Tetris"** fuer das Nintendo 64:
 - Das **Quadrat-System** des Originals ist enthalten: Aus Bausteinen gebildete
   4x4-Quadrate werden zu **Gold-** (sortenrein) bzw. **Silber-Bloecken**
   (gemischt) und liefern beim Abbau Bonus-Reihen.
-- Eine **Multiplayer-Funktion** ist geplant, wird aber erst in einer spaeteren
-  Phase umgesetzt (siehe Roadmap).
+- Eine **Mehrspieler-Funktion** gibt es seit 1.1.0: zwei bis fuenf
+  Leute im lokalen Netz, jeder an seinem eigenen Feld mit derselben
+  Steinfolge (siehe Abschnitt 5).
 
 Der Repo-Name "rowhammer" ist ein Wortspiel: Es geht ums "Hammern" von Reihen
 (rows), nicht um den gleichnamigen Hardware-Angriff.
@@ -49,17 +71,13 @@ Die fuer uns relevanten Merkmale des Originals:
 - Die 7 Standard-Bausteine (I, O, T, S, Z, J, L) mit **Bag-Randomizer**:
   ein Beutel fasst **63 Steine** - neun vollstaendige Saetze der sieben
   Sorten, als Ganzes gemischt (`BAG_SETS` in `lib/pieces.sh`, seit
-  1.0.4). **Umstellung von sieben auf 63 (Nutzerentscheidung):** um mehr
-  Dynamik fuer die Bildung der Spezialbloecke (Gold-/Silber-Quadrate,
-  siehe 3.2) zu bekommen. Die Garantie des Beutels bleibt dieselbe -
-  ueber einen vollen Beutel kommt jede Sorte gleich oft -, aber
-  innerhalb des Beutels ist die Reihenfolge deutlich freier: bei einem
-  Beutel aus sieben Steinen liegen zwei gleiche Sorten hoechstens zwoelf
-  Steine auseinander, und diese gleichmaessige Ausgabe ist genau das,
-  was ein Quadrat schwer macht - es braucht vier zueinander passende
-  Teile. Der lange Beutel bringt beides zurueck: die Haeufung gleicher
-  Sorten, aus der ein Gold-Quadrat ueberhaupt erst wird, und die
-  Duerre, die es zu einer Entscheidung macht. Zwei Festlegungen dazu:
+  1.0.4). Der lange Beutel gibt der Bildung der Spezialbloecke
+  (Gold-/Silber-Quadrate, siehe 3.2) ihre Dynamik: die Garantie bleibt
+  dieselbe - ueber einen vollen Beutel kommt jede Sorte gleich oft -,
+  aber innerhalb des Beutels ist die Reihenfolge frei genug fuer beides,
+  die Haeufung gleicher Sorten, aus der ein Gold-Quadrat ueberhaupt erst
+  wird, und die Duerre, die es zu einer Entscheidung macht. Zwei
+  Festlegungen dazu:
   - **Gemischt wird ueber den ganzen Beutel**, nicht Satz fuer Satz. Ein
     Mischen je Siebenersatz wuerde nur siebenmal je sieben Steine
     umsortieren und damit genau die gleichmaessige Verteilung erhalten,
@@ -68,10 +86,10 @@ Die fuer uns relevanten Merkmale des Originals:
     `ULTRA_TARGET_ROWS` oder `FLOOD_INTERVAL_MS`: sie gehoert zum
     Spielgefuehl und wird nach Playtesting nachgezogen, nicht je Runde
     gewaehlt. `BAG_SETS=1` ist wieder der klassische 7er-Beutel.
-  Demos und der geplante Mehrspieler bleiben davon unberuehrt: eine
-  Aufnahme speichert die Steinfolge selbst und keinen Beutel (siehe
-  4.10), und die Mehrspieler-Fairness haengt am gemeinsamen Seed
-  (siehe 5.1), nicht an der Beutelgroesse.
+  Demos und der Mehrspieler bleiben davon unberuehrt: eine Aufnahme
+  speichert die Steinfolge selbst und keinen Beutel (siehe 4.10), und
+  die Mehrspieler-Fairness haengt am gemeinsamen Seed (siehe 5.1), nicht
+  an der Beutelgroesse.
 - Steuerung (Standardbelegung; ueber das Einstellungsmenue aenderbar und
   in der Nutzer-Konfigurationsdatei gespeichert, siehe 4.5):
   - Links/Rechts: Pfeiltasten (seit 0.31.0 ohne Buchstabentaste)
@@ -131,16 +149,14 @@ Die fuer uns relevanten Merkmale des Originals:
   entgegen).
 - **Rundenende am oberen Feldrand (seit 1.0.2, Nutzerreport):** Die
   Runde endet, sobald etwas **oberhalb des sichtbaren Feldes** liegen
-  bleibt - also in den beiden verdeckten Spawn-Zeilen. Bis 0.55.0 kannte
-  das Spiel nur einen einzigen Top-Out, die blockierte Spawn-Position;
-  ein Stein liess sich deshalb auf der obersten Reihe festsetzen und
-  durfte darueber hinausragen, ohne dass die Runde verloren war. Das
-  Feld ist 20 Reihen hoch, und was darueber stehen bleibt, gehoert nicht
-  mehr dazu. Umsetzung: `board_top_out` (`lib/board.sh`) meldet, ob eine
-  Zelle in den verdeckten Zeilen liegt; gefragt wird sie an den zwei
-  Stellen, an denen dort etwas hinkommen kann - `lock_and_next` nach dem
-  Festsetzen eines Steins und `flood_raise` nach einem Anstieg im
-  Hochwasser-Modus (beide in `rowhammer.sh`). Die Entscheidungen dazu:
+  bleibt - also in den beiden verdeckten Spawn-Zeilen. Das Feld ist 20
+  Reihen hoch, und was darueber stehen bleibt, gehoert nicht mehr dazu;
+  neben dem blockierten Spawn ist das der zweite Weg ins Game Over.
+  Umsetzung: `board_top_out` (`lib/board.sh`) meldet, ob eine Zelle in
+  den verdeckten Zeilen liegt; gefragt wird sie an den zwei Stellen, an
+  denen dort etwas hinkommen kann - `lock_and_next` nach dem Festsetzen
+  eines Steins und `flood_raise` nach einem Anstieg im Hochwasser-Modus
+  (beide in `rowhammer.sh`). Die Entscheidungen dazu:
   - **Gefragt wird das Brett, nicht der Stein.** Eine Pruefung der
     gerade festgesetzten Zellen muesste den Reihenabbau nachrechnen, der
     sie verschiebt - und sie liesse die zweite Stelle (das steigende
@@ -153,13 +169,13 @@ Die fuer uns relevanten Merkmale des Originals:
     steht vor dieser hier: ein Lauf, der mit genau diesem Stein sein
     Ziel erreicht, hat gewonnen, wie hoch der Stein auch sass.
   - **Im Hochwasser-Modus endet die Runde am Anstieg selbst**, nicht
-    erst beim naechsten Lock. Damit rueckt dieses Rundenende eine Zeile
-    frueher als die alte Pruefung in `board_flood_row` (die eine Zelle
-    erst dann nicht mehr schieben wollte, wenn sie vom Brett gefallen
-    waere). Jene Pruefung bleibt als Eigensicherung der Funktion stehen:
-    sie ist das Einzige, was ueberhaupt verhindert, dass eine Zelle aus
-    dem Brett geschoben wird, und die Mehrspieler-Garbage (5.7) wird
-    dort spaeter mehrere Reihen auf einmal durchschieben.
+    erst beim naechsten Lock - sonst waeren die beiden Wege ueber die
+    Feldkante verschieden streng. Die Pruefung in `board_flood_row`
+    (die eine Zelle erst dann nicht mehr schieben will, wenn sie vom
+    Brett gefallen waere) bleibt daneben als Eigensicherung der Funktion
+    stehen: sie ist das Einzige, was ueberhaupt verhindert, dass eine
+    Zelle aus dem Brett geschoben wird, und die Mehrspieler-Garbage
+    (5.7) schiebt dort mehrere Reihen auf einmal durch.
 - Vorschau: die naechsten 3 Teile. Hold: genau ein Teil, einmal pro Zug tauschbar.
 - Level/Geschwindigkeit: Fallgeschwindigkeit steigt mit der Zahl abgebauter
   Reihen der laufenden Runde.
@@ -192,14 +208,13 @@ Die fuer uns relevanten Merkmale des Originals:
   danach); Tastendruecke waehrend des Blinkens werden bewusst verworfen,
   damit sie nicht gesammelt auf dem neuen Stein losgehen. Das Warten
   nutzt wie der uebrige Loop ein `read` mit Timeout (kein `sleep`-Fork),
-  seit 0.23.0 aber ueber `key_drain` (`lib/input.sh`) statt eines rohen
-  `read`: ein Roh-Read verwarf einzelne Bytes und konnte damit genau die
-  Haelfte einer Escape-Sequenz schlucken - blieb `[C` einer Pfeiltaste
-  liegen, wurde das `C` danach als Hold-Taste `c` angewandt (Issue #7 an
-  der Eingabeschicht vorbei). `key_drain` schickt die Bytes durch
-  denselben Zustandsautomaten und verwirft nur die fertig erkannten
-  Tasten, sodass eine Sequenz entweder ganz oder gar nicht geschluckt
-  wird. Dieselbe Funktion nutzt die "resize me"-Overlay.
+  und zwar ueber `key_drain` (`lib/input.sh`, seit 0.23.0) statt eines
+  rohen `read`: `key_drain` schickt die Bytes durch denselben
+  Zustandsautomaten wie das Spiel (siehe 4.3) und verwirft nur die
+  fertig erkannten Tasten, sodass eine Escape-Sequenz entweder ganz oder
+  gar nicht geschluckt wird - ein Roh-Read koennte ihre Haelfte
+  schlucken und den Rest als eigene Taste durchreichen. Dieselbe
+  Funktion nutzt die "resize me"-Overlay.
 
 ### 3.2 Quadrat-System (Gold/Silber)
 
@@ -241,7 +256,7 @@ Die fuer uns relevanten Merkmale des Originals:
   laesst Gold-/Silber-Bloecke vorher in normale Einzelbloecke zerfallen
   (Nutzerentscheidung: soll nicht zur Anwendung kommen).
 
-### 3.3 Weltwunder-Aufbau (umgesetzt, Version 0.8.0)
+### 3.3 Weltwunder-Aufbau (seit 0.8.0)
 
 - Feste Abfolge von sieben Weltwundern (`lib/wonders.sh`). Der Abgleich
   mit dem Original ergab (Recherche, Quellen nur teilweise erreichbar):
@@ -260,20 +275,8 @@ Die fuer uns relevanten Merkmale des Originals:
   Chinesische Mauer und Taj Mahal fuellen die zwei nicht verifizierbaren
   Plaetze. Die Kosten verdoppeln sich je Wunder (grob geometrisch wie im
   Original) und liegen seit 0.44.0 auch in dessen Groessenordnung
-  (1.270.000 gewichtete Reihen insgesamt).
-  **Kosten-Umstellung 0.45.0 (Nutzerentscheidung):** die urspruengliche
-  Reihe 100..6.400 (12.700 insgesamt) war bewusst auf
-  Einzelrechner-Spielzeit herunterskaliert und damit deutlich zu billig -
-  ein Wunder fiel in wenigen Runden. Jede Kostenstelle wurde mit 100
-  multipliziert; die Verdopplung je Wunder und die Wunder-Liste selbst
-  bleiben unveraendert, nur der Massstab wandert an den des Originals
-  (dort 2.500 bis 500.000 Zeilen je Wunder) heran, sodass ein Wunder
-  wieder ein Langfrist-Ziel ist. Ein vorhandener Spielstand behaelt
-  seinen Reihenzaehler (`save`, siehe 4.5), kauft damit aber weniger
-  Fortschritt: die Baustelle faellt auf ein frueheres Wunder und eine
-  fruehere Baustufe zurueck. Das ist Absicht und kein Datenverlust - der
-  Zaehler ist die einzige gespeicherte Groesse, Wunder und Baustufe
-  werden aus ihm abgeleitet (siehe 4.5).
+  (1.270.000 gewichtete Reihen insgesamt, im Original 2.500 bis 500.000
+  Zeilen je Wunder), sodass ein Wunder ein Langfrist-Ziel ist.
 - Jedes Wunder ist **eine** ASCII-Art-Datei (`assets/wonders/`, 12
   Zeilen, max. 44 Spalten, reines ASCII). Die Baustufen werden nicht als
   separate Dateien gepflegt, sondern durch **zeilenweises Aufdecken von
@@ -414,13 +417,11 @@ Der Hauptmenuepunkt **"Anleitung"** steht zwischen "Einstellungen" und
 der Spielblock). **Seit Version 0.33.0 (Nutzerwunsch)** blaettert man mit
 den **Pfeiltasten links/rechts** durch die Seiten (umlaufend: von der
 letzten geht es mit Pfeil rechts zurueck zur ersten und umgekehrt);
-Enter, Leertaste, `x` und `ESC` schliessen die Anleitung. Zuvor fuehrte
-jede beliebige Taste zur naechsten Seite, ohne Weg zurueck - die fuenf
-Bildschirme liefen als feste Folge einzelner `menu_message`-Aufrufe
-nacheinander durch. Damit auch rueckwaerts auf jede Seite gesprungen
-werden kann, baut `menu_help_body` (ein `case`-Switch je Seite, 0-basiert)
-den Inhalt der angeforderten Seite bei Bedarf neu, statt ihn wie vorher
-in fester Reihenfolge einmal durchzureichen:
+Enter, Leertaste, `x` und `ESC` schliessen die Anleitung. Damit auch
+rueckwaerts auf jede Seite gesprungen werden kann, baut `menu_help_body`
+(ein `case`-Switch je Seite, 0-basiert) den Inhalt der angeforderten
+Seite bei Bedarf neu, statt ihn in fester Reihenfolge einmal
+durchzureichen:
 
 1. Spielprinzip: Bausteine, volle Reihen als "Rows", der 63er-Beutel
    (seit 1.0.4, siehe 3.1),
@@ -561,143 +562,102 @@ dazu (seit 0.53.0, Nutzerwunsch):
   ueberall `PLAY_MS` (siehe 3.4), eine Pause laesst also kein Wasser
   herein.
 
-Entscheidungen zu Ultra (die drei in der Roadmap offen gelassenen
-Punkte, im Sinne der dortigen Empfehlung entschieden):
+**Entscheidungen, die fuer alle vier Modi gleich gelten.** Sie wurden
+mit Ultra getroffen (0.34.0) und von den drei spaeteren uebernommen -
+alles andere waere im selben Menue schwer zu erklaeren:
 
 - **Gemessen werden Rows, nicht Lines.** "Abgebaute Reihen" bezeichnet
   im Weltwunder- und Statistik-Kontext laengst die gewichtete Wertung
   (siehe 3.2, 3.3); ausserdem macht das die Gold-/Silber-Quadrate - die
   Kernmechanik des Spiels - zum schnellen Weg ins Ziel statt zu totem
-  Gewicht. Ein Rowhammer durch zwei Gold-Quadrate (85 Rows) ist damit
-  mehr als die halbe Strecke.
-- **Nur erfolgreiche Laeufe kommen in die Ultra-Bestenliste.** Ein
-  Versuch, der vorher im Game Over endet, hat keine vergleichbare Zeit;
-  ihn nach Rows einzusortieren hiesse, zwei Ordnungen in eine Liste zu
-  mischen. Reihen und Zaehler eines gescheiterten Versuchs zaehlen aber
-  wie bei jeder abgebrochenen Runde in Weltwunder-Fortschritt und
-  Statistik (siehe 3.3).
-- **HUD:** zwei zusaetzliche Zaehler in der linken Spalte, nur im
-  Ultra-Modus sichtbar (`render_pane_left`, Zeile 15/16): "Goal" (das
-  Ziel) und "Left" (noch fehlende Rows, bei Ueberschreitung auf 0
-  gekappt). Sie belegen zwei der acht freien Zeilen aus 3.4; im
-  Marathon-Modus bleiben alle acht frei.
-- **Rundenende-Kasten** (`render_status_box`): derselbe Kasten ueber dem
-  Spielfeld traegt jetzt drei Ausgaenge, alle mit denselben acht
-  Innenzeilen, damit die Rahmen stehen bleiben - "ULTRA CLEAR" mit Zeit
-  (`fmt_duration_ms`, MM:SS.mmm) und Ultra-Rang, ein gescheiterter
-  Ultra-Versuch mit dem erreichten Stand ("Rows 87/150", bewusst ohne
-  Rang) und das klassische Game Over der endlosen Runde mit dem
-  Highscore-Rang.
-- **Zeitmessung:** die Spielzeit der Runde (siehe 3.4) ist die Wertung,
-  deshalb wird sie im Zielmoment noch einmal nachgefuehrt
-  (`play_clock_tick`, dieselbe Funktion, die der Game-Loop je Tick
-  nutzt): ein Hard-Drop faellt zwischen zwei Ticks, und diese
-  Millisekunden gehoeren zum Lauf.
+  Gewicht. Ein Rowhammer durch zwei Gold-Quadrate (85 Rows) ist bei
+  Ultra mehr als die halbe Strecke und verlaengert eine Time-Attack-Runde
+  um 85 Sekunden.
+- **HUD: zwei zusaetzliche Zaehler** in der linken Spalte
+  (`render_pane_left`, Zeile 15/16), nur im jeweiligen Modus sichtbar.
+  Sie belegen zwei der acht freien Zeilen aus 3.4; die Modi laufen nie
+  gleichzeitig, deshalb teilen sie sich die Zeilen, statt weitere zu
+  belegen, und im Marathon bleiben alle acht frei. Was dort steht, sagt
+  die Tabelle unten.
+- **Rundenende-Kasten** (`render_status_box`): jeder Modus bringt seine
+  eigenen Ausgaenge mit, **alle mit denselben acht Innenzeilen**, damit
+  die Rahmen stehen bleiben. Der Kasten traegt damit acht Ausgaenge; die
+  Fallunterscheidung ist ein `case` ueber `GAME_MODE` mit der
+  `GOAL_REACHED`-Pruefung darin.
 - **`r` im Rundenende-Bild startet im selben Modus neu** (`game_reset`
   ohne Argument behaelt `GAME_MODE`).
+- **Reihen und Zaehler zaehlen immer**, auch wenn ein Lauf nicht in
+  seine Bestenliste kommt: Weltwunder-Fortschritt und Statistik nehmen
+  ihn wie jede abgebrochene Runde (siehe 3.3).
+- **Die Ziele sind justierbare Konstanten**, keine
+  Kommandozeilen-Schalter: sie gehoeren zum Spielgefuehl und werden nach
+  Playtesting nachgezogen (siehe TODO.md), nicht je Runde gewaehlt.
 
-Entscheidungen zu Sprint (0.39.0). Der Modus ist die Umkehrung von
-Ultra, deshalb sind die Ultra-Entscheidungen oben eins zu eins
-gespiegelt - alles andere waere im selben Menue schwer zu erklaeren:
+Die Abweichungen je Modus:
 
-- **Gewertet werden Rows, nicht Lines** - dieselbe Begruendung wie bei
-  Ultra (siehe oben): "abgebaute Reihen" heisst im ganzen Spiel die
-  gewichtete Wertung, und die Quadrate sollen auch hier der schnelle
-  Weg zu einem guten Ergebnis sein.
-- **Nur vollstaendige Laeufe kommen in die Sprint-Bestenliste.** Ein
-  Versuch, der nach einer Minute im Game Over endet, hat weniger Rows
-  aus einem Grund, der mit der Spielstaerke nichts zu tun hat; er neben
-  vollen Laeufen einzusortieren hiesse, zwei verschiedene Dinge zu
-  vergleichen. Reihen und Zaehler zaehlen wie bei jeder abgebrochenen
-  Runde in Weltwunder-Fortschritt und Statistik (siehe 3.3).
-- **HUD:** dieselben zwei Zeilen der linken Spalte wie bei Ultra
-  (`render_pane_left`, Zeile 15/16, siehe 3.4): "Goal" ist hier das
-  Zeitlimit (MM:SS) und "Left" die verbleibende Spielzeit, auf die
-  naechste ganze Sekunde aufgerundet - die Runde ist vorbei, wenn dort
-  00:00 steht, und Abrunden wuerde diese Anzeige die ganze letzte
-  Sekunde lang zeigen. Die Modi laufen nie gleichzeitig, deshalb teilen
-  sie sich die Zeilen, statt zwei weitere zu belegen.
-- **Rundenende-Kasten** (`render_status_box`): zwei weitere Ausgaenge
-  mit denselben acht Innenzeilen - "SPRINT END" mit den erreichten Rows
-  und dem Sprint-Rang, und fuer einen vorzeitig gescheiterten Versuch
-  das klassische Game Over mit der gespielten Zeit ("Time 01:23/03:00",
-  bewusst ohne Rang). Damit traegt der Kasten fuenf Ausgaenge; die
-  Fallunterscheidung ist deshalb ein `case` ueber `GAME_MODE` mit der
-  `GOAL_REACHED`-Pruefung darin.
-- **Zeitmessung:** die Zielpruefung sitzt im Game-Loop direkt hinter
-  `play_clock_tick` (`sprint_time_up` in `rowhammer.sh`) - die Uhr ist
-  hier das Ziel, so wie die Reihenwertung es bei Ultra ist, und dort
-  wird sie fortgeschrieben. Sie laeuft **vor** der Gravitation des
-  Ticks, damit auf abgelaufener Zeit kein Stein mehr faellt oder
-  festgesetzt wird; der noch fallende Stein wird nicht mehr gelockt,
-  seine Reihen zaehlen also nicht mehr.
+| | Ultra | Sprint | Time Attack | Hochwasser |
+| --- | --- | --- | --- | --- |
+| Ende | Rows-Ziel erreicht | Zeit abgelaufen | Uhr auf 0, oder Game Over | Game Over |
+| Ergebnis | die Spielzeit | die Rows | die Rows | die Rows |
+| HUD "Goal" | das Ziel | das Zeitlimit (MM:SS) | erspielte Gesamtzeit | "Flut": Flut-Abstand |
+| HUD "Left" | fehlende Rows | Restzeit | Restzeit | "Rest": Zeit bis zur naechsten Flut |
+| Gelistet wird | nur ein Lauf am Ziel | nur ein voller Lauf | jeder Lauf | jede Runde |
 
-Entscheidungen zu Time Attack (0.42.0). Der Modus liegt zwischen den
-beiden anderen - eine Uhr wie bei Sprint, aber eine, die von der
-Reihenwertung gespeist wird -, deshalb folgt er ihren Entscheidungen,
-wo sie passen, und weicht an genau einer Stelle begruendet ab:
+Vier Einzelheiten dazu:
 
-- **Gewertet werden Rows, nicht Lines** - dieselbe Begruendung wie bei
-  Ultra und Sprint, hier zusaetzlich zwingend: die Rows sind zugleich
-  die Waehrung, mit der Spielzeit gekauft wird. Ein Rowhammer durch
-  zwei Gold-Quadrate (85 Rows) verlaengert die Runde damit um 85
-  Sekunden.
-- **Der Highscore sind die Rows** (Nutzerfrage). Die zweite denkbare
-  Wertung - die ueberlebte Zeit - ist keine Alternative, sondern
-  dieselbe Rangfolge: ein Lauf, der an der Uhr endet, hat exakt
-  `TIME_ATTACK_START_MS` + Rows x `TIME_ATTACK_ROW_MS` gespielt, seine
-  Zeit ist also eine Funktion seiner Rows und sortiert die Liste
-  zwangslaeufig gleich. Den Ausschlag gibt, dass die Rows im ganzen
-  Spiel die Punktwaehrung sind (siehe 3.2) und auch fuer den vorzeitig
-  gescheiterten Lauf noch aussagekraeftig bleiben, wo die Gleichung
-  nicht mehr gilt. Die Zeit steht in der Liste trotzdem daneben - sie
-  ist genau die Spalte, an der ein solcher Lauf zu erkennen ist.
-- **Jeder Lauf kommt in die Time-Attack-Bestenliste** - die bewusste
-  Abweichung von Ultra und Sprint. Dort gibt es einen Zustand
-  "abgebrochen", der sich mit einem vollen Lauf nicht vergleichen
-  laesst (keine Zeit bzw. weniger Zeit zum Punkten). Time Attack kennt
-  diesen Zustand nicht: die Runde ist zu Ende, wenn sie zu Ende ist,
-  die Rows sind in beiden Faellen dieselbe Leistung, und wer vorzeitig
-  oben rausbaut, hat schlicht weniger davon - dieselbe Lage wie im
-  Marathon, wo eine Runde ebenfalls im Game Over endet und trotzdem
-  gewertet wird.
-- **HUD:** dieselben zwei Zeilen wie Ultra und Sprint
-  (`render_pane_left`, Zeile 15/16, siehe 3.4). "Goal" ist hier keine
-  Konstante, sondern die bisher erspielte Gesamtzeit
-  (`TIME_ATTACK_BUDGET_MS`, MM:SS) - so ist zu sehen, was ein Abbau in
-  Zeit wert war -, "Left" die Restzeit, aufgerundet wie bei Sprint. Der
-  Wert wird in `render_pane_left` neu berechnet statt aus dem Game-Loop
-  uebernommen: ein Abbau passiert nach dessen Aktualisierung, und
-  ausgerechnet der Frame, in dem der Spieler die Gutschrift sehen will,
-  zeigte sonst noch den alten Stand.
-- **Rundenende-Kasten** (`render_status_box`): zwei weitere Ausgaenge,
-  wieder mit denselben acht Innenzeilen - "TIME UP" bzw. "GAME OVER",
-  beide mit den erreichten Rows und dem Time-Attack-Rang. Anders als
-  bei Ultra und Sprint traegt **auch der Game-Over-Ausgang einen Rang**,
-  denn beide Laeufe werden gewertet; die Ueberschrift ist das, was sie
-  unterscheidet. Damit traegt der Kasten sieben Ausgaenge.
-- **Zeitmessung:** die Zielpruefung sitzt an derselben Stelle im
-  Game-Loop wie die von Sprint, direkt hinter `play_clock_tick` und vor
-  der Gravitation (`time_attack_time_up` in `rowhammer.sh`), aus
-  demselben Grund: auf abgelaufener Zeit soll kein Stein mehr fallen
-  oder festgesetzt werden.
-- **`r` im Rundenende-Bild startet im selben Modus neu**, wie bei den
-  anderen Modi (`game_reset` ohne Argument).
+- **"Left" wird aufgerundet**, wo es eine Zeit ist: die Runde ist
+  vorbei, wenn dort 00:00 steht, und Abrunden wuerde diese Anzeige die
+  ganze letzte Sekunde lang zeigen. "Left" in Rows wird umgekehrt bei
+  Ueberschreitung auf 0 gekappt.
+- **Warum ein gescheiterter Ultra- oder Sprint-Lauf nicht gelistet
+  wird:** Er hat keine vergleichbare Zeit bzw. weniger Rows aus einem
+  Grund, der mit der Spielstaerke nichts zu tun hat; ihn neben volle
+  Laeufe zu sortieren hiesse, zwei verschiedene Dinge zu vergleichen.
+  **Time Attack und Hochwasser kennen diesen Zustand nicht:** die Runde
+  ist zu Ende, wenn sie zu Ende ist, die Rows sind in jedem Fall
+  dieselbe Leistung, und wer vorzeitig oben rausbaut, hat schlicht
+  weniger davon - dieselbe Lage wie im Marathon. Deshalb traegt bei
+  ihnen **auch der Game-Over-Ausgang einen Rang**; die Ueberschrift des
+  Kastens ist das, was ihn vom regulaeren Ende unterscheidet.
+- **Der Time-Attack-Highscore sind die Rows** (Nutzerfrage). Die zweite
+  denkbare Wertung - die ueberlebte Zeit - ist keine Alternative,
+  sondern dieselbe Rangfolge: ein Lauf, der an der Uhr endet, hat exakt
+  `TIME_ATTACK_START_MS` + Rows x `TIME_ATTACK_ROW_MS` gespielt. Den
+  Ausschlag gibt, dass die Rows im ganzen Spiel die Punktwaehrung sind
+  (siehe 3.2) und auch fuer den vorzeitig gescheiterten Lauf
+  aussagekraeftig bleiben, wo die Gleichung nicht mehr gilt.
+- **Das Time-Attack-"Goal" wird in `render_pane_left` neu berechnet**
+  statt aus dem Game-Loop uebernommen: ein Abbau passiert nach dessen
+  Aktualisierung, und ausgerechnet der Frame, in dem der Spieler die
+  Gutschrift sehen will, zeigte sonst noch den alten Stand.
 
-Entscheidungen zu Hochwasser (0.49.0). Die Uhr dieses Modus beendet die
+**Zeitmessung.** Bei Ultra ist die Spielzeit die Wertung, deshalb wird
+sie im Zielmoment noch einmal nachgefuehrt (`play_clock_tick`, dieselbe
+Funktion, die der Game-Loop je Tick nutzt): ein Hard-Drop faellt
+zwischen zwei Ticks, und diese Millisekunden gehoeren zum Lauf. Bei
+Sprint und Time Attack ist umgekehrt die Uhr das Ziel; ihre Pruefung
+(`sprint_time_up`, `time_attack_time_up` in `rowhammer.sh`) sitzt direkt
+hinter `play_clock_tick` und **vor** der Gravitation des Ticks, damit
+auf abgelaufener Zeit kein Stein mehr faellt oder festgesetzt wird - der
+noch fallende Stein wird nicht mehr gelockt, seine Reihen zaehlen also
+nicht mehr. Das Zeitguthaben von Time Attack wird dabei **nicht** in
+einem eigenen Zaehler gefuehrt, sondern bei Bedarf aus `ROW_CREDIT`
+abgeleitet (`time_attack_budget`, siehe oben).
+
+**Entscheidungen zum Hochwasser-Modus** (0.49.0). Seine Uhr beendet die
 Runde nicht, sie fuellt das Feld; wo die drei Zeitmodi eine Sonderregel
 haben, folgt er deshalb dem Marathon:
 
 - **Die Flutreihe ist eine Reihe eigener Art** (`GARBAGE_CELL`, `x`,
   in `lib/board.sh`), kein Baustein: sie traegt die Instanz-ID 0 und
   kann damit nie Teil eines Quadrats werden (`square_check_at` weist
-  ID 0 ab). Das ist dieselbe Festlegung, die die Mehrspieler-
-  Spezifikation fuer ihre Garbage-Reihen trifft (siehe 5.7) - der
-  Hochwasser-Modus nimmt sie vorweg, statt eine zweite zu erfinden.
-  Angezeigt wird sie grau mit einem eigenen Glyph (`::`,
-  `GARBAGE_GLYPH` in `lib/render.sh`), **auch im Farbmodus**: im Thema
-  `mono` haben die Steine dasselbe Grau, und eine Reihe, die niemand
-  gelegt hat, soll in jedem Fall als solche zu erkennen sein.
+  ID 0 ab). Das ist dieselbe Festlegung, die der Mehrspieler fuer seine
+  Garbage-Reihen trifft (siehe 5.7) - der Hochwasser-Modus nimmt sie
+  vorweg, statt eine zweite zu erfinden. Angezeigt wird sie grau mit
+  einem eigenen Glyph (`::`, `GARBAGE_GLYPH` in `lib/render.sh`), **auch
+  im Farbmodus**: im Thema `mono` haben die Steine dasselbe Grau, und
+  eine Reihe, die niemand gelegt hat, soll in jedem Fall als solche zu
+  erkennen sein.
 - **Das Hochschieben laesst die Steine heil.** `board_flood_row`
   verschiebt `BOARD`, `BOARD_ID` und `BOARD_SQ` zeilenweise gemeinsam;
   Instanzen behalten ihre ID und ihre Gold-/Silber-Markierung und
@@ -707,13 +667,9 @@ haben, folgt er deshalb dem Marathon:
   folgt ihr keine Abbaupruefung.
 - **Steht der Stapel nach dem Anstieg ueber dem Feld, ist die Runde
   vorbei.** Das ist das Game Over dieses Modus, so wie der blockierte
-  Spawn das des Marathons ist. Seit 1.0.2 entscheidet das
-  `board_top_out` (die verdeckten Zeilen oberhalb des Feldes, siehe
-  3.1) - dieselbe Regel, an der auch ein festgesetzter Stein gemessen
-  wird, und eine Zeile frueher als bis 0.55.0, wo `board_flood_row` das
-  Schieben erst verweigerte, wenn eine Zelle vom Brett gefallen waere.
-  Jene Pruefung meldet den Fall weiterhin, ohne etwas zu aendern, und
-  bleibt als Eigensicherung der Funktion bestehen.
+  Spawn das des Marathons ist; entschieden wird es von `board_top_out`
+  (siehe 3.1) - dieselbe Regel, an der auch ein festgesetzter Stein
+  gemessen wird.
 - **Der fallende Stein bleibt, wo er ist** - der Stapel steigt unter
   ihm. Nur wenn er danach im gestiegenen Stapel steckt, rueckt er eine
   Zeile mit hoch: er lag auf dem, was sich bewegt hat, und sitzt damit
@@ -733,30 +689,6 @@ haben, folgt er deshalb dem Marathon:
   weiterfaellt, das ist der Modus. Beendet er die Runde, faengt das
   `GAME_OVER`-Zweiglein vor der Kette das ab: auf einer beendeten Runde
   faellt und lockt nichts mehr.
-- **Jede Runde kommt in die Hochwasser-Bestenliste**, wie bei Time
-  Attack und aus demselben Grund: es gibt keinen Zustand
-  "abgebrochen", der sich nicht vergleichen liesse - jede Runde dieses
-  Modus endet im Game Over, das ist der Modus. Eigene Datei
-  `${DATA_DIR}/highscore-flood` (siehe 4.5), Rangordnung nach Rows wie
-  im Marathon, denn am Wert einer Runde aendert die Flut nichts.
-- **HUD:** dieselben zwei Zeilen wie die drei Zeitmodi
-  (`render_pane_left`, Zeile 15/16, siehe 3.4), aber mit eigenem Label:
-  "Flut" ist der Abstand zweier Flutreihen (`FLOOD_INTERVAL_MS`,
-  MM:SS), "Rest" die Zeit bis zur naechsten, aufgerundet wie bei
-  Sprint. Kein "Ziel", weil es hier keines gibt.
-- **Rundenende-Kasten** (`render_status_box`): ein weiterer Ausgang mit
-  denselben acht Innenzeilen - "GAME OVER" mit den erreichten Rows und
-  dem Hochwasser-Rang; damit traegt der Kasten acht Ausgaenge. Der Rang
-  steht hier neben dem Game Over, weil jede Runde gewertet wird, und
-  die Rows nehmen die Zeile, die einem gescheiterten Zeitmodus-Lauf
-  seinen Stand zeigt: sie sind die Geschichte einer Runde, die kuerzer
-  ist als eine Marathon-Runde.
-- **`r` im Rundenende-Bild startet im selben Modus neu**, wie ueberall
-  (`game_reset` ohne Argument).
-- **Der Abstand ist eine justierbare Konstante**, kein
-  Kommandozeilen-Schalter: wie `ULTRA_TARGET_ROWS` und `SPRINT_TIME_MS`
-  gehoert er zum Spielgefuehl und wird nach Playtesting nachgezogen
-  (siehe Abschnitt 8), nicht je Runde gewaehlt.
 
 ### 3.7 Namensabfrage am Rundenende (seit 0.45.0)
 
@@ -783,15 +715,9 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   Runde,
   die nirgends abgelegt wird, hat keinen Namen zu erfragen; alles
   andere, was sie noch speist - Weltwunder-Fortschritt und Statistik -,
-  ist ohnehin namenlos.
-  **Aenderung 1.0.1 (Nutzerwunsch):** bis 0.55.0 entschied die
-  Vorschau nur, *was* auf dem Bildschirm stand ("Platz 3 von 10" bzw.
-  "kein Platz (Top 10)"), nicht *ob* es ihn gab - eine Runde ohne Platz
-  wurde nach einem Namen gefragt, der nirgends hinging. Sie behaelt
-  jetzt den Spielernamen aus den Einstellungen und geht direkt zum
-  Rundenende-Kasten, der dieselben Zahlen ohnehin zeigt. Damit hat die
-  Meldung "kein Platz" keinen Fall mehr und ist aus beiden
-  Sprachdateien entfallen.
+  ist ohnehin namenlos. Eine Runde, die die Top 10 verfehlt, behaelt den
+  Spielernamen aus den Einstellungen und geht direkt zum
+  Rundenende-Kasten, der dieselben Zahlen ohnehin zeigt.
 - **Der eingegebene Name gilt fuer diese eine Runde**, die Einstellung
   bleibt unveraendert (und damit die Vorgabe der naechsten Runde). Das
   ist genau der Fall, fuer den die Abfrage da ist - jemand anderes
@@ -831,26 +757,19 @@ Zeichen ersetzt sie vollstaendig, Enter uebernimmt sie unveraendert.
   dessen Einfuegeregel an, und zwischen beiden aendert nichts die
   Liste. Seit 1.0.1 ist dieselbe Vorschau zugleich die Bedingung fuer
   die Abfrage (siehe oben), sodass der Bildschirm immer einen Platz
-  nennt: eine **verfehlte** Liste wurde bis 0.55.0 mit "kein Platz
-  (Top 10)" gemeldet, wird jetzt aber gar nicht mehr gefragt. Die
-  Vorschau laeuft damit zweimal je Runde - einmal in
+  nennt. Sie laeuft damit zweimal je Runde - einmal in
   `round_is_ranked`, einmal in `prompt_round_name` -, was eine
   Abfrage in einer bereits geladenen Liste ist und beide Stellen
   fuer sich lesbar laesst.
 - **Die Zeit steht auf die Millisekunde genau da (seit 1.0.3,
   Nutzerwunsch):** `fmt_duration_ms` (MM:SS.mmm) wie in der
-  Ultra-Bestenliste, und zwar **in jedem Modus**, nicht nur im Ultra.
-  Bis 1.0.2 zeigte der Bildschirm `fmt_duration` (MM:SS) - und schnitt
-  damit ausgerechnet die Stellen ab, die im Ultra ueber den Platz
-  entscheiden, den derselbe Bildschirm eine Zeile tiefer nennt (zwei
-  Versuche auf dasselbe Ziel landen oft in derselben Sekunde, deshalb
-  speichert die Ultra-Liste Millisekunden, siehe 4.5). Fuer alle Modi
-  gleich, weil ein Bildschirm eine Zahl nicht in zwei Formen zeigen
-  soll, je nachdem welcher Modus lief; gelesen wird `PLAY_MS`, also
-  genau der Wert, der gleich in den Eintrag geht. Der Rundenende-Kasten
-  bleibt davon unberuehrt: dort ist die Zeit im Ultra ohnehin schon auf
-  die Millisekunde genau (siehe 3.6), und in den anderen Modi ist sie
-  nicht die Wertung, sondern eine Randnotiz.
+  Ultra-Bestenliste, und zwar **in jedem Modus**, nicht nur im Ultra -
+  ein Bildschirm soll eine Zahl nicht in zwei Formen zeigen, je nachdem
+  welcher Modus lief. Gelesen wird `PLAY_MS`, also genau der Wert, der
+  gleich in den Eintrag geht. Der Rundenende-Kasten bleibt davon
+  unberuehrt: dort ist die Zeit im Ultra ohnehin schon auf die
+  Millisekunde genau (siehe 3.6), und in den anderen Modi ist sie nicht
+  die Wertung, sondern eine Randnotiz.
 - **Darstellung:** ein regulaerer, zentrierter Menue-Frame
   (`render_menu_frame`, siehe 4.3) mit Modus, Rows, Lines, Level, Zeit
   und Listenplatz der Runde ueber der Eingabezeile. Die Markierung ist invertierter
@@ -887,8 +806,8 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
   ein Byte je Stein und ein knapp 300 Byte grosser Kopf); eine
   Zehn-Minuten-Runde liegt bei ~20 kB. Ein Frame-Mitschnitt kostet je
   Bildschirmaenderung den halben Bildschirm. Damit ist auch die in der
-  Roadmap offen gelassene Frage nach einer Obergrenze entschieden: eine
-  reine **Stueckzahl** (`DEMO_MAX`, 10 wie die Bestenlisten) reicht, ein
+  Frage nach einer Obergrenze beantwortet: eine reine **Stueckzahl**
+  (`DEMO_MAX`, 10 wie die Bestenlisten) reicht, ein
   Gesamtgroessen-Budget waere Aufwand ohne Gegenwert. Die Grenze gilt
   seit 0.46.0 nur fuer die **gewoehnlichen** Aufnahmen; eine, die noch
   einen Highscore-Eintrag haelt, wird nie geloescht (siehe unten).
@@ -902,15 +821,14 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
   und zwingend im Full-Modus aufgenommen werden muessen, weil ein
   Zeilen-Diff nur vor dem Bildschirm Sinn ergibt, den er vorgefunden hat.
 - **Robustheit.** Die Steinfolge steht als Buchstabenkette in der Datei,
-  **nicht als RNG-Seed** - obwohl die Roadmap "Eingabe-Mitschnitt plus
-  Seed" skizziert hatte. `RANDOM` wird einmal je Sitzung gesetzt, nicht
+  **nicht als RNG-Seed**, obwohl das kuerzer waere: `RANDOM` wird einmal
+  je Sitzung gesetzt, nicht
   je Runde (eine zweite Runde setzt den Strom fort), und der Generator
   hinter `RANDOM` hat sich zwischen Bash-Versionen geaendert: ein Seed
   wuerde auf einer anderen Bash eine andere Runde abspielen. Ein Byte je
   Stein macht die Frage gegenstandslos.
 
-**Bedienung der Wiedergabe** (die dritte in der Roadmap offen gelassene
-Frage - Pause und Vorspulen: beides, plus Zeitlupe):
+**Bedienung der Wiedergabe** (Pause und Vorspulen, plus Zeitlupe):
 
 - Pausetaste (`p`) oder Leertaste haelt an und laeuft weiter; angezeigt
   wird das ueber denselben "PAUSED"-Kasten wie im Spiel.
@@ -1014,7 +932,7 @@ Entscheidungen dahinter:
 
 ### 4.1 Rahmenbedingungen
 
-- **Bash >= 4.3** (seit 1.3.0, Schritt 9.2): assoziative Arrays gaeben
+- **Bash >= 4.3** (seit 1.3.0): assoziative Arrays gaeben
   sich mit 4.0 zufrieden, die **Namerefs** (`declare -n`) von
   `lib/state.sh` nicht - sie halten fuenf Rundenzustaende gleichzeitig
   und sind die Voraussetzung der Mehrspieler-Wiedergabe (siehe 5.20).
@@ -1116,85 +1034,85 @@ rowhammer/
   docs/
     release-process.md # Ablauf eines Releases und was die Workflows tun
     input-analysis.md  # Analyse der Eingabeschicht (Nachfassen Issue #7)
-  CLAUDE.md            # Konzept, Architektur, offene Roadmap
-  HISTORY.md           # Archiv der erledigten Roadmap-Punkte
-  README.md
+  CLAUDE.md            # technisches Konzept und Konventionen
+  TODO.md              # offene Punkte (Roadmap, Entscheidungen)
+  HISTORY.md           # Archiv der erledigten Punkte je Version
+  README.md            # Anleitung fuer Spielerinnen und Spieler
+  MISTRAL.md           # externe Review (Juli 2026), wird nicht gepflegt
 ```
 
-Stand (Version 1.1.0): alle Module aus dem Baum oben existieren; die
-vier Mehrspieler-Module (`net`, `proto`, `hub`, `mp`) sind mit 1.1.0
-dazugekommen (siehe Abschnitt 5)
-(`rowhammer.sh`, `lib/*.sh` inklusive `wonders.sh`, `save.sh`,
-`stats.sh`, `demo.sh` und `i18n.sh` mit `lib/lang/` sowie
-`assets/wonders/` mit einer Art-Datei je Wunder). Die Anwendung
-startet in einem Menue (Einzelspieler / Mehrspieler /
-Highscores / Weltwunder / Statistik / Demos / Einstellungen /
-Anleitung / Beenden;
-solange eine pausierte Runde wartet, zusaetzlich "Fortsetzen" an
-erster Stelle, ebenso im Einzelspieler-Untermenue). Das
-Einzelspieler-Untermenue waehlt seit 0.34.0 den Spielmodus
-("Marathon", "Ultra", seit 0.39.0 "Sprint", seit 0.42.0
-"Time Attack" und seit 0.49.0 "Hochwasser", siehe 3.6; der
-endlose Modus hiess bis
-0.34.1 "Normales Spiel"), und seit 0.38.0 waehlt der Menuepunkt
-"Highscores" ebenso den Modus der anzuzeigenden Bestenliste
-(`menu_highscores`, seit 0.49.0 mit fuenf Listen, siehe 4.5). Seit
-0.47.0 waehlt auch der Menuepunkt "Statistik" zuerst die Sicht
-(`menu_stats`: Gesamt oder einer der Modi, siehe 4.5). Die
-Modus-Eintraege dieser drei Auswahlen baut seit 0.48.0 ein gemeinsamer
-Helfer (`menu_mode_entries`); seit 1.1.0 haengt er auf Wunsch einen
-sechsten Modus an - den Mehrspieler, den nur die beiden
-Rueckblick-Auswahlen (Highscores, Statistik) fuehren, weil er im
-Einzelspieler-Menue nicht gestartet wird; seit 0.53.0 nennt jeder Eintrag hinter dem
-Namen in einer eigenen, ausgerichteten Spalte, wogegen der Modus laeuft
-(siehe 3.6). Die
-Menue-Beschriftung
-ist seit 0.48.0 nicht mehr fest, sondern uebersetzt (siehe 4.11):
-Deutsch und Englisch stehen zur Wahl, Code, Kommentare und
+Alle Module aus dem Baum oben existieren; die vier
+Mehrspieler-Module (`net`, `proto`, `hub`, `mp`) kamen mit 1.1.0 dazu
+(siehe Abschnitt 5), `state` mit 1.3.0 (siehe 5.20).
+
+**Menuefuehrung.** Die Anwendung startet in einem Menue (Einzelspieler /
+Mehrspieler / Highscores / Weltwunder / Statistik / Demos /
+Einstellungen / Anleitung / Beenden; solange eine pausierte Runde
+wartet, zusaetzlich "Fortsetzen" an erster Stelle, ebenso im
+Einzelspieler-Untermenue). Drei Untermenues waehlen zuerst einen
+Modus: das Einzelspieler-Menue den Modus der Runde (Marathon, Ultra,
+Sprint, Time Attack, Hochwasser, siehe 3.6), "Highscores" die
+anzuzeigende Bestenliste (`menu_highscores`, fuenf Listen, siehe 4.5)
+und "Statistik" die Sicht (`menu_stats`: Gesamt oder ein Modus, siehe
+4.5). Ihre Eintraege baut ein gemeinsamer Helfer
+(`menu_mode_entries`), der auf Wunsch einen sechsten Modus anhaengt -
+den Mehrspieler, den nur die beiden Rueckblick-Auswahlen fuehren, weil
+er im Einzelspieler-Menue nicht gestartet wird; jeder Eintrag nennt
+hinter dem Namen in einer eigenen, ausgerichteten Spalte, wogegen der
+Modus laeuft (siehe 3.6). Die Beschriftungen sind uebersetzt (siehe
+4.11): Deutsch und Englisch stehen zur Wahl, Code, Kommentare und
 Diagnosemeldungen nach STDERR bleiben Englisch.
-Das Spielfeld haelt je Zelle drei parallele Arrays (Sorte `BOARD`,
-Instanz-ID `BOARD_ID`, Quadrat-Status `BOARD_SQ`); der HUD-Zaehler
-"Rows" ist die gewichtete Reihenwertung (1/5/10), die den
-Weltwunder-Fortschritt speist und seit 0.16.0 zugleich der Score der
-Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und
-treibt das Level. Seit 0.45.0 fragt jede Runde, die in eine
-Bestenliste kommt, an ihrem Ende nach dem Namen fuer den Eintrag
-(vormarkierte Vorgabe aus den Einstellungen, siehe 3.7).
-CLI-Optionen bisher: `--seed N` (`ROWHAMMER_SEED`)
-fuer reproduzierbare Teilfolgen, `--name NAME` (`ROWHAMMER_PLAYER_NAME`),
-`--lang de|en|auto` (`ROWHAMMER_LANG`, Standard `auto`, seit 0.48.0;
-auch im Einstellungsmenue waehlbar und in der Config gespeichert,
-siehe 4.11),
-`--data-dir DIR` (`ROWHAMMER_DATA_DIR`) fuer das Datenverzeichnis,
-`--no-color` (`ROWHAMMER_NO_COLOR`; seit 0.28.0 wird zusaetzlich die
-De-facto-Standardvariable `NO_COLOR` [https://no-color.org/] beachtet:
+
+**Datenmodell und Zaehler.** Das Spielfeld haelt je Zelle drei parallele
+Arrays (Sorte `BOARD`, Instanz-ID `BOARD_ID`, Quadrat-Status
+`BOARD_SQ`); der HUD-Zaehler "Rows" ist die gewichtete Reihenwertung
+(1/5/10), die den Weltwunder-Fortschritt speist und zugleich der Score
+der Runde ist (siehe 3.2), "Lines" zaehlt physische Reihen und treibt
+das Level. Jede Runde, die in eine Bestenliste kommt, fragt an ihrem
+Ende nach dem Namen fuer den Eintrag (vormarkierte Vorgabe aus den
+Einstellungen, siehe 3.7).
+**CLI-Optionen.** Jede ist zusaetzlich per Umgebungsvariable setzbar
+(Konvention aus Abschnitt 6). Die Spalte **Config** sagt, ob der Wert
+in `rowhammer.conf` gespeichert wird - und damit, welche Praezedenz
+gilt: Standard < **Config** < Env < CLI bei den vier gespeicherten
+Werten, Standard < Env < CLI bei allen uebrigen. Der Unterschied ist
+kein Zufall: gespeichert wird, was Geschmack ist (Name, Sprache,
+Farbschema, Demo-Aufzeichnung), nicht gespeichert, was eine Eigenschaft
+des Terminals oder des einzelnen Aufrufs ist (Farb- und Render-Modus,
+Reset, Debug, Mehrspieler).
+
+| Option | Umgebung | Config | Bedeutung |
+| --- | --- | --- | --- |
+| `--seed N` | `ROWHAMMER_SEED` | - | reproduzierbare Teilfolge |
+| `--name NAME` | `ROWHAMMER_PLAYER_NAME` | ja | Spielername (Vorgabe der Namensabfrage, 3.7) |
+| `--lang de\|en\|auto` | `ROWHAMMER_LANG` | ja | Sprache, Standard `auto` (4.11) |
+| `--data-dir DIR` | `ROWHAMMER_DATA_DIR` | - | Datenverzeichnis (4.5) |
+| `--no-color` | `ROWHAMMER_NO_COLOR` | - | Farben aus (siehe unten) |
+| `--color-mode auto\|basic\|extended` | `ROWHAMMER_COLOR_MODE` | - | Farbpalette, Standard `auto`; `--no-color` gewinnt (4.1) |
+| `--color-theme guideline\|classic\|mono\|colorblind` | `ROWHAMMER_COLOR_THEME` | ja | Farbschema, Standard `guideline` (4.1) |
+| `--render-mode partial\|full` | `ROWHAMMER_RENDER_MODE` | - | Bildaufbau, Standard `partial` (4.3) |
+| `--demo-record on\|off` | `ROWHAMMER_DEMO_RECORD` | ja | Demo-Aufzeichnung, Standard `on` (3.8/4.10) |
+| `--reset config\|stats\|highscore\|save\|demo\|all` | `ROWHAMMER_RESET` | - | Daten zuruecksetzen und beenden (4.8) |
+| `--force` | `ROWHAMMER_FORCE` | - | Sicherheitsabfragen mit "ja" beantworten (4.8) |
+| `--debug` | `ROWHAMMER_DEBUG` | - | Session-Trace (4.6) |
+| `--debug-dir DIR` | `ROWHAMMER_DEBUG_DIR` | - | Zielverzeichnis der Debug-Logs |
+| `-h`, `--help` | - | - | Hilfe in der gewaehlten Sprache |
+
+Dazu die Mehrspieler-Optionen `--mp-transport`, `--mp-port`,
+`--mp-dir`, `--mp-max`, `--mp-session`, `--mp-view`, `--mp-target`,
+`--mp-mode`, `--mp-garbage`, `--mp-host`, `--mp-join` und `--mp-bot`
+(je mit `ROWHAMMER_MP_*`-Variable, keine Config-Werte, Tabelle in 5.10)
+sowie die drei internen Prozessmodi `--mp-hub`, `--mp-bridge` und
+`--mp-discover` (5.3). Die Tastenbelegung ist zusaetzlich per
+`ROWHAMMER_KEY_*` uebersteuerbar.
+
+**`NO_COLOR`:** Neben `--no-color`/`ROWHAMMER_NO_COLOR` wird die
+De-facto-Standardvariable [`NO_COLOR`](https://no-color.org/) beachtet -
 ist sie gesetzt und nicht leer, sind Farben standardmaessig aus.
-Praezedenz der Abschalt-Schalter: Standard-`NO_COLOR` < projekteigenes
-`ROWHAMMER_NO_COLOR` < `--no-color` auf der Kommandozeile, sodass ein
-global exportiertes `NO_COLOR` per `ROWHAMMER_NO_COLOR=0` fuer rowhammer
-wieder ueberschrieben werden kann), `--color-mode auto|basic|extended`
-(`ROWHAMMER_COLOR_MODE`, Standard `auto`; `--no-color` gewinnt),
-`--color-theme guideline|classic|mono|colorblind`
-(`ROWHAMMER_COLOR_THEME`, Standard `guideline`; auch im
-Einstellungsmenue waehlbar und in der Config gespeichert),
-`--render-mode partial|full` (`ROWHAMMER_RENDER_MODE`, Standard
-`partial`, seit 0.41.0, siehe 4.3),
-`--demo-record on|off` (`ROWHAMMER_DEMO_RECORD`, Standard `on`, seit
-0.46.0; auch im Einstellungsmenue und in der Config, siehe 3.8/4.10),
-die Mehrspieler-Optionen `--mp-transport lan|unix`, `--mp-port N`,
-`--mp-dir DIR`, `--mp-max N`, `--mp-session NAME`,
-`--mp-view auto|full|compact|score`, `--mp-target random|all|even`,
-`--mp-mode survival|sprint|ultra`, `--mp-garbage on|off`, `--mp-host`,
-`--mp-join HOST[:PORT]` und `--mp-bot` (je mit
-`ROWHAMMER_MP_*`-Variable, seit 1.1.0, siehe 5.10) sowie die drei
-internen Prozessmodi `--mp-hub`, `--mp-bridge` und `--mp-discover`,
-`--reset config|stats|highscore|save|demo|all` (`ROWHAMMER_RESET`, seit
-0.35.0, das Ziel `demo` seit 0.46.0, siehe 4.8), `--force` (`ROWHAMMER_FORCE`, seit 0.36.0:
-beantwortet Sicherheitsabfragen automatisch mit "ja", derzeit die des
-Resets; frei mit anderen Optionen kombinierbar),
-`--debug` (`ROWHAMMER_DEBUG`),
-`--debug-dir DIR` (`ROWHAMMER_DEBUG_DIR`), `-h/--help`. Tastenbelegung
-zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
+Praezedenz der drei Abschalter: Standard-`NO_COLOR` < projekteigenes
+`ROWHAMMER_NO_COLOR` < `--no-color`, sodass ein global exportiertes
+`NO_COLOR` per `ROWHAMMER_NO_COLOR=0` fuer rowhammer wieder
+ueberschrieben werden kann.
 
 ### 4.3 Game-Loop, Input, Rendering
 
@@ -1206,23 +1124,14 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
 - **Input:** nicht-blockierend ueber `read -rsn1 -t <timeout>`;
   Escape-Sequenzen der Pfeiltasten sauber einlesen. Terminal-Modus mit `stty`
   setzen und ueber einen `trap`-Handler (EXIT/INT/TERM) garantiert
-  wiederherstellen. **Der Rohmodus gilt seit 0.28.1 fuer die ganze
-  Sitzung** (`term_input_raw` in `lib/input.sh`, aufgerufen aus
-  `term_setup`: `stty -echo -icanon min 1 time 0`, Issue #33). Vorher
-  war ueberhaupt kein Modus gesetzt; das Spiel lebte von dem Modus, den
-  `read -rsn1` nur fuer die Dauer eines einzelnen Reads einstellt und
-  danach zuruecknimmt. Zwischen zwei Reads - beim Bauen und Schreiben
-  eines Frames, waehrend der Blink-Animation und auf den Pause- und
-  Game-Over-Bildschirmen - echote das Terminal darum jeden Tastendruck
-  an die Cursorposition, also hinter die zuletzt geschriebene Zeile.
-  Seit dem inkrementellen Rendering (0.22.0) wird eine unveraenderte
-  Zeile nicht mehr neu geschrieben, sodass das echote `^[[C` stehen
-  blieb (frueher hatte der naechste Voll-Frame es uebermalt). **Seit
-  0.45.0 gilt der Rohmodus ausnahmslos:** die einzige Ausnahme war die
-  Namensabfrage, die per `term_input_line` in den kanonischen Modus mit
-  Echo zurueckschaltete; mit dem gemeinsamen Zeileneditor `menu_text_input`
-  (siehe 3.7) zeichnet das Spiel die getippte Zeile selbst, `term_input_line`
-  ist ersatzlos entfallen.
+  wiederherstellen. **Der Rohmodus gilt fuer die ganze Sitzung**
+  (`term_input_raw` in `lib/input.sh`, aufgerufen aus `term_setup`:
+  `stty -echo -icanon min 1 time 0`, seit 0.28.1, Issue #33) und seit
+  0.45.0 ausnahmslos - auch die Namensabfrage zeichnet ihre Zeile
+  selbst (`menu_text_input`, siehe 3.7). Ohne ihn echote das Terminal
+  zwischen zwei Reads jeden Tastendruck an die Cursorposition, und weil
+  der Diff-Renderer eine unveraenderte Zeile nicht neu schreibt, blieb
+  ein echotes `^[[C` dort stehen.
   Der Editor liest ueber denselben `read_key`, nur im **Textmodus**
   (`KEY_TEXT`, `lib/input.sh`): eine gesetzte Flagge aendert allein die
   Behandlung einfacher Bytes in `key_plain` - das Zeichen wird so
@@ -1241,15 +1150,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Zustand in Globals liegt und damit ueber `read_key`-Aufrufe und
   Spiel-Ticks hinweg erhalten bleibt: eine vom Terminal in Stuecken
   zugestellte Sequenz (SSH, tmux/screen, Last) wird unabhaengig von der
-  Luecke zwischen ihren Bytes als eine Sequenz zusammengesetzt. Bis
-  0.20.0 musste die Entscheidung innerhalb eines Aufrufs fallen, und
-  spaet eintreffende Bytes wurden als eigene Tastendruecke angewandt
-  (der Schwanz `C` einer Rechts-Pfeiltaste wurde zur Hold-Taste `c`);
-  das Hochsetzen des Fortsetzungs-Timeouts auf 50 ms in 0.16.1 hatte
-  das nur unwahrscheinlicher gemacht, ab rund 45 ms Byte-Abstand riss
-  eine Pfeiltaste weiterhin auseinander. Derselbe Automat konsumiert
-  die Sequenzklassen, die zuvor ihre Nutzlast als Tastendruecke
-  durchreichten: X10-Mausmeldungen (drei Rohbytes nach `ESC [ M`),
+  Luecke zwischen ihren Bytes als eine Sequenz zusammengesetzt - ohne
+  ihn wuerde ein spaet eintreffendes Byte zur eigenen Taste (der
+  Schwanz `C` einer Rechts-Pfeiltaste zur Hold-Taste `c`). Derselbe
+  Automat konsumiert die Sequenzklassen, die ihre Nutzlast sonst als
+  Tastendruecke durchreichen wuerden: X10-Mausmeldungen (drei Rohbytes
+  nach `ESC [ M`),
   OSC-/DCS-Terminalantworten, 8-Bit-CSI (`0x9b`), ueberlange
   CSI-Sequenzen und Bracketed Paste (in `term_setup` eingeschaltet,
   Mausmeldungen werden dort zugleich abgeschaltet). Bytes ausserhalb
@@ -1308,10 +1214,10 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Umgesetzt in `render_flush`: das Flag entscheidet allein darueber, ob
   alle Zeilen geschrieben werden; **ob der Bildschirm geloescht wird,
   haengt weiterhin allein an `RENDER_FULL`** (Menue, Resize,
-  Rundenstart). Der kuerzere Weg, den die Roadmap skizziert hatte -
-  `RENDER_FULL` dauerhaft auf 1 halten - haette mit jedem Frame ein
-  `\e[2J` geschickt und den Rueckfallmodus flackern lassen, also genau
-  das Gegenteil dessen bewirkt, wozu er da ist.
+  Rundenstart). Beides zusammenzulegen - `RENDER_FULL` dauerhaft auf 1
+  halten - haette mit jedem Frame ein `\e[2J` geschickt und den
+  Rueckfallmodus flackern lassen, also genau das Gegenteil dessen
+  bewirkt, wozu er da ist.
   Cursor verstecken, alternativen Screen-Buffer nutzen, und im
   Alternate-Screen ist der **Auto-Wrap abgeschaltet** (`\e[?7l`): bei
   exakt 48x22 fuellt das Layout die letzte Bildschirmzelle, was mit
@@ -1414,23 +1320,12 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   seine Demo nicht weggeraeumt (siehe 3.8 und 4.10). Alle vier Listen
   tragen ihn als **letztes** Feld, sodass `highscore_hash_set` sie mit
   einer einzigen Expansion einsammeln kann.
-  Seit 0.29.0 (Nutzerentscheidung, bewusste Ausnahme von der
-  Arbeitsregel "keine Abwaertskompatibilitaet"): eine Zeile muss nicht
-  mehr alle elf Felder tragen. Akzeptiert werden 5, 7, 8, 9, 10 oder 11
-  Felder - genau die Laengen, die das Format seit dem Punktesystem-
-  Umbau (0.16.0, Rows fuehrend) beim schrittweisen Anhaengen von
-  Gold/Silber, Zeit, Rowhammer, Pieces und - seit 0.46.0 - dem
-  Runden-Hash tatsaechlich durchlaufen hat
-  (`HS_FIELD_COUNTS`, `highscore_parse_line` in `lib/highscore.sh`).
+  Eine Zeile muss nicht alle elf Felder tragen (Kulanzregel unten).
   Fehlende Zaehler werden beim Laden als `0` ergaenzt statt die ganze
   Runde zu verwerfen - eine Runde soll nicht verschwinden, nur weil sie
-  aelter ist als ein Zaehler. Zeilen aus der Zeit vor 0.16.0 (fuehrendes
-  `score`-Feld, Rows an dritter Stelle) sind davon ausgenommen: das ist
-  eine andere Spaltenreihenfolge und keine bloss kuerzere Version der
-  heutigen, ein Wiederverwenden ihrer Felder wuerde den alten Score
-  faelschlich als Rows einordnen. Jede andere Feldzahl sowie ein
+  aelter ist als ein Zaehler. Jede unbekannte Feldzahl sowie ein
   einzelnes Feld, das sein Muster nicht erfuellt (Namen, Datum, Zahlen),
-  wirft weiterhin die ganze Zeile heraus.
+  wirft die ganze Zeile heraus.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
   Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
@@ -1447,143 +1342,96 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   die Rowhammer der Runde ("RH", seit 0.25.0), die abgelegten Teile
   ("PCS") und die daraus mit der Spielzeit berechnete Ablegerate
   ("PPM", Teile je Minute, `fmt_ppm` in `rowhammer.sh`).
-  **Ultra-Bestenliste (seit 0.34.0, siehe 3.6):** die Ergebnisse des
-  Ultra-Modus liegen in einer **eigenen** Datei `${DATA_DIR}/highscore-ultra`
-  mit eigener Ordnung - Zeilenformat
-  `time|rows|lines|level|name|date|gold|silver|rowhammers|pieces|hash`,
-  aufsteigend nach `time` sortiert (schnellster Lauf zuerst, gleiche
-  Zeit rangiert hinter dem aelteren Eintrag), ebenfalls Top 10
-  (`HSU_*` in `lib/highscore.sh`). Zwei Gruende fuer die getrennte
-  Datei: ein Lauf auf Zeit und eine endlose Runde sind ueber Rows nicht
-  vergleichbar, und ein 150-Rows-Lauf soll die Top 10 der endlosen
-  Liste nicht verdraengen. Das fuehrende `time`-Feld ist die Spielzeit
-  in **Millisekunden** (nicht in ganzen Sekunden wie in der
-  Normal-Liste): es ist hier das Sortierkriterium, und zwei Versuche auf
-  dasselbe Ziel landen oft genug in derselben Sekunde, dass ganze
-  Sekunden die Rangfolge nach Eintreffen statt nach Tempo entscheiden
-  wuerden; angezeigt wird das ueber `fmt_duration_ms` als
-  MM:SS.mmm. Gespeichert werden nur Laeufe, die das Ziel erreicht haben
-  (Entscheidung in 3.6). Es gilt die uebliche Arbeitsregel "keine
-  Abwaertskompatibilitaet": seit 0.46.0 elf Felder, oder zehn fuer eine Zeile
-  ohne den Runden-Hash; jede andere faellt bei der Validierung heraus.
-  Die Kulanz um genau diese eine Laenge kam mit dem Hash: das Format hat
-  seither doch in einer kuerzeren Fassung existiert, und es gilt derselbe
-  Grund wie bei der Marathon-Liste - ein Eintrag soll nicht
-  verschwinden, nur weil er aelter ist als ein Feld.
-  **Anzeige (seit 0.38.0, Nutzerwunsch):** `highscore_ultra_screen`
-  zeigt die Liste so, wie `highscore_screen` die Marathon-Liste zeigt -
-  seitenweise ueber `highscore_browse`, zwei Zeilen je Eintrag, gleiche
-  Spaltenbreiten, gleiche Faerbung (deshalb teilt sie sich auch
-  `HS_PAGE_ENTRIES`: gleiche Eintragshoehe, eine zweite Konstante
-  koennte nur auseinanderlaufen). Zwei Unterschiede,
-  beide aus der Rangordnung nach Zeit: die Zeit-Spalte traegt die
-  Akzentfarbe, die auf dem Marathon-Bildschirm die Rows-Spalte hat (sie
-  ist hier der Score), und die PPM-Spalte rechnet die Millisekunden auf
-  ganze Sekunden herunter, die Einheit von `fmt_ppm`. Die Rows-Spalte
-  bleibt daneben stehen - ein Ultra-Lauf endet bei oder ueber
-  `ULTRA_TARGET_ROWS`, und um wie viel er ueberschossen hat, ist eine
-  Information. Der erreichte Rang steht wie bisher zusaetzlich im
-  Rundenende-Kasten.
-  **Sprint-Bestenliste (seit 0.39.0, Nutzerwunsch, siehe 3.6):** die
-  Ergebnisse des Sprint-Modus liegen in einer dritten Datei
-  `${DATA_DIR}/highscore-sprint`, Zeilenformat und Rangordnung wie die
-  Marathon-Liste
-  (`rows|lines|level|name|date|gold|silver|time|rowhammers|pieces|hash`,
-  absteigend nach Rows, gleiche Rows rangieren hinter dem aelteren
-  Eintrag), ebenfalls Top 10 (`HSS_*` in `lib/highscore.sh`). Das
-  gleiche Format ist Absicht: gewertet wird dieselbe Zahl in derselben
-  Einheit, ein zweites Layout waere nur ein zweites, das mitgepflegt
-  werden muesste. Eine eigene Datei ist es trotzdem, denn ein auf drei
-  Minuten begrenzter Lauf und eine Runde, die erst beim Game Over endet,
-  sind nicht dasselbe - die Rows der endlosen Liste wuerden die kurzen
-  Laeufe schlicht verdraengen. Gespeichert werden nur Laeufe, die ihre
-  volle Zeit gespielt haben (Entscheidung in 3.6). Wie bei der
-  Ultra-Liste werden seit 0.46.0 elf Felder erwartet, oder zehn fuer
-  eine Zeile ohne den Runden-Hash; jede andere faellt bei der
-  Validierung heraus.
-  **Anzeige:** `highscore_sprint_screen` zeigt die Liste im Layout der
-  beiden anderen (seitenweise ueber `highscore_browse`, dasselbe
-  `HS_PAGE_ENTRIES`, zwei Zeilen je Eintrag, gleiche
-  Spaltenbreiten und Faerbung, Rows in der Akzentfarbe wie auf dem
-  Marathon-Bildschirm). Eine Spalte weicht ab: wo die Marathon-Liste die
-  Spielzeit zeigt, stehen hier die physischen Reihen ("Lines"). Jeder
-  Eintrag hat dieselben drei Minuten gespielt, eine Zeitspalte stuende
-  also zehnmal gleich da; die Lines sind neben den gewichteten Rows die
-  interessante Zahl, weil beide zusammen zeigen, wie viel des Ergebnisses
-  aus den Quadraten kam. Gespeichert bleibt die Spielzeit trotzdem - die
-  PPM-Spalte der zweiten Zeile rechnet mit ihr.
-  **Time-Attack-Bestenliste (seit 0.42.0, Nutzerwunsch, siehe 3.6):**
-  die Ergebnisse des Time-Attack-Modus liegen in einer vierten Datei
-  `${DATA_DIR}/highscore-timeattack`, Zeilenformat und Rangordnung
-  wieder wie die Marathon-Liste (absteigend nach Rows, gleiche Rows
-  hinter dem aelteren Eintrag), ebenfalls Top 10 (`HSA_*` in
-  `lib/highscore.sh`), seit 0.46.0 ebenfalls elf Felder mit dem
-  Runden-Hash am Ende (oder zehn ohne ihn, wie bei den anderen Listen). Dass die Rows und nicht die ueberlebte Zeit die
-  Wertung sind, ist in 3.6 begruendet (beide ergeben dieselbe
-  Rangfolge). Eine eigene Datei ist noetig, weil ein Lauf auf einer
-  selbst erspielten Minute nicht die Leistung einer endlosen Runde ist.
-  Der Unterschied zu den beiden anderen Zeitmodi: **jeder** Lauf wird
-  gespeichert, auch der vorzeitig im Game Over gescheiterte
-  (Entscheidung in 3.6) - dieser Modus hat keinen Zustand
-  "unvollstaendig", der sich nicht vergleichen liesse.
-  **Anzeige:** `highscore_timeattack_screen` zeigt die Liste im Layout
-  der drei anderen (seitenweise ueber `highscore_browse`, dasselbe
-  `HS_PAGE_ENTRIES`, zwei Zeilen je Eintrag, Rows in der
-  Akzentfarbe). Die Spalten sind die der Marathon-Liste samt
-  Spielzeit - und die verdient ihren Platz hier: ein Lauf an der Uhr
-  spielt genau Startzeit + eine Sekunde je Row, eine kuerzere Zeit
-  weist den Eintrag also als vorzeitig beendet aus.
-  **Hochwasser-Bestenliste (seit 0.49.0, Nutzerwunsch, siehe 3.6):**
-  die Ergebnisse des Hochwasser-Modus liegen in einer fuenften Datei
-  `${DATA_DIR}/highscore-flood`, Zeilenformat und Rangordnung wieder wie
-  die Marathon-Liste (absteigend nach Rows, gleiche Rows hinter dem
-  aelteren Eintrag), ebenfalls Top 10 (`HSF_*` in `lib/highscore.sh`).
-  Anders als die vier aelteren Listen kennt sie **nur die volle
-  Feldzahl** (elf, mit dem Runden-Hash am Ende): sie ist mit ihm
-  entstanden und hat deshalb keine kuerzere Fassung, gegenueber der sie
-  kulant sein muesste. Eine eigene Datei ist noetig, weil eine Runde
-  unter steigendem Wasser nach Minuten endet und in der endlosen Liste
-  nie einen Platz saehe. Wie bei Time Attack wird **jede** Runde
-  gespeichert (Entscheidung in 3.6) - dieser Modus endet immer im Game
-  Over, einen Zustand "unvollstaendig" gibt es nicht.
-  **Anzeige:** `highscore_flood_screen` zeigt die Liste im Layout der
-  vier anderen (seitenweise ueber `highscore_browse`, dasselbe
-  `HS_PAGE_ENTRIES`, zwei Zeilen je Eintrag, Rows in der
-  Akzentfarbe), mit den Spalten der Marathon-Liste samt Spielzeit: das
-  Wasser steigt nach der Uhr, die ueberlebte Zeit sagt also, gegen wie
-  viele Flutreihen ein Eintrag angespielt hat, und trennt zwei Runden
-  mit gleichen Rows.
-  **Mehrspieler-Bestenliste (seit 1.1.0, siehe 5.8):** die Ergebnisse
-  einer Mehrspieler-Runde liegen in einer sechsten Datei
-  `${DATA_DIR}/highscore-versus`, Zeilenformat und Rangordnung wieder
-  wie die Marathon-Liste (elf Felder, absteigend nach Rows, gleiche Rows
-  hinter dem aelteren Eintrag), ebenfalls Top 10 (`HSV_*` in
-  `lib/highscore.sh`). Damit ist die in Abschnitt 8 offen gelassene
-  Frage entschieden, und zwar mit der Empfehlung, die dort stand: eine
-  **eigene Liste** statt eines Eintrags in der Marathon-Liste. Garbage
-  kuerzt eine Runde ab und schenkt ihr zugleich zusaetzliche Reihen zum
-  Abbauen - die Zahlen haben schlicht nicht dieselbe Groesse, und genau
-  dagegen wurde die Liste fuenfmal aufgeteilt. **Jede** Runde wird
-  gewertet, gewonnen wie verloren (wie bei Time Attack und Hochwasser:
-  es gibt keinen Zustand "unvollstaendig"). **Der erreichte Platz wird
-  bewusst nicht gespeichert:** die Liste rangiert, was ein Spieler
-  getan hat, und das ist ueber Abende zu zweit und zu fuenft
-  vergleichbar - wer an einem bestimmten Abend gewonnen hat, nicht. Wie
-  oft jemand gewonnen hat, steht dafuer in der Statistik (das
-  `goal`-Feld des Modus, siehe unten).
-  **Eine Liste fuer alle drei Mehrspieler-Modi** (seit 1.1.0, als der
-  Gastgeber die Wahl zwischen `survival`, `sprint` und `ultra` bekam,
-  siehe 5.1). Das ist die eine Stelle, an der bewusst *nicht* nach dem
-  Muster der Einzelspieler-Listen aufgeteilt wird: die drei
-  unterscheiden sich in der Siegbedingung, gewertet wird aber ueberall
-  dieselbe Zahl in derselben Einheit - die eigenen Rows -, und drei
-  Listen mit je zwei Eintraegen waeren fuer den Leser weniger wert als
-  eine mit sechs. Der Modus ist Teil des Abends, wie die Zahl der
-  Mitspieler, und der steht auch nicht in der Liste.
-  **Anzeige:** `highscore_versus_screen` zeigt die Liste im Layout der
-  fuenf anderen, mit den Spalten der Marathon-Liste samt Spielzeit: ein
-  Lauf, der frueh ausgeschieden ist, ist genau der kurze, sodass die
-  Zeit einen K.O. von einer durchgespielten Runde trennt.
+  **Eine Liste je Modus.** Neben der Marathon-Liste gibt es fuenf
+  weitere Dateien mit derselben Bauart. **Warum ueberhaupt getrennt:**
+  ein Lauf unter anderen Regeln ist mit einer endlosen Runde nicht
+  vergleichbar - ein 150-Rows-Ultra-Lauf, drei Sprint-Minuten oder eine
+  Runde unter steigendem Wasser saehen in der endlosen Liste nie einen
+  Platz, und umgekehrt wuerden ihre Zahlen die Rangfolge dort
+  verfaelschen. Was **allen sechs** gemeinsam ist:
+
+  - Top 10, dieselben elf Felder je Zeile mit dem Runden-Hash am Ende
+    (bei Ultra in anderer Reihenfolge, siehe unten; kuerzere Zeilen
+    siehe "Kulanz bei der Feldzahl"), dieselbe Muster-Validierung,
+    atomares Schreiben.
+  - Angezeigt ueber denselben Browser `highscore_browse` mit demselben
+    `HS_PAGE_ENTRIES` (gleiche Eintragshoehe - eine zweite Konstante
+    koennte nur auseinanderlaufen), zwei Zeilen je Eintrag, gleiche
+    Spaltenbreiten und Faerbung, der Score jeweils in der Akzentfarbe.
+  - Bei Gleichstand rangiert der **aeltere** Eintrag vorn.
+  - Der erreichte Rang steht zusaetzlich im Rundenende-Kasten.
+
+  Die Unterschiede - und nur die - stehen in dieser Tabelle; die
+  Entscheidung, welche Zahl ein Modus wertet und welche Laeufe
+  ueberhaupt gelistet werden, ist in 3.6 (Einzelspieler) bzw. 5.8
+  (Mehrspieler) begruendet:
+
+  | Liste | Datei / Praefix | Sortiert nach | Gelistet wird | Statt der Spielzeit-Spalte |
+  | --- | --- | --- | --- | --- |
+  | Marathon | `highscore-marathon`, `HS_*` | Rows, absteigend | jede Runde | - (zeigt die Spielzeit) |
+  | Ultra | `highscore-ultra`, `HSU_*` | `time`, **aufsteigend** | nur ein Lauf am Ziel | - (Zeit ist der Score) |
+  | Sprint | `highscore-sprint`, `HSS_*` | Rows, absteigend | nur ein Lauf ueber die volle Zeit | Lines |
+  | Time Attack | `highscore-timeattack`, `HSA_*` | Rows, absteigend | jeder Lauf | - (zeigt die Spielzeit) |
+  | Hochwasser | `highscore-flood`, `HSF_*` | Rows, absteigend | jede Runde | - (zeigt die Spielzeit) |
+  | Mehrspieler | `highscore-versus`, `HSV_*` | Rows, absteigend | jede Runde | - (zeigt die Spielzeit) |
+
+  Vier Einzelheiten, die sich aus der Tabelle nicht ergeben:
+
+  - **Die Ultra-Liste hat das `time`-Feld vorn**
+    (`time|rows|lines|level|name|date|gold|silver|rowhammers|pieces|hash`)
+    und speichert es in **Millisekunden** statt in ganzen Sekunden: es
+    ist dort das Sortierkriterium, und zwei Versuche auf dasselbe Ziel
+    landen oft genug in derselben Sekunde, dass ganze Sekunden die
+    Rangfolge nach Eintreffen statt nach Tempo entscheiden wuerden.
+    Angezeigt wird sie
+    als MM:SS.mmm (`fmt_duration_ms`), die PPM-Spalte rechnet die
+    Millisekunden auf ganze Sekunden herunter (die Einheit von
+    `fmt_ppm`). Die Rows-Spalte bleibt daneben stehen - um wie viel ein
+    Lauf `ULTRA_TARGET_ROWS` ueberschossen hat, ist eine Information.
+  - **Die Sprint-Liste zeigt Lines statt der Spielzeit**: jeder Eintrag
+    hat dieselben drei Minuten gespielt, eine Zeitspalte stuende dort
+    zehnmal gleich. Lines und Rows nebeneinander zeigen dafuer, wie viel
+    des Ergebnisses aus den Quadraten kam. Gespeichert bleibt die
+    Spielzeit trotzdem - die PPM-Spalte rechnet mit ihr.
+  - **Wo die Spielzeit-Spalte steht, verdient sie ihren Platz:** bei
+    Time Attack weist eine zu kurze Zeit den Lauf als vorzeitig beendet
+    aus (er spielt sonst genau Startzeit + 1 s je Row), bei Hochwasser
+    sagt sie, gegen wie viele Flutreihen ein Eintrag angespielt hat, und
+    im Mehrspieler trennt sie einen fruehen K.O. von einer
+    durchgespielten Runde.
+  - **Der Mehrspieler hat nur eine Liste fuer alle drei Sitzungsmodi**
+    (`survival`, `sprint`, `ultra`, siehe 5.1) - die eine Stelle, an der
+    bewusst *nicht* aufgeteilt wird: sie unterscheiden sich in der
+    Siegbedingung, gewertet wird aber ueberall dieselbe Zahl in
+    derselben Einheit, und drei Listen mit je zwei Eintraegen waeren
+    weniger wert als eine mit sechs. **Der erreichte Platz wird nicht
+    gespeichert:** die Liste rangiert, was ein Spieler getan hat, und
+    das ist ueber Abende zu zweit und zu fuenft vergleichbar - wer an
+    einem bestimmten Abend gewonnen hat, nicht. Wie oft jemand gewonnen
+    hat, steht in der Statistik (das `goal`-Feld des Modus, siehe
+    unten).
+
+  **Kulanz bei der Feldzahl** (Nutzerentscheidung seit 0.29.0, bewusste
+  Ausnahme von "keine Abwaertskompatibilitaet", Abschnitt 6): Eine Liste
+  akzeptiert genau die Laengen, die ihr eigenes Format tatsaechlich
+  einmal hatte - ein Eintrag soll nicht verschwinden, nur weil er
+  aelter ist als ein Feld.
+
+  - **Marathon:** 5, 7, 8, 9, 10 oder 11 Felder (`HS_FIELD_COUNTS`,
+    `highscore_parse_line` in `lib/highscore.sh`) - die Stationen des
+    schrittweisen Anhaengens von Gold/Silber, Zeit, Rowhammer, Pieces
+    und Hash seit dem Punktesystem-Umbau (0.16.0).
+  - **Ultra, Sprint, Time Attack:** elf oder zehn, also mit oder ohne
+    den Runden-Hash.
+  - **Hochwasser und Mehrspieler:** nur elf. Sie sind mit dem Hash
+    entstanden und haben nie eine kuerzere Fassung gehabt, gegenueber
+    der sie kulant sein muessten.
+
+  Zeilen aus der Zeit **vor** 0.16.0 (fuehrendes `score`-Feld, Rows an
+  dritter Stelle) sind ausgenommen: das ist eine andere
+  Spaltenreihenfolge und keine bloss kuerzere Version der heutigen -
+  ihre Felder wiederzuverwenden wuerde den alten Score faelschlich als
+  Rows einordnen.
 
   **Umbenennung der Marathon-Datei (seit 0.51.0, Nutzerwunsch):** die
   Marathon-Liste hiess bis 0.50.0 schlicht `highscore` - als einzige
@@ -1674,16 +1522,14 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Namensabfrage am Rundenende (siehe 3.7), die vor dem Eintrag laeuft
   und den Rang der `*_add`-Funktionen deshalb noch nicht kennt - seit
   1.0.1 entscheidet sie dort zusaetzlich, ob ueberhaupt gefragt wird.
-  Lines und Level bleiben gespeichert, werden aber nicht angezeigt;
-  die Score-Spalte wurde in 0.15.0 auf Nutzerwunsch aus
-  der Anzeige und in 0.16.0 auch aus dem Dateiformat entfernt.
-  Bis 0.26.0 war ein Eintrag eine Zeile, und weil das Layout (mit dem
-  Zwei-Zeichen-Menue-Einzug) exakt ins 48-Spalten-Minimum passte,
-  zahlte jede neue Spalte eine vorhandene: der Name schrumpfte mit der
-  Zeit-Spalte (0.17.0) von 13 auf 8 Zeichen und mit der RH-Spalte
-  (0.25.0) auf 6. Fuer PCS und PPM war kein Platz mehr uebrig; der
-  Zeilenumbruch gibt dem Namen dafuer 12 Zeichen zurueck (gespeichert
-  bleiben weiterhin bis zu 16). Die Liste ist damit zu hoch fuer einen
+  Lines und Level bleiben gespeichert, werden aber nicht angezeigt; eine
+  Score-Spalte gibt es seit dem Punktesystem-Umbau (0.16.0) nicht mehr.
+  **Der Zwei-Zeilen-Block ist der Grund, warum ueberhaupt geblaettert
+  wird:** ein einzeiliger Eintrag passte mit dem
+  Zwei-Zeichen-Menue-Einzug exakt ins 48-Spalten-Minimum, sodass jede
+  neue Spalte eine vorhandene bezahlen musste; die zweite Zeile gibt dem
+  Namen 12 Zeichen zurueck (gespeichert bleiben bis zu 16) und macht
+  Platz fuer PCS und PPM. Die Liste ist damit zu hoch fuer einen
   22-Zeilen-Bildschirm und wird seitenweise gezeigt - fuenf Eintraege je
   Seite (`HS_PAGE_ENTRIES`), Tabellenkopf auf jeder Seite wiederholt,
   Seitenzaehler im Titel.
@@ -1860,7 +1706,7 @@ zusaetzlich per `ROWHAMMER_KEY_*`-Umgebungsvariablen uebersteuerbar.
   Bildschirm dieselbe Faerbung fuer Rows sowie Gold/Silb/RH je Runde.
   Dieselbe 46-Zeichen-Rueckfallregel gilt hier ebenfalls.
 
-### 4.6 Debug-Modus (umgesetzt, Version 0.6.0)
+### 4.6 Debug-Modus (seit 0.6.0)
 
 Zweck: Ein Problem oder eine Frage zum Spielverlauf soll anhand von
 Log-Dateien nachvollziehbar sein, ohne die Situation live reproduzieren
@@ -1928,7 +1774,7 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
   `/usr/games/rowhammer`), und ein Layout-Wechsel ist nur im `Makefile`
   nachzuziehen. Das `%make_install`-Makro wird absichtlich nicht genutzt,
   weil es nicht auf jedem Build-Host definiert ist. Paket-Eigenschaften:
-  `BuildArch: noarch`, `Requires: bash >= 4.3` (seit 9.2, siehe 4.1),
+  `BuildArch: noarch`, `Requires: bash >= 4.3` (siehe 4.1),
   `Recommends: ncurses`
   (`tput` ist optional, siehe 4.1). `/usr/games` ist als Verzeichnis
   mitverpackt, weil es auf RPM-Distributionen nicht ueberall vom
@@ -2002,12 +1848,11 @@ weil ein vorhandenes Backup nie ueberschrieben werden darf. Die
 `.bak`-Dateien bleiben liegen; das Spiel liest sie nie (kein Dateiname
 passt auf die Konstanten aus 4.5), aufgeraeumt werden sie von Hand.
 
-Entscheidungen zu den beiden in der Roadmap offen gelassenen Punkten:
+Zwei Festlegungen zum Umfang:
 
 - **`all` loescht auch das Savegame.** "Alles" heisst alles; wer nur den
   Weltwunder-Fortschritt zuruecksetzen will, hat dafuer das eigene Ziel
-  `save` (der in der Roadmap angedachte Wert), das die uebrigen Dateien
-  unangetastet laesst.
+  `save`, das die uebrigen Dateien unangetastet laesst.
 - **`highscore` trifft alle Bestenlisten.** Endlos-, Ultra-, Sprint-,
   Time-Attack-, Hochwasser- und Mehrspieler-Liste (seit 0.34.0, 0.39.0,
   0.42.0, 0.49.0 bzw. 1.1.0, siehe 4.5)
@@ -2208,7 +2053,7 @@ pcs=IOTSZJLIOT...    die Steinfolge (Zeilen zu hoechstens 80 Buchstaben)
 e=120l               ein Ereignis: Zeitdelta in ms + Aktionsbuchstabe
 ```
 
-Eine **Mehrspieler-Aufnahme** (seit Schritt 9.6) traegt darueber hinaus
+Eine **Mehrspieler-Aufnahme** traegt darueber hinaus
 einen Sitzungsblock und einen Ereignisstrom je Teilnehmer; beides steht
 mit seinen Entscheidungen in 5.20. Der Rest dieses Abschnitts gilt fuer
 beide Sorten.
@@ -2234,7 +2079,7 @@ korrekt ablaufen, aber die Regel "keine Abwaertskompatibilitaet" gilt
 auch hier, und genau die Frage, welche alten Versionen nahe genug sind,
 soll diese eine Zahl ersparen.
 
-**Version 3** (Schritt 9.6) kam mit dem Mehrspieler und ist die eine
+**Version 3** kam mit dem Mehrspieler und ist die eine
 Stelle, an der das Format doch kulant ist: gelesen werden **2 und 3**
 (`DEMO_FORMAT_MIN_VERSION`), geschrieben wird 3. Das ist die bewusste,
 eng begrenzte Ausnahme von der Arbeitsregel (Abschnitt 6,
@@ -2430,55 +2275,32 @@ abgeschnitten wurden (Mehrspieler-Platzhalter, die drei Meldungen des
 Rebind-Dialogs, die Abbrechen-Fusszeile einer Sicherheitsabfrage und je
 eine Zeile der ersten und dritten Anleitungsseite) - sie sind umbrochen.
 
-## 5. Multiplayer (Phase 5, umgesetzt seit 1.1.0)
+## 5. Mehrspieler und Server-Betrieb
 
-**Diese Phase laeuft in der `1.x`-Reihe** (siehe die Arbeitsregel in
-Abschnitt 6): `2.0.0` ist fuer den Stand reserviert, an dem der
-Mehrspieler fertig ist - einschliesslich der Demo-Aufzeichnung aus
-5.20. Bis dahin traegt jeder Zuwachs eine Minor-Version, angefangen bei
-`1.1.0`.
+Dieser Abschnitt hat zwei Teile: **5.1 bis 5.10 und 5.20** beschreiben
+den **gebauten** Mehrspieler (Phase 5, seit 1.1.0), **5.11 bis 5.19**
+den **geplanten** Server-Betrieb darum herum (Phase 6, noch nichts
+davon umgesetzt); ein Trennabsatz vor 5.11 markiert die Stelle. Die
+Nummerierung folgt der Entstehungsreihenfolge und bleibt deshalb stabil
+(Arbeitsregel 6.1) - deshalb steht 5.20 hinter der Phase 6, obwohl es
+zu Phase 5 gehoert.
 
-**Stand:** Der Mehrspieler laeuft seit 1.1.0 - Sitzung eroeffnen und
-beitreten, gemeinsame Steinfolge, Stoerreihen, Ausscheiden, Sieger,
-eigene Bestenliste und eigener Statistik-Modus (Roadmap-Schritte 1 bis 8
-und 10 bis 12, siehe HISTORY.md); seit 1.2.0 ueberlebt eine Lobby
-ausserdem ihren Gastgeber (Umzug der Sitzung, siehe 5.1) und ein Client
-erkennt eine verstummte Sitzung von selbst (siehe 5.4/5.8). Dieser Abschnitt beschreibt damit
-nicht mehr eine Absicht, sondern den gebauten Zustand; wo die Umsetzung
-von der urspruenglichen Spezifikation abweicht, steht es an Ort und
-Stelle. **Offen ist ein Punkt:** die Demo-Aufzeichnung einer
-Mehrspieler-Runde (5.20, Schritt 9). Ihr Unterbau steht seit den
-Schritten 9.1 bis 9.4: der Rundenzustand ist benannt und umschaltbar
-(`lib/state.sh`), das Bash-Minimum liegt bei 4.3, und die
-**Protokollversion 4** verteilt die Zuege aller Teilnehmer (`ACT`,
-`PEERACT`) und schickt `GARBAGE` und `QUEUE` mit Slot an alle. Seit
-Schritt 9.6 wird eine Mehrspieler-Runde damit auch wirklich
-**aufgezeichnet** - vollstaendig, mit einem Ereignisstrom je Teilnehmer,
-im **Demo-Format 3** (4.10/5.20); seit Schritt 9.7 reicht ihre
-Steinfolge fuer jeden Teilnehmer und nicht nur fuer den
-aufzeichnenden, und seit Schritt 9.8 wird eine solche Aufnahme auch
-wieder **gelesen** - Sitzungsblock, fuenf Stroeme und Pruefpunkte. Seit
-Schritt 9.9 **startet** sie und laeuft ihre Zeitachse ab: jeder Sitzplatz
-hat einen eigenen Rundenzustand (`lib/state.sh`), der Bildschirm sitzt
-auf dem Platz, in dem aufgezeichnet wurde, und die Mitspieler stehen mit
-ihren Feldern darum herum. Seit Schritt 9.10 haben diese Felder auch
-ihren Inhalt: die Ereignisstroeme werden angewandt, jeder Sitzplatz
-spielt seine Runde wirklich noch einmal, und was daraus wird, steht in
-den Mitspieler-Tabellen, aus denen auch eine laufende Runde ihre Gegner
-zeichnet. Was noch fehlt (Schritte 9.11 bis 9.14), ist die Bedienung -
-der Fokus laesst sich waehrend der Wiedergabe noch nicht wechseln - und
-der Kasten am Ende.
+Was am Mehrspieler noch fehlt, fuehrt [TODO.md](TODO.md): die
+**Bedienung** der Demo-Wiedergabe (Spezifikation in 5.20).
+Aufgezeichnet, gelesen und abgespielt wird eine Mehrspieler-Runde
+bereits - nur der Fokus laesst sich waehrend der Wiedergabe noch nicht
+wechseln.
 
-Drei Nachrichten kamen beim Bauen hinzu, die die Nachrichtentabelle in
-5.4 so nicht hatte; sie sind dort mit aufgefuehrt und hier zusammen
-begruendet, weil sie alle drei dieselbe Luecke schliessen - die
-Spezifikation nannte eine Wirkung, ohne zu sagen, woher der Absender
+Drei Nachrichten kamen beim Bauen hinzu, die die urspruengliche
+Spezifikation nicht hatte; sie stehen in der Nachrichtentabelle 5.4 und
+hier zusammen begruendet, weil sie alle drei dieselbe Luecke schliessen -
+die Spezifikation nannte eine Wirkung, ohne zu sagen, woher der Absender
 weiss, dass sie noetig ist:
 
 - **`VIEW <0|1>`** (Client -> Hub): "ich zeichne die Gegnerfelder".
   `NEEDBOARD` war vorgesehen, aber der Hub kann nicht wissen, welche
   Detailstufe ein Terminal gerade zeigt.
-- **`QUEUE <n>`** (Hub -> Client): die verbindliche Laenge der eigenen
+- **`QUEUE`** (Hub -> Clients): die verbindliche Laenge einer
   Garbage-Warteschlange, nachdem ein Abbau sie gekuerzt hat.
 - **`APPLIED <n>`** (Client -> Hub): "diese Reihen stehen jetzt in
   meinem Stapel". Zusammen halten die beiden die Warteschlange an genau
@@ -2775,7 +2597,7 @@ oft an mehrere schickt:
   Terminal des einzelnen Clients, und `PEER`, `PEERBOARD` und `PEERACT`
   gehen an alle **ausser** dem Absender. Multicast lohnt erst, wo
   wirklich alle dasselbe bekommen - und selbst `GARBAGE` und `QUEUE`,
-  die seit 9.4 an alle gehen, sind an genau einen Slot adressiert und
+  die seit Protokoll 4 an alle gehen, sind an genau einen Slot adressiert und
   nur fuer ihn eine Anweisung; die uebrigen schreiben sie bloss mit.
 - **TCP bringt mit, was sonst nachzubauen waere.** Reihenfolge,
   Zustellung, Flusskontrolle und ein sauberes EOF beim Absturz eines
@@ -2896,13 +2718,13 @@ Modulschnitt (neue Dateien, siehe auch 4.2):
   `draw_frame`-Erweiterung), damit alles Zeichnen an einer Stelle bleibt.
 
 Voraussetzung im bestehenden Code: die Rundenlogik muss ohne Rendering
-und ohne Tastatur laufen koennen (Roadmap-Punkt "Spiellogik entkoppeln").
+und ohne Tastatur laufen koennen (offener Punkt, siehe TODO.md).
 Konkret: `game_reset`, `step_down`, `lock_and_next`, `hold_piece`,
 `try_move`, `try_rotate` duerfen weder zeichnen noch lesen; `DIRTY`
 markiert nur. Das ist ohnehin fast erreicht - offen sind die Stellen, an
 denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
 
-### 5.4 Protokoll (Version 3)
+### 5.4 Protokoll (Version 4)
 
 - **Rahmen:** eine Nachricht = eine Zeile, `\n`-terminiert, reines
   druckbares ASCII (0x20-0x7E), maximal **512 Byte** inklusive Zeilenende.
@@ -2923,7 +2745,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   **Version 4** (Schritte 9.3 und 9.4) verteilt die Zuege aller
   Teilnehmer (`ACT`, `PEERACT`) und stellt `GARBAGE` und `QUEUE` einen
   Slot voran, damit eine Demo-Aufzeichnung jeden Mitspieler nachspielen
-  kann (5.20). Ein Version-3-Client wuerde `ACT`/`PEERACT` stillschweigend
+  kann (5.20). Sie kam mit 1.3.0. Ein Version-3-Client wuerde `ACT`/`PEERACT` stillschweigend
   ignorieren (so ist ein unbekanntes Verb gedacht), aber den Slot in
   `GARBAGE` als Reihenzahl lesen und die falsche Menge Stoerreihen
   einschieben - genau dafuer gibt es diese Zahl.
@@ -2937,7 +2759,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `BOARD` | `<200 Zeichen>` | Feld-Snapshot, nur wenn der Hub `NEEDBOARD 1` gesetzt hat, max. 5/s |
   | `CLEAR` | `<lines> <silver> <gold>` | ein Reihenabbau als Angriffs-Meldung (Hub rechnet daraus die Garbage aus) |
   | `APPLIED` | `<count>` | eingeschobene Stoerreihen (seit 1.1.0, siehe unten) |
-  | `ACT` | `<t> <tokens>` | die eigenen Zuege eines Zeitfensters (seit 9.3, siehe unten) |
+  | `ACT` | `<t> <tokens>` | die eigenen Zuege eines Zeitfensters (seit Protokoll 4, siehe unten) |
   | `VIEW` | `<0 oder 1>` | ob dieser Client die Gegnerfelder zeichnet (seit 1.1.0) |
   | `SETUP` | `<modus> <garbage>` | Sitzungseinstellungen, nur vom Gastgeber (seit 1.1.0, siehe 5.1) |
   | `PROMOTED` | `<port>` | "mein Hub laeuft auf diesem Port" - Antwort auf `PROMOTE` (seit 1.2.0) |
@@ -2960,10 +2782,10 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `START` | `<countdown_ms>` | Rundenstart |
   | `PEER` | `<slot> <lines> <rows> <level> <gold> <silver> <height> <pending> <state>` | Zustand eines Mitspielers |
   | `PEERBOARD` | `<slot> <200 Zeichen>` | Feld-Snapshot eines Mitspielers |
-  | `PEERACT` | `<slot> <t> <tokens>` | die Zuege eines Mitspielers, unveraendert weitergereicht (seit 9.3) |
+  | `PEERACT` | `<slot> <t> <tokens>` | die Zuege eines Mitspielers, unveraendert weitergereicht (seit Protokoll 4) |
   | `NEEDBOARD` | `<0 oder 1>` | ob dieser Client Snapshots senden soll (spart Last, wenn niemand Stufe 2 anzeigt) |
-  | `GARBAGE` | `<slot> <count> <hole>` | Stoerreihen fuer einen Spieler, Lochspalte 0-9; seit 9.4 mit Slot und an alle |
-  | `QUEUE` | `<slot> <count>` | verbindliche Laenge einer Warteschlange (seit 1.1.0; seit 9.4 mit Slot und an alle) |
+  | `GARBAGE` | `<slot> <count> <hole>` | Stoerreihen fuer einen Spieler, Lochspalte 0-9; seit Protokoll 4 mit Slot und an alle |
+  | `QUEUE` | `<slot> <count>` | verbindliche Laenge einer Warteschlange (seit 1.1.0; seit Protokoll 4 mit Slot und an alle) |
   | `KO` | `<slot> <platz>` | Spieler ausgeschieden |
   | `END` | `<siegerslot>` | Runde vorbei |
   | `PING` | `<token>` | Lebendpruefung, alle 2 s |
@@ -3335,25 +3157,22 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
     keine Reihen der Gegner, und auch der Sieg selbst bringt keine
     Reihen - er ist ein Ergebnis, keine Leistung in Reihen. Damit ist
     ein Weltwunder auf demselben Weg gebaut, egal ob allein oder zu
-    sechst gespielt wurde.
+    fuenft gespielt wurde.
   - **Die Statistik bekommt den Mehrspieler als eigenen Modus**
     (`mode_versus_*`, siehe die Modus-Zaehler in 4.5), dazu die zwei
     Zahlen, die es nur hier gibt: Siege und die gesendete bzw.
     erhaltene Garbage. Sie stehen neben den Modus-Zaehlern und nicht
     in den Gesamtzaehlern - die zaehlen Reihen, nicht Duelle.
-  - **Ob eine Mehrspieler-Runde zusaetzlich in eine lokale
-    Bestenliste kommt, ist noch offen** (Nutzer unentschieden,
-    Tendenz "ja"). Empfehlung mit dem Muster, das dieses Projekt fuer
-    genau diese Frage schon fuenfmal angewandt hat: **eine eigene
-    Liste `highscore-versus`** statt eines Eintrags in der
-    Marathon-Liste. Begruendung und Alternativen in Abschnitt 8.
+  - **Die Runde kommt in eine eigene Bestenliste**
+    `highscore-versus` statt in die Marathon-Liste - dasselbe Muster,
+    das dieses Projekt fuer die fuenf Einzelspieler-Listen anwendet;
+    Begruendung in 4.5.
 
 ### 5.9 Auswirkungen auf bestehende Systeme
 
-- **Rendering-Performance:** mit bis zu 6 Feldern reicht ein
-  "kompletter Frame als String" nicht. Der Phase-4-Punkt "nur
-  geaenderte Zellen zeichnen" war damit Voraussetzung und ist mit 0.22.0
-  erledigt (Zeilen-Diff plus Cache der liegenden Feldreihen, siehe 4.3);
+- **Rendering-Performance:** mit bis zu fuenf Feldern reicht ein
+  "kompletter Frame als String" nicht; der Zeilen-Diff samt Cache der
+  liegenden Feldreihen (seit 0.22.0, siehe 4.3) ist die Voraussetzung;
   fuer die Mini-Felder der Mitspieler ist der Diff genauso zu nutzen.
 - **Game-Loop:** pro Tick zusaetzlich Socket leeren, Peer-Puffer
   aktualisieren, eigenen Zustand senden (nur bei Aenderung). Der
@@ -3364,19 +3183,15 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   das die Verbindung nicht verhungern lassen: waehrend der Animation
   wird der Socket weiter geleert (Tastendruecke bleiben wie bisher
   verworfen).
-- **Seed:** der Hub-Seed passt seit Schritt 9.5 immer in das Zahlenfeld
-  des Protokolls (neun Stellen, `PROTO_NUM_RE`): `hub_start_round` nimmt
-  ihn modulo 1.000.000.000, egal ob er gewuerfelt wurde oder aus
-  `--seed` kam. Davor tat das keine der beiden Quellen - die Maske
-  `0x3FFFFFFF` reicht bis 1.073.741.823 und war damit in rund **7 % aller
-  Runden** zehnstellig, und `--seed` nimmt Ziffern beliebiger Laenge
-  entgegen. Die Folge war still und schwerwiegend: **jeder** Client wies
-  die `SEED`-Nachricht als fehlerhaft ab, behielt sein eigenes `RANDOM`
-  und spielte eine **andere Steinfolge** - genau die Fairness, fuer die
-  der gemeinsame Seed da ist (siehe 5.1), und auf dem Bildschirm stand
-  nichts davon. Gefunden hat es die Lastprobe aus 9.5, die den Fehler in
-  einem von drei Laeufen als verworfene Nachricht sichtbar machte; im
-  Code stand er, seit es den Seed gibt. Ein Seed, der von dem
+- **Seed:** der Hub-Seed muss in das Zahlenfeld des Protokolls passen
+  (neun Stellen, `PROTO_NUM_RE`), deshalb nimmt `hub_start_round` ihn
+  modulo 1.000.000.000 - egal ob er gewuerfelt wurde (die Maske
+  `0x3FFFFFFF` reicht bis 1.073.741.823) oder aus `--seed` kam, das
+  Ziffern beliebiger Laenge entgegennimmt. Ein zu langer Seed wird von
+  **jedem** Client als fehlerhafte Nachricht verworfen; jeder behaelt
+  dann sein eigenes `RANDOM` und spielt eine **andere Steinfolge** -
+  genau die Fairness, fuer die der gemeinsame Seed da ist (siehe 5.1),
+  und auf dem Bildschirm stuende nichts davon. Ein Seed, der vom
   gewuenschten abweicht, ist das erheblich kleinere Uebel als einer, den
   niemand bekommt.
 - **Seed (CLI):** `--seed` wird im Mehrspieler vom Hub-Seed uebersteuert; ein
@@ -3434,6 +3249,17 @@ Durchsagen (siehe 5.2). **Der Start gehoert
 allein dem Host** (5.1): er sieht den Eintrag, sobald ein zweiter
 Spieler da ist, und niemand wartet auf eine vorher festgelegte Zahl.
 
+---
+
+**Ab hier: Phase 6 - der geplante Server-Betrieb.** Die folgenden neun
+Unterabschnitte (5.11 bis 5.19) beschreiben **Absichten**, nicht
+Gebautes: einen dedizierten Spiel-Server, Accounts, Server-Persistenz,
+Web-Highscore und was daran haengt. Sie setzen einen fertigen,
+per Playtesting bewaehrten Mehrspieler-Kern voraus. Die Arbeitsschritte
+dazu stehen in [TODO.md](TODO.md), die noch offenen Grundsatzfragen
+ebenfalls (dort Abschnitt 2.3). 5.20 gehoert wieder zu Phase 5 und
+steht nur deshalb dahinter, damit diese Nummerierung stabil bleibt.
+
 ### 5.11 Deployment: dedizierter Server mit SSH-ForceCommand
 
 - **Zielbild (Nutzerentscheidung):** rowhammer laeuft nicht nur
@@ -3477,8 +3303,8 @@ Spieler da ist, und niemand wartet auf eine vorher festgelegte Zahl.
   heutigen `--name`/`ROWHAMMER_PLAYER_NAME` (siehe 4.2). Ein konkretes
   Account-System wird erst nachgezogen, sobald ein oeffentlicher Server
   ansteht.
-- **Empfehlung fuer das spaetere Account-System (zu bestaetigen, siehe
-  Abschnitt 8):** rowhammer-Accounts **nicht** eins-zu-eins auf
+- **Empfehlung fuer das spaetere Account-System** (zu bestaetigen,
+  siehe TODO.md 2.3): rowhammer-Accounts **nicht** eins-zu-eins auf
   Unix-Systembenutzer abbilden. Unix-Accounts je Spieler bedeuten
   Root-Rechte fuer jede Neuregistrierung, keinen Bezug zu
   Web-Identitaeten (Apple/Google/Facebook-Login ist ein Web-OAuth-Flow,
@@ -3521,7 +3347,7 @@ Spieler da ist, und niemand wartet auf eine vorher festgelegte Zahl.
   Ein Server mit vielen Konten braucht eine laengere, nach Konto
   durchsuchbare Liste; ab einer gewissen Groesse ist lineares
   Text-Parsing nicht mehr das richtige Werkzeug.
-- **Empfehlung (zu bestaetigen):** kein Sprung direkt auf einen separaten
+- **Empfehlung** (zu bestaetigen, siehe TODO.md 2.3): kein Sprung direkt auf einen separaten
   Datenbankserver. Ein guter Zwischenschritt ist **SQLite**: eine echte
   SQL-Datenbank, aber ein einzelner Dateipfad ohne eigenen Serverprozess,
   aus Bash ueber die `sqlite3`-Kommandozeile ansprechbar (neue optionale
@@ -3542,7 +3368,7 @@ Spieler da ist, und niemand wartet auf eine vorher festgelegte Zahl.
 ### 5.14 Endausbaustufe: Web-Highscore, Liga-System, Multi-Server
 
 Diese drei Punkte sind bewusst nur grob skizziert - sie stehen am Ende
-der Roadmap (Phase 6, Abschnitt 7) und werden erst konkretisiert, wenn
+der Roadmap (Phase 6, siehe TODO.md) und werden erst konkretisiert, wenn
 Server-Deployment (5.11), Accounts (5.12) und Server-Persistenz (5.13)
 stehen.
 
@@ -3566,8 +3392,8 @@ stehen.
 - **Frage:** Wird das serverseitige Backend (Accounts, Highscore-Web,
   Liga, Multi-Server) ebenfalls in Bash geschrieben, oder kommuniziert
   Bash mit einem in einer anderen Sprache geschriebenen Dienst?
-- **Empfehlung (zu bestaetigen, siehe Abschnitt 8):** kein Bruch, sondern
-  eine klare Grenze entlang dessen, was Bash gut kann und was nicht:
+- **Empfehlung** (zu bestaetigen, siehe TODO.md 2.3): kein Bruch,
+  sondern eine klare Grenze entlang dessen, was Bash gut kann und was nicht:
   - **Spiel-Engine und lokale Mehrspieler-Sitzung bleiben Bash** - Hub,
     Bridge, Client, Protokoll (`lib/net.sh`, `lib/proto.sh`,
     `lib/hub.sh`, `lib/mp.sh`, siehe 5.3) sind bereits so entworfen und
@@ -3617,7 +3443,7 @@ stehen.
 
 ### 5.17 Gemeinsamer Weltwunder-Fortschritt auf dem Server
 
-- **Idee (Nutzervorschlag, zu bestaetigen, siehe Abschnitt 8):** auf
+- **Idee** (Nutzervorschlag, zu bestaetigen, siehe TODO.md 2.3): auf
   einem Server bauen nicht nur einzelne Accounts an ihrem eigenen
   Weltwunder (siehe 3.3, das bleibt fuer den lokalen
   Einzelspieler-Betrieb unveraendert bestehen), sondern **alle Spieler
@@ -3625,14 +3451,14 @@ stehen.
   abgebaute Reihe jedes Accounts zahlt dann doppelt ein: auf den
   eigenen (Account-)Zaehler und auf einen gemeinsamen Server-Zaehler.
 - **Konsequenz fuer die Kostentabelle:** Die bestehende
-  `WONDER_COSTS`-Reihe (seit 0.45.0 10.000..640.000, insgesamt 1.270.000
+  `WONDER_COSTS`-Reihe (seit 0.44.0 10.000..640.000, insgesamt 1.270.000
   Reihen, siehe 3.3) ist auf einen einzelnen Spieler ausgelegt und waere
   von vielen
   gleichzeitig spielenden Accounts durchgespielt, lange bevor ein
   gemeinsames Wunder etwas Gemeinsames haette. Der
   Server-Fortschritt braucht deshalb weiterhin **eine eigene, deutlich
   groessere Kostentabelle** (`SERVER_WONDER_COSTS`) - die Umstellung in
-  0.45.0 hat den Abstand nur verkleinert, nicht aufgehoben: sie bringt
+  0.44.0 hat den Abstand nur verkleinert, nicht aufgehoben: sie bringt
   die Einzelspieler-Reihe erst auf die Original-Groessenordnung (2.500
   bis 500.000 Zeilen je Wunder, siehe 3.3), die Server-Reihe muss
   darueber liegen, je nach erwarteter Serverlast. Beide
@@ -3644,7 +3470,7 @@ stehen.
   (eigenes Bauwerk, eigene Baustufe); die Rundenwertung fuer den
   Account (Highscore, persoenliche Statistik, 4.5) bleibt davon
   unberuehrt.
-- **Offen (siehe Abschnitt 8):** ob der Server tatsaechlich eigene,
+- **Offen** (siehe TODO.md 2.3): ob der Server tatsaechlich eigene,
   groessere Wunder braucht (weitere, noch unverifizierte Bauwerke) oder
   dieselbe Liste nur mit anderen Kosten laufen soll; ob ein
   fertiggestelltes Server-Wunder ein sichtbares Server-Ereignis ist
@@ -3700,64 +3526,41 @@ stehen.
 - **Voraussetzung:** Abzeichen sind reine Server-Funktion (haengen an
   einem Account, siehe 5.12) und ergeben ohne Account/Server keinen
   Sinn; sie entfallen daher konsequent im lokalen Einzelspieler-Betrieb.
-- **Offen (siehe Abschnitt 8):** konkrete Abzeichen-Liste und ihre
+- **Offen** (siehe TODO.md 2.3): konkrete Abzeichen-Liste und ihre
   Bedingungen sind noch nicht festgelegt - erst nach Playtesting und
   zusammen mit dem Liga-System (5.14) sinnvoll auszuarbeiten, damit
   Abzeichen und Liga-Punkte sich nicht widersprechen.
 
 ### 5.20 Demo-Aufzeichnung im Mehrspieler
 
-Dieser Unterabschnitt gehoert zu **Phase 5** und steht trotzdem hier am
-Ende, damit die Nummerierung 5.11-5.19 (Phase 6) nicht wandert und die
-Verweise darauf im ganzen Dokument gueltig bleiben. Er ist die
-**Spezifikation des offenen Schritts 9**; die abzuhakenden
-Arbeitsschritte stehen als 9.1 bis 9.14 in Abschnitt 7.
+Dieser Unterabschnitt gehoert zu **Phase 5** und steht trotzdem hinter
+den Phase-6-Abschnitten, damit die Nummerierung 5.11-5.19 nicht wandert
+und die Verweise darauf gueltig bleiben (Arbeitsregel 6.1). Er
+beschreibt Format und Architektur der Mehrspieler-Demo; was daran noch
+fehlt - die Bedienung der Wiedergabe -, fuehrt [TODO.md](TODO.md).
 
 **Warum eine Mehrspieler-Runde nicht wie jede andere aufgezeichnet
 wird.** Eine Demo speichert Zuege, keine Bildschirme (3.8). Die eigenen
-Zuege liegen vollstaendig vor; die **Zuege der Mitspieler kamen bis
-Protokoll 3 nirgends an** - uebertragen wurden nur ihre Zaehler
-(`PEER`) und, nur in Detailstufe 2, Feld-Schnappschuesse (`PEERBOARD`,
-200 Zeichen, max. 5 Hz, siehe 5.6). Das ist mit Schritt 9.3 behoben
-(`ACT`/`PEERACT`, siehe unten), und seit Schritt 9.6 wird eine
-Mehrspieler-Runde damit aufgezeichnet - als **Format 3** (unten), mit
-einem Ereignisstrom je Teilnehmer. Bis dahin wurde sie bewusst gar nicht
-aufgezeichnet, weil eine Aufnahme im Format 2 als Runde abgelaufen
-waere, in der aus dem Nichts Stoerreihen erscheinen. Gelesen wird sie
-seit Schritt 9.8, seit Schritt 9.9 **laeuft sie auch ab** - mit einem
-Rundenzustand je Sitzplatz und der Sitzordnung der Runde -, und seit
-Schritt 9.10 spielt jeder dieser Sitzplaetze seine Runde wirklich noch
-einmal (siehe "Wiedergabe" unten).
-Die Meldung, mit der `demo_play` eine Versus-Aufnahme bis dahin
-abgewiesen hat, ist mit 9.9 entfallen (`demo_versus` in beiden
-Sprachdateien); sie war der ehrliche Zwischenstand, solange es gar keine
-Wiedergabe gab - nicht die Meldung fuer eine beschaedigte Datei, denn
-das war die Aufnahme nie.
+Zuege liegen vollstaendig vor; die **Zuege der Mitspieler** kommen
+dagegen nur deshalb an, weil das Protokoll sie eigens verteilt
+(`ACT`/`PEERACT`, Version 4, siehe unten und 5.4) - uebertragen werden
+sonst nur ihre Zaehler (`PEER`) und, nur in Detailstufe 2,
+Feld-Schnappschuesse (`PEERBOARD`, 200 Zeichen, max. 5 Hz, siehe 5.6).
+Daraus liesse sich keine Runde nachspielen: ein Gegner waere ein
+5-Hz-Standbild ohne fallenden Stein, ohne Next und ohne Hold.
 
 **Leitentscheidung: der Vollausbau** (Nutzerentscheidung). Eine Aufnahme
 ist eine **vollstaendige Aufzeichnung der Partie** und nicht die Sicht
 eines Einzelnen: sie traegt fuer **jeden** Teilnehmer denselben
-Ereignisstrom, den sie heute fuer den eigenen traegt, die Wiedergabe
-simuliert alle Felder gleichzeitig echt, und der Fokus wechselt waehrend
-der Wiedergabe frei mit den Pfeiltasten - der gewaehlte Spieler sitzt
-mittig, die uebrigen sitzen wie gewohnt um ihn herum (5.6).
-
-Damit sind zwei aeltere Festlegungen dieses Abschnitts **ueberholt**,
-beide zugunsten derselben Ueberlegung:
-
-- **"Aufgezeichnet wird, was empfangen wurde"** - die persoenliche
-  Aufnahme aus Zaehlern und Feld-Schnappschuessen, mit dem Kopfvermerk
-  `peers=board` bzw. `peers=state`. Sie war die ehrliche Antwort,
-  solange die Zuege nicht uebertragen werden; ein Gegner in der
-  Bildmitte waere darin aber ein 5-Hz-Schnappschuss ohne fallenden
-  Stein, ohne Next und ohne Hold. Wer den Fokus frei setzen koennen
-  will, braucht die Zuege.
-- **Die Abhaengigkeit von der Detailstufe.** Mit den Zuegen ist eine
-  Aufnahme in jeder Detailstufe vollstaendig - auch eine im
-  Scoreboard-Modus gespielte Runde spielt mit vollen Gegnerfeldern ab.
-  Der Grundsatz dahinter bleibt unangetastet: **die Aufzeichnung
-  erzwingt keine Schnappschuesse** und aendert das Spiel nicht (3.8);
-  `NEEDBOARD` entscheidet weiter allein die Detailstufe.
+Ereignisstrom, den sie fuer den eigenen traegt, die Wiedergabe simuliert
+alle Felder gleichzeitig echt, und der Fokus wechselt waehrend der
+Wiedergabe frei mit den Pfeiltasten - der gewaehlte Spieler sitzt
+mittig, die uebrigen sitzen wie gewohnt um ihn herum (5.6). Damit ist
+eine Aufnahme **unabhaengig von der Detailstufe**, in der sie entstand:
+auch eine im Scoreboard-Modus gespielte Runde spielt mit vollen
+Gegnerfeldern ab. Der Grundsatz aus 3.8 bleibt dabei unangetastet - **die
+Aufzeichnung erzwingt keine Schnappschuesse** und aendert das Spiel
+nicht; `NEEDBOARD` entscheidet weiter allein die Detailstufe.
 
 **Je Teilnehmer eine eigene Datei, lokal.** Eine zentrale Aufnahme beim
 Hub bringt nichts: er sieht dieselben Ereignisse wie jeder Client, die
@@ -3853,9 +3656,8 @@ Zwei Konsequenzen:
     hinter dem Spiel zurueckbleiben, ohne dass es auffaellt.
 
 **Protokoll Version 4: die Zuege werden verteilt** (gebaut mit den
-Schritten 9.3 und 9.4).
-Das ist die Folgefrage, die Abschnitt 8 offen gelassen hat, und sie ist
-mit dem Vollausbau entschieden. Der Einwand von damals - jeder Client
+1.3.0).
+Sie ist mit dem Vollausbau entschieden. Der Einwand von damals - jeder Client
 muesste bis zu vier fremde Runden mitsimulieren - **greift hier nicht**:
 uebertragen und mitgeschrieben werden die Zuege, simuliert wird erst bei
 der Wiedergabe.
@@ -3901,7 +3703,7 @@ der Wiedergabe.
   `PEER`, und eine zweite Quelle fuer dieselbe Zahl koennte von ihr nur
   abweichen.
 - **Gesammelt wird an derselben Stelle wie fuer die Aufnahme.** Die
-  zehn Stellen, an denen einer Runde etwas zustoesst, rufen seit 9.3
+  zehn Stellen, an denen einer Runde etwas zustoesst, rufen seit 1.3.0
   `round_event` (`rowhammer.sh`) statt `demo_record_event`; der Trichter
   gibt das Ereignis an beide Verbraucher desselben Alphabets weiter -
   die Aufzeichnung und den Zugstrom. Auch der Test-Bot (`--mp-bot`)
@@ -3910,37 +3712,15 @@ der Wiedergabe.
 - Bandbreite: rund 40 B/s je Spieler an Zuegen, verteilt an vier
   andere - unter 1 kB/s fuer die ganze Sitzung, gegen die 6 kB/s der
   Schnappschuesse (5.4) also nichts.
-- **Nachgemessen (Schritt 9.5).** Fuenf Teilnehmer in Detailstufe 2 - ein
-  zeichnender Client in einem 200x50-Terminal, der als Einziger
-  Schnappschuesse anfordert (und sie damit fuer alle einschaltet), dazu
-  vier Test-Bots -, je drei Laeufe mit und ohne die neuen Nachrichten:
-
-  | Groesse | Protokoll 3 | Protokoll 4 | Grenze |
-  | --- | --- | --- | --- |
-  | Nachrichten je Client und Sekunde (Spitze) | 10 | 17 | `MP_RATE_MAX` 64 |
-  | empfangene Zeilen je Client und Sekunde (Spitze) | 45 | 63 | 800 (16 je Tick x 50 Ticks) |
-  | Nachrichten des Hubs je Sekunde (Spitze, alle Clients) | 144 | 221 | - |
-  | `PING`-Abstand des Hubs | 2000-2049 ms | 2001-2058 ms | Soll 2000 ms |
-  | Bilder je Sekunde beim zeichnenden Client | 7,4-8,0 | 6,7-9,1 | - |
-  | verworfene Nachrichten / Raten-Abschaltungen | 0 / 0 | 0 / 0 | 0 |
-
-  Der Zugstrom kostet also gut zwei Drittel mehr Nachrichten und bleibt
-  bei einem Viertel der Ratengrenze; die Empfangsseite liegt unter einem
-  Zehntel dessen, was ein Tick abraeumen kann. **Keine der beiden
-  Grenzen wird nachgezogen** - eine Zahl, die nicht annaehernd erreicht
-  wird, enger zu ziehen bringt nichts, und weiter zu ziehen gaebe nur
-  einem Fluter mehr Raum. Der Hub-Tick von 50 ms haelt mit: sein `PING`
-  weicht wie vorher um hoechstens 58 ms vom Soll ab. Die Bildrate liegt
-  im selben Streubereich wie vorher (Mittel 7,5 gegen 7,7 bei drei
-  Laeufen je Seite, der beste Einzellauf ist einer der neuen) - eine
-  Verschlechterung ist nicht messbar, die Stichprobe ist aber klein:
-  die Test-Bots bauen sich nach 4 bis 7 Sekunden selbst tot, und so lang
-  ist das Vollast-Fenster je Lauf.
-- **Was die Lastprobe gefunden hat**, war kein Kapazitaetsproblem,
-  sondern ein Fehler, den es seit der Einfuehrung des gemeinsamen Seeds
-  gab: ein zehnstelliger Seed passte nicht in das Zahlenfeld des
-  Protokolls und wurde von **jedem** Client verworfen (siehe 5.9,
-  "Seed"). Er ist mit 9.5 behoben.
+- **Nachgemessen** an fuenf Teilnehmern in Detailstufe 2 (Messwerte in
+  HISTORY.md, 1.3.0): der Zugstrom kostet gut zwei Drittel mehr
+  Nachrichten und bleibt damit bei einem Viertel von `MP_RATE_MAX`; die
+  Empfangsseite liegt unter einem Zehntel dessen, was ein Tick abraeumen
+  kann, der Hub-Tick haelt seinen `PING`-Abstand, und die Bildrate
+  bleibt im bisherigen Streubereich. **Keine der beiden Grenzen wurde
+  nachgezogen** - eine Zahl, die nicht annaehernd erreicht wird, enger
+  zu ziehen bringt nichts, und weiter zu ziehen gaebe nur einem Fluter
+  mehr Raum.
 
 Drei Festlegungen dazu:
 
@@ -3968,8 +3748,7 @@ Drei Festlegungen dazu:
   aenderte die Aufzeichnung das Spiel (3.8), und `--demo-record off`
   waere am Verkehr zu erkennen.
 
-**Demo-Format Version 3** (geschrieben seit Schritt 9.6, gelesen seit
-Schritt 9.8).
+**Demo-Format Version 3.**
 Der Lader nimmt **Version 2 und 3**, geschrieben wird 3. Eine
 Einzelspieler-Aufnahme ist eine echte Teilmenge, und die vorhandenen
 Aufnahmen - an denen Highscore-Eintraege haengen - bleiben damit
@@ -4048,7 +3827,7 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   wenn der Roster ihn nennt - und beim Schliessen der Aufnahme als `n`,
   falls die Runde vorher zu Ende war (der Normalfall beim
   entscheidenden Ausscheiden).
-- **Eine Steinfolge fuer alle** (gebaut mit Schritt 9.7). Der gemeinsame
+- **Eine Steinfolge fuer alle.** Der gemeinsame
   Seed (5.1) gibt jedem dieselbe Folge, nur zu anderen Zeitpunkten. Der
   Aufzeichnende zieht sie deshalb weit genug: er zaehlt je Slot die
   Ereignisse mit, die einen Stein aus der Folge nehmen, und fuellt die
@@ -4075,7 +3854,7 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
     den gespawnten Steinen immer die drei Vorschauen und den naechsten
     in der Queue, und auch die sind aus der Folge gezogen.
 - **Der Leser kennt nur ein Modell** (`demo_load` in `lib/demo.sh`, seit
-  Schritt 9.8): `e=` fuellt Strom 0, `p=<n>` fuellt Strom n, und eine
+  `lib/demo.sh`): `e=` fuellt Strom 0, `p=<n>` fuellt Strom n, und eine
   Einzelspieler-Aufnahme hat schlicht nichts ausser Strom 0. Vier
   Festlegungen dazu:
   - **Je Strom vier Arrays**, angesprochen ueber **Namerefs**
@@ -4153,18 +3932,19 @@ Fokus-Slot gebunden. Der Renderer bleibt dadurch fast unveraendert:
   Der Schnappschuss liess ihn weg, weil er unterwegs veraltet waere
   (5.4); in einer Wiedergabe gibt es dieses Problem nicht, und ein Feld
   ohne fallenden Stein saehe neben vier anderen tot aus.
-- **Tasten:** Pfeil links/rechts waehlen den Fokus, umlaufend ueber die
-  belegten Slots; `-`/`+` stellen das Tempo. Beide sind heute doppelt
-  belegt (`LEFT`/`-` und `RIGHT`/`+`, siehe 3.8), es geht also keine
-  Funktion verloren. Die HUD-Zeile 18 nennt Tempo und Fokus.
+- **Tasten** (noch offen, siehe TODO.md): Pfeil links/rechts sollen den
+  Fokus waehlen, umlaufend ueber die belegten Slots; `-`/`+` stellen
+  dann das Tempo. Beide sind heute doppelt belegt (`LEFT`/`-` und
+  `RIGHT`/`+`, siehe 3.8), es geht also keine Funktion verloren. Die
+  HUD-Zeile 18 nennt danach Tempo und Fokus.
 - **Die Blink-Animation laeuft nur fuer den Fokus.** `flash_rows` haelt
   den Loop an (3.1); bei den uebrigen verschwindet die Reihe sofort,
   denn alles andere hiesse, den Loop bis zu fuenfmal je Sekunde
   anzuhalten.
-- Der Kasten am Ende hat genau acht Innenzeilen; die Platzierung
-  bezahlt die fuehrende Leerzeile.
+- Der Kasten am Ende hat genau acht Innenzeilen; die Platzierung soll
+  die fuehrende Leerzeile bezahlen (noch offen, siehe TODO.md).
 
-Die Zustaende dahinter stehen seit Schritt 9.9
+Die Zustaende dahinter
 (`demo_seats_scan`, `demo_play_states_build`,
 `demo_play_states_release`, `demo_play_peers_begin`/`_end` in
 `lib/demo.sh`). Fuenf Festlegungen aus dieser Umsetzung:
@@ -4208,7 +3988,7 @@ Die Zustaende dahinter stehen seit Schritt 9.9
   kleineren `--mp-max` gestartet wurde als die, die sie gespielt hat -
   dieselbe Ueberlegung, auf der `DEMO_STREAM_MAX` steht.
 
-**Die Ereignisse werden seit Schritt 9.10 angewandt** (`demo_step`,
+**Die Ereignisse werden angewandt** (`demo_step`,
 `demo_peer_publish`, `demo_cursors_reset`, `demo_events_left` und die
 vier neuen Buchstaben in `demo_apply`/`demo_apply_out`, alle in
 `lib/demo.sh`). Damit spielt jeder Sitzplatz seine Runde wirklich noch
@@ -4280,7 +4060,8 @@ Fuer **jedes** Bash-Skript in diesem Repo gelten verbindlich die
   Diagnosemeldungen nach STDERR bleiben ausnahmslos englisch.
 - `-h`/`--help` mit allen Parametern; jeder Parameter zusaetzlich per
   Umgebungsvariable setzbar (Praefix `ROWHAMMER_`, Praezedenz
-  Standard < Config < Env < CLI).
+  Standard < Config < Env < CLI - welche Werte ueberhaupt in der Config
+  landen, sagt die Optionstabelle in 4.2).
 - Variablen immer als `"${var}"` schreiben.
 - Fehler mit aussagekraeftiger Meldung nach STDERR; STDERR von Befehlen nicht
   unterdruecken; Exit-Code 0/!=0, Aufruffehler 2.
@@ -4288,577 +4069,61 @@ Fuer **jedes** Bash-Skript in diesem Repo gelten verbindlich die
 
 Hinweis: Das Spiel ist interaktiv; die Logging-Regeln fuer cron/systemd sind
 hier nachrangig, die uebrigen Regeln gelten uneingeschraenkt.
-Diese CLAUDE.md (Konzept, Roadmap) ist bei jeder inhaltlichen Aenderung
-mitzupflegen.
 
-Arbeitsregel: **Erledigte Roadmap-Punkte wandern nach HISTORY.md.** Die
-Roadmap (Abschnitt 7) fuehrt nur Offenes; ist ein Punkt umgesetzt, wird
-er samt seiner Begruendung nach [HISTORY.md](HISTORY.md) verschoben
-(Archiv, nach Version geordnet, mit Uebersichtstabelle). Zum Verschieben
-gehoert dazu:
+### 6.1 Arbeitsregeln fuer die Dokumentation
 
-1. **Aktuellen Zustand nachziehen.** Was die Funktion *heute* tut, gehoert
-   in die Abschnitte 1 bis 5 dieser Datei - und, soweit es Spielerinnen
-   und Spieler sehen (Menuepunkte, Tasten, CLI-Optionen, Dateien im
-   Datenverzeichnis), zusaetzlich in die README.md. HISTORY.md beschreibt
-   nur den Stand zum Umsetzungszeitpunkt und ist keine Quelle fuer den
-   aktuellen Zustand.
-2. **Ueberholtes markieren.** Loest die neue Version eine aeltere ab,
+Arbeitsregel: **Jede der vier Markdown-Dateien hat eine Rolle**, und
+eine Angabe steht an genau einer Stelle (Tabelle im Kopf dieser Datei).
+Wer etwas fertigstellt, pflegt alle vier:
+
+1. **Aktuellen Zustand nachziehen.** Was die Funktion *heute* tut,
+   gehoert in die Abschnitte 1 bis 5 dieser Datei - und, soweit es
+   Spielerinnen und Spieler sehen (Menuepunkte, Tasten, CLI-Optionen,
+   Dateien im Datenverzeichnis), zusaetzlich in die README.md.
+2. **Erledigtes nach HISTORY.md verschieben**, samt seiner Begruendung
+   und der Abnahme (Archiv, nach Version geordnet, mit
+   Uebersichtstabelle). Was die Version **abgeloest** hat, gehoert als
+   _"Vorzustand: ..."_ ebenfalls dorthin und nicht in die Beschreibung
+   hier - CLAUDE.md fuehrt den heutigen Stand samt seiner Begruendung,
+   nicht die Geschichte davor.
+3. **Ueberholtes markieren.** Loest die neue Version eine aeltere ab,
    bekommt der aeltere Eintrag in HISTORY.md eine Zeile
    _"Spaeter ueberholt: ..."_ mit Verweis auf die abloesende Version.
-3. **Querverweise pruefen.** Zeigt eine Stelle in CLAUDE.md auf einen
-   Roadmap-Punkt ("siehe Phase 4 ..."), wird der Verweis auf HISTORY.md
-   samt Version umgeschrieben.
+4. **Den Punkt aus TODO.md streichen** und die Querverweise pruefen -
+   hier, in der README und in den Code-Kommentaren.
+
+Arbeitsregel: **Die Abschnittsnummern dieser Datei sind stabil.** Rund
+hundert Kommentare in `rowhammer.sh`, `lib/*.sh`, `tools/*.sh` und den
+Workflows verweisen mit ihnen auf einzelne Abschnitte ("siehe CLAUDE.md
+5.20"). Ein neuer Abschnitt wird angehaengt, ein bestehender nicht
+umnummeriert; wird eine Umnummerierung doch einmal unvermeidlich, sind
+diese Verweise im selben Zug nachzuziehen.
+
+Arbeitsregel: **Aenderungen an TODO.md duerfen direkt auf dem
+`main`-Branch** vorgenommen werden, auch ohne eigenen Feature-Branch
+oder Pull Request. Dasselbe gilt fuer HISTORY.md, soweit nur bereits
+erledigte Punkte dorthin verschoben oder dort nachgetragen werden.
+
+### 6.2 Arbeitsregeln fuer den Code
 
 Arbeitsregel: **`2.0.0` kommt erst, wenn der Mehrspieler fertig ist**
 (Nutzerentscheidung, ueberarbeitet mit 1.1.0). Bis dahin laeuft die
 Arbeit am Mehrspieler in der **`1.x`-Reihe** weiter, Seite an Seite mit
 allem anderen, was am Spiel nachgezogen wird: eine Minor-Version je
-Zuwachs, eine Patch-Version je Korrektur.
-
-Bis 1.0.4 galt hier die umgekehrte Regel - jede Aenderung am
-Mehrspieler sei Arbeit an `2.x.x`, und der erste Schritt hinein der
-Sprung auf `2.0.0`. Die erste Fassung des Mehrspielers war danach
-zunaechst als `2.0.0` beschriftet; noch vor jedem Release hat der Nutzer
-das umgedreht, weil die grosse Zahl etwas Fertiges verspricht, das
-dieser Modus noch nicht ist (der Lobby-Aufbau, die Sitzungs-
-einstellungen und die Demo-Aufzeichnung fehlten). Eine Versionsnummer
-ist eine Aussage ueber den Zustand, nicht ueber die Menge der Arbeit.
-`2.0.0` ist damit reserviert fuer den Stand, an dem Phase 5
-abgeschlossen ist - also einschliesslich der Demo-Aufzeichnung einer
-Mehrspieler-Runde (5.20); die Server-Phase 6 baut danach darauf auf.
-SemVer traegt das: die neuen Formate des Mehrspielers (Protokoll,
-Sitzungsverzeichnis) sind bislang nur untereinander im Umlauf, und die
-Arbeitsregel "keine Abwaertskompatibilitaet" unten laesst sie ohnehin
-brechen - eine Protokollversion, die ein alter Client nicht kennt,
-weist der Hub sauber ab.
+Zuwachs, eine Patch-Version je Korrektur. Eine Versionsnummer ist eine
+Aussage ueber den Zustand, nicht ueber die Menge der Arbeit - `2.0.0`
+ist deshalb dem Stand vorbehalten, an dem Phase 5 abgeschlossen ist,
+einschliesslich der Demo-Aufzeichnung einer Mehrspieler-Runde (5.20);
+die Server-Phase 6 baut danach darauf auf. SemVer traegt das: die
+Formate des Mehrspielers (Protokoll, Sitzungsverzeichnis) sind bislang
+nur untereinander im Umlauf, und die Regel darunter laesst sie ohnehin
+brechen - eine Protokollversion, die ein alter Client nicht kennt, weist
+der Hub sauber ab.
 
 Arbeitsregel: **Keine Abwaertskompatibilitaet noetig.** Das Projekt wird
 sequenziell entwickelt und war nie anderswo installiert; Migrationslogik
 fuer alte Config-/Savegame-Formate oder alte Schnittstellen ist unnoetig
 und soll weggelassen werden. Formate duerfen bei Bedarf einfach brechen.
-
-Arbeitsregel: **Aenderungen an der ToDo-Liste (Abschnitt 7) duerfen
-direkt auf dem `main`-Branch vorgenommen werden**, auch ohne eigenen
-Feature-Branch oder Pull Request. Dasselbe gilt fuer HISTORY.md, soweit
-nur bereits erledigte Punkte dorthin verschoben oder dort nachgetragen
-werden.
-
-## 7. Roadmap / Todo-Liste
-
-Diese Liste fuehrt nur noch die **offenen** Punkte. Ein erledigter Punkt
-wandert samt seiner Begruendung nach [HISTORY.md](HISTORY.md) - dem
-Archiv der abgeschlossenen Roadmap-Punkte, nach Version geordnet. Der
-**aktuelle** Zustand der jeweiligen Funktion steht danach nicht dort,
-sondern in den Abschnitten 1 bis 5 dieser Datei und - soweit
-spielersichtbar - in der README.md (Arbeitsregel in Abschnitt 6).
-
-**Versionszuordnung (ueberarbeitet mit 1.1.0):** Alles unten laeuft in
-der **`1.x`-Reihe** - die offenen Einzelspieler-Punkte ebenso wie der
-Rest der Phase 5. **`2.0.0` ist fuer den fertigen Mehrspieler
-reserviert** (Arbeitsregel in Abschnitt 6): erst wenn Phase 5
-abgeschlossen ist, also samt der Demo-Aufzeichnung einer
-Mehrspieler-Runde (5.20), traegt das Spiel die grosse Zahl; die
-Server-Phase 6 baut danach darauf auf.
-
-Erledigt und nach HISTORY.md verschoben:
-
-- **Phase 1 - Spielbarer Kern** (0.1.0), vollstaendig
-- **Zwischenschritt - Menue und Konfiguration** (0.2.0), vollstaendig
-- **Phase 2 - The-New-Tetris-Mechaniken** (0.3.0, Bonuswerte 0.4.0),
-  vollstaendig
-- **Zwischenschritt - Debug-Modus** (0.6.0), vollstaendig
-- **Phase 3 - Weltwunder** (0.8.0), vollstaendig
-- **Zwischenschritt - Paketierung**: `Makefile`, Debian-Paketierung und
-  `build-deb.sh` (0.17.0), RPM-Paketierung und `build-rpm.sh` (0.37.0),
-  Release-Struktur auf GitHub samt CI-Paketbau (0.40.0, siehe 4.9);
-  die restlichen Punkte dieses Zwischenschritts stehen unten
-- **Phase 4 - Politur**: alles von 0.5.0 (Tastenbelegung) bis 1.0.2
-  (Rundenende am oberen Feldrand); die
-  Uebersichtstabelle in HISTORY.md
-  listet jede Version mit ihrem Thema. Offen ist der Punkt unten
-- **Phase 5 - Mehrspieler** (1.1.0): die Schritte 1 bis 8 und 10 bis 12
-  (Transport, Protokoll, Hub und Lobby, Mitspieler-Anzeige in drei
-  Stufen, Garbage, Rundenende, mehrere Spieler, Test-Bot und
-  Fuzz-Review). Offen bleiben die zwei Punkte unten
-
-### Zwischenschritt - Paketierung (Version 1.x.x; offene Punkte, deb 0.17.0, rpm 0.37.0 und Release/CI 0.40.0 erledigt, siehe HISTORY.md)
-
-- [ ] Lauffaehigkeit fuer abgespeckte Shells pruefen (z. B. `ash`/BusyBox
-      auf OpenWrt/Embedded-Systemen); nur bei positivem Ergebnis den
-      naechsten Punkt (opkg-Paketierung) angehen
-- [ ] opkg-Paketierung implementieren (fuer OpenWrt/Embedded-Systeme,
-      analog zur Debian-Paketierung, nutzt ebenfalls `make install`),
-      vorausgesetzt die Shell-Kompatibilitaetspruefung faellt positiv aus
-- [ ] Lizenz festlegen und `debian/copyright` aktualisieren. Haengt
-      inzwischen mehr dran als die beiden Dateien: solange es keine
-      Lizenz gibt, werden die Release-Pakete bewusst unsigniert gebaut
-      und es gibt keine oeffentliche Paketquelle (siehe 4.9). Ein
-      Signier-Schritt im Release-Workflow (Schluessel als Secret) waere
-      der naechste Schritt, sobald die Lizenzfrage entschieden ist.
-
-### Phase 4 - Politur (Version 1.x.x; offene Punkte, die erledigten stehen in HISTORY.md)
-
-- [ ] Weltwunder-Animation (siehe 5.18, Nutzerwunsch): der
-      Wunder-Bildschirm deckt die ASCII-Art bislang nur statisch
-      zeilenweise auf. Kurze, von Hand aus asciinema-Voraufnahmen
-      abgeleitete Frame-Tabellen sollen Wunder-Uebergaenge (neue
-      Baustufe, Fertigstellung) mit einem kleinen Animationsschritt
-      versehen, ueber das bestehende `FRAME_LINES`-Rendering (4.3) ohne
-      neue Abhaengigkeit. Gilt fuer den lokalen wie den spaeteren
-      serverweiten Wunder-Bildschirm (5.17) gleichermassen und hat
-      keine Server-Abhaengigkeit, ist also unabhaengig von Phase 6
-      umsetzbar.
-### Phase 5 - Multiplayer (Version 1.x.x; Kern seit 1.1.0, offener Rest unten)
-
-Die Schritte 1 bis 8 sowie 10 bis 12 sind mit `1.1.0` umgesetzt und samt
-ihrer Begruendung nach [HISTORY.md](HISTORY.md) gewandert; der aktuelle
-Zustand steht in Abschnitt 5. Offen ist ein Schritt:
-
-- [ ] **Schritt 9 - Demo-Aufzeichnung der Mehrspieler-Runde**
-      (Zielanforderung und Architektur siehe 5.20). Vollausbau: die
-      Zuege aller Teilnehmer werden verteilt und mitgeschrieben, die
-      Wiedergabe simuliert alle Felder gleichzeitig, und der Fokus
-      wechselt waehrend der Wiedergabe frei mit den Pfeiltasten.
-      Aufgezeichnet wird seit 9.6; bis dahin wurde eine
-      Mehrspieler-Runde bewusst **nicht** aufgezeichnet, weil eine
-      Aufnahme im Format 2 als Runde abliefe, in der aus dem Nichts
-      Stoerreihen erscheinen. Gelesen wird sie seit 9.8 und laeuft seit
-      9.9 ab; seit 9.10 spielt dabei jeder Sitzplatz seine Runde
-      wirklich noch einmal. Was 9.11 bis 9.13 noch fertig bauen, ist die
-      Bedienung (Fokuswechsel), der Kasten am Ende und die Gegenprobe
-      gegen die Pruefpunkte.
-      **Gesamtabnahme:** die Wiedergabe einer Vier-Spieler-Runde zeigt
-      fuer jeden der vier denselben Verlauf wie die Runde selbst, in
-      jeder Detailstufe aufgenommen, und laesst sich waehrend des Laufs
-      zwischen ihnen umschalten.
-      Die Version bleibt waehrend der Arbeit auf `1.3.0` und steigt erst
-      mit Schritt 9.14 auf `1.4.0`; `2.0.0` bleibt dem Stand nach der
-      Entkopplung (Punkt darunter) vorbehalten.
-  - [x] **9.1 Rundenzustand benennen.** Neues Modul `lib/state.sh` mit
-        der Liste des Rundenzustands und `state_new`, `state_bind`,
-        `state_release`. Noch ohne Nutzer - die Runde laeuft weiter auf
-        den Globals. Abnahme: ein Testskript legt fuenf Zustaende an,
-        schreibt in jeden und weist die Trennung nach; die Liste deckt
-        sich mit `game_reset`.
-  - [x] **9.2 Bash-Minimum auf 4.3.** Startcheck mit klarer Meldung,
-        `debian/control`, `rowhammer.spec`, 4.1 und README nachziehen.
-        Abnahme: Start und `--help` unveraendert, die Meldung erscheint
-        bei kuenstlich gesetzter Bedingung.
-  - [x] **9.3 Protokoll 4, Teil 1: `ACT`/`PEERACT`.** Nachrichtentabelle
-        und Muster in `lib/proto.sh`, Sammeln und Senden in `lib/mp.sh`
-        (`MP_ACT_MS`), Weiterreichen im Hub. Abnahme: Runde mit drei
-        `--mp-bot`, `net.log` zeigt die Stroeme, `tools/net-fuzz.sh`
-        bleibt sauber, die Runde spielt sich unveraendert.
-  - [x] **9.4 Protokoll 4, Teil 2: `GARBAGE`/`QUEUE` mit Slot an alle.**
-        Abnahme: Stoerreihen kommen unveraendert an, und jeder Client
-        sieht auch die der anderen im `net.log`.
-  - [x] **9.5 Lastprobe.** Fuenf Teilnehmer in Detailstufe 2:
-        `MP_POLL_MAX`, `MP_RATE_MAX` und den Hub-Tick gegen den neuen
-        Verkehr messen, Grenzen nachziehen falls noetig. Abnahme: keine
-        verworfene Nachricht, keine Ratenabschaltung, Framerate wie
-        vorher. Zahlen und Aufbau in 5.20 ("Nachgemessen"); keine der
-        beiden Grenzen musste nachgezogen werden. Die Probe hat dafuer
-        einen alten Fehler gefunden - ein zehnstelliger Seed, den jeder
-        Client verwarf (siehe 5.9, "Seed") -, der mit ihr behoben ist.
-  - [x] **9.6 Format 3 schreiben.** Kopf, `p=`- und `v=`-Zeilen, neue
-        Ereignisbuchstaben, Demo-Uhr als Rundenuhr im Versus, `versus`
-        in `DEMO_MODE_RE`, `end=lost`, und `--mp-bot` zeichnet nicht
-        auf. Noch keine Wiedergabe. Abnahme: nach einer Runde liegt eine
-        lesbare Datei vor, deren Kopf und Stroeme sich mit `events.log`
-        decken. Geprueft an einer Runde mit zwei Test-Bots: Kopf,
-        Ereignisstroeme, Pruefpunkte und die Plaetze der Ausgeschiedenen
-        decken sich mit dem `events.log` des aufzeichnenden Clients.
-        Der Sitzungsblock ist auf eine Versus-Aufnahme beschraenkt, damit
-        eine Einzelspieler-Aufnahme bleibt, was sie war - sie wird
-        weiterhin unveraendert aufgezeichnet und abgespielt (siehe
-        5.20). Eine Versus-Aufnahme steht in der Demo-Liste und wird
-        beim Abspielen mit einer Meldung abgewiesen, bis 9.8 sie lesen
-        kann.
-  - [x] **9.7 Steinfolge fuer alle.** Die Folge aus dem eigenen Beutel
-        nachfuellen, solange irgendein Spieler noch Steine braucht -
-        auch nach dem eigenen Ausscheiden. Abnahme: der frueh
-        Ausgeschiedene hat in seiner Datei so viele Steine, wie der
-        Letzte im Feld verbraucht hat. Geprueft an einer
-        Drei-Spieler-Runde mit zwei Test-Bots, in der der aufzeichnende
-        Client als Erster ausschied: er selbst hatte 12 Steine
-        verbraucht, der Weiterspielende 14, und in der Datei stehen 18
-        (14 + Vorschau) - dieselben 18, die der Beutel des Bots aus dem
-        gemeinsamen Seed gezogen hatte, Buchstabe fuer Buchstabe.
-        Gezaehlt wird je Slot in `demo_slot_event`, nachgezogen beim
-        Schliessen der Aufnahme (`demo_pieces_topup`, siehe 5.20).
-  - [x] **9.8 Format 3 lesen.** Neue Kopfschluessel (`peer=` ist der
-        erste wiederholbare), fuenf Ereignisstroeme, ein Muster je Feld,
-        Version 2 weiter akzeptiert. Abnahme: eine Format-2-Aufnahme
-        laedt unveraendert, praeparierte Muelldateien werden mit Grund
-        abgewiesen. Geprueft an der Aufnahme aus 9.7 (drei Stroeme, 146
-        Ereignisse, Pruefpunkte an ihrer Position) und an 29
-        praeparierten Dateien - Sitzungsblock in beiden Richtungen
-        falsch, Slots ausserhalb der Sitzung, verstuemmelte Tokens,
-        Kopfzeilen hinter dem Strom, Version zu alt und zu neu sowie
-        ANSI-Sequenzen, `$(...)`, Backticks und eine 100-kB-Zeile: jede
-        mit ihrem Grund im Debug-Log abgewiesen, kein Befehl
-        ausgefuehrt. Eine Format-2-Aufnahme und eine
-        Einzelspieler-Aufnahme der Version 3 spielen unveraendert.
-        Bis 9.9 die Wiedergabe baut, wies `demo_play` eine geladene
-        Versus-Aufnahme mit einer eigenen Meldung ab (`demo_versus`) -
-        nicht mit der fuer eine beschaedigte Datei; mit 9.9 ist diese
-        Meldung entfallen.
-  - [x] **9.9 Wiedergabe: Zustaende aufbauen.** Je Slot ein Zustand,
-        initialisiert wie `game_reset`; Aufbau innerhalb der
-        Neustart-Schleife (Taste `r`), Rueckbau auf beiden
-        Rueckgabepfaden. Abnahme: eine Versus-Aufnahme startet, zeigt
-        fuenf leere Felder und laeuft bis zum Ende durch.
-        Geprueft an einer echten Drei-Spieler-Runde (ein Client, zwei
-        Test-Bots, Stoerreihen an): die Aufnahme startet, zeigt das
-        eigene Feld in der Mitte und die beiden Mitspieler mit Namen auf
-        ihren Plaetzen der Runde, laeuft ihre 5882 ms ab und endet im
-        Demo-Kasten; `events.log` nennt drei Rundenstarts, einen je
-        Sitzplatz. Dieselbe Aufnahme mit `--mp-max 2` zeigt weiterhin
-        beide Mitspieler (`MP_SEATS`, siehe 5.20). Rueckbau geprueft,
-        indem im selben Prozess hinterher eine Marathon-Runde gespielt
-        wurde - Brett, Beutel und Instanztabellen arbeiten wie zuvor -,
-        und die Wiedergabe einer Einzelspieler-Aufnahme laeuft
-        unveraendert, obwohl sie jetzt denselben Weg nimmt.
-        Aufgeraeumt: `state_unbind` stellt die Globals wieder her und
-        `tools/state-check.sh` prueft das mit (siehe 5.20).
-  - [x] **9.10 Wiedergabe: Ereignisse anwenden.** Ein Cursor je Slot,
-        Kontextwechsel, `MP_PEER_*` aus der Simulation fuellen (Brett
-        samt fallendem Stein), `flash_rows` nur fuer den Fokus. Abnahme:
-        die Wiedergabe zeigt denselben Verlauf wie die Runde - fuer
-        jeden Spieler. Geprueft an einer echten Drei-Spieler-Runde
-        (ein Client, zwei Test-Bots, Stoerreihen an): beim Abspielen
-        stapeln sich die beiden Bot-Bretter genau wie in der Runde, sie
-        scheiden mit ihren Plaetzen 3 und 2 aus, der Sieger bleibt
-        stehen, und die Wiedergabe endet auf ihrer Zeitachse. Dazu eine
-        von Hand gebaute Aufnahme mit den drei Ereignissen, die kein
-        Zug erzeugt: die zwei Stoerreihen (`y023`) stehen mit ihrem Loch
-        in Spalte 3 im Brett des Fokus, die Warteschlangenlaenge folgt
-        dem `q`-Ereignis und der Ausgeschiedene traegt "K.O. 3" in
-        seiner Fusszeile. Die Detailstufen 1 und 0 zeigen dieselbe
-        Simulation als Zaehler und Hoehenbalken, eine
-        Einzelspieler-Aufnahme laeuft unveraendert, und die Runde nach
-        einer Wiedergabe hat weder Gegner noch fremden Zustand.
-        Aufgeraeumt: die Guards, die eine Wiedergabe davon abhalten, ihr
-        simuliertes Rundenende als eigenes zu melden (siehe 5.20).
-  - [ ] **9.11 Wiedergabe: Fokuswechsel.** Pfeiltasten waehlen den Slot,
-        Tempo auf `-`/`+`, HUD-Zeile nennt beides, `RENDER_FULL` beim
-        Wechsel. Abnahme: waehrend des Laufs umschalten; das gewaehlte
-        Feld steht mittig mit HUD, Hold und Next.
-  - [ ] **9.12 Rundenende.** Ausscheiden, Verbindungsverlust und Sieger
-        in der Anzeige, Platzierung im Kasten (er hat genau acht
-        Innenzeilen - die fuehrende Leerzeile bezahlt sie), `end=lost`
-        mit eigenem Text. Abnahme: der Kasten nennt Platz und Grund,
-        alle vier `end`-Werte sehen richtig aus.
-  - [ ] **9.13 Gegenprobe und Randfaelle.** Simulation gegen die
-        `v=`-Pruefpunkte mit Meldung ins Debug-Log; Verbindungsverlust,
-        Aufnahme aus Detailstufe 0/1, Sperre bei pausierter Runde,
-        EXIT-`trap`, Verknuepfung aus der Versus-Bestenliste ueber den
-        Runden-Hash. Abnahme: eine Vier-Spieler-Aufnahme laeuft ohne
-        eine einzige Abweichungsmeldung durch.
-  - [ ] **9.14 Doku, Texte, Version.** 5.20 auf den gebauten Zustand,
-        4.10 (Format 3), 5.4 (Protokoll 4), 5.6 (Fokus), 4.1 (Bash),
-        Abschnitt 8 nachziehen; README, Anleitungsseiten 9 und 10;
-        Punkt nach HISTORY.md; Version `1.4.0` an allen vier Stellen
-        samt Changelog-Strophen. Abnahme: `tools/release.sh --mode
-        check` ist gruen.
-- [ ] **Rest aus Schritt 1 - Entkopplung der Rundenlogik** (siehe 5.3).
-      Der Mehrspieler brauchte davon nur, was er benutzt, und laeuft
-      damit; vollstaendig entkoppelt ist die Rundenlogik aber nicht:
-      `flash_rows` haelt den Loop weiterhin an (es leert im Mehrspieler
-      immerhin die Leitung mit) und `record_round` verbucht und zeigt
-      noch in einem. Das ist Aufraeumarbeit ohne sichtbare Wirkung und
-      steht deshalb hinter allem anderen.
-
-### Phase 6 - Server-Betrieb, Accounts, Web (Version 2.x.x; spezifiziert in 5.11-5.19, noch nicht umgesetzt)
-
-Diese Phase beginnt hinter `2.0.0`, also hinter dem abgeschlossenen
-Mehrspieler (Arbeitsregel in Abschnitt 6).
-
-Setzt auf einem fertigen Phase 5 auf (der Mehrspieler-Kern muss laufen
-und sich per Playtesting bewaehrt haben, bevor Accounts/Web/Liga
-sinnvoll sind). Reihenfolge wie in 5.11-5.19 begruendet: Deployment
-zuerst (ohne Server kein Bedarf fuer Accounts), Accounts vor dem
-Persistenz-Umbau (das Datenbankschema haengt vom Kontomodell ab),
-serverweite Statistik und gemeinsames Weltwunder direkt danach (sie
-brauchen nur Accounts und die Datenbank, keine laufende
-Mehrspieler-Session, und lassen sich vor der Webseite fertig testen),
-Web-Frontend/Kontoverknuepfung/Abzeichen anschliessend, Liga und
-Multi-Server zuletzt.
-
-- [ ] **Schritt 1 - SSH-ForceCommand-Deployment** (siehe 5.11).
-      `sshd_config`/`authorized_keys`-Vorlage mit `ForceCommand` bzw.
-      `command=`, Haertung (`no-port-forwarding` usw.), eigener
-      Systembenutzer, Rechte auf `${DATA_DIR}`/`${MP_DIR}` geprueft.
-      Laeuft zunaechst weiter mit freiem Login (siehe 5.12).
-      Abnahme: mehrere SSH-Sitzungen landen direkt im Spiel, keine Shell
-      erreichbar.
-- [ ] **Schritt 2 - Konto-Grundlage: SSH-Key-Bindung** (siehe 5.12).
-      Spielkonto an SSH-Public-Key-Fingerprint gebunden, Erstanmeldung
-      fragt Kontonamen ab, Namensmuster wie 5.5. Noch ohne Passwort- oder
-      OAuth-Login. Abnahme: derselbe Key wird bei jeder Sitzung demselben
-      Konto zugeordnet, ein fremder Key kann einen belegten Namen nicht
-      kapern.
-- [ ] **Schritt 3 - Server-Persistenz auf SQLite umstellen** (siehe 5.13).
-      Highscore, Stats und Konten in SQLite-Tabellen statt Flatfiles,
-      `sqlite3`-Zugriff aus Bash mit gebundenen Parametern, Migration der
-      Formate ohne Altdaten-Uebernahme (Arbeitsregel Abschnitt 6).
-      Abnahme: identisches Verhalten wie die bisherigen Flatfiles, aber
-      per SQL abfragbar (z. B. Rang eines Kontos ueber alle Runden).
-- [ ] **Schritt 4 - Erweiterte Server-Highscore-Liste** (siehe 5.13).
-      Laengere Liste (mehr als Top 10), Filter/Suche nach Konto,
-      weiterhin im Spiel ueber "Highscores" abrufbar. Abnahme: Liste
-      bleibt bei vielen Konten performant und uebersichtlich (seitenweise
-      wie heute, siehe 4.5).
-- [ ] **Schritt 5 - Serverweite Statistik** (siehe 5.16).
-      Kontounabhaengiger Aggregat-Zaehler zusaetzlich zum Account-Eintrag
-      bei jeder verbuchten Runde (`server_stats`), neuer Menuepunkt
-      "Server-Statistik". Abnahme: der Zaehler summiert sichtbar ueber
-      mehrere Accounts hinweg korrekt auf, unabhaengig von Highscore und
-      persoenlicher Statistik.
-- [ ] **Schritt 6 - Gemeinsamer Weltwunder-Fortschritt** (siehe 5.17).
-      Zusaetzlicher serverweiter Reihenzaehler mit eigener, deutlich
-      groesserer Kostentabelle (`SERVER_WONDER_COSTS`), zweiter
-      Wunder-Bildschirm fuer den Server-Fortschritt. Abnahme: Reihen
-      mehrerer Accounts zahlen sichtbar auf denselben Server-Fortschritt
-      ein, der Account-eigene Fortschritt bleibt davon unberuehrt.
-- [ ] **Schritt 7 - Web-Highscore (read-only)** (siehe 5.14).
-      Separates, schlankes Web-Backend liest die Datenbank aus Schritt 3,
-      zeigt Highscore/Statistik (inklusive Server-Statistik aus Schritt 5)
-      im Browser. Kein Schreibzugriff vom Web aus. Abnahme: Highscore-
-      Liste ist ohne SSH-Zugang einsehbar.
-- [ ] **Schritt 8 - OAuth-Kontoverknuepfung** (siehe 5.12, 5.14).
-      Login mit Google/Apple/Facebook & Co. auf der Webseite, Anzeige
-      eines kurzlebigen Verknuepfungscodes, Eingabe im Spiel
-      ("Konto verknuepfen") bindet SSH-Key und Web-Identitaet an
-      dasselbe Konto. Abnahme: Anmeldung ueber einen der Anbieter fuehrt
-      zum selben Spielkonto wie der bisherige SSH-Key-Login.
-- [ ] **Schritt 9 - Account-Abzeichen** (siehe 5.19).
-      Feste Abzeichen-Liste mit pruefbaren Bedingungen, Freischaltung bei
-      `record_round`, Anzeige im Account-Bereich und spaeter auf der
-      Highscore-Webseite. Abnahme: ein erfuelltes Kriterium schaltet das
-      passende Abzeichen zuverlaessig und dauerhaft frei.
-- [ ] **Schritt 10 - Liga-System** (siehe 5.14).
-      Saisons/Ranglisten oberhalb der Highscore-Liste; Regeln noch offen
-      (siehe Abschnitt 8), erst nach Playtesting des Mehrspieler-Kerns und
-      im Zusammenspiel mit den Abzeichen aus Schritt 9 zu konkretisieren.
-- [ ] **Schritt 11 - Multi-Server-Faehigkeit** (siehe 5.14).
-      Mehrere Spiel-Server gegen ein gemeinsames Accounts-/Highscore-
-      Backend, Kontosynchronisation ueber Server-Grenzen hinweg. Abnahme:
-      ein Konto behaelt Highscore und Einstellungen beim Wechsel des
-      Servers.
-
-## 8. Offene Punkte
-
-- Bonus-Reihenwertung ist verifiziert und umgesetzt (siehe 3.2); seit
-  dem Punktesystem-Umbau in 0.16.0 ist sie zugleich der Score. Die
-  frueher offene Frage nach den Punkten fuer die Quadrat-Bildung hat
-  sich damit erledigt (es gibt bewusst keine Bildungs-Punkte mehr).
-- Weltwunder-Liste und Baustufen sind seit 0.8.0 festgelegt (siehe
-  3.3). Die Reihen-Kosten je Wunder waren gegenueber dem Original
-  bewusst herunterskaliert (100..6400) und sind mit 0.45.0 auf
-  Nutzerentscheidung mit 100 multipliziert worden (10.000..640.000,
-  Original-Groessenordnung). Offen bleibt wie bisher nur die
-  Feinjustierung nach Playtesting (`WONDER_COSTS`).
-- Mindest-Terminalgroesse: seit 0.26.0 48x22 (vorher 48x24 - die zwei
-  Statuszeilen sind mit dem HUD-Umbau entfallen, siehe 3.4), seit
-  0.19.0 auch waehrend des Spiels ueberwacht (SIGWINCH, siehe HISTORY.md,
-  0.19.0 "Anpassung an Terminalgroesse"): ein Resize zeichnet sauber neu, ein
-  Unterschreiten des Minimums pausiert die Runde hinter einer
-  "resize me"-Overlay bis das Terminal wieder gross genug ist. Das feste
-  Layout skaliert bewusst nicht mit, wird aber seit 0.22.0 mittig im
-  Terminal ausgerichtet (siehe 3.4) - seit 0.28.0 ebenso die Menue- und
-  Info-Bildschirme (siehe 4.3); groessere Terminals zeigen das
-  Spiel also zentriert statt oben links. Ein mitwachsendes Layout (z. B.
-  breitere Zellen oder mehr Vorschau auf grossen Terminals) ist bewusst
-  nicht vorgesehen.
-- Rowhammer-Zaehler: erledigt. 0.24.0 brachte Rundenzaehler und
-  Gesamtstatistik, 0.25.0 auf Nutzerentscheidung auch HUD,
-  `recent=`-Liste und Highscore-Zeile - im HUD anstelle des
-  Weltwunder-Fortschritts, in den beiden Tabellen zulasten der
-  Namensspalte bzw. der letzten freien Spalten (siehe 3.4 und 4.5).
-  Die beiden Tabellen (Highscore, letzte Spiele) waren damit randvoll.
-  Fuer den HUD gilt das seit 0.26.0 nicht mehr - die Zaehler
-  stehen jetzt untereinander in der linken Spalte und haben dort noch
-  acht freie Zeilen (siehe 3.4).
-- Tabellenbreite: erledigt fuer den naechsten Zuwachs. Der
-  Pieces-Zaehler (0.27.0) hat die Ein-Zeilen-Grenze der beiden Tabellen
-  gesprengt; auf Nutzerentscheidung ist ein Eintrag jetzt zwei Zeilen
-  breit, seitenweise angezeigt (bis 0.51.0 ueber `menu_pages`, seit
-  0.52.0 ueber `highscore_browse`, siehe 4.5). Weitere Werte kosten
-  damit keine vorhandene Spalte mehr, sondern Zeilen - und irgendwann
-  eine weitere Seite: pro Info-Bildschirm passen 18 Zeilen
-  (`MENU_BODY_MAX`, seit 0.28.0 eine mehr), die Highscore-Liste zeigt fuenf Eintraege je
-  Seite, die Statistik teilt sich in Gesamtzaehler und letzte Spiele.
-  Eine Zeile der Liste hat seit 0.52.0 zwei Zeichen weniger fuer sich
-  (`HS_LINE_MAX` 44 statt 46): die beiden vordersten Spalten gehoeren
-  dem Cursor und der Demo-Markierung.
-- Spielmodi: die drei Fragen zum Ultra-Modus sind mit 0.34.0
-  entschieden (Rows statt Lines, gescheiterte Versuche ohne
-  Listeneintrag, HUD-Zaehler "Goal"/"Left" in der linken Spalte, siehe
-  3.6), Sprint hat sie mit 0.39.0 gespiegelt uebernommen und Time
-  Attack folgt ihnen seit 0.42.0 mit einer begruendeten Ausnahme (jeder
-  Lauf wird gewertet, siehe 3.6). Offen
-  bleibt nur die Justierung: ob 150 Rows die richtige
-  Distanz, 3 Minuten die richtige Dauer und 1 Minute Startzeit bei
-  1 Sekunde je Row die richtige Time-Attack-Waehrung sind, entscheidet
-  Playtesting
-  (`ULTRA_TARGET_ROWS`, `SPRINT_TIME_MS`, `TIME_ATTACK_START_MS`/
-  `TIME_ATTACK_ROW_MS`) - mit den
-  Quadrat-Boni ist die Ultra-Strecke deutlich kuerzer als 150 physische
-  Reihen, das ist so gewollt, und aus demselben Grund verlaengert ein
-  Rowhammer durch zwei Gold-Quadrate eine Time-Attack-Runde gleich um
-  85 Sekunden. Hochwasser (0.49.0) folgt derselben Linie: Rows als
-  Wertung, jede Runde gewertet (es gibt nur ein Ende), und offen ist
-  auch hier allein die Justierung - ob 20 Sekunden je Flutreihe
-  (`FLOOD_INTERVAL_MS`, Nutzervorgabe "vorerst") auf Dauer die richtige
-  Steigung sind, entscheidet Playtesting. Die Anzeige der Ultra-Liste
-  ist mit
-  0.38.0 nachgezogen (Modus-Auswahl unter "Highscores", siehe 4.5), die
-  Sprint-Liste mit 0.39.0, die Time-Attack-Liste samt Statistik je
-  Modus mit 0.42.0 und die Hochwasser-Liste mit 0.49.0.
-- Punktesystem-Feinschliff (Kombos, Back-to-Back?): Nach dem Umbau in
-  0.16.0 (nur abgebaute Reihen zaehlen) waeren solche Extras eine
-  bewusste Abweichung vom Konzept "Punkte = Reihenwertung" - nur nach
-  expliziter Nutzerentscheidung wieder aufgreifen.
-- UI-Sprache: erledigt mit 0.48.0. Die frueher feste Mischung (Menues
-  Deutsch, HUD und `--help` Englisch) ist einer Uebersetzungsschicht
-  gewichen: die Oberflaeche ist vollstaendig ein- und umschaltbar
-  zweisprachig (Deutsch/Englisch, siehe 4.11), Diagnosemeldungen nach
-  STDERR bleiben englisch. Offen bleibt nur, ob weitere Sprachen
-  dazukommen sollen - technisch ist das eine Datei unter `lib/lang/`.
-
-Offene Punkte zum Mehrspieler (Spezifikation siehe Abschnitt 5; alles
-Uebrige dort ist entschieden):
-
-- **Siegbedingung im Versus-Modus:** entschieden und umgesetzt
-  (Nutzerentscheidung mit 1.1.0). Sie ist **keine Festlegung des
-  Spiels mehr, sondern eine der Sitzung**: der Gastgeber waehlt in der
-  Lobby zwischen `survival` (wer uebrig bleibt - die Vorgabe),
-  `sprint` (die meisten Rows in der Zeit) und `ultra` (wer zuerst am
-  Ziel ist), und die Stoerreihen sind ein Schalter daneben, der
-  anfangs aus ist (siehe 5.1). Damit ist auch die frueher offene Frage
-  nach einem "reinen Rows-Wettkampf ohne Garbage" beantwortet: das ist
-  `sprint` bzw. `ultra` mit ausgeschalteten Stoerreihen.
-  Offen bleibt nur, welche Modi nach Playtesting dazukommen oder
-  wegfallen - die drei sind die, die sich in der Siegbedingung
-  unterscheiden.
-- **Fremdabhaengigkeit:** entschieden und seit 1.1.0 in Gebrauch
-  (Nutzerentscheidung). **`socat` ist gesetzt**, weil die Discovery
-  UDP-Broadcast braucht und `socat` als einziges der frueher
-  erwogenen Programme Broadcast, TCP und Unix-Socket zugleich kann; die
-  Suchreihenfolge ueber `ncat`/`nc -U` und die FIFO-Variante sind damit
-  entfallen (siehe 5.2). Es bleibt ein `Recommends` - der Einzelspieler
-  laeuft ohne.
-- **Wertung von Mehrspieler-Runden:** entschieden und umgesetzt.
-  **Weltwunder-Fortschritt und Statistik: ja, aber nur die eigene
-  Leistung** - keine Reihe eines Mitspielers, kein Bonus fuer den Sieg
-  (Nutzerentscheidung, siehe 5.8). Die zuletzt offene Frage nach der
-  **Bestenliste** ist mit 1.1.0 im Sinne der Empfehlung entschieden:
-  eine **eigene Liste `highscore-versus`** (siehe 4.5). Die drei Wege
-  und warum es dieser wurde:
-  - **Eigene Liste `highscore-versus`** (gebaut): dasselbe
-    Zeilenformat und dieselbe Rangordnung nach Rows wie Marathon, eine
-    sechste Datei neben den fuenf vorhandenen (4.5), jede Runde
-    gewertet wie bei Time Attack und Hochwasser - eine
-    Mehrspieler-Runde kennt keinen Zustand "unvollstaendig". Es ist
-    genau die Entscheidung, die fuer Ultra, Sprint, Time Attack und
-    Hochwasser schon getroffen wurde: eine Runde unter anderen Regeln
-    gehoert in eine andere Liste. Kosten: eine Datei, ein Eintrag in
-    `menu_mode_entries` (der die Modus-Auswahl fuer Einzelspieler,
-    Highscores und Statistik ohnehin gemeinsam baut, siehe 3.6), ein
-    `HSV_*`-Block in `lib/highscore.sh`.
-  - **Mit in die Marathon-Liste:** billiger, aber es mischt zwei
-    Ordnungen in eine Tabelle. Garbage schneidet eine Runde ab und
-    schenkt ihr zugleich zusaetzliche Reihen zum Abbauen; die Zahlen
-    sind schlicht nicht dieselbe Groesse. Genau dagegen wurde die
-    Liste fuenfmal aufgeteilt.
-  - **Gar nicht werten:** der bisherige Stand der Spezifikation.
-    Verliert die Motivation, die eine Bestenliste stiftet, und passt
-    schlecht dazu, dass Statistik und Weltwunder die Runde sehr wohl
-    zaehlen.
-- **Garbage-Werte** (0/1/2/4 Reihen, +2 Silber, +4 Gold, Deckel 10,
-  `GARBAGE_*` in `lib/hub.sh`) sind aus der Reihenwertung abgeleitet,
-  nicht aus dem Original - "The New Tetris" hat keinen vergleichbaren
-  Versus-Modus. Sie stehen seit 1.1.0 im Code und sind bislang nur
-  gerechnet, nicht gespielt: nach Playtesting nachjustieren.
-- **Zielwahl ab 3 Spielern:** Standard `random`. Ob eine manuelle
-  Zielauswahl (Taste) gewuenscht ist, bleibt offen; die Tastenbelegung
-  ist voll und die Bedienung skaliert schlecht.
-- **Spielerzahl:** entschieden (Nutzerentscheidung, siehe 5.1) -
-  **minimal 2, maximal 5, keine Vorgabe dazwischen**, der Host
-  entscheidet ueber den Start. Die Obergrenze ist mit 1.3.0 von 6 auf 5
-  gesunken (Nutzerentscheidung, Begruendung in 5.1). Offen bleibt nur,
-  ob 5 in der Praxis auf
-  schwacher Hardware fluessig laeuft - gemessen wurde bisher gegen
-  Test-Bots auf einem Rechner, nicht in einem echten Raum voller
-  Terminals; die volle Zellenbreite (5.6) verdoppelt dabei die
-  Zeichenmenge je Gegnerfeld, was zuerst dort auffallen wird.
-- **Demo-Aufzeichnung im Mehrspieler:** entschieden
-  (Nutzerentscheidung, siehe 5.20) - **jeder Client zeichnet alle
-  Teilnehmer auf** -, und seit Schritt 9.6 tut er das auch: eine
-  Mehrspieler-Runde wird als Format 3 aufgezeichnet, seit 9.7 mit einer
-  Steinfolge, die fuer jeden Teilnehmer reicht, und seit 9.8 wird sie
-  auch wieder gelesen. Offen bleibt die
-  **Wiedergabe** (Abschnitt 7, Schritte 9.11 bis 9.14): seit 9.9 startet
-  eine Versus-Aufnahme, und seit 9.10 spielt jeder Sitzplatz darin seine
-  Runde wirklich noch einmal - was fehlt, ist der Fokuswechsel, der
-  Kasten am Ende und die Gegenprobe gegen die Pruefpunkte.
-  Die frueher hier offene Folgefrage - ob die Mitspieler nur so
-  aufgenommen werden koennen, wie sie ankamen (Zaehler, und
-  Feld-Schnappschuesse nur in Detailstufe 2) - ist mit dem **Vollausbau**
-  beantwortet: **die Zuege werden verteilt** (Protokollversion 4), und
-  die Aufnahme wird dadurch vollstaendig und symmetrisch. Der Einwand,
-  der die Spezifikation bis dahin bei den Schnappschuessen hielt - jeder
-  Client muesste bis zu vier fremde Runden mitsimulieren -, greift dafuer
-  nicht: uebertragen und mitgeschrieben werden die Zuege, **simuliert
-  wird erst bei der Wiedergabe**. Die Mini-Felder der laufenden Runde
-  kommen unveraendert aus den Schnappschuessen (5.6). Ausschlaggebend
-  war der Wunsch, bei der Wiedergabe frei zwischen den Spielern
-  umschalten zu koennen: ein Gegner in der Bildmitte waere aus
-  Schnappschuessen ein 5-Hz-Standbild ohne fallenden Stein.
-  Der zusaetzliche Verkehr ist mit Schritt 9.5 gemessen und folgenlos:
-  17 Nachrichten je Client und Sekunde in der Spitze gegen eine Grenze
-  von 64, Empfangsseite unter einem Zehntel der Tick-Kapazitaet, Bildrate
-  im bisherigen Streubereich (Tabelle in 5.20). Offen bleibt nur, was
-  eine Messung auf einem Rechner nicht beantworten kann: wie sich das in
-  einem echten Raum voller Terminals und auf schwacher Hardware
-  anfuehlt.
-- **Kein Reconnect in v1** (5.8). Falls sich Abbrueche im Alltag haeufen,
-  waere ein Wiedereinstieg mit vollstaendiger Zustandsuebertragung ein
-  eigener spaeterer Punkt.
-- **Anti-Cheat:** bewusst nur Hub-Autoritaet ueber Garbage-Mengen und
-  Rundenende (5.4). Ein manipulierter Client kann falsche `CLEAR`s
-  melden; eine serverseitige Vollsimulation ist kein Ziel. Die
-  Sicherheitsregeln in 5.5 schuetzen dagegen die Prozesse und Terminals
-  der Mitspieler - dieser Teil ist nicht verhandelbar.
-
-Offene Punkte zum Server-Betrieb (Phase 6, Spezifikation siehe 5.11-5.19):
-
-- **Unix-Accounts vs. eigenes Kontosystem:** Empfehlung in 5.12 ist ein
-  vom SSH-Login entkoppeltes Spielkonto (Bindung an
-  SSH-Key-Fingerprint, keine Unix-Accounts je Spieler). Bestaetigung
-  ausstehend.
-- **Backend-Sprache:** Empfehlung in 5.15 ist, Spiel-Engine und lokales
-  Mehrspieler-Protokoll bei Bash zu belassen, aber fuer Web/Liga/
-  Multi-Server einen schlanken separaten Dienst in einer HTTP-/JSON-/
-  DB-tauglicheren Sprache vorzusehen. Sprache selbst noch offen;
-  Bestaetigung ausstehend, ob dieser Schnitt so gewuenscht ist.
-- **Server-Persistenz:** Empfehlung in 5.13 ist SQLite als
-  Zwischenschritt vor einem "richtigen" Datenbankserver (erst bei
-  Multi-Server-Bedarf, 5.14). Bestaetigung ausstehend.
-- **Liga-Regeln:** komplett offen (Saisonlaenge, Punkteverfall,
-  Ranglisten je Modus), siehe 5.14.
-- **Serverweites Weltwunder:** Nutzervorschlag (5.17), zu bestaetigen.
-  Offen: eigene, groessere Wunder-Liste oder dieselbe Liste mit
-  hoeherer Kostentabelle (`SERVER_WONDER_COSTS`); ob ein
-  fertiggestelltes Server-Wunder allen verbundenen Clients angekuendigt
-  wird.
-- **Weltwunder-Animation:** Nutzerwunsch (5.18) nach mehr Bewegung im
-  Wunder-Bildschirm. Offen: eigener `.cast`-Player zur Laufzeit oder
-  eine von Hand aus einer asciinema-Voraufnahme abgeleitete
-  Frame-Tabelle (letzteres ist der Vorschlag, weil es ohne neue
-  Abhaengigkeit auskommt).
-- **Account-Abzeichen:** Nutzerwunsch (5.19). Offen: konkrete
-  Abzeichen-Liste und ihre Bedingungen, Verhaeltnis zum spaeteren
-  Liga-System.
+Wo bewusst davon abgewichen wurde, steht es an Ort und Stelle: die
+Feldzahlen der Bestenlisten (4.5), die einmalige Umbenennung der
+Marathon-Liste (4.5) und die Demo-Formatversionen 2 und 3 (4.10).
