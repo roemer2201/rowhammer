@@ -310,6 +310,13 @@ DEMO_PLAY_POS=0
 DEMO_SEATS=()
 DEMO_FOCUS=0
 DEMO_STATES=0
+# What the end-of-demo box says about the seat in focus: the place it
+# took and how the round ended for it (demo_focus_outcome). Kept out of
+# the renderer because only this module knows that a seat other than the
+# recording one has no written reason at all - it is read back out of
+# what became of it.
+DEMO_FOCUS_END="quit"
+DEMO_FOCUS_PLACE=0
 # How long the replay runs, in milliseconds of the recorded round. For a
 # versus recording that is the length of the round and not this player's
 # play time - the two part company the moment they top out early and
@@ -1704,6 +1711,132 @@ demo_speed_apply() {
     return 0
 }
 
+# --- Focus of a versus playback -------------------------------------------
+# Which seat the screen is centred on is a decision of the person
+# watching, not of the recording: every seat is simulated in full, so any
+# of them can take the middle at any moment (CLAUDE.md 5.20). The three
+# functions below are the whole of it - the renderer needs nothing but
+# MP_SLOT, which is the seat it leaves out of the opponent columns.
+
+# demo_focus_sync
+# Mirror the focus seat's outcome from the session tables into the pair
+# the board's own box and HUD read (MP_STATE/MP_PLACE). The peer tables
+# are the record - demo_apply_out writes them for every seat, focus or
+# not - and this is the copy that follows the focus around, so a seat
+# that was knocked out long ago still says so when the focus lands on it.
+demo_focus_sync() {
+    MP_STATE="${MP_PEER_STATE[DEMO_FOCUS]:-play}"
+    MP_PLACE="${MP_PEER_PLACE[DEMO_FOCUS]:-0}"
+    return 0
+}
+
+# demo_focus_set SLOT
+# Move the focus to SLOT. The seat being left has to be published into
+# the peer tables first: while it was the focus it was drawn from the
+# round state itself and demo_step never published it, so its entry is
+# whatever it was when the focus last arrived - it would take the middle
+# board's place as a stale picture of itself.
+# The full repaint is not optional: MP_SLOT decides which seats become
+# columns, so every board on screen moves one place along.
+demo_focus_set() {
+    local slot="${1}"
+    [ "${slot}" -ne "${DEMO_FOCUS}" ] || return 0
+    # The seat that is stepping down, as it stands right now.
+    if state_bind "${DEMO_FOCUS}"; then
+        demo_peer_publish "${DEMO_FOCUS}"
+    fi
+    DEMO_FOCUS="${slot}"
+    MP_SLOT="${slot}"
+    DEMO_SIM_SLOT="${slot}"
+    DEMO_SIM_FOCUS=1
+    state_bind "${slot}" || return 1
+    demo_focus_sync
+    # The play clock is round state (STATE_VARS), so every seat carries
+    # one of its own and the seat just bound carries whatever it had when
+    # the focus last left it. The playback loop writes the demo clock
+    # into the bound seat every pass - but only while the replay is still
+    # running, so a focus moved after the end would otherwise show the
+    # time of some earlier moment as this seat's final time.
+    PLAY_MS="${DEMO_CLOCK_MS}"
+    if [ "${PLAY_MS}" -gt "${DEMO_TIMELINE_MS}" ]; then
+        PLAY_MS="${DEMO_TIMELINE_MS}"
+    fi
+    RENDER_FULL=1
+    DIRTY=1
+    debug_event "demo: focus moved to slot ${slot} (${MP_PEER_NAME[slot]:-?})"
+    return 0
+}
+
+# demo_focus_step DIR
+# Step the focus one seat along DEMO_SEATS, wrapping - the same way
+# every other list in this game is paged through. DIR is 1 or -1.
+# A recording with a single seat has nothing to step to and says so by
+# doing nothing.
+demo_focus_step() {
+    local dir="${1}" n i pos=0
+    n="${#DEMO_SEATS[@]}"
+    [ "${n}" -gt 1 ] || return 0
+    for (( i = 0; i < n; i++ )); do
+        [ "${DEMO_SEATS[i]}" -ne "${DEMO_FOCUS}" ] || pos="${i}"
+    done
+    pos=$(( (pos + dir + n) % n ))
+    demo_focus_set "${DEMO_SEATS[pos]}"
+    return 0
+}
+
+# demo_finish_marks
+# Mark the winner when the replay reaches the end of the round. Nobody
+# ever wrote a place for them: "n" and "z" are what leaving the round
+# looks like, and the winner did neither - the seat still standing when
+# the timeline runs out is the one the recording names in its header.
+# Without this the winning board would sit there in mid-round dress
+# while every other column shows how it ended.
+demo_finish_marks() {
+    local winner="${DEMO_HDR_WINNER}"
+    [ "${DEMO_HDR_MP}" -eq 1 ] || return 0
+    # A round this client left before it was decided names no winner.
+    [ "${winner}" -ge 0 ] || return 0
+    [ -n "${MP_PEER_NAME[winner]}" ] || return 0
+    MP_PEER_STATE[winner]="win"
+    MP_PEER_PLACE[winner]=1
+    demo_focus_sync
+    return 0
+}
+
+# demo_focus_outcome
+# How the round ended for the seat in focus, into DEMO_FOCUS_END (one of
+# the four "end" values plus "win" and "end") and DEMO_FOCUS_PLACE.
+# Read by the end-of-demo box, which is the one place that has to say
+# something about a seat other than the one that wrote the file.
+# The recording seat is the only one whose reason is written down; for
+# every other seat it is read back out of what became of them, which is
+# all the streams ever said about it.
+demo_focus_outcome() {
+    DEMO_FOCUS_PLACE="${MP_PEER_PLACE[DEMO_FOCUS]:-0}"
+    if [ "${DEMO_HDR_MP}" -eq 0 ]; then
+        DEMO_FOCUS_PLACE=0
+        DEMO_FOCUS_END="${DEMO_HDR_END}"
+        return 0
+    fi
+    case "${MP_PEER_STATE[DEMO_FOCUS]:-play}" in
+        win)  DEMO_FOCUS_END="win" ;;
+        ko)   DEMO_FOCUS_END="over" ;;
+        gone) DEMO_FOCUS_END="lost" ;;
+        # Still standing when the timeline ran out: the round ended
+        # around them. The recording seat says it more precisely - it is
+        # the one seat whose reason was written down, and "quit" (the
+        # player left) is a thing no stream can show.
+        *)
+            if [ "${DEMO_FOCUS}" -eq "${DEMO_HDR_SLOT}" ]; then
+                DEMO_FOCUS_END="${DEMO_HDR_END}"
+            else
+                DEMO_FOCUS_END="end"
+            fi
+            ;;
+    esac
+    return 0
+}
+
 # demo_apply ACTION
 # Apply one recorded event to the game state, through the very functions
 # the live round uses - which is what makes a replay show the game rather
@@ -2030,9 +2163,11 @@ demo_play_peers_end() {
 # must not be recorded, banked or ranked (record_round refuses while
 # DEMO_PLAYING is set).
 # Controls: the pause key toggles the replay (reusing the game's PAUSED
-# flag and therefore its box), left/right and -/+ step through
-# DEMO_SPEEDS, the quit key or ESC leaves, and "r" restarts the demo once
-# it has finished.
+# flag and therefore its box), left/right move the focus from seat to
+# seat, "-" and "+" step through DEMO_SPEEDS, the quit key or ESC leaves,
+# and "r" restarts the demo once it has finished. The focus survives a
+# restart - whoever the watcher chose to follow, they chose to follow
+# them through the round again.
 # The clock advances by the real time between two loop passes, scaled by
 # the speed, and events are applied when it passes their timestamp. The
 # row flash inside lock_and_next scales along with it (see flash_rows),
@@ -2116,14 +2251,26 @@ demo_play() {
                     PAUSED=$(( 1 - PAUSED ))
                     DIRTY=1
                     ;;
-                LEFT|-)
+                # The arrows pick the seat, "-" and "+" the speed.
+                # Both pairs used to do the speed together, so nothing is
+                # lost by splitting them - and the arrows are what every
+                # other list in this game is walked with, which is what
+                # the seats are (CLAUDE.md 5.20). A recording with a
+                # single seat simply has nothing to step to.
+                LEFT)
+                    demo_focus_step -1
+                    ;;
+                RIGHT)
+                    demo_focus_step 1
+                    ;;
+                -)
                     if [ "${DEMO_SPEED_IDX}" -gt 0 ]; then
                         DEMO_SPEED_IDX=$(( DEMO_SPEED_IDX - 1 ))
                         demo_speed_apply
                         DIRTY=1
                     fi
                     ;;
-                RIGHT|+)
+                +)
                     if [ "${DEMO_SPEED_IDX}" -lt $(( ${#DEMO_SPEEDS[@]} - 1 )) ]; then
                         DEMO_SPEED_IDX=$(( DEMO_SPEED_IDX + 1 ))
                         demo_speed_apply
@@ -2187,6 +2334,9 @@ demo_play() {
                    [ "${DEMO_CLOCK_MS}" -ge "${DEMO_TIMELINE_MS}" ]; then
                     DEMO_ENDED=1
                     DIRTY=1
+                    # The seat that was still standing has no event that
+                    # says so; the header names it (demo_finish_marks).
+                    demo_finish_marks
                     debug_event "demo: playback finished (${DEMO_TIMELINE_MS}ms, rows=${ROW_CREDIT})"
                 fi
             fi

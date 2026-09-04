@@ -183,7 +183,7 @@ Jede Runde wird mitgeschnitten und laesst sich unter **Demos** noch
 einmal ansehen - aufgezeichnet werden die Zuege, nicht der Bildschirm,
 die Wiedergabe spielt die Runde also wirklich noch einmal durch. Sie
 laesst sich anhalten (`p` oder Leertaste) und zwischen 0.25x und 4x Tempo
-abspielen (Pfeiltasten); gewertet wird sie nie.
+abspielen (`-` und `+`); gewertet wird sie nie.
 
 Aufbewahrt werden die 10 neuesten Runden. Aufnahmen, die noch einen
 Highscore-Eintrag halten, sind mit `*` markiert und bleiben darueber
@@ -192,8 +192,11 @@ Aufnahme des dort ausgewaehlten Eintrags.
 
 Eine **Mehrspieler-Runde** wird ebenfalls aufgezeichnet, mit den Zuegen
 aller Teilnehmer. Beim Abspielen laeuft jedes Feld seine Runde noch
-einmal ab; der Fokus laesst sich noch nicht umschalten - das ist der
-naechste Schritt.
+einmal ab, und die **Pfeiltasten** waehlen, wem man dabei zusieht: der
+gewaehlte Spieler steht mittig mit Hold, Vorschau und vollem HUD (sein
+Name steht links unter dem Tempo), die uebrigen sitzen wie im Spiel
+rechts und links daneben. Der Kasten am Ende nennt Platz und Grund fuer
+genau den Spieler, auf dem der Fokus gerade steht.
 
 ### Statistik
 
@@ -241,7 +244,8 @@ Belegung ist zusaetzlich per `ROWHAMMER_KEY_*` uebersteuerbar (siehe
 | Taste | Aktion |
 |---|---|
 | `p` / Leertaste | Anhalten / weiter |
-| Pfeil links / rechts | Tempo (0.25x bis 4x) |
+| Pfeil links / rechts | Spieler waehlen (Mehrspieler-Aufnahme) |
+| `-` / `+` | Tempo (0.25x bis 4x) |
 | `x` / `Esc` | Zurueck zur Liste |
 | `r` | Noch einmal (am Ende) |
 
