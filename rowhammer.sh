@@ -212,7 +212,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.2.1  (2026-09-03)
+# Version: 1.2.2  (2026-09-05)
 
 set -euo pipefail
 
@@ -1746,7 +1746,18 @@ round_finish() {
         return 0
     fi
     if [ "${MP_ACTIVE}" -eq 1 ]; then
-        # The moves still in the window go out first, and unconditionally:
+        # The counters of the very last lock, and before the moves that
+        # produced them: the game loop sends them at the end of a tick
+        # and never gets to this one, so without this the last thing the
+        # others heard about this board is the state one lock before it
+        # filled up. On screen that is a stale height for a player who
+        # is out anyway; in a recording of this round it is a checkpoint
+        # sitting behind moves it does not describe, and a replay that
+        # got everything right would be accused of having drifted
+        # (demo_verify, lib/demo.sh). This order is the one the
+        # recording pairs the two by (CLAUDE.md 5.20).
+        mp_send_state
+        # The moves still in the window go out next, and unconditionally:
         # the last few before a top-out are the ones that led to it, and
         # they would otherwise be lost with the buffer - a recording made
         # by the other players would end a move or two early.
