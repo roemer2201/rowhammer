@@ -102,6 +102,7 @@ TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
 | 1.1.0 | Mehrspieler im lokalen Netz (Phase 5, Schritte 1-8 und 10-12) | 5.1-5.10 |
 | 1.2.0 | Gastgeberwechsel: die Lobby ueberlebt ihren Gastgeber; Client-Timeouts | 5.1, 5.4, 5.8 |
 | 1.3.0 | Fuenf Spieler, Sitzordnung um das eigene Feld, volle Zellenbreite; Unterbau und Aufzeichnung der Mehrspieler-Demo (Teilschritte 9.1-9.10) | 4.1, 4.10, 5.1, 5.4, 5.6, 5.20 |
+| 1.4.0 | Wiedergabe der Mehrspieler-Demo: Fokuswechsel, Rundenende, Gegenprobe (Teilschritte 9.11-9.14) | 5.6, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1931,8 +1932,8 @@ Zustand steht in CLAUDE.md 5.1 (Spielerzahl) und 5.6 (Darstellung).
 Die Teilschritte 9.1 bis 9.10 des Punkts "Demo-Aufzeichnung der
 Mehrspieler-Runde" (Zielanforderung und Architektur in 5.20). Die
 restlichen Teilschritte 9.11 bis 9.14 - Fokuswechsel, Kasten am Ende,
-Gegenprobe, Doku - stehen weiter in [TODO.md](TODO.md); erst sie heben
-die Version auf `1.4.0`.
+Gegenprobe, Doku - standen zu diesem Zeitpunkt noch in TODO.md und
+folgten mit `1.4.0` (eigener Abschnitt unten).
 
 - [x] **9.1 Rundenzustand benennen.** Neues Modul `lib/state.sh` mit der
       Liste des Rundenzustands (`STATE_VARS`) und `state_new`,
@@ -2076,3 +2077,119 @@ die Version auf `1.4.0`.
       `mp_act_event`, `mp_send_clear` und `mp_apply_garbage`, die eine
       Wiedergabe davon abhalten, ihr simuliertes Rundenende als eigenes
       zu melden.
+
+## Mehrspieler-Demo: Wiedergabe (umgesetzt, Version 1.4.0)
+
+Die Teilschritte 9.11 bis 9.14 des Punkts "Demo-Aufzeichnung der
+Mehrspieler-Runde" (Zielanforderung und Architektur in 5.20) - und
+damit dessen Abschluss. Aufgezeichnet und gelesen wurde eine
+Mehrspieler-Runde seit 1.3.0; seit 1.4.0 laesst sie sich auch ansehen:
+der Fokus waehlt den Sitzplatz, der Kasten am Ende nennt Platz und
+Grund, und die Wiedergabe prueft sich gegen die Pruefpunkte der
+Aufnahme.
+
+**Gesamtabnahme des Punkts** (zusaetzlich zu den Abnahmen der
+Teilschritte): eine echte Vier-Spieler-Runde ueber TCP (ein Client, drei
+`--mp-bot`, `survival`, Stoerreihen an) wurde aufgezeichnet und
+anschliessend abgespielt - 227 Ereignisse auf vier Stroemen, 19 Steine
+in der gemeinsamen Folge. Die Wiedergabe zeigt fuer jeden der vier
+denselben Verlauf wie die Runde selbst, der Fokus laesst sich waehrend
+des Laufs und nach dem Ende umschalten (der gewaehlte Sitzplatz steht
+mittig mit HUD, Hold und Next, sein Name in HUD-Zeile 19), die
+Fusszeilen nennen `K.O. 4`, `K.O. 3` und `SIEG`, der Kasten am Ende
+"Platz 2" mit dem Grund, und das Debug-Log schliesst mit
+"checkpoints 14 matched, 0 diverged". Die Aufnahme aus den Detailstufen
+0, 1 und 2 hatte 9.13 bereits abgenommen.
+
+- [x] **9.11 Wiedergabe: Fokuswechsel.** Pfeil links/rechts waehlen den
+      Sitzplatz, umlaufend ueber die belegten Slots
+      (`demo_focus_step`/`demo_focus_set` in `lib/demo.sh`); das Tempo
+      liegt seither allein auf `-`/`+`. Der abtretende Sitzplatz wird
+      vor dem Wechsel in die Peer-Tabellen veroeffentlicht - solange er
+      der Fokus war, hat `demo_step` ihn nie geschrieben, er naehme
+      seinen Platz als Gegnerspalte sonst mit einem Bild ein, das so alt
+      ist wie der letzte Wechsel. Die Spieluhr wird mitgenommen
+      (`PLAY_MS` ist Rundenzustand, und der Loop schreibt die Demo-Uhr
+      nur in den gebundenen Sitzplatz und nur, solange die Wiedergabe
+      laeuft), und der Fokus ueberlebt den Neustart mit `r`. HUD-Zeile
+      19 nennt den Namen des Fokus - das Einzige, was der Bildschirm
+      sonst nicht sagt, denn das mittlere Feld traegt in einer echten
+      Runde keinen. Abnahme: waehrend des Laufs und nach dem Ende
+      umschalten; das gewaehlte Feld steht mittig mit HUD, Hold und
+      Next, Zeit und Zaehler folgen ihm, der Neustart behaelt ihn.
+      _Vorzustand: beide Tastenpaare (`LEFT`/`-` und `RIGHT`/`+`)
+      stellten dasselbe Tempo, das Aufteilen hat also keine Funktion
+      gekostet - und die Pfeile sind das, womit in diesem Spiel jede
+      Liste durchgegangen wird._
+- [x] **9.12 Rundenende.** Der Kasten nennt Platz und Grund, beides
+      fuer den Sitzplatz im Fokus statt fuer die Aufnahme
+      (`demo_focus_outcome`, gelesen von `render_status_box`): nur der
+      Grund des Aufzeichnenden steht in der Datei (`end=`), fuer jeden
+      anderen wird er aus dem gelesen, was aus ihm geworden ist. Der
+      Kasten behaelt seine acht Innenzeilen - die Platzierung bezahlt
+      die fuehrende Leerzeile, die eine Einzelspieler-Aufnahme
+      unveraendert behaelt. `end=lost` hat einen eigenen Text
+      ("Verbindung weg") statt unter "Abgebrochen" zu fallen, der
+      Sieger wird beim Erreichen des Endes aus dem Dateikopf markiert
+      (`demo_finish_marks`; fuer ihn gibt es kein Ereignis), und die
+      Fusszeile einer Gegnerspalte trennt seither `K.O.`,
+      Verbindungsverlust (`Weg`) und Sieg. Der K.O.-Kasten wartet auf
+      den Platz: in einer Wiedergabe liegen Top-Out und Ausscheiden so
+      weit auseinander, wie die Aufnahme es sagt, und ein Kasten mit
+      "Platz 0" verdeckte solange das Brett. Abnahme: eine synthetische
+      Vier-Spieler-Aufnahme im PTY - alle vier `end`-Werte plus der noch
+      stehende Sitzplatz zeigen den richtigen Text, in beiden Sprachen,
+      und eine Einzelspieler-Aufnahme behaelt ihren Kasten.
+- [x] **9.13 Gegenprobe und Randfaelle.** `demo_verify` (`lib/demo.sh`)
+      vergleicht die Simulation nach jedem einzelnen angewandten
+      Ereignis gegen die `v=`-Pruefpunkte des Sitzplatzes - sechs
+      Zaehler in derselben Reihenfolge, ob sie vom `STATE` eines
+      Mitspielers stammen oder aus den eigenen lebenden Zaehlern - und
+      meldet jede Abweichung samt beider Staende ins Debug-Log, am Ende
+      die Bilanz des Laufs, auch die eines sauberen: sonst hiesse eine
+      fehlende Meldung nur, dass niemand hingesehen hat. Je Sitzplatz
+      ein Cursor durch seine Pruefpunkte, wie es je Sitzplatz einen
+      durch seine Ereignisse gibt. Die Gegenprobe hat dabei vier Fehler
+      gefunden, die sonst niemand gesehen haette - genau die Klasse,
+      fuer die sie da ist (alle vier gefixt, siehe 5.3 und 5.20):
+      der Hub verwarf eine angelesene Zeile, wenn sein Postfach-`read`
+      mitten in ihr ablief (`HUB_INBOX_PART`); der Countdown holte die
+      ersten Zuege der Mitspieler ab, bevor es die Runde gab; vor einem
+      Top-Out fehlte der letzte `STATE`, sodass der Pruefpunkt hinter
+      Zuegen landete, die er nicht beschreibt; und der eigene
+      Pruefpunkt stand hinter statt vor seinem Ereignis. Dazu ein Fund
+      am Rande: ein zweites `KO` fuer denselben Slot ueberschreibt den
+      vorgemerkten Platz jetzt, statt verworfen zu werden - in `sprint`
+      und `ultra` vergibt der Hub am Ende alle Plaetze nach Rows neu.
+      Abnahme: acht Wiedergaben aus sieben Aufnahmen mit vier und fuenf
+      Spielern - `survival` und `sprint`, Detailstufe 0, 1 und 2, eine
+      mit gekapptem Hub (`end=lost`) - laufen mit zusammen 185
+      Pruefpunkten ohne eine einzige Abweichungsmeldung durch; ein von
+      Hand verfaelschter Pruefpunkt und eine eingefuegte Stoerreihe
+      werden gemeldet. Dazu die Randfaelle: eine Aufnahme aus
+      Detailstufe 0 (kein einziges `PEERBOARD` empfangen) spielt mit
+      allen fuenf Feldern, die pausierte Runde sperrt Demo-Liste und
+      Versus-Bestenliste mit derselben Meldung, der EXIT-`trap` raeumt
+      die RAM-Disk-Datei bei `INT`, `TERM` und `HUP` weg (nur `KILL`
+      laesst sie liegen, wie es muss), und `Enter` auf einem
+      Versus-Bestenlisteneintrag startet ueber den Runden-Hash dessen
+      Aufnahme.
+- [x] **9.14 Doku, Texte, Version.** Der Abschluss des Punkts: 5.20,
+      3.5, 3.8 und die Anleitungsseite 9 waren mit den Bauschritten
+      selbst nachgezogen worden, hier kam der Rest dazu. In CLAUDE.md
+      4.10 die Zeitbasis einer Versus-Aufnahme (Rundenzeit statt
+      Spielzeit, Zeitachse `DEMO_TIMELINE_MS`) und der Runden-Hash im
+      Dateinamen, in 5.6 die Fusszeile einer Gegnerspalte mit ihren
+      drei Ausgaengen sowie der Hinweis, dass die Wiedergabe dieselben
+      Spalten benutzt; dazu der Kopf des Abschnitts 5, der Kopf von
+      5.20 und die Arbeitsregel 6.2 - der Mehrspieler ist gebaut, und
+      `2.0.0` haengt nur noch an der Entkopplung der Rundenlogik
+      (5.3). Die Anleitungsseite 10 sagt in zwei bis dahin freien
+      Zeilen, dass die Runde bei jedem mitgeschnitten wird und die
+      Wiedergabe jeden Mitspieler zeigt (deutsch und englisch); die
+      README hatte ihren Teil bereits und bekam die neue Versionszeile.
+      Version `1.4.0` in `rowhammer.sh`, `debian/changelog`,
+      `rowhammer.spec` und der README, je mit Changelog-Strophe.
+      Abnahme: `tools/release.sh --mode check` ist gruen, Seite 10
+      bleibt mit 18 (deutsch) bzw. 17 (englisch) Zeilen in
+      `MENU_BODY_MAX` und in den 46 Zeichen Breite.

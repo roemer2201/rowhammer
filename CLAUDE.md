@@ -479,8 +479,11 @@ durchzureichen:
    Stoerreihen schicken und ein eigener Abbau zuerst die eigene
    Warteschlange raeumt, wie eine Sitzung eroeffnet und gefunden wird
    (Beacon oder eingegebene Adresse), dass der Letzte im Feld gewinnt,
-   dass es keine Pause gibt, dass nur die eigene Leistung gewertet wird
-   und dass socat gebraucht wird. Spielerzahl und Port kommen aus
+   dass es keine Pause gibt, dass nur die eigene Leistung gewertet wird,
+   dass socat gebraucht wird und - seit 1.4.0 - dass die Runde bei
+   jedem mitgeschnitten wird und die Wiedergabe jeden Mitspieler zeigt
+   (die zwei Zeilen dafuer waren noch frei, die Seite steht mit 18
+   Zeilen jetzt auf `MENU_BODY_MAX`). Spielerzahl und Port kommen aus
    `MP_MAX`/`MP_PORT`, damit ein nachjustierter Wert die Seite nicht zur
    Luege macht - dieselbe Regel wie bei den Modus- und Wunder-Seiten.
 
@@ -2105,17 +2108,23 @@ Sitzungsblock behauptet, ebenfalls - das ist keine kurze Aufnahme,
 sondern eine bearbeitete Datei.
 
 **Zeit.** Jedes Ereignis traegt die **Spielzeit** (`PLAY_MS`, Pausen
-also ausgenommen) als Delta zum vorherigen. Beim Laden werden die Deltas
-zu absoluten Zeitstempeln aufsummiert; die Wiedergabe fuehrt eine eigene
-Uhr (`DEMO_CLOCK_MS`), die je Schleifendurchlauf um die vergangene
-Echtzeit mal Tempofaktor waechst, und wendet jedes Ereignis an, sobald
+also ausgenommen) als Delta zum vorherigen - in einer
+**Mehrspieler-Aufnahme** stattdessen die **Rundenzeit**, die auch im
+Pausenmenue weiterlaeuft, weil sie dort die einzige Uhr ist, die alle
+Teilnehmer teilen (Begruendung in 5.20). Beim Laden werden die Deltas
+zu absoluten Zeitstempeln aufsummiert (je Strom, siehe 5.20); die
+Wiedergabe fuehrt eine eigene Uhr (`DEMO_CLOCK_MS`), die je
+Schleifendurchlauf um die vergangene Echtzeit mal Tempofaktor waechst,
+und wendet jedes Ereignis an, sobald
 sie dessen Stempel passiert hat. Absolut statt "je Ereignis schlafen":
 so kann sich ueber eine lange Demo kein Fehler aufsummieren, ein
 langsamer Durchlauf holt auf, und ein Tempowechsel wirkt sofort. Nach
-dem letzten Ereignis laeuft die Uhr bis `time` weiter - der Schwanz nach
-der letzten Aktion gehoert zur Runde. Das HUD bekommt die Demo-Uhr als
-`PLAY_MS`, damit der "Time"-Zaehler (und der Sprint-Countdown) so laeuft
-wie in der aufgenommenen Runde.
+dem letzten Ereignis laeuft die Uhr bis zum Ende der Zeitachse weiter
+(`DEMO_TIMELINE_MS`: die Spielzeit `time`, in einer
+Mehrspieler-Aufnahme die Rundendauer `length`, siehe 5.20) - der
+Schwanz nach der letzten Aktion gehoert zur Runde. Das HUD bekommt die
+Demo-Uhr als `PLAY_MS`, damit der "Time"-Zaehler (und der
+Sprint-Countdown) so laeuft wie in der aufgenommenen Runde.
 
 **Steinfolge.** `queue_fill` (`lib/pieces.sh`) ist die einzige Stelle,
 an der Steine in eine Runde kommen, und damit die Stelle, an der die
@@ -2142,10 +2151,13 @@ weder Frame-Zeit noch Schreibzyklen auf einer SSD, und ein abgestuerzter
 Prozess verliert hoechstens diese Sekunden. Erst beim echten Rundenende
 (`record_round`, siehe 3.3) baut `demo_record_finish` Kopf, Steinfolge
 und Ereignisse zusammen und legt die fertige Datei **atomar**
-(Tempdatei + `mv`) unter `${DATA_DIR}/demos/<YYYYMMDD-HHMMSS>-<modus>.demo`
-ab; danach werden die aeltesten Aufnahmen ueber `DEMO_MAX` hinaus
-geloescht. Der Dateiname beginnt mit dem Datum, sodass das Glob
-chronologisch sortiert ist und weder Liste noch Pruning `stat` braucht.
+(Tempdatei + `mv`) unter
+`${DATA_DIR}/demos/<YYYYMMDD-HHMMSS>-<modus>-<hash>.demo` ab; danach
+werden die aeltesten Aufnahmen ueber `DEMO_MAX` hinaus geloescht. Der
+Dateiname beginnt mit dem Datum, sodass das Glob chronologisch sortiert
+ist und weder Liste noch Pruning `stat` braucht, und endet mit dem
+Runden-Hash (siehe 3.8), sodass `demo_file_hash` ihn mit einer einzigen
+Expansion wieder abliest.
 Die RAM-Disk-Datei einer nie beendeten Runde raeumt der EXIT-`trap` weg.
 
 **Voller Datentraeger (seit 0.48.1).** Der freie Platz wird **bewusst
@@ -2295,12 +2307,15 @@ Nummerierung folgt der Entstehungsreihenfolge und bleibt deshalb stabil
 (Arbeitsregel 6.1) - deshalb steht 5.20 hinter der Phase 6, obwohl es
 zu Phase 5 gehoert.
 
-Was am Mehrspieler noch fehlt, fuehrt [TODO.md](TODO.md): die
-**Gegenprobe** der Demo-Wiedergabe gegen die `v=`-Pruefpunkte samt ihrer
-Randfaelle (Spezifikation in 5.20). Aufgezeichnet, gelesen, abgespielt
-und bedient wird eine Mehrspieler-Runde bereits - der Fokus wechselt
-waehrend der Wiedergabe mit den Pfeiltasten, und der Kasten am Ende
-nennt Platz und Grund.
+**Gebaut ist der Mehrspieler damit vollstaendig**, seit 1.4.0
+einschliesslich der Demo-Aufzeichnung einer Mehrspieler-Runde (5.20):
+sie wird bei jedem Teilnehmer aufgezeichnet, wieder gelesen und
+abgespielt, der Fokus wechselt waehrend der Wiedergabe mit den
+Pfeiltasten, der Kasten am Ende nennt Platz und Grund, und die
+Wiedergabe prueft sich gegen die Pruefpunkte der Aufnahme. Was
+[TODO.md](TODO.md) an Phase 5 noch fuehrt, ist Aufraeumarbeit ohne
+sichtbare Wirkung: die vollstaendige Entkopplung der Rundenlogik von
+Bildschirm und Tastatur (5.3), der `2.0.0` vorbehalten ist.
 
 Drei Nachrichten kamen beim Bauen hinzu, die die urspruengliche
 Spezifikation nicht hatte; sie stehen in der Nachrichtentabelle 5.4 und
@@ -2993,7 +3008,12 @@ Stufe):
 - **Stufe 2 "full" - ein Feld je Gegner, in zwei Zellenbreiten.**
   22 Zeilen hoch (Kopfzeile mit Namen, 20 Feldzeilen, Fusszeile mit
   `Rows`/`pending`), Farben wie im eigenen Feld (Gold/Silber bleiben
-  erkennbar, Garbage dunkelgrau).
+  erkennbar, Garbage dunkelgrau). **Wer draussen ist, traegt in der
+  Fusszeile seinen Platz** statt der Zahlen - mit dem Grund davor,
+  denn es sind zwei verschiedene Dinge: `K.O.` fuer einen Stapel an der
+  Decke, `Weg` fuer eine gerissene Verbindung. Den dritten Ausgang
+  `SIEG` setzt nur eine durchgelaufene Demo-Wiedergabe; in einer Runde
+  steht der Sieg im Kasten ueber dem Feld (5.20).
   - **Volle Breite (seit 1.3.0, Nutzerwunsch):** zwei Zeichen je Zelle,
     exakt wie das eigene Feld - 20 Spalten Inhalt + Rahmen = 22, plus 1
     Spalte Abstand = **23 Spalten je Gegner**. Ein Gegnerfeld traegt
@@ -3060,6 +3080,13 @@ Tastendruecke.
 
 Jeder Slot bekommt eine feste Akzentfarbe fuer Name und Rahmen, damit
 Zuordnung auch ohne Namenslesen funktioniert.
+
+**Dieselben Spalten zeigt die Demo-Wiedergabe** (seit 1.4.0, siehe
+5.20): sie fuellt die `MP_PEER_*`-Tabellen aus ihrer Simulation statt
+aus dem Netz, sodass `render_peer_column` unveraendert bleibt. Zwei
+Dinge sind dort anders - in der Mitte sitzt der Sitzplatz im **Fokus**
+statt des eigenen Feldes, und die Mini-Felder tragen den **fallenden
+Stein** -, beides mit seiner Begruendung in 5.20.
 
 ### 5.7 Garbage-Regeln
 
@@ -3559,8 +3586,9 @@ stehen.
 Dieser Unterabschnitt gehoert zu **Phase 5** und steht trotzdem hinter
 den Phase-6-Abschnitten, damit die Nummerierung 5.11-5.19 nicht wandert
 und die Verweise darauf gueltig bleiben (Arbeitsregel 6.1). Er
-beschreibt Format und Architektur der Mehrspieler-Demo; was daran noch
-fehlt - die Bedienung der Wiedergabe -, fuehrt [TODO.md](TODO.md).
+beschreibt Format und Architektur der Mehrspieler-Demo, gebaut in den
+Teilschritten 9.1 bis 9.14 (Unterbau und Aufzeichnung mit 1.3.0,
+Wiedergabe und Gegenprobe mit 1.4.0).
 
 **Warum eine Mehrspieler-Runde nicht wie jede andere aufgezeichnet
 wird.** Eine Demo speichert Zuege, keine Bildschirme (3.8). Die eigenen
@@ -4244,11 +4272,13 @@ Arbeit am Mehrspieler in der **`1.x`-Reihe** weiter, Seite an Seite mit
 allem anderen, was am Spiel nachgezogen wird: eine Minor-Version je
 Zuwachs, eine Patch-Version je Korrektur. Eine Versionsnummer ist eine
 Aussage ueber den Zustand, nicht ueber die Menge der Arbeit - `2.0.0`
-ist deshalb dem Stand vorbehalten, an dem Phase 5 abgeschlossen ist,
-einschliesslich der Demo-Aufzeichnung einer Mehrspieler-Runde (5.20);
-die Server-Phase 6 baut danach darauf auf. SemVer traegt das: die
-Formate des Mehrspielers (Protokoll, Sitzungsverzeichnis) sind bislang
-nur untereinander im Umlauf, und die Regel darunter laesst sie ohnehin
+ist deshalb dem Stand vorbehalten, an dem Phase 5 abgeschlossen ist:
+die Demo-Aufzeichnung einer Mehrspieler-Runde steht seit 1.4.0 (5.20),
+offen ist allein die vollstaendige Entkopplung der Rundenlogik (5.3,
+siehe TODO.md); die Server-Phase 6 baut danach darauf auf. SemVer
+traegt das: die Formate des Mehrspielers (Protokoll,
+Sitzungsverzeichnis) sind bislang nur untereinander im Umlauf, und die
+Regel darunter laesst sie ohnehin
 brechen - eine Protokollversion, die ein alter Client nicht kennt, weist
 der Hub sauber ab.
 
