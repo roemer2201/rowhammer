@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.7.0  (2026-08-11)
+# Version: 1.8.0  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -617,7 +617,9 @@ During a replay:"
 
     # Page 10: the multiplayer (1.1.0). The player count and the port
     # come from the live constants, so a retuned value cannot leave the
-    # page lying.
+    # page lying. The closing sentence about the recording came with
+    # 1.4.0 (see CLAUDE.md 5.20); it uses the two lines the page had
+    # free until then.
     [help_p9_head]="Multiplayer (on the local network)
 
 Everybody plays their own board, all of them
@@ -632,7 +634,9 @@ time (Sprint) or first to the target (Ultra) -
 and whether cleared rows send garbage to the
 opponents (off to begin with). Everybody sees
 it. There is no pause. Only your own
-achievement is recorded. Needs socat."
+achievement is recorded. Needs socat.
+The whole round is recorded - the playback
+shows every player in it."
 
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" affects these files in %s:"

@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.3.0
+**Version:** 1.4.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 

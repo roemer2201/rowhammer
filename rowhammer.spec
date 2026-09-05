@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.3.0
+Version:        1.4.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,16 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sat Sep 05 2026 roemer2201 <r.oliver@web.de> - 1.4.0-1
+- A recorded multiplayer round can be watched: every board replays its
+  own round through the same game functions a live round uses.
+- The arrow keys pick whom you watch; the chosen player sits in the
+  middle with hold, preview and the full HUD, the speed is on "-"/"+".
+- The box at the end names place and reason for the player in focus,
+  and an opponent's footer tells top-out, lost connection and win apart.
+- A playback checks itself against the counters the round reported and
+  logs every deviation with --debug.
+
 * Sat Aug 29 2026 roemer2201 <r.oliver@web.de> - 1.3.0-1
 - A session holds five players instead of six: yourself and four
   opponents; --mp-max takes 2..5 and defaults to 5.

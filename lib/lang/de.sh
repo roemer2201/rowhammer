@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.7.0  (2026-08-11)
+# Version: 1.8.0  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -660,7 +660,9 @@ Waehrend der Wiedergabe:"
 
     # Page 10: der Mehrspieler (1.1.0). Spielerzahl und Port kommen aus
     # den laufenden Konstanten, damit ein nachjustierter Wert die Seite
-    # nicht zur Luege macht.
+    # nicht zur Luege macht. Der Schlusssatz zur Aufzeichnung kam mit
+    # 1.4.0 dazu (siehe CLAUDE.md 5.20); er nutzt die zwei Zeilen, die
+    # die Seite bis dahin frei hatte.
     [help_p9_head]="Mehrspieler (im lokalen Netz)
 
 Jeder spielt sein eigenes Feld, alle mit
@@ -676,7 +678,9 @@ zuerst am Ziel ist (Ultra) - und ob
 abgebaute Reihen dem Gegner Stoerreihen
 schicken (anfangs aus). Alle sehen das.
 Eine Pause gibt es nicht. Gewertet wird nur
-die eigene Leistung. Benoetigt socat."
+die eigene Leistung. Benoetigt socat.
+Aufgezeichnet wird die ganze Runde - die
+Wiedergabe zeigt jeden Mitspieler."
 
     # --- Reset dialog (runs before the terminal is touched) ---------------
     [reset_affects]="Reset \"%s\" betrifft diese Dateien in %s:"

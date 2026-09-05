@@ -1,3 +1,34 @@
+rowhammer (1.4.0) unstable; urgency=medium
+
+  * A recorded multiplayer round can now be watched. Rounds have been
+    recorded with every player's moves since 1.3.0; playing one back is
+    what this release adds: every board replays its own round through
+    the same game functions a live round uses, so all of them move at
+    once instead of one field moving next to still pictures.
+  * The arrow keys pick whom you are watching during a playback: the
+    chosen player sits in the middle with hold, preview and the full
+    HUD (their name is named below the speed), the others sit to the
+    left and right of them the way they do in a round. The speed is on
+    "-" and "+" alone now; both key pairs used to do the speed, so no
+    function was lost.
+  * The box at the end of a playback names the place and how the round
+    ended - for whoever is in focus, not for the player who recorded
+    it. A lost connection reads as such instead of as "aborted", and an
+    opponent's footer tells a stack that hit the ceiling, a connection
+    that died and the seat that was still standing apart.
+  * A playback checks itself: it compares its simulation against the
+    counters the round reported at the time and writes every deviation,
+    plus the tally of the run, to the debug log (--debug). That check
+    found four bugs that were invisible otherwise - the hub dropping a
+    partially read line, the countdown collecting the other players'
+    first moves before the round existed, a missing last state report
+    before a top-out, and a checkpoint written behind the event it
+    describes instead of in front of it.
+  * The manual's multiplayer page says that the round is recorded and
+    that the playback shows every player in it.
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 05 Sep 2026 12:00:00 +0200
+
 rowhammer (1.3.0) unstable; urgency=medium
 
   * A session now holds five players instead of six (user decision):
