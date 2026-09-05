@@ -34,7 +34,7 @@
 #   shared inbox is atomic, which is what lets several bridges share it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.2.0  (2026-08-11)
+# Version: 1.2.1  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -176,6 +176,11 @@ HUB_NEXT_PING_MS=0
 HUB_PING_TOKEN=0
 HUB_INBOX_PATH=""
 HUB_DOWN_PREFIX=""
+# The beginning of a line the inbox read did not get to the end of, kept
+# until the rest of it arrives (see hub_main). The same buffer the
+# client's receive path keeps for the same reason (NET_PART in net_poll,
+# lib/net.sh).
+HUB_INBOX_PART=""
 HUB_SOCAT_PID=0
 HUB_LISTEN_PATH=""
 
@@ -1420,6 +1425,32 @@ hub_main() {
             line=""
             rc=0
             IFS= read -r -t 0.05 -u 9 line || rc=$?
+            if [ "${rc}" -gt 128 ]; then
+                # Timed out - the normal case, and then the variable is
+                # empty and this is just the clock. It is not always
+                # empty though: a read that runs into its timeout in the
+                # middle of a line hands back the part it did get, and
+                # dropping that would lose the line and everything the
+                # same message still had to say. It happens when the hub
+                # is descheduled mid-read, which is exactly what a full
+                # session on a busy machine does - measured once in a
+                # four player round, where it cost one player's move
+                # window: on screen nothing at all, since the next board
+                # snapshot papers over it, but the demo recording of
+                # that round keeps the hole for good (CLAUDE.md 5.20).
+                # So the part is kept and the remainder glued in front
+                # of it next time, exactly as the client's receive path
+                # does it (NET_PART in net_poll, lib/net.sh) - including
+                # the cap, so a writer sending MP_LINE_MAX bytes without
+                # a newline cannot make this buffer grow.
+                HUB_INBOX_PART="${HUB_INBOX_PART}${line}"
+                if [ "${#HUB_INBOX_PART}" -ge "${MP_LINE_MAX}" ]; then
+                    HUB_INBOX_PART=""
+                fi
+                break
+            fi
+            line="${HUB_INBOX_PART}${line}"
+            HUB_INBOX_PART=""
             if [ -z "${line}" ]; then
                 break
             fi

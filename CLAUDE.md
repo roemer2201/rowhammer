@@ -1753,7 +1753,9 @@ zu muessen (z. B. fuer Bug-Reports an Claude Code).
     Ablage und Wiedergabe von Demos (siehe 3.8/4.10) - eine abgespielte
     Demo erzeugt dabei dieselben Spielereignisse wie die Runde, die sie
     aufgezeichnet hat, was sie zum Vergleichen zweier Laeufe brauchbar
-    macht.
+    macht. Bei einer Mehrspieler-Aufnahme steht hier ausserdem die
+    Gegenprobe gegen ihre Pruefpunkte: je Abweichung eine Zeile mit
+    beiden Staenden und am Ende die Bilanz des Laufs (siehe 5.20).
 - Ohne `--debug` sind alle Logging-Helfer No-Ops (ein Guard am
   Funktionsanfang); der Spiel-Loop bleibt frei von Zusatzkosten.
 - Die Logs koennen in langen Sessions mehrere MB gross werden; es gibt
@@ -2700,6 +2702,18 @@ Vier Rollen, strikt getrennt (die vierte nur im Transport `lan`):
   auf einer Maschine - der Normalfall waehrend eines Gastgeberwechsels,
   siehe 5.1 - einander nicht das Postfach unter den Bruecken
   wegziehen.
+  **Beide Leseseiten heben eine angelesene Zeile auf.** Ein `read` mit
+  Zeitlimit gibt beim Ablauf zurueck, was es bis dahin hatte - und das
+  ist mitten in einer Zeile eben deren Anfang. Der Client tut das seit
+  jeher (`NET_PART` in `net_poll`, `lib/net.sh`), der Hub seit 1.4.0
+  (`HUB_INBOX_PART` in `hub_main`): sein Postfach-`read` laeuft alle
+  50 ms ab, und ein Hub, der genau dann verdraengt wird - was eine volle
+  Sitzung auf einer beschaeftigten Maschine tut -, verwarf die Zeile
+  samt allem, was sie noch zu sagen hatte. Im Spiel faellt das kaum auf,
+  weil der naechste Schnappschuss darueber hinweggeht; einer
+  Demo-Aufnahme bleibt das Loch (siehe 5.20). Beide Puffer sind auf
+  `MP_LINE_MAX` gedeckelt, damit ein Schreiber ohne Zeilenende sie nicht
+  wachsen laesst.
 - **Discover-Sammler** (`rowhammer.sh --mp-discover`, ein kurzlebiger
   Prozess je empfangenem Beacon, nur Transport `lan`): wird von
   `socat UDP4-RECVFROM:<port>,fork,...` gestartet, liest das Datagramm
@@ -3835,7 +3849,12 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   kommt. Der Platz wird deshalb vorgemerkt und der Buchstabe gesetzt,
   wenn der Roster ihn nennt - und beim Schliessen der Aufnahme als `n`,
   falls die Runde vorher zu Ende war (der Normalfall beim
-  entscheidenden Ausscheiden).
+  entscheidenden Ausscheiden). Ein zweites `KO` fuer denselben Slot
+  **ueberschreibt** den vorgemerkten Platz, statt verworfen zu werden:
+  in den Sitzungsmodi `sprint` und `ultra` vergibt der Hub am Ende alle
+  Plaetze nach Rows neu (5.1), und wer die beiden auseinanderhaelt,
+  schreibt die Reihenfolge des Ausscheidens dorthin, wo die Runde anders
+  gewertet hat.
 - **Eine Steinfolge fuer alle.** Der gemeinsame
   Seed (5.1) gibt jedem dieselbe Folge, nur zu anderen Zeitpunkten. Der
   Aufzeichnende zieht sie deshalb weit genug: er zaehlt je Slot die
@@ -3916,10 +3935,58 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
     aus seinen **lebenden** Zaehlern mit: er kam nie ueber das Netz und
     ist damit die schaerfste Probe darauf, ob die Wiedergabe das Spiel
     richtig nachspielt.
+  - **Der eigene Pruefpunkt steht vor seinem Ereignis, der fremde
+    dahinter.** Das ist derselbe Ort, nur von zwei Seiten erreicht:
+    jede Stelle, die `round_event` ruft, meldet die Aktion **bevor** sie
+    sie ausfuehrt (siehe 4.10), die lebenden Zaehler sind dort also die
+    des vorherigen Ereignisses - und genau das heisst ein Pruefpunkt,
+    der "nach den Ereignissen vor ihm" gilt. Hinter das Ereignis
+    geschrieben wuerde er den Stand eines Locks behaupten, das noch
+    nicht stattgefunden hat, und jeder Pruefpunkt, der auf ein `h` oder
+    `k` faellt, wuerde einer korrekten Wiedergabe eine Abweichung
+    vorwerfen.
+
+  **Verglichen wird beim Abspielen** (`demo_verify` in `lib/demo.sh`,
+  gerufen aus `demo_step` nach jedem einzelnen angewandten Ereignis -
+  nach dem ganzen Schwung waere die Stellung schon zwei Ereignisse
+  weiter). Ein Cursor je Sitzplatz laeuft durch dessen Pruefpunkte, wie
+  einer durch dessen Ereignisse laeuft; stimmen die sechs Zahlen nicht,
+  geht eine Zeile mit beiden Staenden ins Debug-Log (4.6), und am Ende
+  der Wiedergabe eine mit der Bilanz - **auch ein sauberer Lauf sagt
+  das**, sonst hiesse eine fehlende Meldung nur, dass niemand
+  hingesehen hat. Auf dem Bildschirm steht davon nichts: wer zusieht,
+  kann daran nichts aendern, und Diagnosen fuehrt dieses Spiel im Log.
 - **Ein Test-Bot (`--mp-bot`) zeichnet nicht auf.** Seine Runden sind
   Testverkehr, und seine Aufnahmen laegen in einem Datenverzeichnis als
   echte - sie zaehlten gegen `DEMO_MAX` und verdraengten Runden, die
   jemand gespielt hat.
+
+**Ein Strom muss vollstaendig sein.** Ein einziger fehlender Zug
+verschiebt den Stein, auf dem er lag, und von da an ist das ganze Brett
+dieses Sitzplatzes ein anderes - lautlos, denn niemand vermisst eine
+Zeile, die nie ankam. Drei Stellen, an denen genau das passierte - alle
+drei gefunden von der Gegenprobe oben, die dafuer da ist:
+
+- **Der Countdown liest die Uhr vor der Leitung** (`mp_countdown`,
+  `lib/mp.sh`). Sein letzter Durchlauf wartet bis zu 100 ms auf eine
+  Taste und sass damit regelmaessig hinter dem Rundenstart: die ersten
+  Zuege aller anderen wurden dort abgeholt, wo es die Runde - und damit
+  ihre Aufnahme - noch gar nicht gab. Sie bleiben jetzt im
+  Socket-Puffer, den der Game-Loop einen Wimpernschlag spaeter leert.
+  Verloren geht dabei nichts: vor `MP_START_MS` kann sich niemand
+  bewegen, und eine in dieser Strecke abreissende Leitung merkt der
+  Game-Loop im ersten Durchlauf.
+- **Der letzte `STATE` geht vor den letzten Zuegen raus**
+  (`round_finish`, `rowhammer.sh`). Der Game-Loop schickt die Zaehler am
+  Ende eines Ticks und kommt zu diesem einen nicht mehr; ohne ihn ist
+  das Letzte, was die anderen von diesem Brett gehoert haben, der Stand
+  ein Lock bevor es voll war. Auf dem Schirm ist das eine veraltete
+  Stapelhoehe fuer jemanden, der ohnehin draussen ist - in einer
+  Aufnahme ein Pruefpunkt hinter Zuegen, die er nicht beschreibt.
+- **Der Hub verliert keine angelesene Zeile mehr** (siehe 5.3). Eine
+  abgeschnittene Nachricht ist im laufenden Spiel kaum zu sehen, weil
+  der naechste Schnappschuss darueber hinweggeht; in der Aufnahme bleibt
+  das Loch.
 
 **Wiedergabe.**
 Je Frame wird fuer jeden Slot umgebunden, alle faelligen Ereignisse

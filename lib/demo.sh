@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.7.0  (2026-09-03)
+# Version: 0.8.0  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -336,6 +336,18 @@ DEMO_EV_N=()
 # whether a seat is due without binding its stream to look (see
 # demo_cursors_reset).
 DEMO_NEXT_MS=()
+# Where each seat stands in its own checkpoints: the index of the next
+# one that has not been compared yet (demo_verify). A cursor of its own
+# rather than a search, for the same reason the events have one - the
+# checkpoints of a seat are in order, and each of them is due exactly
+# once.
+DEMO_CK_CUR=()
+# The tally of the whole playback: how many checkpoints agreed with the
+# simulation and how many did not. Reported to the debug log when the
+# replay reaches the end of its timeline, so a run that was clean says so
+# rather than only a run that was not.
+DEMO_CK_OK=0
+DEMO_CK_BAD=0
 # The seat currently being simulated, and whether it is the focus. The
 # second one is read by flash_rows (rowhammer.sh): the row flash holds
 # the whole loop for its ~280 ms, so it runs for the seat on screen and
@@ -636,8 +648,16 @@ demo_record_event() {
     fi
     demo_stamp
     if [ "${DEMO_MP}" -eq 1 ]; then
-        demo_slot_event "${DEMO_MP_SLOT}" "${DEMO_STAMP_MS}" "${1}"
+        # The checkpoint goes out BEFORE the event, not after it. Every
+        # caller of round_event (rowhammer.sh) reports the action before
+        # carrying it out, so the live counters read here are the ones
+        # the previous event left behind - and a checkpoint means "after
+        # the events written before it" (demo_verify). Written after the
+        # event they would claim the state of a lock that has not
+        # happened yet, and every checkpoint landing on an "h" or a "k"
+        # would accuse a correct replay of having diverged.
         demo_own_checkpoint
+        demo_slot_event "${DEMO_MP_SLOT}" "${DEMO_STAMP_MS}" "${1}"
         return 0
     fi
     delta=$(( DEMO_STAMP_MS - DEMO_LAST_MS ))
@@ -752,11 +772,15 @@ demo_checkpoint_flush() {
 
 # demo_own_checkpoint
 # The same cross-check for this player's own seat, taken from the live
-# counters right behind the event that changed them. Worth having even
-# though nothing came over the network for it: our own stream and our own
-# counters were produced by the same process, so a replay that disagrees
-# with them is a replay that got the game wrong - which is exactly what
-# these checkpoints are for.
+# counters in front of the next event rather than from a message. Worth
+# having even though nothing came over the network for it: our own stream
+# and our own counters were produced by the same process, so a replay
+# that disagrees with them is a replay that got the game wrong - which is
+# exactly what these checkpoints are for.
+# Called from demo_record_event before the event is written, for the
+# reason given there. The spacing is therefore measured against the
+# previous event's round time, which is one event's delta short of the
+# new one - nothing at a distance of DEMO_V_MS.
 demo_own_checkpoint() {
     local slot="${DEMO_MP_SLOT}"
     (( DEMO_SLOT_LAST_MS[slot] - DEMO_V_LAST_MS[slot] >= DEMO_V_MS )) || return 0
@@ -816,12 +840,17 @@ demo_record_queue() {
 # apart ("n" and "z"). Which it was follows in the roster a moment later,
 # and demo_record_peer_status writes the event then - or, if the round
 # ends before any roster arrives, demo_ko_flush does.
+# A second KO for a place already waiting overwrites it instead of being
+# ignored: in the sprint and ultra session modes the hub hands out the
+# places again by row credit when the round is decided, and a client
+# "simply takes the newer one" (hub_places_by_rows, lib/hub.sh). Kept
+# apart, the recording would show the order somebody went out where the
+# round ended up ranking them differently.
 demo_record_ko() {
     local slot="${1}" place="${2}"
     [ "${DEMO_RECORDING}" -eq 1 ] || return 0
     [ "${DEMO_MP}" -eq 1 ] || return 0
     demo_slot_ok "${slot}" || return 0
-    [ -z "${DEMO_KO_PEND[slot]}" ] || return 0
     [ "${place}" -le 9 ] || place=9
     DEMO_KO_PEND[slot]="${place}"
     return 0
@@ -1910,6 +1939,46 @@ demo_apply_out() {
     return 0
 }
 
+# demo_verify SLOT CUR
+# Compare the simulation of one seat against every checkpoint that holds
+# for the position CUR its stream has reached. A checkpoint carries the
+# six counters the round reported at that moment - lines, rows, level,
+# gold, silver and stack height, the same six in the same order whether
+# they came off a peer's STATE or out of this player's own live counters
+# (demo_own_checkpoint) - and the replay recomputes all six as it goes.
+# A disagreement means the simulation has drifted away from the round it
+# is replaying, which is the one failure of this whole construction that
+# would otherwise be silent (CLAUDE.md 5.20).
+# It is reported to the debug log and nowhere else: a watcher can do
+# nothing about it, and the log is where this game keeps its diagnoses
+# (CLAUDE.md 4.6).
+# Called after every applied event, so CUR is exactly the position a
+# checkpoint names. The loop is "<=" all the same: a hand-edited file
+# whose positions run backwards must not wedge the cursor - it then gets
+# a divergence note it has earned.
+# The seat's round state and its stream are bound by the caller
+# (demo_step), which is what makes the counters below the seat's own.
+demo_verify() {
+    local slot="${1}" cur="${2}" idx n want got
+    idx="${DEMO_CK_CUR[slot]}"
+    n="${#DEMO_CK_N[@]}"
+    while [ "${idx}" -lt "${n}" ] && [ "${DEMO_CK_N[idx]}" -le "${cur}" ]; do
+        want="${DEMO_CK_V[idx]}"
+        proto_stack_height
+        got="${CLEARED_TOTAL} ${ROW_CREDIT} ${LEVEL} ${GOLD_COUNT}"
+        got+=" ${SILVER_COUNT} ${PROTO_HEIGHT}"
+        if [ "${got}" = "${want}" ]; then
+            DEMO_CK_OK=$(( DEMO_CK_OK + 1 ))
+        else
+            DEMO_CK_BAD=$(( DEMO_CK_BAD + 1 ))
+            debug_event "demo: slot ${slot} diverges after ${cur} events (${DEMO_CLOCK_MS}ms): recorded [${want}], replayed [${got}]"
+        fi
+        idx=$(( idx + 1 ))
+    done
+    DEMO_CK_CUR[slot]="${idx}"
+    return 0
+}
+
 # demo_peer_publish SLOT
 # Copy what the seat currently bound looks like into the session tables
 # the renderer reads (MP_PEER_*). In a live round those are filled from
@@ -1964,10 +2033,14 @@ demo_cursors_reset() {
     DEMO_CUR=()
     DEMO_EV_N=()
     DEMO_NEXT_MS=()
+    DEMO_CK_CUR=()
+    DEMO_CK_OK=0
+    DEMO_CK_BAD=0
     for slot in "${DEMO_SEATS[@]}"; do
         demo_stream_bind "${slot}" || return 1
         n="${#DEMO_EV_T[@]}"
         DEMO_CUR[slot]=0
+        DEMO_CK_CUR[slot]=0
         DEMO_EV_N[slot]="${n}"
         if [ "${n}" -gt 0 ]; then
             DEMO_NEXT_MS[slot]="${DEMO_EV_T[0]}"
@@ -2013,11 +2086,21 @@ demo_step() {
         [ "${slot}" -ne "${DEMO_FOCUS}" ] || DEMO_SIM_FOCUS=1
         cur="${DEMO_CUR[slot]}"
         n="${DEMO_EV_N[slot]}"
+        # A checkpoint that holds for the position this seat is already
+        # at: the one before its first event, which is the only one that
+        # can be due without an event of this pass falling before it.
+        demo_verify "${slot}" "${cur}"
         # Everything due by now, in order. A single pass may cover
         # several events - a burst of inputs, or a slow terminal.
         while [ "${cur}" -lt "${n}" ] &&               [ "${DEMO_EV_T[cur]}" -le "${DEMO_CLOCK_MS}" ]; do
             demo_apply "${DEMO_EV_A[cur]}"
             cur=$(( cur + 1 ))
+            # After each single event rather than after the burst: a
+            # checkpoint names a position, and comparing it against a
+            # state two events further on would report a divergence the
+            # replay does not have. The call costs a guard per event,
+            # which is nothing against the events themselves.
+            demo_verify "${slot}" "${cur}"
         done
         DEMO_CUR[slot]="${cur}"
         if [ "${cur}" -lt "${n}" ]; then
@@ -2338,6 +2421,13 @@ demo_play() {
                     # says so; the header names it (demo_finish_marks).
                     demo_finish_marks
                     debug_event "demo: playback finished (${DEMO_TIMELINE_MS}ms, rows=${ROW_CREDIT})"
+                    # The tally of the cross-check, once per run and
+                    # only where there is one to report: a clean run
+                    # says so too, which is what makes the absence of a
+                    # divergence note mean something.
+                    if [ "${DEMO_HDR_MP}" -eq 1 ]; then
+                        debug_event "demo: checkpoints ${DEMO_CK_OK} matched, ${DEMO_CK_BAD} diverged"
+                    fi
                 fi
             fi
             if [ "${DIRTY}" -eq 1 ]; then

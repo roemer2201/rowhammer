@@ -28,7 +28,7 @@
 #   are worth (see lib/hub.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.4.0  (2026-09-03)
+# Version: 1.4.1  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1741,6 +1741,22 @@ mp_countdown() {
     local -a lines
     local left line
     while :; do
+        # The clock first, the link afterwards. The other way round the
+        # last pass of this loop would drain the link once more after the
+        # round has begun - key_drain below waits up to 100 ms, so that
+        # pass can sit well past the starting point - and the first moves
+        # of everybody else would be read here, where the round state and
+        # with it the recording of it does not exist yet. They are simply
+        # left in the socket buffer instead; the game loop reads them a
+        # moment later, with the recording running. Nothing is missed by
+        # not polling for that last stretch either: nobody can move
+        # before MP_START_MS, and a link that dies in it is noticed by
+        # the game loop on its first pass.
+        now_ms
+        left=$(( MP_START_MS - NOW_MS ))
+        if [ "${left}" -le 0 ]; then
+            break
+        fi
         if ! mp_poll; then
             mp_lobby_lost
             return 0
@@ -1749,11 +1765,6 @@ mp_countdown() {
             mp_lobby_lost
             MP_PHASE="lobby"
             return 0
-        fi
-        now_ms
-        left=$(( MP_START_MS - NOW_MS ))
-        if [ "${left}" -le 0 ]; then
-            break
         fi
         printf -v line "${I18N[mp_countdown]}" "$(( (left + 999) / 1000 ))"
         lines=("  ${I18N[mp_lobby_title]}" "" "  ${line}")

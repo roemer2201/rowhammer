@@ -84,11 +84,12 @@ sind zwei Punkte:
       aller Teilnehmer werden verteilt und mitgeschrieben, die
       Wiedergabe simuliert alle Felder gleichzeitig, und der Fokus
       wechselt waehrend der Wiedergabe frei mit den Pfeiltasten.
-      **Stand:** die Teilschritte 9.1 bis 9.12 sind erledigt (siehe
-      HISTORY.md) - eine Runde wird aufgezeichnet, wieder gelesen, und
+      **Stand:** die Teilschritte 9.1 bis 9.13 sind erledigt (9.1-9.10
+      in HISTORY.md) - eine Runde wird aufgezeichnet, wieder gelesen, und
       beim Abspielen spielt jeder Sitzplatz seine Runde wirklich noch
-      einmal; der Fokus wechselt mit den Pfeiltasten, und der Kasten am
-      Ende nennt Platz und Grund. Es fehlen die Gegenprobe und die Doku.
+      einmal; der Fokus wechselt mit den Pfeiltasten, der Kasten am
+      Ende nennt Platz und Grund, und die Wiedergabe prueft sich gegen
+      die Pruefpunkte der Aufnahme. Es fehlt die Doku.
       **Gesamtabnahme:** die Wiedergabe einer Vier-Spieler-Runde zeigt
       fuer jeden der vier denselben Verlauf wie die Runde selbst, in
       jeder Detailstufe aufgenommen, und laesst sich waehrend des Laufs
@@ -104,12 +105,29 @@ sind zwei Punkte:
         Innenzeilen - die fuehrende Leerzeile bezahlt sie), `end=lost`
         mit eigenem Text. Abnahme: der Kasten nennt Platz und Grund,
         alle vier `end`-Werte sehen richtig aus.
-  - [ ] **9.13 Gegenprobe und Randfaelle.** Simulation gegen die
-        `v=`-Pruefpunkte mit Meldung ins Debug-Log; Verbindungsverlust,
-        Aufnahme aus Detailstufe 0/1, Sperre bei pausierter Runde,
-        EXIT-`trap`, Verknuepfung aus der Versus-Bestenliste ueber den
-        Runden-Hash. Abnahme: eine Vier-Spieler-Aufnahme laeuft ohne
-        eine einzige Abweichungsmeldung durch.
+  - [x] **9.13 Gegenprobe und Randfaelle.** `demo_verify` (`lib/demo.sh`)
+        vergleicht die Simulation nach jedem Ereignis gegen die
+        `v=`-Pruefpunkte des Sitzplatzes und meldet jede Abweichung samt
+        beider Staende ins Debug-Log, am Ende die Bilanz des Laufs -
+        auch die eines sauberen. Die Gegenprobe hat dabei vier Fehler
+        gefunden, die sonst niemand gesehen haette: eine im Hub
+        abgeschnittene Zeile, die ersten Zuege der Mitspieler, die der
+        Countdown noch vor der Runde abholte, den fehlenden letzten
+        `STATE` vor einem Top-Out und den eigenen Pruefpunkt, der hinter
+        statt vor seinem Ereignis stand (alle vier gefixt, siehe 5.3 und
+        5.20). Abnahme: acht Wiedergaben aus sieben Aufnahmen mit vier
+        und fuenf Spielern - `survival` und `sprint`, Detailstufe 0, 1
+        und 2, eine mit gekapptem Hub (`end=lost`) - laufen mit zusammen
+        185 Pruefpunkten ohne eine einzige Abweichungsmeldung durch; ein
+        von Hand verfaelschter Pruefpunkt und eine eingefuegte
+        Stoerreihe werden gemeldet. Dazu die Randfaelle: eine Aufnahme
+        aus Detailstufe 0 (kein einziges `PEERBOARD` empfangen) spielt
+        mit allen fuenf Feldern, die pausierte Runde sperrt Demo-Liste und
+        Versus-Bestenliste mit derselben Meldung, der EXIT-`trap` raeumt
+        die RAM-Disk-Datei bei `INT`, `TERM` und `HUP` weg (nur `KILL`
+        laesst sie liegen, wie es muss), und `Enter` auf einem
+        Versus-Bestenlisteneintrag startet ueber den Runden-Hash dessen
+        Aufnahme.
   - [ ] **9.14 Doku, Texte, Version.** 5.20 ist mit 9.11/9.12 bereits
         auf den gebauten Stand gezogen (Tasten, Kasten, HUD-Zeile 19),
         ebenso 3.5, 3.8 und die Anleitungsseite 9; offen sind
