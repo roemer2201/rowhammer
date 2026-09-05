@@ -1,3 +1,21 @@
+rowhammer (1.4.1) unstable; urgency=medium
+
+  * The hub now says why a player is out of the round when it hands them
+    their place, instead of leaving it to the roster that follows one
+    tick later (protocol 5). Whenever that elimination was the one that
+    ended the round, the roster never arrived at all - the round-over
+    message overtakes it - and a lost connection was recorded and shown
+    as a stack that hit the ceiling.
+  * A recording no longer settles an unfinished elimination as a
+    top-out when it is closed: there is nothing left to settle, the
+    reason came with the place.
+  * A place handed out at the end of a sprint or ultra session no
+    longer marks a board that was still standing as knocked out. Those
+    modes rank every player by rows when the round is decided, and a
+    place is not an elimination.
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 05 Sep 2026 16:00:00 +0200
+
 rowhammer (1.4.0) unstable; urgency=medium
 
   * A recorded multiplayer round can now be watched. Rounds have been

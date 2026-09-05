@@ -1050,6 +1050,7 @@ rowhammer/
   HISTORY.md           # Archiv der erledigten Punkte je Version
   README.md            # Anleitung fuer Spielerinnen und Spieler
   MISTRAL.md           # externe Review (Juli 2026), wird nicht gepflegt
+  CODEX-REVIEW.md      # externe Review (September 2026), wird nicht gepflegt
 ```
 
 Alle Module aus dem Baum oben existieren; die vier
@@ -2762,7 +2763,7 @@ Konkret: `game_reset`, `step_down`, `lock_and_next`, `hold_piece`,
 markiert nur. Das ist ohnehin fast erreicht - offen sind die Stellen, an
 denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
 
-### 5.4 Protokoll (Version 4)
+### 5.4 Protokoll (Version 5)
 
 - **Rahmen:** eine Nachricht = eine Zeile, `\n`-terminiert, reines
   druckbares ASCII (0x20-0x7E), maximal **512 Byte** inklusive Zeilenende.
@@ -2770,10 +2771,10 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   Grossbuchstaben. Unbekannte Verben werden ignoriert (Vorwaerts-
   kompatibilitaet), fehlerhafte Zeilen fuehren zum Verbindungsabbruch
   (siehe 5.5).
-- **Versionierung:** `PROTO_VERSION=4`. Der Hub lehnt abweichende
+- **Versionierung:** `PROTO_VERSION=5`. Der Hub lehnt abweichende
   Versionen im `HELLO` mit `ERR proto ...` ab. Gemaess der Arbeitsregel
   "keine Abwaertskompatibilitaet" wird das Protokoll bei Bedarf
-  hochgezaehlt statt kompatibel erweitert; genau das ist dreimal
+  hochgezaehlt statt kompatibel erweitert; genau das ist viermal
   passiert. **Version 2** kam mit den Sitzungseinstellungen (1.1.0,
   siehe 5.1): `SETUP` in beide Richtungen. **Version 3** kam mit dem
   Gastgeberwechsel (1.2.0, siehe unten und 5.8): `HOST`, `PROMOTE`,
@@ -2787,6 +2788,16 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   ignorieren (so ist ein unbekanntes Verb gedacht), aber den Slot in
   `GARBAGE` als Reihenzahl lesen und die falsche Menge Stoerreihen
   einschieben - genau dafuer gibt es diese Zahl.
+  **Version 5** (1.4.1) gibt `KO` ein drittes Feld: **warum** der
+  Spieler seinen Platz bekommt (`play`, `ko` oder `gone`). Der Hub
+  wusste das immer schon und sagte es eine Tick-Laenge spaeter im
+  `ROSTER`; wer darauf wartet, bekommt die Antwort zu spaet, sobald
+  dasselbe Ausscheiden die Runde beendet - `END` geht sofort raus, der
+  Roster erst am Ende des Ticks. Ein Version-4-Client wuerde die
+  Nachricht an ihrer Feldzahl verwerfen, also eine Runde spielen, in der
+  keine Plaetze mehr ankommen; deshalb die neue Nummer statt eines
+  angehaengten Feldes. Was daran haengt, steht in 5.8 (Anzeige) und
+  5.20 (Aufzeichnung).
 - **Client -> Hub**
 
   | Nachricht | Felder | Bedeutung |
@@ -2824,7 +2835,7 @@ denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
   | `NEEDBOARD` | `<0 oder 1>` | ob dieser Client Snapshots senden soll (spart Last, wenn niemand Stufe 2 anzeigt) |
   | `GARBAGE` | `<slot> <count> <hole>` | Stoerreihen fuer einen Spieler, Lochspalte 0-9; seit Protokoll 4 mit Slot und an alle |
   | `QUEUE` | `<slot> <count>` | verbindliche Laenge einer Warteschlange (seit 1.1.0; seit Protokoll 4 mit Slot und an alle) |
-  | `KO` | `<slot> <platz>` | Spieler ausgeschieden |
+  | `KO` | `<slot> <platz> <play\|ko\|gone>` | Platz in der Runde, mit dem Grund; das dritte Feld seit Protokoll 5 |
   | `END` | `<siegerslot>` | Runde vorbei |
   | `PING` | `<token>` | Lebendpruefung, alle 2 s |
   | `ERR` | `<code> <text>` | Ablehnung/Fehler, danach ggf. Abbruch |
@@ -3160,7 +3171,12 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
 - **Verbindungsabbruch eines Clients:** EOF oder 6 s ohne `PONG` ->
   Status `gone`, gilt wie ein KO, die Runde laeuft weiter. Kein
   Reconnect in v1 (Zustandsuebertragung waere aufwendig; die Runde
-  dauert wenige Minuten).
+  dauert wenige Minuten). **Der Unterschied zum Top-Out steht im `KO`
+  selbst** (seit 1.4.1, siehe 5.4): der Hub schickt den Grund mit dem
+  Platz, sodass Fusszeile und Aufnahme sofort `Weg` von `K.O.`
+  unterscheiden. Ihn aus dem `ROSTER` zu lesen ging nicht auf - er kommt
+  erst am Ende des Hub-Ticks und damit hinter `END`, wenn genau dieses
+  Ausscheiden die Runde entschieden hat (Begruendung in 5.20).
 - **Ausfall des Hubs:** alle Clients bekommen EOF, zeigen "Verbindung
   verloren" und kehren ins Hauptmenue zurueck. Die Runde wird wie ein
   abgebrochenes Spiel behandelt und gemaess 3.3 gewertet (abgebrochene
@@ -3871,16 +3887,33 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   weggekuerzt hat, ist die Rechnung des Hubs - eine Wiedergabe, die die
   Reihen selbst zusammenzaehlt, liefe beim ersten verrechneten Angriff
   auseinander.
-- **`n` und `z` werden verzoegert geschrieben.** Das `KO` des Hubs sagt
-  fuer einen Top-Out dasselbe wie fuer eine gerissene Verbindung; welches
-  von beiden es war, steht erst im `ROSTER`, das einen Hub-Tick spaeter
-  kommt. Der Platz wird deshalb vorgemerkt und der Buchstabe gesetzt,
-  wenn der Roster ihn nennt - und beim Schliessen der Aufnahme als `n`,
-  falls die Runde vorher zu Ende war (der Normalfall beim
-  entscheidenden Ausscheiden). Ein zweites `KO` fuer denselben Slot
-  **ueberschreibt** den vorgemerkten Platz, statt verworfen zu werden:
-  in den Sitzungsmodi `sprint` und `ultra` vergibt der Hub am Ende alle
-  Plaetze nach Rows neu (5.1), und wer die beiden auseinanderhaelt,
+- **`n` und `z` stehen im `KO` selbst** (seit 1.4.1, Protokoll 5, siehe
+  5.4). Der Grund kommt mit dem Platz, und die Aufnahme schreibt den
+  Buchstaben in demselben Moment. **Vorher** sagte das `KO` fuer einen
+  Top-Out dasselbe wie fuer eine gerissene Verbindung, der Platz wurde
+  vorgemerkt und der Buchstabe erst gesetzt, wenn das `ROSTER` einen
+  Hub-Tick spaeter den Zustand nannte - und beim Schliessen der Aufnahme
+  als `n`, falls es nie kam. Genau der Fall, fuer den die Verzoegerung
+  da war, wurde damit falsch beantwortet: beendet dieses Ausscheiden die
+  Runde, ueberholt `END` den Roster (`hub_eliminate` sendet `KO` und
+  `END` sofort, den Roster erst am Tick-Ende), und der aufzeichnende
+  Client hat seine Buecher laengst geschlossen. Eine gerissene
+  Verbindung stand danach als Top-Out in der Datei, und zwar immer dann,
+  wenn sie die Runde entschieden hat. Aus demselben Grund traf es die
+  laufende Anzeige: `mp_poll` setzte den Zustand hart auf `ko`, bis ein
+  Roster ihn richtigstellte.
+- **Ein Platz ist noch kein Ausscheiden.** Das dritte `KO`-Feld kennt
+  `play` als dritte Antwort: in `sprint` und `ultra` vergibt der Hub am
+  Ende **alle** Plaetze nach Rows neu (5.1), auch an Bretter, die noch
+  standen. Fuer sie wird nichts geschrieben - sie haben die Runde nicht
+  verlassen, die Runde hat sie verlassen, und genau das zeigt die
+  Wiedergabe ohnehin ("Runde zu Ende"). Sie behalten damit auch in der
+  laufenden Runde ihre Zahlen, statt als `K.O.` in der Fusszeile zu
+  stehen. Der Preis ist, dass ihr Platz in der Aufnahme nicht vermerkt
+  ist (siehe TODO.md); ein falsches `K.O.` mit Platz war der schlechtere
+  Tausch. Ein zweites `KO` fuer einen Slot, der schon eines hat, wird
+  dagegen **geschrieben** statt verworfen: die Wiedergabe nimmt schlicht
+  den neueren Platz (`demo_apply`), und wer die beiden auseinanderhaelt,
   schreibt die Reihenfolge des Ausscheidens dorthin, wo die Runde anders
   gewertet hat.
 - **Eine Steinfolge fuer alle.** Der gemeinsame

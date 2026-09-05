@@ -34,7 +34,7 @@
 #   shared inbox is atomic, which is what lets several bridges share it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.2.1  (2026-09-05)
+# Version: 1.2.2  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -996,7 +996,11 @@ hub_eliminate() {
     # went out, i.e. the count before the elimination - hub_count_players
     # has already subtracted this player, so add them back.
     HUB_PLACE[slot]=$(( HUB_ALIVE + 1 ))
-    proto_msg KO "${slot}" "${HUB_PLACE[slot]}"
+    # The reason travels with the place (protocol 5): a client that had to
+    # wait for the roster to learn it would still be waiting whenever this
+    # elimination is the one that ends the round - END goes out below,
+    # while the roster only leaves at the end of the tick.
+    proto_msg KO "${slot}" "${HUB_PLACE[slot]}" "${state}"
     hub_bcast "${PROTO_LINE}"
     HUB_ROSTER_DIRTY=1
     debug_event "hub: slot ${slot} (${HUB_NAME[slot]}) out as ${state}, place ${HUB_PLACE[slot]}"
@@ -1081,7 +1085,7 @@ hub_start_round() {
 # The places are sent as KO, the message that carries a place already;
 # a client simply takes the newer one.
 hub_places_by_rows() {
-    local winner="${1}" place=1 i best rows
+    local winner="${1}" place=1 i best rows reason
     local -a left=()
     for (( i = 0; i < MP_MAX; i++ )); do
         [ -n "${HUB_NAME[i]}" ] || continue
@@ -1104,7 +1108,18 @@ hub_places_by_rows() {
             fi
         done
         HUB_PLACE[${left[best]}]="${place}"
-        proto_msg KO "${left[best]}" "${place}"
+        # Whatever this player is: somebody who went out earlier keeps
+        # their reason and only trades their place, while somebody who
+        # was still standing when the clock ran out is "play" - a place
+        # is not an elimination, and a recording must not write one.
+        # Anything else is normalised to "play" rather than sent as it
+        # is: the field has three values (PROTO_OUT_RE), and a fourth
+        # would be dropped by every receiver, place and all.
+        case "${HUB_STATE[${left[best]}]}" in
+            ko|gone) reason="${HUB_STATE[${left[best]}]}" ;;
+            *)       reason="play" ;;
+        esac
+        proto_msg KO "${left[best]}" "${place}" "${reason}"
         hub_bcast "${PROTO_LINE}"
         left=("${left[@]:0:best}" "${left[@]:best+1}")
         place=$(( place + 1 ))

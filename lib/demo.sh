@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.8.0  (2026-09-05)
+# Version: 0.9.0  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -231,7 +231,7 @@ DEMO_PEER_RE='^([0-9]) ([A-Za-z0-9_-]{1,16})$'
 # One event of a versus stream, as the value of a "p=" line: the slot,
 # then the delta and the action written back to back the way the move
 # stream sends them. The payload widths are the ones the writer uses
-# (demo_record_garbage, demo_record_queue, demo_ko_write) and they are
+# (demo_record_garbage, demo_record_queue, demo_record_ko) and they are
 # fixed for the reason given above, so the pattern can spell them out.
 DEMO_MP_EVENT_RE='^([0-9]) ([0-9]{1,7})([lrcashogk]|y[0-9]{3}|q[0-9]{2}|[nz][0-9])$'
 # One checkpoint, as the value of a "v=" line: the slot and the six
@@ -258,13 +258,10 @@ DEMO_MP=0
 DEMO_MP_SLOT=0
 # Per slot: the round time of that slot's last recorded event (the deltas
 # are counted against it), the counters of the checkpoint waiting to be
-# written, when the last checkpoint for that slot was written, and the
-# place of an elimination whose kind is not settled yet (see
-# demo_record_ko).
+# written, and when the last checkpoint for that slot was written.
 DEMO_SLOT_LAST_MS=()
 DEMO_V_PEND=()
 DEMO_V_LAST_MS=()
-DEMO_KO_PEND=()
 # How many pieces that slot has taken out of the sequence: one per spawn,
 # counted from the events that cause one (see demo_slot_event). It is
 # what the piece stream is topped up against when the recording is closed
@@ -538,7 +535,6 @@ demo_record_start() {
             DEMO_SLOT_LAST_MS[i]=0
             DEMO_V_PEND[i]=""
             DEMO_V_LAST_MS[i]=0
-            DEMO_KO_PEND[i]=""
             # One already: every round opens with the spawn game_reset
             # does before a single event can have happened.
             DEMO_SLOT_SPAWNS[i]=1
@@ -833,74 +829,39 @@ demo_record_queue() {
     return 0
 }
 
-# demo_record_ko SLOT PLACE
-# A player is out of the round, with the place they took. Not written
-# yet: the hub's KO says the same thing for somebody who topped out and
-# for somebody whose connection died, and the recording tells the two
-# apart ("n" and "z"). Which it was follows in the roster a moment later,
-# and demo_record_peer_status writes the event then - or, if the round
-# ends before any roster arrives, demo_ko_flush does.
-# A second KO for a place already waiting overwrites it instead of being
-# ignored: in the sprint and ultra session modes the hub hands out the
-# places again by row credit when the round is decided, and a client
-# "simply takes the newer one" (hub_places_by_rows, lib/hub.sh). Kept
-# apart, the recording would show the order somebody went out where the
-# round ended up ranking them differently.
+# demo_record_ko SLOT PLACE STATE
+# A player has their place in the round, and STATE says how they came by
+# it. The recording keeps the two ways out apart ("n" for a stack that
+# hit the ceiling, "z" for a connection that died), which is why the hub
+# sends the reason with the place (protocol 5). It used to be read off
+# the roster arriving a tick later, and an elimination still waiting when
+# the recording closed was written as a top-out - the very case the wait
+# was for: a round decided by that elimination sends END ahead of the
+# roster, so a lost connection ended up in the file as a top-out every
+# time it was the one that ended the round.
+# "play" is neither: in the sprint and ultra session modes the hub hands
+# out every place by row credit when the round is decided
+# (hub_places_by_rows, lib/hub.sh), boards that were still standing
+# included. Nothing is written for those - they did not leave the round,
+# the round left them, and that is what a replay shows anyway.
+# A second KO for a slot that already has one is written as well rather
+# than dropped: those same modes hand the places out again, and a replay
+# "simply takes the newer one" (demo_apply). Kept apart, the recording
+# would show the order somebody went out where the round ended up
+# ranking them differently.
 demo_record_ko() {
-    local slot="${1}" place="${2}"
+    local slot="${1}" place="${2}" state="${3}" letter
     [ "${DEMO_RECORDING}" -eq 1 ] || return 0
     [ "${DEMO_MP}" -eq 1 ] || return 0
     demo_slot_ok "${slot}" || return 0
-    [ "${place}" -le 9 ] || place=9
-    DEMO_KO_PEND[slot]="${place}"
-    return 0
-}
-
-# demo_record_peer_status SLOT STATE
-# What the roster says a player is doing. Only one thing is taken from
-# it: it settles an elimination that is waiting for its kind.
-demo_record_peer_status() {
-    local slot="${1}" state="${2}"
-    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
-    [ "${DEMO_MP}" -eq 1 ] || return 0
-    demo_slot_ok "${slot}" || return 0
-    [ -n "${DEMO_KO_PEND[slot]}" ] || return 0
-    demo_stamp
     case "${state}" in
-        ko)   demo_ko_write "${slot}" "n" "${DEMO_STAMP_MS}" ;;
-        gone) demo_ko_write "${slot}" "z" "${DEMO_STAMP_MS}" ;;
+        ko)   letter="n" ;;
+        gone) letter="z" ;;
+        *)    return 0 ;;
     esac
-    return 0
-}
-
-# demo_ko_write SLOT LETTER T
-# Write the elimination that was waiting for this slot, at round time T.
-demo_ko_write() {
-    local slot="${1}"
-    demo_slot_event "${slot}" "${3}" "${2}${DEMO_KO_PEND[slot]}"
-    DEMO_KO_PEND[slot]=""
-    return 0
-}
-
-# demo_ko_flush
-# Settle every elimination still waiting when the recording is closed. A
-# round that ended on the knock-out deciding it is the ordinary case
-# here: the hub sends its ROSTER on the pass after the KO, and this
-# client is already closing its books by then. They are written as
-# knock-outs, which is what an elimination is unless a roster said
-# otherwise - and a player whose connection died has left a trail the
-# round itself does not need this event to show.
-# Stamped with the end of the timeline (demo_mark_end) rather than with
-# "now": this runs after the name prompt, and a person typing must not
-# push an event of the round past the length the file says it had.
-demo_ko_flush() {
-    local i
-    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
-    [ "${DEMO_MP}" -eq 1 ] || return 0
-    for (( i = 0; i < MP_MAX; i++ )); do
-        [ -n "${DEMO_KO_PEND[i]}" ] || continue
-        demo_ko_write "${i}" "n" "${DEMO_END_MS}"
-    done
+    [ "${place}" -le 9 ] || place=9
+    demo_stamp
+    demo_slot_event "${slot}" "${DEMO_STAMP_MS}" "${letter}${place}"
     return 0
 }
 
@@ -1017,10 +978,6 @@ demo_record_finish() {
     if [ "${DEMO_RECORDING}" -eq 0 ]; then
         return 0
     fi
-    # Before the buffer goes out for the last time: an elimination still
-    # waiting for the roster that would have named its kind is written
-    # now, or it is lost with the buffer.
-    demo_ko_flush
     demo_flush || return 0
     if [ ! -s "${DEMO_TMP_FILE}" ]; then
         debug_event "demo: round had no events, recording dropped"

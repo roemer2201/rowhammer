@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.4.0
+Version:        1.4.1
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,15 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sat Sep 05 2026 roemer2201 <r.oliver@web.de> - 1.4.1-1
+- The hub says why a player is out when it hands them their place
+  (protocol 5); the roster that used to carry it arrives after the
+  round-over message whenever that elimination ended the round, so a
+  lost connection was recorded and shown as a top-out.
+- A recording no longer settles an unfinished elimination as a top-out.
+- A place handed out at the end of a sprint or ultra session no longer
+  marks a board that was still standing as knocked out.
+
 * Sat Sep 05 2026 roemer2201 <r.oliver@web.de> - 1.4.0-1
 - A recorded multiplayer round can be watched: every board replays its
   own round through the same game functions a live round uses.
