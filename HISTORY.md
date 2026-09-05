@@ -103,6 +103,7 @@ TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
 | 1.2.0 | Gastgeberwechsel: die Lobby ueberlebt ihren Gastgeber; Client-Timeouts | 5.1, 5.4, 5.8 |
 | 1.3.0 | Fuenf Spieler, Sitzordnung um das eigene Feld, volle Zellenbreite; Unterbau und Aufzeichnung der Mehrspieler-Demo (Teilschritte 9.1-9.10) | 4.1, 4.10, 5.1, 5.4, 5.6, 5.20 |
 | 1.4.0 | Wiedergabe der Mehrspieler-Demo: Fokuswechsel, Rundenende, Gegenprobe (Teilschritte 9.11-9.14) | 5.6, 5.20 |
+| 1.4.1 | Grund des Ausscheidens im `KO` (Protokoll 5): eine gerissene Verbindung ist kein Top-Out mehr | 5.4, 5.8, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2193,3 +2194,68 @@ Fusszeilen nennen `K.O. 4`, `K.O. 3` und `SIEG`, der Kasten am Ende
       Abnahme: `tools/release.sh --mode check` ist gruen, Seite 10
       bleibt mit 18 (deutsch) bzw. 17 (englisch) Zeilen in
       `MENU_BODY_MAX` und in den 46 Zeichen Breite.
+
+## Grund des Ausscheidens im `KO` (umgesetzt, Version 1.4.1)
+
+Aus dem externen Review `CODEX-REVIEW.md` (September 2026), das den
+Punkt als "Finding 2" fuehrte. Es traf einen echten Fehler, und einen
+haeufigeren, als es selbst annahm.
+
+**Vorzustand:** Das `KO` des Hubs trug nur Slot und Platz. Ob jemand
+oben rausgebaut hatte (`ko`) oder seine Verbindung verloren hatte
+(`gone`), stand allein im `ROSTER`, das der Hub am Ende seines Ticks
+schickt. Die Aufnahme merkte sich deshalb erst nur den Platz
+(`DEMO_KO_PEND`) und schrieb `n` oder `z`, sobald der Roster kam -
+und beim Schliessen der Aufnahme **immer `n`**, falls er nicht mehr
+gekommen war. Die laufende Anzeige tat dasselbe: `mp_poll` setzte den
+Zustand hart auf `ko`, bis ein Roster ihn richtigstellte.
+
+**Warum das nicht aufging:** Beendet das Ausscheiden die Runde, geht
+`END` dem Roster voraus - `hub_eliminate` sendet `KO` und (ueber
+`hub_end_round`) `END` sofort, `HUB_ROSTER_DIRTY` wird dagegen erst am
+Tick-Ende ausgewertet. Der aufzeichnende Client hat seine Buecher zu
+diesem Zeitpunkt geschlossen. Eine gerissene Verbindung stand danach
+als Top-Out in der Datei, und zwar nicht in einem Randfall, sondern
+**immer dann, wenn sie die Runde entschieden hat** - genau der Fall,
+fuer den die Verzoegerung gebaut worden war. Nachgestellt mit Hub und
+zwei `--mp-bot` ueber TCP: der `SIGKILL` auf den zweiten Bot ergibt
+`KO 1 2`, `END 0` und danach ein `ROSTER`, das Slot 1 gar nicht mehr
+nennt.
+
+**Neuer Stand:** Der Grund reist mit dem Platz. `KO` hat ein drittes
+Feld (`play|ko|gone`, Muster `PROTO_OUT_RE`, Feldklasse `O`), die
+Protokollversion steht auf **5**, und die ganze Verzoegerungsmechanik
+ist entfallen - `DEMO_KO_PEND`, `demo_ko_write`, `demo_ko_flush` und
+`demo_record_peer_status` gibt es nicht mehr. Vier Entscheidungen:
+
+- **Protokollversion statt angehaengtem Feld.** Ein Version-4-Client
+  wuerde die Nachricht an ihrer Feldzahl verwerfen und damit eine Runde
+  spielen, in der keine Plaetze mehr ankommen; die Arbeitsregel "keine
+  Abwaertskompatibilitaet" laesst den Sprung ohnehin zu, und der Hub
+  weist eine fremde Version im `HELLO` sauber ab.
+- **Das Feld hat ein eigenes, engeres Muster** als der Zustand des
+  Rosters: `lobby` ist nichts, was ein Platz bedeuten kann. Ein Wert
+  ausserhalb der drei faellt wie jedes andere Fremddatum heraus (5.5);
+  `tools/net-fuzz.sh` speist ihn mit `$(...)`, `;` und `lobby` an.
+- **`play` ist die dritte Antwort, nicht das Fehlen einer.** In
+  `sprint` und `ultra` vergibt der Hub am Ende alle Plaetze nach Rows
+  neu, auch an Bretter, die noch standen (`hub_places_by_rows`). Fuer
+  die schreibt die Aufnahme nichts, und die Fusszeile laesst ihre
+  Zahlen stehen, statt sie als `K.O.` auszuweisen - ein Platz ist kein
+  Ausscheiden. Ihr Platz ist dafuer in der Aufnahme nicht vermerkt; das
+  ist der bewusst kleinere Verlust gegenueber einem falschen `K.O.` und
+  steht als offener Punkt in TODO.md.
+- **Ein zweites `KO` wird geschrieben statt vorgemerkt.** Die
+  Wiedergabe nimmt schlicht den neueren Platz (`demo_apply`) - dieselbe
+  Regel wie vorher, nur ohne Zwischenlager.
+
+Abnahme: `KO 2 3 ko|gone|play` wird geparst, die Version-4-Form und
+`KO 2 3 lobby` fallen mit Rueckgabewert 1 heraus, eine injizierte
+Nutzlast ebenso; `demo_record_ko` schreibt `n3` fuer `ko`, `z2` fuer
+`gone`, nichts fuer `play` und nichts fuer einen Slot ausserhalb der
+Sitzung, und ein zweites `KO` desselben Slots landet als weiteres
+Ereignis im Strom. Eine echte Sitzung ueber TCP (Hub, zwei
+`--mp-bot`) zeigt `KO 1 2 gone` auf der Leitung und beim Empfaenger.
+`tools/net-fuzz.sh` (719 Faelle), `tools/key-scan.sh` (72) und
+`tools/state-check.sh` (68) sind ohne Befund,
+`tools/release.sh --mode check` ist gruen.

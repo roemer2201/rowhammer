@@ -28,7 +28,7 @@
 #   then a length and a character class and has no gaps.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.2.0  (2026-08-11)
+# Version: 1.3.0  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -60,7 +60,15 @@ fi
 # but would then misread the slot in GARBAGE as a row count and push a
 # wrong number of rows into its board - which is exactly why the version
 # number is raised rather than the messages extended compatibly.
-PROTO_VERSION=4
+# Version 5 (1.4.1) gives KO a third field: why the player is out of the
+# running - they topped out, their connection died, or they were still
+# standing when the round was decided. The hub knew that all along and
+# said it one tick later in the roster; a client that has to wait for it
+# gets the answer too late whenever the same elimination ends the round,
+# because END travels ahead of the roster. A version 4 client would fail
+# the message on its field count and drop it, which is a round whose
+# places never arrive - hence the new number.
+PROTO_VERSION=5
 
 # --- Field patterns -------------------------------------------------------
 # Every field of every message is checked against exactly one of these.
@@ -110,6 +118,12 @@ PROTO_BOARD_RE='^[.IOTSZJLgsx]{200}$'
 # and at most 48 tokens, so the field cannot exceed 336 characters however
 # it is composed.
 PROTO_ACT_RE='^([0-9]{1,6}[acghklors]){1,48}$'
+# Why a player is out of the running (KO). Deliberately narrower than the
+# roster's state pattern: a place is only ever handed to somebody who
+# topped out, whose connection died, or who was still playing when the
+# round was decided on rows (hub_places_by_rows, lib/hub.sh) - "lobby" is
+# not a thing this message can mean.
+PROTO_OUT_RE='^(play|ko|gone)$'
 
 # --- Message table --------------------------------------------------------
 # One entry per verb: the number of arguments (without the verb) and the
@@ -216,7 +230,13 @@ declare -A PROTO_MSG=(
     # could only ever drift away from it. Slot-prefixed and sent to
     # everybody for the same reason as GARBAGE above.
     [QUEUE]="s n"
-    [KO]="s n"
+    # A player has their place in the round: whose it is, which place, and
+    # why they got it. The reason is what tells a top-out from a lost
+    # connection - the two look the same from the outside, and the
+    # recording keeps them apart (CLAUDE.md 5.20). It came with protocol 5;
+    # before that the reason was only in the roster that follows, which
+    # arrives after END whenever this very elimination ended the round.
+    [KO]="s n O"
     [END]="s"
     [PING]="k"
     [ERR]="e t"
@@ -249,6 +269,7 @@ proto_field_ok() {
         a) [[ "${2}" =~ ${PROTO_ADDR_RE} ]] ;;
         C) [[ "${2}" =~ ${PROTO_CLOSE_RE} ]] ;;
         T) [[ "${2}" =~ ${PROTO_ACT_RE} ]] ;;
+        O) [[ "${2}" =~ ${PROTO_OUT_RE} ]] ;;
         t) [[ "${2}" =~ ${PROTO_TEXT_RE} ]] ;;
         *) return 1 ;;
     esac

@@ -28,7 +28,7 @@
 #   net-fuzz.sh [-n|--random N] [-s|--seed N] [-v|--verbose] [-q|--silent]
 #               [-h|--help]
 #
-# Version: 1.0.0  (2026-08-11)
+# Version: 1.0.1  (2026-09-05)
 
 set -euo pipefail
 
@@ -298,6 +298,13 @@ HOSTILE=(
     'QUEUE 0 $(touch CANARY)'
     'QUEUE 99 0'
     'KO 0 $((1+1))'
+    # The reason field protocol 5 added: it is compared against a
+    # whitelist and never used as anything else, but it comes off the
+    # wire like every other field and is fuzzed in its own position.
+    'KO 0 1 $(touch CANARY)'
+    'KO 0 1 ko;touch CANARY'
+    'KO a[$(touch CANARY)] 1 ko'
+    'KO 0 1 lobby'
     # Arithmetic injection: the classic way an unchecked number turns
     # into code inside $(( )).
     'STATE a[$(touch CANARY)] 0 0 0 0 0 0'

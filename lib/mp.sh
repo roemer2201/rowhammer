@@ -28,7 +28,7 @@
 #   are worth (see lib/hub.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.4.1  (2026-09-05)
+# Version: 1.4.2  (2026-09-05)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -318,10 +318,6 @@ mp_handle() {
                 MP_PEER_NAME[slot]="${PROTO_ARG[1]}"
                 MP_PEER_READY[slot]="${PROTO_ARG[2]}"
                 MP_PEER_STATE[slot]="${PROTO_ARG[3]}"
-                # The roster is the only message that tells a top-out
-                # from a lost connection: the KO before it says the same
-                # thing for both, and the recording keeps them apart.
-                demo_record_peer_status "${slot}" "${PROTO_ARG[3]}"
             fi
             ;;
         SEED)
@@ -455,13 +451,27 @@ mp_handle() {
             slot="${PROTO_ARG[0]}"
             if [ "${slot}" -lt "${MP_MAX}" ]; then
                 MP_PEER_PLACE[slot]="${PROTO_ARG[1]}"
-                # Noted for the recording, written once the roster says
-                # whether this was a top-out or a lost connection.
-                demo_record_ko "${slot}" "${PROTO_ARG[1]}"
-                MP_PEER_STATE[slot]="ko"
+                # Why they are out, straight from the hub (protocol 5).
+                # It used to be read off the roster that follows, which
+                # is one tick later - and never at all when this
+                # elimination ended the round, because END overtakes it.
+                # The recording wrote a top-out for a lost connection
+                # then, the screen said the same, and neither could be
+                # corrected afterwards.
+                demo_record_ko "${slot}" "${PROTO_ARG[1]}" "${PROTO_ARG[2]}"
+                # "play" is the third answer and not an elimination: in
+                # the sprint and ultra session modes the hub hands out
+                # every place by row credit when the round is decided
+                # (hub_places_by_rows), including to boards that were
+                # still standing. They keep the state they have.
+                case "${PROTO_ARG[2]}" in
+                    ko|gone) MP_PEER_STATE[slot]="${PROTO_ARG[2]}" ;;
+                esac
                 if [ "${slot}" -eq "${MP_SLOT}" ]; then
                     MP_PLACE="${PROTO_ARG[1]}"
-                    MP_STATE="ko"
+                    case "${PROTO_ARG[2]}" in
+                        ko|gone) MP_STATE="${PROTO_ARG[2]}" ;;
+                    esac
                 fi
                 DIRTY=1
             fi

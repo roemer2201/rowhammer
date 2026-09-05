@@ -215,6 +215,29 @@ und werden nach Playtesting nachgezogen, nicht je Runde gewaehlt.
 - [ ] **Kein Reconnect in v1** (siehe 5.8): Haeufen sich Abbrueche im
       Alltag, waere ein Wiedereinstieg mit vollstaendiger
       Zustandsuebertragung ein eigener spaeterer Punkt.
+- [ ] **Ursprungszeit und Ankunftszeit im Zugstrom** (siehe 5.20,
+      "Finding 1" aus [CODEX-REVIEW.md](CODEX-REVIEW.md)):
+      `demo_slot_event` klemmt ein negatives Delta auf 0, ein
+      verspaetetes `PEERACT`-Fenster landet damit hinter einem
+      Hub-Ereignis, das spaeter passiert ist. Die Begruendung in 5.20 -
+      die Wirkung verschiebe sich nicht, weil Stoerreihen nur eingereiht
+      werden - hat eine Luecke: enthaelt das nachgeholte Fenster einen
+      Lock (`h`/`k`), wird eine Flut ein Lock zu frueh eingeschoben und
+      das Brett laeuft ab da auseinander. Dasselbe gilt fuer `q`, das
+      die Warteschlangenlaenge absolut setzt. Zuerst **messen**: die
+      Bilanz von `demo_verify` im Debug-Log sagt, ob der Fall in echten
+      Runden mit eingeschalteten Stoerreihen ueberhaupt auftritt. Falls
+      ja, waere der Weg, Hub-Ereignisse eines fremden Slots
+      zurueckzustellen, bis dessen Strom ihre Ankunftszeit erreicht hat
+      (offene Frage dabei: der Timeout fuer einen Spieler, der gerade
+      nichts sendet). Falls nein, ist es eine Zeile Doku in 5.20.
+- [ ] **Der Platz eines Ueberlebenden fehlt in der Aufnahme** (siehe
+      5.20): seit 1.4.1 schreibt die Aufzeichnung fuer ein `KO` mit dem
+      Grund `play` nichts - in `sprint` und `ultra` bekommt damit ein
+      Brett, das bis zum Ende stand und nicht gewonnen hat, in der
+      Wiedergabe zwar "Runde zu Ende", aber keinen Platz. Ein eigener
+      Buchstabe dafuer waere Demo-Format 4; ob sich das lohnt, sagt erst
+      das Playtesting der beiden Modi.
 
 Bewusst **kein** offener Punkt: vollstaendige Cheat-Sicherheit. Der Hub
 ist autoritativ fuer Garbage-Mengen, Lochspalten, KO-Reihenfolge und
@@ -267,7 +290,14 @@ Bestaetigung, bevor der jeweilige Roadmap-Schritt beginnt:
       "Punkte = Reihenwertung" und nur nach ausdruecklicher
       Nutzerentscheidung wieder aufzugreifen.
 
-## 3. Externe Review
+## 3. Externe Reviews
+
+[CODEX-REVIEW.md](CODEX-REVIEW.md) ist eine Code-Review der
+Mehrspieler-Demoaufzeichnung vom 5. September 2026, eine
+**fremde Momentaufnahme, die nicht gepflegt wird**. Ihr zweites Finding
+(ein ausbleibendes `ROSTER` laesst eine gerissene Verbindung als
+Top-Out in die Aufnahme) ist mit 1.4.1 behoben, siehe HISTORY.md; ihr
+erstes steht als offener Punkt in 2.2.
 
 [MISTRAL.md](MISTRAL.md) ist eine Code-Review von Mistral AI vom
 30. Juli 2026 mit rund fuenfzig Vorschlaegen. Sie ist eine **fremde
