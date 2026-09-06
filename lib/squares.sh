@@ -14,7 +14,7 @@
 #   the four consumed instance ids.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.3.2  (2026-07-26)
+# Version: 0.3.3  (2026-09-06)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -41,9 +41,10 @@ SQUARE_RESULT=""
 
 # square_check_at X0 Y0
 # Check whether the 4x4 area with top-left corner (X0, Y0) is a valid
-# square and mark it on success. Valid means: all 16 cells filled and
-# every cell belongs to one of exactly 4 distinct instances, none of
-# which is cut (damaged by a line clear) or already part of a square.
+# square and mark it on success. Valid means: all 16 cells filled, none
+# of them a garbage cell, and every cell belongs to one of exactly 4
+# distinct instances, none of which is cut (damaged by a line clear) or
+# already part of a square.
 # Because every instance owns at most 4 cells, "16 cells from 4 distinct
 # instances" already implies each instance lies completely inside the
 # area - no separate outside-cells check is needed.
@@ -55,6 +56,20 @@ square_check_at() {
         for (( x = x0; x < x0 + 4; x++ )); do
             idx=$(( y * BOARD_W + x ))
             if [ "${BOARD[idx]}" = "${EMPTY_CELL}" ]; then
+                return 1
+            fi
+            # A cell nobody placed can never be part of a square.
+            # CHANGE 2026-09-06 (SP-002 of the singleplayer review): the
+            # cell type is asked as well, not just the instance id. Both
+            # say the same thing today - board_flood_row and the
+            # multiplayer garbage give their rows GARBAGE_CELL and id 0
+            # together (CLAUDE.md 3.6, 5.7) - but the id was the only
+            # thing standing between a garbage row and a gold square,
+            # and it says "belongs to no piece", not "is not a piece".
+            # A later cell type that happens to carry id 0 would be
+            # square-ineligible by accident rather than by rule; this
+            # spells the rule out where the rule is decided.
+            if [ "${BOARD[idx]}" = "${GARBAGE_CELL}" ]; then
                 return 1
             fi
             id="${BOARD_ID[idx]}"

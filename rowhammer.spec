@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.4.1
+Version:        1.4.2
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,16 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sun Sep 06 2026 roemer2201 <r.oliver@web.de> - 1.4.2-1
+- The time source is resolved and verified once at startup: a date(1)
+  without GNU's %N used to kill the game in mid-round or, worse, put its
+  clock in 1970. Needs bash 5 or a date supporting %N, and says so.
+- A garbage row can never become part of a square, by cell type rather
+  than by the instance id that happened to imply it.
+- A highscore number is capped at 15 digits like every other number this
+  game stores, and the pieces-per-minute rate refuses operands it cannot
+  compute with instead of overflowing.
+
 * Sat Sep 05 2026 roemer2201 <r.oliver@web.de> - 1.4.1-1
 - The hub says why a player is out when it hands them their place
   (protocol 5); the roster that used to carry it arrives after the

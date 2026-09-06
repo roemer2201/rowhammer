@@ -212,7 +212,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.2.3  (2026-09-05)
+# Version: 1.3.0  (2026-09-06)
 
 set -euo pipefail
 
@@ -227,7 +227,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.4.1"
+ROWHAMMER_VERSION="1.4.2"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -1052,6 +1052,51 @@ if [ -n "${RESET_OPT}" ]; then
     exit 0
 fi
 
+# CLOCK_SRC: which time source now_ms uses. Resolved once here rather
+# than probed per call - the game loop asks for the time several times
+# per frame.
+CLOCK_SRC=""
+# clock_source_init
+# Pick the time source and report whether one works at all. bash 5's
+# EPOCHREALTIME is the first choice (no fork); below that the only
+# millisecond clock left is date +%s%N.
+# CHANGE 2026-09-06 (SP-001 of the singleplayer review): the date path is
+# now verified before the game relies on it. %N is a GNU extension and
+# not required by POSIX, so a date(1) without it either passes the letter
+# through ("1757000000N") or drops it and leaves the plain seconds
+# behind. The first form makes $(( )) fail, which under set -e killed the
+# game in the middle of a round - at the one moment nobody can do
+# anything about it; the second form is worse, because it looks like a
+# number and would put the clock in 1970 once divided by a million.
+# Hence the two-part probe: all digits, and exactly nine digits longer
+# than the plain seconds. A source that fails it is a startup error like
+# the bash version above, not a degraded mode - a game whose gravity and
+# lock delay are measured in whole seconds is not this game.
+# Placed here rather than up in the prerequisites for the same
+# reason the tty check is (see there): --help and --reset never ask
+# what time it is. The headless multiplayer processes do, though -
+# the hub's tick and its timeouts run on this clock - so unlike the
+# tty check this one is not skipped for them.
+clock_source_init() {
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+        CLOCK_SRC="epochrealtime"
+        return 0
+    fi
+    local secs nsec
+    # STDERR is deliberately not swallowed: a missing date(1) says so
+    # itself, and the message lands before the alternate screen.
+    secs="$(date +%s)" || return 1
+    nsec="$(date +%s%N)" || return 1
+    [[ "${secs}" =~ ^[0-9]+$ ]] || return 1
+    [[ "${nsec}" =~ ^[0-9]+$ ]] || return 1
+    [ "${#nsec}" -eq $(( ${#secs} + 9 )) ] || return 1
+    CLOCK_SRC="date"
+    return 0
+}
+if ! clock_source_init; then
+    die "no millisecond clock: needs bash 5 (EPOCHREALTIME) or a date(1) supporting %N, this is bash ${BASH_VERSION}"
+fi
+
 # The game itself needs a terminal (the reset above does not, see the
 # prerequisites section). Neither do the headless multiplayer processes
 # (1.1.0): the hub, the socket bridge, the beacon collector and the test
@@ -1330,8 +1375,12 @@ FLASH_CYCLES=2
 # Uses bash 5's EPOCHREALTIME when available (no fork); older bash falls
 # back to date. A global instead of command substitution keeps the hot
 # game loop free of subshell forks on bash 5.
+# Which of the two it is was decided once at startup (clock_source_init
+# in the prerequisites above), so this asks a variable instead of the
+# environment - and the date branch is only ever reached on a system
+# where its output was verified to be seconds plus nanoseconds.
 now_ms() {
-    if [ -n "${EPOCHREALTIME:-}" ]; then
+    if [ "${CLOCK_SRC}" = "epochrealtime" ]; then
         # Some locales print a decimal comma; normalize before splitting.
         local t="${EPOCHREALTIME/,/.}"
         local usec="${t#*.}"
@@ -1372,8 +1421,29 @@ fmt_duration_ms() {
 # printing. Shared by the highscore and the statistics screen so both
 # read identically.
 FMT_PPM="-"
+# The largest operand this accepts. 15 digits is the cap the persistent
+# files put on their numbers (STATS_LINE_RE, HS_FIELD_NUM_RE), and
+# 10^15 * 600 still leaves three orders of magnitude below the signed
+# 64-bit ceiling bash computes in.
+FMT_PPM_MAX_RE='^[0-9]{1,15}$'
 fmt_ppm() {
     local pieces="${1}" secs="${2}" tenths
+    # CHANGE 2026-09-06 (SP-003 of the singleplayer review): both
+    # operands are checked before they are multiplied. The loaders cap
+    # their fields, but this helper is shared by the highscore and the
+    # statistics screens and is also handed live round counters, so it
+    # states its own domain instead of trusting five callers to have
+    # done so. Anything outside it is "-", the same answer the
+    # division-by-zero case gets: a rate that cannot be computed is not
+    # printed as a wrong number - and a value bash cannot represent
+    # would not just be wrong, it would put a printf/test error message
+    # on STDERR, which in a full-screen program means in the middle of
+    # the board.
+    if [[ ! "${pieces}" =~ ${FMT_PPM_MAX_RE} ]] \
+        || [[ ! "${secs}" =~ ${FMT_PPM_MAX_RE} ]]; then
+        FMT_PPM="-"
+        return 0
+    fi
     if [ "${secs}" -le 0 ]; then
         FMT_PPM="-"
         return 0

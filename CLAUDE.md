@@ -956,6 +956,30 @@ Entscheidungen dahinter:
   ist von 2014, und `${EPOCHREALTIME}` (Bash 5) nutzt das Spiel ohnehin
   schon, wo es da ist. `debian/control`, `rowhammer.spec` und die README
   nennen dieselbe Zahl.
+- **Eine Millisekunden-Uhr** (seit 1.4.2): entweder `${EPOCHREALTIME}`
+  (Bash 5, ohne Fork) oder ein `date`, das `%N` kennt. `now_ms`
+  (`rowhammer.sh`) nimmt das erste, wo es da ist; welche der beiden es
+  ist, entscheidet `clock_source_init` **einmal beim Start** und legt es
+  in `CLOCK_SRC` ab. Taugt keine von beiden, bricht das Spiel mit einer
+  Meldung ab - wie bei der Bash-Version, und aus demselben Grund: einen
+  dritten Weg gibt es nicht. Drei Festlegungen dazu:
+  - **Der `date`-Weg wird geprueft, nicht geglaubt.** `%N` ist eine
+    GNU-Erweiterung und von POSIX nicht verlangt; ein `date` ohne sie
+    reicht entweder den Buchstaben durch (`1757000000N`, woran `$(( ))`
+    scheitert - unter `set -e` mitten in der Runde) oder laesst ihn weg
+    und gibt die blossen Sekunden zurueck, was schlimmer ist: das sieht
+    wie eine Zahl aus und legt die Uhr, durch eine Million geteilt, ins
+    Jahr 1970. Der Probelauf verlangt deshalb beides - lauter Ziffern
+    **und** genau neun Stellen mehr als `date +%s`.
+  - **Kein Rueckfall auf ganze Sekunden.** Ein Spiel, dessen Gravitation,
+    Lock Delay (250 ms) und Zeitmodi in Sekunden gemessen werden, ist
+    nicht dieses Spiel; eine klare Meldung beim Start ist ehrlicher als
+    eine Runde, die sich falsch anfuehlt.
+  - **Geprueft wird hinter `--help` und `--reset`** (wie die
+    TTY-Pruefung, siehe 4.8) - die beiden fragen nicht, wie spaet es
+    ist. Die kopflosen Mehrspieler-Prozesse dagegen schon (der Hub-Tick
+    und seine Timeouts laufen auf dieser Uhr), sie sind also **nicht**
+    ausgenommen.
 - Keine harten Abhaengigkeiten ausser Coreutils; `tput` optional (Fallback auf
   feste ANSI-Sequenzen).
 - Farben ueber ANSI-Escape-Sequenzen (8/16 Farben als Basis, 256-Farben als
@@ -1050,7 +1074,9 @@ rowhammer/
   HISTORY.md           # Archiv der erledigten Punkte je Version
   README.md            # Anleitung fuer Spielerinnen und Spieler
   MISTRAL.md           # externe Review (Juli 2026), wird nicht gepflegt
-  CODEX-REVIEW.md      # externe Review (September 2026), wird nicht gepflegt
+  CODEX-REVIEW.md      # externe Review Mehrspieler (Sept. 2026), ungepflegt
+  CODEX-REVIEW-SINGLEPLAYER.md
+                       # externe Review Einzelspieler (Sept. 2026), dito
 ```
 
 Alle Module aus dem Baum oben existieren; die vier
@@ -1274,6 +1300,16 @@ ueberschrieben werden kann.
 3. Bei Treffer: Zellen als Gold/Silber markieren; die Instanzen sind damit
    verbraucht (ein Stein kann nur zu einem Quadrat gehoeren).
 
+**Eine Stoerreihe ist ausdruecklich ausgenommen** (seit 1.4.2):
+`square_check_at` weist eine Zelle der Sorte `GARBAGE_CELL` ab, bevor es
+nach ihrer Instanz fragt. Beides sagt heute dasselbe - die Flutreihe des
+Hochwasser-Modus (3.6) und die Mehrspieler-Garbage (5.7) vergeben Sorte
+und Instanz-ID 0 gemeinsam -, aber die ID war bis dahin das Einzige, was
+zwischen einer Stoerreihe und einem Gold-Quadrat stand, und sie sagt
+"gehoert zu keinem Stein", nicht "ist kein Stein". Eine kuenftige
+Zellenart mit ID 0 waere aus Versehen quadratsunfaehig statt nach Regel;
+jetzt steht die Regel dort, wo ueber sie entschieden wird.
+
 ### 4.5 Persistenz
 
 - Alle persistenten Spieldaten liegen gemeinsam im Datenverzeichnis
@@ -1338,6 +1374,17 @@ ueberschrieben werden kann.
   aelter ist als ein Zaehler. Jede unbekannte Feldzahl sowie ein
   einzelnes Feld, das sein Muster nicht erfuellt (Namen, Datum, Zahlen),
   wirft die ganze Zeile heraus.
+  **Ein Zahlenfeld hat hoechstens 15 Ziffern** (`HS_FIELD_NUM_RE`, seit
+  1.4.2) - dieselbe Grenze, die die Statistik (`STATS_LINE_RE`) und das
+  Protokoll (5.5) immer schon hatten. Ohne sie konnte eine von Hand
+  bearbeitete Datei eine Zahl tragen, die Bash nicht darstellen kann,
+  und jede Stelle, die danach mit ihr rechnete, ging auf ihre eigene
+  Weise daneben: `$(( ))` laeuft still ueber (`fmt_ppm` machte aus
+  einer riesigen Teilezahl eine negative Rate), `test -le` und
+  `printf %d` schreiben ihre Beschwerde nach STDERR - und STDERR ist in
+  einem Vollbild-Programm mitten im Spielfeld, wo der Diff-Renderer sie
+  stehen laesst (siehe 4.10). 15 Ziffern mal den 600 aus `fmt_ppm`
+  bleiben drei Zehnerpotenzen unter der 64-Bit-Grenze.
   Die Datei wird geparst und validiert (nicht gesourct); defekte
   Zeilen werden beim Laden uebersprungen. Eine Runde wird beim
   echten Rundenende genau einmal gewertet (Game Over oder endgueltiges
@@ -1559,9 +1606,10 @@ ueberschrieben werden kann.
   meidet) auch hier stimmig bleibt. In `--no-color`/`NO_COLOR` sind alle
   `TXT_*`-Variablen leer, die Anzeige ist dann byteidentisch zur
   unkolorierten Fassung. Eine Zeile, die trotz der 46-Zeichen-Grenze zu
-  lang wird (`HS_FIELD_NUM_RE` begrenzt die Ziffernzahl nicht, eine von
-  Hand editierte Datei koennte also ueberlaufen), verzichtet auf Farbe
-  und faellt auf den bisherigen, hart abgeschnittenen Klartext zurueck -
+  lang wird (`HS_FIELD_NUM_RE` begrenzt die Ziffern eines Feldes, nicht
+  die Breite einer ganzen Zeile - eine von Hand editierte Datei kann sie
+  also weiter sprengen), verzichtet auf Farbe und faellt auf den
+  bisherigen, hart abgeschnittenen Klartext zurueck -
   sonst koennte eine Escape-Sequenz mitten durchgeschnitten werden.
 - `lib/save.sh` (seit 0.8.0): der Gesamt-Reihenzaehler in
   `${DATA_DIR}/save`, eine validierte Zeile `total_rows=N` (geparst,

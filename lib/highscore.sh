@@ -50,10 +50,10 @@
 #   (lib/render.sh, theme-aware, empty in --no-color/NO_COLOR mode): rank
 #   1/2 in gold/silver, the rows column and other ranks in the theme's
 #   accent color, the Gold/Silb/RH figures in gold/silver/warn color. An
-#   implausibly long line (HS_FIELD_NUM_RE has no digit cap, so a
-#   hand-edited file could exceed the 46-char budget) skips coloring and
-#   falls back to the plain truncated text instead of risking a cut
-#   escape sequence.
+#   implausibly long line (HS_FIELD_NUM_RE caps the digits of a field but
+#   not the width of a whole line, so a hand-edited file can still exceed
+#   the 46-char budget) skips coloring and falls back to the plain
+#   truncated text instead of risking a cut escape sequence.
 #   Since 0.10.0 the Ultra game mode (clear ULTRA_TARGET_ROWS rows as
 #   fast as possible, see rowhammer.sh) keeps its own list in
 #   ${DATA_DIR}/highscore-ultra, built from the HSU_* globals and
@@ -112,7 +112,7 @@
 #   who won a given evening does not (see CLAUDE.md 4.5).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.20.0  (2026-08-11)
+# Version: 0.20.1  (2026-09-06)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -144,7 +144,20 @@ HS_LAST_RANK=0
 # Per-field patterns for loading. The name charset matches the player
 # name validation in rowhammer.sh (no "|" possible), so every file this
 # game writes round-trips unchanged.
-HS_FIELD_NUM_RE='^[0-9]+$'
+# CHANGE 2026-09-06 (SP-003 of the singleplayer review): the number
+# pattern caps the digit count, the way lib/stats.sh and the protocol
+# have always done. Without a cap a hand-edited file could carry a value
+# bash cannot represent, and every place that then does arithmetic on it
+# behaves badly in its own way: $(( )) wraps silently (fmt_ppm turned a
+# huge piece count into a negative rate), test -le and printf %d write
+# "integer expression expected" / "invalid number" to STDERR - and STDERR
+# in a full-screen program lands in the middle of the board, where the
+# diff renderer then leaves it standing (CLAUDE.md 4.10). 15 digits is
+# what stats uses; 15 digits times the 600 of fmt_ppm still fits a signed
+# 64-bit integer with three orders of magnitude to spare.
+# A line can still outgrow HS_LINE_MAX with values this size, so the
+# truncation fallback below stays where it is.
+HS_FIELD_NUM_RE='^[0-9]{1,15}$'
 HS_FIELD_NAME_RE='^[A-Za-z0-9_ -]{1,16}$'
 HS_FIELD_DATE_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
 # The round hash (round_hash in rowhammer.sh) that every list carries as
@@ -551,8 +564,9 @@ HS_PAGE_ENTRIES=5
 # browser spends two of them on the cursor and the demo marker in front
 # of every entry, which leaves 44 for the text itself. A line that would
 # exceed that - only reachable with a hand-edited file, since
-# HS_FIELD_NUM_RE caps no digit count - is shown truncated and without
-# colors rather than risking a cut escape sequence.
+# HS_FIELD_NUM_RE caps the digit count of a field but not the width of
+# the whole line - is shown truncated and without colors rather than
+# risking a cut escape sequence.
 HS_LINE_MAX=44
 
 # --- List browser ---------------------------------------------------------
@@ -811,8 +825,9 @@ highscore_screen() {
             "${hs_date}"
         # Color only the common case (plausible values, still within the
         # HS_LINE_MAX budget); an implausibly long line (a hand-edited
-        # file - HS_FIELD_NUM_RE has no digit cap) falls back to the plain
-        # truncated text instead of risking a cut escape sequence.
+        # file - HS_FIELD_NUM_RE caps a field's digits, not the line)
+        # falls back to the plain truncated text instead of risking a cut
+        # escape sequence.
         if [ "${#plain}" -le "${HS_LINE_MAX}" ]; then
             highscore_rank_sgr "${rank}"
             printf -v line '%s%2d%s %-12.12s %s%6d%s %5s %10s' \

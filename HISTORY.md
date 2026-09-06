@@ -104,6 +104,7 @@ TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
 | 1.3.0 | Fuenf Spieler, Sitzordnung um das eigene Feld, volle Zellenbreite; Unterbau und Aufzeichnung der Mehrspieler-Demo (Teilschritte 9.1-9.10) | 4.1, 4.10, 5.1, 5.4, 5.6, 5.20 |
 | 1.4.0 | Wiedergabe der Mehrspieler-Demo: Fokuswechsel, Rundenende, Gegenprobe (Teilschritte 9.11-9.14) | 5.6, 5.20 |
 | 1.4.1 | Grund des Ausscheidens im `KO` (Protokoll 5): eine gerissene Verbindung ist kein Top-Out mehr | 5.4, 5.8, 5.20 |
+| 1.4.2 | Drei Haertungen aus der Einzelspieler-Review: geprueft Uhr-Quelle, ausdrueckliche Stoerreihen-Regel im Quadrat, Ziffernkappe der Bestenlisten | 4.1, 4.4, 4.5 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2259,3 +2260,98 @@ Ereignis im Strom. Eine echte Sitzung ueber TCP (Hub, zwei
 `tools/net-fuzz.sh` (719 Faelle), `tools/key-scan.sh` (72) und
 `tools/state-check.sh` (68) sind ohne Befund,
 `tools/release.sh --mode check` ist gruen.
+
+## Haertungen aus der Einzelspieler-Review (umgesetzt, Version 1.4.2)
+
+Aus dem externen Review `CODEX-REVIEW-SINGLEPLAYER.md` (September 2026,
+mit PR #101 gemergt), das drei Punkte fuehrte. Alle drei haben sich
+bestaetigt - keiner davon als Fehler im normalen Spiel, alle drei als
+Stelle, an der die Regel nicht dort stand, wo ueber sie entschieden
+wird. Ein Punkt seiner Begruendung war ueberholt: es rechnete mit einem
+Bash-Minimum von 4.0, das seit 1.3.0 bei 4.3 liegt (5.20). Am Befund
+aendert das nichts, denn `${EPOCHREALTIME}` kam erst mit Bash 5.
+
+**SP-001, die Uhr (High).** _Vorzustand:_ `now_ms` nahm
+`${EPOCHREALTIME}`, wo es das gab, und sonst `date +%s%N` - ungeprueft.
+`%N` ist eine GNU-Erweiterung und von POSIX nicht verlangt; auf einer
+Bash 4.3/4.4 ohne GNU-`date` (macOS, BSD) liefert der Aufruf entweder
+`1757000000N`, woran `$(( ))` scheitert - unter `set -euo pipefail`
+mitten in der Runde, an der einen Stelle, an der niemand etwas dagegen
+tun kann -, oder die blossen Sekunden, was schlimmer ist: das sieht wie
+eine Zahl aus und legt die Uhr, durch eine Million geteilt, ins Jahr
+1970. Nachgestellt mit zwei vorgeschobenen `date`-Skripten, die genau
+diese beiden Faelle nachahmen.
+
+_Neuer Stand:_ `clock_source_init` loest die Taktquelle **einmal beim
+Start** auf und legt sie in `CLOCK_SRC` ab; `now_ms` fragt seither die
+Variable statt die Umgebung. Vier Entscheidungen:
+
+- **Der Probelauf verlangt beides**: lauter Ziffern **und** genau neun
+  Stellen mehr als `date +%s`. Nur die Ziffernpruefung faenge den
+  ersten Fall und liesse den zweiten durch.
+- **Abbruch statt Rueckfall auf ganze Sekunden** (Nutzerentscheidung).
+  Ein Spiel, dessen Gravitation, Lock Delay (250 ms) und Zeitmodi in
+  Sekunden gemessen werden, ist nicht dieses Spiel; die Meldung beim
+  Start ist ehrlicher als eine Runde, die sich falsch anfuehlt - und
+  es ist dieselbe Bauart wie der Bash-Versionscheck darueber.
+- **Geprueft wird hinter `--help` und `--reset`**, wie die TTY-Pruefung
+  (4.8): die beiden fragen nicht, wie spaet es ist. Die kopflosen
+  Mehrspieler-Prozesse dagegen schon - der Hub-Tick und seine Timeouts
+  laufen auf dieser Uhr -, sie sind also nicht ausgenommen.
+- **STDERR des Probelaufs bleibt offen** (Konvention, Abschnitt 6): ein
+  fehlendes `date` sagt das selbst, und die Meldung landet noch vor dem
+  Alternate-Screen.
+
+**SP-002, das Quadrat (Medium).** _Vorzustand:_ `square_check_at` wies
+eine Zelle mit Instanz-ID 0 ab und fing damit jede Stoerreihe - aber
+ueber ihre ID, nicht ueber ihre Sorte. Die ID sagt "gehoert zu keinem
+Stein", nicht "ist kein Stein". Das Review nennt es ausdruecklich
+keinen heutigen Spielfehler, und das stimmt: `board_flood_row` und die
+Mehrspieler-Garbage vergeben `GARBAGE_CELL` und ID 0 gemeinsam. Setzt
+man im Versuchsaufbau eine Garbage-Zelle mit einer ID ungleich 0 in ein
+sonst gueltiges 4x4-Feld, bildete die alte Fassung daraus ein
+Silber-Quadrat.
+
+_Neuer Stand:_ Die Sorte wird vor der Instanz gefragt. Das kostet einen
+Vergleich je Zelle und stellt die Regel dorthin, wo ueber sie
+entschieden wird (4.4).
+
+**SP-003, die Zahlen (Low).** _Vorzustand:_ `HS_FIELD_NUM_RE` war
+`^[0-9]+$`, ohne Kappe - als einziges der drei Formate dieses Projekts
+(`STATS_LINE_RE` und das Protokoll kappen bei 15 bzw. 9 Ziffern). Eine
+von Hand bearbeitete Bestenliste konnte damit eine Zahl tragen, die
+Bash nicht darstellen kann, und jede Stelle, die danach mit ihr
+rechnete, ging auf ihre eigene Weise daneben: `fmt_ppm` machte aus
+einer 20-stelligen Teilezahl die Ausgabe `-12097452961952345.-7`
+(stiller Ueberlauf, negativ, und breiter als die Spalte), und eine
+ebenso grosse Zeit brachte `[: integer expression expected` nach
+STDERR - in einem Vollbild-Programm mitten ins Spielfeld, wo der
+Diff-Renderer es stehen laesst (4.10).
+
+_Neuer Stand:_ zwei Schranken statt einer. `HS_FIELD_NUM_RE` kappt bei
+15 Ziffern wie die Statistik, sodass keine Zeile mit einer
+unrechenbaren Zahl ueberhaupt geladen wird; und `fmt_ppm` prueft seine
+beiden Operanden selbst, weil es ein geteilter Helfer ist, der neben
+den Dateiwerten auch die lebenden Rundenzaehler bekommt - ausserhalb
+seines Bereichs meldet es `-`, dieselbe Antwort wie im
+Division-durch-0-Fall: eine Rate, die sich nicht rechnen laesst, wird
+nicht als falsche Zahl gedruckt. Die Kappe macht die
+Abschneide-Regel der Anzeige (`HS_LINE_MAX`) nicht ueberfluessig - elf
+Felder zu 15 Ziffern sprengen die 44 Zeichen weiterhin -, ihre
+Begruendung ist nur eine andere geworden.
+
+Abnahme: `clock_source_init` nimmt `${EPOCHREALTIME}` und ein
+GNU-`date`, weist ein `date`, das `%N` durchreicht, eines, das `%N`
+weglaesst, und ein fehlendes `date` zurueck; `now_ms` liefert auf dem
+`date`-Weg denselben Millisekundenwert wie auf dem Bash-5-Weg. Ein
+4x4-Feld aus vier O-Steinen ergibt weiter Gold, mit einer
+Garbage-Zelle darin (ID 0 wie ID 1) kein Quadrat. `fmt_ppm 300 600`
+bleibt `30.0`, 20-stellige Argumente ergeben `-` statt eines
+Ueberlaufs, und eine Bestenliste mit einem 22-stelligen Feld verliert
+beim Laden genau diese Zeile und behaelt die andere. Eine echte Runde
+ueber ein Pseudo-Terminal (100x30, `--debug`) spielt, verbucht ihre
+Statistik und legt Bestenlisteneintrag und Aufnahme ab.
+`tools/net-fuzz.sh` (719 Faelle), `tools/key-scan.sh` (72 und 69 mit
+`--gap 0.06`) und `tools/state-check.sh` (68) sind ohne Befund,
+`shellcheck --severity=error` und `tools/release.sh --mode check`
+ebenso.
