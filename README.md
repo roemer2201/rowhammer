@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.4.1
+**Version:** 1.4.2
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -85,6 +85,10 @@ Alternativ geht auch eine Installation ohne Paket per `sudo make install`
 ## Voraussetzungen
 
 - **Bash >= 4.3** (empfohlen: Bash 5)
+- Eine Millisekunden-Uhr: entweder Bash 5 (`EPOCHREALTIME`) oder ein
+  `date`, das `%N` kennt - auf den ueblichen Linux-Distributionen ist
+  beides der Fall. Das Spiel prueft das beim Start und sagt es, falls
+  keines von beidem da ist
 - Ein Terminal mit ANSI-Farbunterstuetzung, **mindestens 48x22 Zeichen**.
   Kleiner startet das Spiel nicht; wird das Fenster waehrend einer Runde
   zu klein, pausiert sie hinter einem Hinweis, bis wieder Platz da ist

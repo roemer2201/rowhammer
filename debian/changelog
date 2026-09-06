@@ -1,3 +1,27 @@
+rowhammer (1.4.2) unstable; urgency=medium
+
+  * The time source is resolved once at startup and verified before the
+    game relies on it. now_ms fell back to "date +%N" without checking,
+    which is a GNU extension: a date(1) without it either makes the
+    arithmetic fail - killing the game in mid-round under set -e - or
+    silently returns plain seconds, which puts the clock in 1970. The
+    game now needs bash 5 (EPOCHREALTIME) or a date supporting %N and
+    says so at startup instead of failing later.
+  * A garbage row can no longer become part of a gold or silver square.
+    It never could in practice, but only because such cells carry
+    instance id 0; the rule is now stated by cell type, where it is
+    decided.
+  * A highscore number is capped at 15 digits, the same cap the
+    statistics file and the multiplayer protocol always had. Without it
+    a hand-edited list could carry a value bash cannot represent, which
+    overflowed the pieces-per-minute rate and wrote shell error messages
+    into the middle of the board.
+  * fmt_ppm checks its own operands and reports "-" for anything it
+    cannot compute, the same answer it gives when no play time has been
+    measured yet.
+
+ -- roemer2201 <r.oliver@web.de>  Sun, 06 Sep 2026 22:00:00 +0200
+
 rowhammer (1.4.1) unstable; urgency=medium
 
   * The hub now says why a player is out of the round when it hands them

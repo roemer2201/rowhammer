@@ -299,6 +299,12 @@ Mehrspieler-Demoaufzeichnung vom 5. September 2026, eine
 Top-Out in die Aufnahme) ist mit 1.4.1 behoben, siehe HISTORY.md; ihr
 erstes steht als offener Punkt in 2.2.
 
+[CODEX-REVIEW-SINGLEPLAYER.md](CODEX-REVIEW-SINGLEPLAYER.md) ist eine
+Code-Review des Einzelspielers vom 5. September 2026, ebenfalls eine
+**fremde Momentaufnahme, die nicht gepflegt wird**. Alle drei Findings
+(Uhr-Quelle, Stoerreihen im Quadrat, Ziffernkappe der Bestenlisten)
+sind mit 1.4.2 behoben, siehe HISTORY.md; offen ist daraus nichts.
+
 [MISTRAL.md](MISTRAL.md) ist eine Code-Review von Mistral AI vom
 30. Juli 2026 mit rund fuenfzig Vorschlaegen. Sie ist eine **fremde
 Momentaufnahme und wird nicht gepflegt**: viele ihrer Punkte sind
