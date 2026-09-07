@@ -1075,8 +1075,6 @@ rowhammer/
   README.md            # Anleitung fuer Spielerinnen und Spieler
   MISTRAL.md           # externe Review (Juli 2026), wird nicht gepflegt
   CODEX-REVIEW.md      # externe Review Mehrspieler (Sept. 2026), ungepflegt
-  CODEX-REVIEW-SINGLEPLAYER.md
-                       # externe Review Einzelspieler (Sept. 2026), dito
 ```
 
 Alle Module aus dem Baum oben existieren; die vier

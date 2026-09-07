@@ -2355,3 +2355,12 @@ Statistik und legt Bestenlisteneintrag und Aufnahme ab.
 `--gap 0.06`) und `tools/state-check.sh` (68) sind ohne Befund,
 `shellcheck --severity=error` und `tools/release.sh --mode check`
 ebenso.
+
+**Nachtrag (Nutzerwunsch):** `CODEX-REVIEW-SINGLEPLAYER.md` ist danach
+**aus dem Baum entfernt** worden, samt ihrer Eintraege im Dateibaum
+(CLAUDE.md 4.2) und in der Review-Liste (TODO.md 3). Was sie zu sagen
+hatte, steht vollstaendig hier - je Finding der Vorzustand, die
+Entscheidung und die Abnahme -, und eine Datei, die im Baum liegt,
+liest sich wie eine offene Liste. Die Mehrspieler-Review
+`CODEX-REVIEW.md` bleibt dagegen liegen: aus ihr ist ein Finding noch
+offen (TODO.md 2.2).
