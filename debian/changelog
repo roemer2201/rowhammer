@@ -1,3 +1,32 @@
+rowhammer (1.5.0) unstable; urgency=medium
+
+  * The settings menu can move the data directory for good. Until now
+    the only way was --data-dir on every invocation, which the
+    /usr/games starter cannot pass; the new entry "Speicherort" asks
+    for a path, moves everything there - config, the six highscore
+    lists, savegame, statistics and the recordings - and leaves a link
+    file "datadir" in ~/.config/rowhammer naming the new place. Every
+    later start reads it; --data-dir and ROWHAMMER_DATA_DIR still
+    outrank it.
+  * A target that does not exist yet or holds nothing is moved into
+    without a question. One that already holds a rowhammer.conf asks
+    which of the two sides survives: do nothing, drop the data here and
+    play on with what lies there, or take the data along and overwrite
+    it. Both destructive answers ask once more and save the side they
+    give up as backup-YYYYMMDD-HHMMSS.tar.gz in that very directory,
+    with archives already lying there left out of it.
+  * A target that is not empty but holds no config of ours is moved
+    into as well, as long as no name collides; a collision names the
+    entry and changes nothing.
+  * Setting the location back to ~/.config/rowhammer removes the link
+    file again.
+  * New module lib/datadir.sh with the link file, the path validation
+    and the move; the debug session header gained a "datalink" line, so
+    a relocated session no longer looks like one started with
+    --data-dir.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 09 Sep 2026 23:50:00 +0000
+
 rowhammer (1.4.3) unstable; urgency=medium
 
   * The replay speed is on the up and down arrows as well, not only on

@@ -106,6 +106,7 @@ TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
 | 1.4.1 | Grund des Ausscheidens im `KO` (Protokoll 5): eine gerissene Verbindung ist kein Top-Out mehr | 5.4, 5.8, 5.20 |
 | 1.4.2 | Drei Haertungen aus der Einzelspieler-Review: geprueft Uhr-Quelle, ausdrueckliche Stoerreihen-Regel im Quadrat, Ziffernkappe der Bestenlisten | 4.1, 4.4, 4.5 |
 | 1.4.3 | Demo-Tempo auch auf Pfeil hoch/runter, damit eine Einzelspieler-Wiedergabe wieder Pfeiltasten hat | 3.8, 5.20 |
+| 1.5.0 | Speicherort der Spieldaten im Einstellungsmenue verlegbar, mit Zeigerdatei und Sicherung | 4.12 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2409,3 +2410,88 @@ ohne Befund; beide `--help`-Ausgaben und die Anleitungsseite wurden
 gerendert und vermessen (18 von 18 Zeilen, laengste Zeile 45 von 46,
 die Tempozeile 40). Eine vollstaendige interaktive Wiedergabe wurde
 nicht gefahren.
+
+## Speicherort der Spieldaten verlegbar (umgesetzt, Version 1.5.0)
+
+Das Einstellungsmenue hat einen Eintrag **"Speicherort"** bekommen
+(Nutzerwunsch), der das Datenverzeichnis dauerhaft an einen anderen Ort
+legt: Pfad eingeben, alles zieht um, und im Standardpfad bleibt eine
+Zeigerdatei `datadir` mit einer Zeile `data_dir=<pfad>` zurueck, die
+jeder spaetere Start liest. Umzug, Sicherung und Zeigerdatei stehen im
+neuen Modul `lib/datadir.sh`, der Dialog als `menu_datadir` in
+`lib/menu.sh`. Das Konzept samt aller Festlegungen steht in 4.12.
+
+_Vorzustand: Das Datenverzeichnis liess sich nur mit `--data-dir` bzw.
+`ROWHAMMER_DATA_DIR` umstellen, also bei jedem Aufruf erneut. Fuer eine
+Paketinstallation heisst das praktisch "gar nicht": der Starter in
+`/usr/games` (4.7) ist ein Symlink und reicht keine Optionen durch. Wer
+seine Bestenlisten auf eine andere Platte oder aus dem Home
+herausbekommen wollte, hatte keinen Weg dorthin._
+
+Die vier Entscheidungen, die den Ausschlag gaben (Rueckfragen an den
+Nutzer, Antworten in Klammern):
+
+- **Zeigerdatei statt Symlink** (Zeigerdatei). Der Standardordner bleibt
+  damit ein Ordner, in dem Sicherung und Zeigerdatei nebeneinander
+  liegen koennen - genau das, was der Wunsch "der Inhalt wird durch die
+  Link-Config ersetzt" beschreibt. Ein Symlink haette beides ins Ziel
+  verschoben und `--reset`/`--data-dir` mehrdeutig gemacht.
+- **Sicherungsformat** (tar.gz). Gewuenscht war ein ZIP; `zip` ist aber
+  kein Coreutil, und 4.1 laesst keine weitere harte Abhaengigkeit zu.
+  Zur Wahl standen "zip voraussetzen und die beiden Antworten sperren,
+  wenn es fehlt", "ZIP, sonst tar.gz" und "immer tar.gz" - entschieden
+  wurde das dritte, weil ein Format, das von der Maschine abhaengt, die
+  schlechtere Ueberraschung ist.
+- **Umfang** (alles ausser Zeigerdatei und vorhandenen Archiven). Eine
+  Liste der bekannten Dateinamen haette die `.bak`-Dateien eines Resets
+  und alles Kuenftige stillschweigend liegen gelassen.
+- **Ziel nicht leer, aber ohne Config** (verschieben, wenn kein Name
+  kollidiert). Das ist der Standardfall des Wunsches - "leeres Ziel,
+  keine Rueckfrage" -, nur mit der einen Schranke, die ein
+  Ueberschreiben ausschliesst.
+
+Der Ablauf haengt am Zustand des Ziels: existiert es nicht oder ist es
+leer, wird ohne Rueckfrage verschoben; traegt es eine `rowhammer.conf`,
+fragt das Spiel "Nichts unternehmen / Daten hier verwerfen, Ziel
+uebernehmen / Daten mitnehmen, Ziel ueberschreiben". Beide zerstoerenden
+Antworten fragen mit `menu_confirm` noch einmal zurueck ("Nein"
+vorausgewaehlt, 3.1) und sichern die Seite, die aufgegeben wird, vorher
+als `backup-JJJJMMTT-HHMMSS.tar.gz` in genau deren Verzeichnis.
+
+Drei Dinge fielen beim Bauen auf und sind in 4.12 festgehalten:
+
+- **`tar -C <verz> .` mit `--exclude`-Mustern funktioniert nicht**, wenn
+  das Archiv im selben Verzeichnis entsteht: die Punkt-Form nimmt das
+  Verzeichnis selbst als Member auf, und die daneben wachsende
+  Temp-Datei laesst `tar` mit "file changed as we read it" mit Exit 1
+  abbrechen. Der erste Testlauf scheiterte genau daran. Gepackt werden
+  jetzt die Eintraege aus `datadir_entries` - dieselbe Liste, auf der
+  Umzug und Loeschen arbeiten.
+- **Die Reihenfolge der Schritte ist nicht beliebig.**
+  `datadir_link_probe` prueft die Schreibbarkeit der Zeigerdatei, bevor
+  irgendetwas Zerstoerendes passiert, und in der Antwort "Ziel
+  uebernehmen" wird die Zeigerdatei **vor** dem Loeschen geschrieben -
+  umgekehrt waeren die Daten weg und das Spiel saehe weiter in den eben
+  geleerten Ordner.
+- **Eine uebernommene fremde Config wird nachsichtig geprueft.** Beim
+  Start darf eine kaputte Config mit `die` enden, dort ist noch nichts
+  verloren; mitten in einer Sitzung behaelt ein ungueltiger Wert den
+  bisherigen und vermerkt es im Debug-Log - ausgerechnet ein Umzug soll
+  nicht das sein, was eine Sitzung beendet.
+
+Abnahme: `bash -n`, `shellcheck --severity=error` ueber den ganzen Baum,
+die ASCII-Pruefung und `tools/release.sh --mode check` ohne Befund;
+`tools/state-check.sh` (68), `tools/key-scan.sh` (72) und
+`tools/demo-keys.sh` (31) unveraendert ohne Befund. Interaktiv gefahren
+wurde die Funktion in einem Wegwerf-HOME an einem Pseudo-Terminal, je
+einmal: leeres Ziel (Daten umgezogen, Zeigerdatei geschrieben, ein
+danebenliegendes `old.zip` unangetastet), alle drei Antworten der
+Abfrage (Archiv jeweils in der richtigen Seite, `old.zip` nicht darin,
+danach lief das Spiel mit der jeweils richtigen Config weiter), Ziel mit
+Namenskollision (Abbruch mit dem Namen), fremdes Ziel ohne Kollision
+(Umzug ohne Rueckfrage), Rueckweg auf den Standardpfad (Zeigerdatei
+verschwindet), gesperrter Menuepunkt unter `ROWHAMMER_DATA_DIR`, die
+vier ungueltigen Pfadformen und eine defekte Zeigerdatei (Meldung auf
+STDERR, Rueckfall auf den Standardpfad). Nach einem Neustart standen
+Wunderfortschritt (8500 Reihen) und Bestenliste am neuen Ort, und
+`--reset save --force` traf das verlegte Verzeichnis.

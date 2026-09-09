@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.8.1  (2026-09-09)
+# Version: 1.9.0  (2026-09-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -234,6 +234,58 @@ afterwards."
     [theme_colorblind]="Colorblind"
     [lang_title]="Pick a language"
     [lang_auto]="Automatic"
+
+    # --- Data directory (1.5.0, CLAUDE.md 4.12) ---------------------------
+    # The menu entry carries the shortened path (DATADIR_ENTRY_WIDTH in
+    # lib/menu.sh), the dialog headings the slightly longer one
+    # (DATADIR_LINE_WIDTH). Both widths are picked so text plus path fit
+    # into the 42 resp. 44 characters a menu entry resp. an info line has.
+    [set_datadir]="Location: %s"
+    [dd_title]="Location of the game data"
+    [dd_current]="Current: %s"
+    # 1 = the character limit of the input line (DATADIR_INPUT_MAX).
+    [dd_rules]="New path, absolute or starting with ~,
+at most %d characters. Everything moves
+along: settings, highscore lists, savegame,
+statistics and demos."
+    [dd_locked]="The location is set for this session with
+--data-dir resp. ROWHAMMER_DATA_DIR. A path
+stored here would have no effect for as
+long as that stays the case."
+    [dd_err_empty]="No path was entered."
+    [dd_err_chars]="Allowed: letters, digits, spaces
+and _ . + - / ~"
+    [dd_err_relative]="The path has to start with / or ~/."
+    [dd_err_root]="The root directory is not a location."
+    [dd_err_dotdot]="The path must not contain \"..\"."
+    [dd_err_same]="The game data is already there."
+    [dd_err_nested]="Target and current location overlap."
+    [dd_err_blocked]="Not a writable directory:"
+    [dd_err_collision]="An entry of this name is already there:"
+    [dd_err_backup]="The backup failed:"
+    [dd_err_wipe]="Clearing out failed at:"
+    [dd_err_move]="The move failed at:"
+    [dd_err_link]="The link could not be stored:"
+    # The question asked when the target already holds a config. The
+    # first entry is the harmless one and therefore the preselected one;
+    # ESC picks it as well.
+    [dd_ask_title]="The target already holds game data"
+    [dd_ask_nothing]="Do nothing"
+    [dd_ask_theirs]="Drop the data here, use the target's"
+    [dd_ask_ours]="Take the data along, overwrite target"
+    [dd_warn_theirs]="What is dropped lies in:"
+    [dd_warn_ours]="What is overwritten lies in:"
+    [dd_warn_backup]="The content is saved first as
+backup-YYYYMMDD-HHMMSS.tar.gz in that same
+directory; archives already lying there are
+left out of it."
+    [dd_warn_yes]="Yes, go ahead"
+    [dd_done_title]="Location changed"
+    [dd_done_where]="The game data now lives in:"
+    [dd_done_backup]="Saved to:"
+    [dd_done_note]="The path is kept in the file \"datadir\" in
+the default directory from now on and holds
+for the next start as well."
 
     # --- Key bindings -----------------------------------------------------
     [keylabel_KEY_LEFT]="Left"
@@ -681,6 +733,10 @@ Options:
                 Directory for all persistent game data: the config file
                 rowhammer.conf, the highscore list, the savegame and
                 the statistics file.
+                The directory can be relocated for good in the settings
+                menu ("Location"); the new path is then kept in
+                ~/.config/rowhammer/datadir. This option and the
+                environment variable outrank it.
                 Env: ROWHAMMER_DATA_DIR     Default: ~/.config/rowhammer
   --no-color    Disable ANSI colors. Each piece type is then drawn with
                 its own two-letter glyph (II OO TT SS ZZ JJ LL) so blocks

@@ -96,7 +96,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.28.1  (2026-09-09)
+# Version: 0.29.0  (2026-09-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -991,7 +991,7 @@ menu_demos() {
 # rounds are recorded as demos; every change is written to the user
 # config file immediately.
 menu_settings() {
-    local demo_label theme_entry name_entry demo_entry lang_entry
+    local demo_label theme_entry name_entry demo_entry lang_entry dir_entry
     while :; do
         if [ "${DEMO_RECORD}" = "on" ]; then
             demo_label="${I18N[on]}"
@@ -1008,12 +1008,17 @@ menu_settings() {
         # not say by itself.
         i18n_lang_label "${LANGUAGE}"
         printf -v lang_entry "${I18N[set_lang]}" "${I18N_LABEL}"
+        # The location entry names where the data currently lives, cut
+        # down to what a menu entry has room for (see menu_datadir).
+        datadir_short "${DATA_DIR}" "${DATADIR_ENTRY_WIDTH}"
+        printf -v dir_entry "${I18N[set_datadir]}" "${DATADIR_SHORT}"
         menu_run "${I18N[set_title]}" \
             "${I18N[set_keys]}" \
             "${lang_entry}" \
             "${theme_entry}" \
             "${name_entry}" \
             "${demo_entry}" \
+            "${dir_entry}" \
             "${I18N[menu_back]}"
         case "${MENU_CHOICE}" in
             0) menu_keys ;;
@@ -1031,9 +1036,242 @@ menu_settings() {
                 debug_event "settings: demo recording ${DEMO_RECORD}"
                 config_save
                 ;;
+            5) menu_datadir ;;
             *) return 0 ;;
         esac
     done
+}
+
+# --- Data directory ------------------------------------------------------
+# How wide the path in the settings entry and in the dialog headings may
+# get. The entry is "Speicherort: <path>" inside the 42 characters a menu
+# entry has (see menu_run), the heading lines have the 44 of a body line;
+# datadir_short cuts the front off anything longer, because the tail of a
+# path is the half that says which directory it is.
+DATADIR_ENTRY_WIDTH=28
+DATADIR_LINE_WIDTH=34
+# A path named on a line of its own gets the whole body line minus the
+# two spaces it is indented by. It has one whenever a sentence about it
+# would not fit next to it, which is nearly always: 44 characters are
+# gone after "Der Verweis liess sich nicht speichern:" alone.
+DATADIR_PATH_WIDTH=42
+# What the path prompt accepts. Wider than the name rules and with the
+# path characters added; the length is what the input line can show
+# inside a 48-column terminal ("  > " plus the cursor block). Set right
+# before the menu_text_input call, which puts the name rules back itself.
+DATADIR_INPUT_KEY_RE='^[A-Za-z0-9_.+ /~-]$'
+DATADIR_INPUT_MAX=40
+
+# menu_datadir_note KEY PATH
+# Report one thing about one path: the sentence from KEY, then the path
+# on a line of its own, shortened from the left (datadir_short). Used by
+# every refusal and every failure of the relocation, so they all read the
+# same way.
+menu_datadir_note() {
+    datadir_short "${2}" "${DATADIR_PATH_WIDTH}"
+    menu_message "${I18N[dd_title]}" "${I18N[${1}]}" "  ${DATADIR_SHORT}"
+    return 0
+}
+
+# menu_datadir: move the data directory for good (CLAUDE.md 4.12).
+# Asks for the new path, decides from the state of that path whether the
+# move can just happen or needs a question, and carries it out through
+# lib/datadir.sh. Nothing here touches a file itself - this function owns
+# the conversation, the module owns the moving.
+#
+# The straight case is a target that does not exist yet or holds nothing:
+# it is moved without a question, because there is nothing to lose there
+# (user decision). A target that already holds a rowhammer.conf belongs
+# to somebody's game, and then the player says which of the two sides
+# survives; whichever is given up is packed into an archive first.
+menu_datadir() {
+    local current="${DATA_DIR}" target line
+    local -a body
+
+    # Relocating is pointless while --data-dir or ROWHAMMER_DATA_DIR is
+    # in force: both outrank the link file (see rowhammer.sh), so the
+    # session would go on reading the directory it was given. Saying so
+    # is more use than storing a path that does nothing.
+    if [ "${DATA_DIR_EXPLICIT}" -eq 1 ]; then
+        i18n_lines dd_locked
+        menu_message "${I18N[dd_title]}" "${I18N_LINES[@]}"
+        return 0
+    fi
+
+    datadir_short "${current}" "${DATADIR_LINE_WIDTH}"
+    printf -v line "${I18N[dd_current]}" "${DATADIR_SHORT}"
+    body=("${line}" "")
+    printf -v line "${I18N[dd_rules]}" "${DATADIR_INPUT_MAX}"
+    mapfile -t -O "${#body[@]}" body <<< "${line}"
+    MENU_INPUT_RE_CUR="${DATADIR_INPUT_KEY_RE}"
+    MENU_INPUT_MAX_CUR="${DATADIR_INPUT_MAX}"
+    if ! menu_text_input "${I18N[dd_title]}" "${current}" "${body[@]}"; then
+        return 0
+    fi
+    if [ -z "${MENU_INPUT}" ]; then
+        return 0
+    fi
+    if ! datadir_path_check "${MENU_INPUT}"; then
+        menu_message "${I18N[dd_title]}" "${I18N[dd_err_${DATADIR_ERROR}]}"
+        return 0
+    fi
+    target="${DATADIR_TARGET}"
+    if [ "${target}" = "${current}" ]; then
+        menu_message "${I18N[dd_title]}" "${I18N[dd_err_same]}"
+        return 0
+    fi
+    # A directory cannot travel into itself, and the entry loop would
+    # chase what it just moved.
+    if datadir_inside "${current}" "${target}" ||
+       datadir_inside "${target}" "${current}"; then
+        menu_message "${I18N[dd_title]}" "${I18N[dd_err_nested]}"
+        return 0
+    fi
+
+    datadir_target_state "${target}"
+    debug_event "datadir: target ${target} is ${DATADIR_STATE}"
+    case "${DATADIR_STATE}" in
+        blocked)
+            menu_datadir_note dd_err_blocked "${target}"
+            ;;
+        new|empty)
+            menu_datadir_apply "${target}" "move"
+            ;;
+        foreign)
+            # Not ours, but not empty either. Moving in is fine as long
+            # as nothing bumps into anything - a move must never quietly
+            # overwrite a file somebody else put there.
+            if ! datadir_collision "${current}" "${target}"; then
+                menu_datadir_note dd_err_collision "${DATADIR_COLLISION}"
+                return 0
+            fi
+            menu_datadir_apply "${target}" "move"
+            ;;
+        config)
+            # ESC counts as the first entry: the answer that changes
+            # nothing is the safe one, so it must also be the easiest.
+            menu_run "${I18N[dd_ask_title]}" \
+                "${I18N[dd_ask_nothing]}" \
+                "${I18N[dd_ask_theirs]}" \
+                "${I18N[dd_ask_ours]}"
+            case "${MENU_CHOICE}" in
+                1) menu_datadir_apply "${target}" "theirs" ;;
+                2) menu_datadir_apply "${target}" "ours" ;;
+                *) : ;;
+            esac
+            ;;
+    esac
+    return 0
+}
+
+# menu_datadir_apply TARGET MODE
+# Carry out a relocation. MODE is "move" (take the current data along),
+# "theirs" (give up the current data and play on with what lies at the
+# target) or "ours" (take the current data along and overwrite what lies
+# at the target). The two destructive modes ask once more and write an
+# archive of the side they give up, into that very directory.
+menu_datadir_apply() {
+    local target="${1}" mode="${2}"
+    local current="${DATA_DIR}" victim=""
+    local -a body
+
+    # Cleared here rather than trusted from datadir_backup: the plain
+    # move never writes an archive, and a value left over from an earlier
+    # relocation in the same session would be reported as this one's.
+    DATADIR_ARCHIVE=""
+
+    # Asked before anything moves: the relocation ends with the link
+    # file, and a link that cannot be written would leave the data in its
+    # new place while every later start looks in the old one.
+    if ! datadir_link_probe; then
+        menu_datadir_note dd_err_link "${DATADIR_FAILED}"
+        return 0
+    fi
+
+    # Which side is given up, and which sentence says so. Both destructive
+    # modes ask the same way and back up the same way - only the directory
+    # differs, so the question is built once.
+    case "${mode}" in
+        theirs) victim="${current}" ;;
+        ours)   victim="${target}" ;;
+    esac
+    if [ -n "${victim}" ]; then
+        datadir_short "${victim}" "${DATADIR_PATH_WIDTH}"
+        if [ "${mode}" = "theirs" ]; then
+            body=("${I18N[dd_warn_theirs]}")
+        else
+            body=("${I18N[dd_warn_ours]}")
+        fi
+        body+=("  ${DATADIR_SHORT}" "")
+        i18n_lines dd_warn_backup
+        body+=("${I18N_LINES[@]}")
+        if ! menu_confirm "${I18N[dd_ask_title]}" \
+            "${I18N[dd_warn_yes]}" "${I18N[confirm_no]}" \
+            "${body[@]}"; then
+            return 0
+        fi
+        if ! datadir_backup "${victim}"; then
+            menu_datadir_note dd_err_backup "${DATADIR_FAILED}"
+            return 0
+        fi
+    fi
+
+    case "${mode}" in
+        theirs)
+            # The link goes in before the wipe: were it to fail after it,
+            # the data here would be gone and every later start would
+            # still look into the directory it was just emptied out of.
+            if ! datadir_link_write "${target}"; then
+                menu_datadir_note dd_err_link "${DATADIR_FAILED}"
+                return 0
+            fi
+            if ! datadir_wipe "${current}"; then
+                menu_datadir_note dd_err_wipe "${DATADIR_FAILED}"
+                # No return: the link is written and the target is
+                # untouched, so the relocation did happen - what stayed
+                # behind is a leftover, not a loss, and the archive
+                # beside it holds it all anyway.
+            fi
+            ;;
+        ours)
+            if ! datadir_wipe "${target}"; then
+                menu_datadir_note dd_err_wipe "${DATADIR_FAILED}"
+                return 0
+            fi
+            if ! datadir_move "${current}" "${target}"; then
+                menu_datadir_note dd_err_move "${DATADIR_FAILED}"
+                return 0
+            fi
+            if ! datadir_link_write "${target}"; then
+                menu_datadir_note dd_err_link "${DATADIR_FAILED}"
+                return 0
+            fi
+            ;;
+        *)
+            if ! datadir_move "${current}" "${target}"; then
+                menu_datadir_note dd_err_move "${DATADIR_FAILED}"
+                return 0
+            fi
+            if ! datadir_link_write "${target}"; then
+                menu_datadir_note dd_err_link "${DATADIR_FAILED}"
+                return 0
+            fi
+            ;;
+    esac
+
+    DATA_DIR="${target}"
+    datadir_reload
+    datadir_short "${target}" "${DATADIR_PATH_WIDTH}"
+    body=("${I18N[dd_done_where]}" "  ${DATADIR_SHORT}")
+    if [ -n "${DATADIR_ARCHIVE}" ]; then
+        datadir_short "${DATADIR_ARCHIVE}" "${DATADIR_PATH_WIDTH}"
+        body+=("" "${I18N[dd_done_backup]}" "  ${DATADIR_SHORT}")
+    fi
+    body+=("")
+    i18n_lines dd_done_note
+    body+=("${I18N_LINES[@]}")
+    menu_message "${I18N[dd_done_title]}" "${body[@]}"
+    return 0
 }
 
 # menu_language: pick the interface language (lib/i18n.sh). Lists

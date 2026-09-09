@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.8.1  (2026-09-09)
+# Version: 1.9.0  (2026-09-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -244,6 +244,60 @@ fortsetzbar."
     [theme_colorblind]="Farbenblind"
     [lang_title]="Sprache waehlen"
     [lang_auto]="Automatisch"
+
+    # --- Speicherort der Spieldaten (1.5.0, CLAUDE.md 4.12) ---------------
+    # Der Menue-Eintrag traegt den gekuerzten Pfad (DATADIR_ENTRY_WIDTH in
+    # lib/menu.sh), die Kopfzeilen der Dialoge den etwas laengeren
+    # (DATADIR_LINE_WIDTH). Beide Breiten sind so gewaehlt, dass Text plus
+    # Pfad in die 42 bzw. 44 Zeichen passen, die ein Menue-Eintrag bzw.
+    # eine Info-Zeile hat - eine Uebersetzung darf hier also laenger
+    # werden, muss dann aber die Konstanten mitrechnen.
+    [set_datadir]="Speicherort: %s"
+    [dd_title]="Speicherort der Spieldaten"
+    [dd_current]="Aktuell: %s"
+    # 1 = die Zeichengrenze der Eingabezeile (DATADIR_INPUT_MAX).
+    [dd_rules]="Neuer Pfad, absolut oder mit ~ beginnend,
+max. %d Zeichen. Alles - Einstellungen,
+Bestenlisten, Spielstand, Statistik und
+Demos - zieht mit um."
+    [dd_locked]="Der Speicherort ist fuer diese Sitzung per
+--data-dir bzw. ROWHAMMER_DATA_DIR gesetzt.
+Ein hier gespeicherter Pfad haette keine
+Wirkung, solange das so bleibt."
+    [dd_err_empty]="Es wurde kein Pfad eingegeben."
+    [dd_err_chars]="Erlaubt: Buchstaben, Ziffern, Leerzeichen
+und _ . + - / ~"
+    [dd_err_relative]="Der Pfad muss mit / oder ~/ beginnen."
+    [dd_err_root]="Das Wurzelverzeichnis ist kein Speicherort."
+    [dd_err_dotdot]="Der Pfad darf kein \"..\" enthalten."
+    [dd_err_same]="Dort liegen die Spieldaten bereits."
+    [dd_err_nested]="Ziel und aktueller Ort liegen ineinander."
+    [dd_err_blocked]="Kein beschreibbares Verzeichnis:"
+    [dd_err_collision]="Am Ziel liegt schon ein Eintrag namens:"
+    [dd_err_backup]="Die Sicherung schlug fehl:"
+    [dd_err_wipe]="Das Aufraeumen schlug fehl bei:"
+    [dd_err_move]="Der Umzug schlug fehl bei:"
+    [dd_err_link]="Der Verweis liess sich nicht speichern:"
+    # Die Abfrage, wenn am Ziel schon eine Konfiguration liegt. Der erste
+    # Eintrag ist der harmlose und deshalb der vorausgewaehlte; ESC waehlt
+    # ihn ebenfalls.
+    [dd_ask_title]="Am Ziel liegen bereits Spieldaten"
+    [dd_ask_nothing]="Nichts unternehmen"
+    [dd_ask_theirs]="Daten hier verwerfen, Ziel uebernehmen"
+    [dd_ask_ours]="Daten mitnehmen, Ziel ueberschreiben"
+    [dd_warn_theirs]="Verworfen wird, was hier liegt:"
+    [dd_warn_ours]="Ueberschrieben wird, was dort liegt:"
+    [dd_warn_backup]="Der Inhalt wird vorher als
+backup-JJJJMMTT-HHMMSS.tar.gz im selben
+Verzeichnis gesichert; bereits vorhandene
+Archive bleiben aussen vor."
+    [dd_warn_yes]="Ja, weiter"
+    [dd_done_title]="Speicherort geaendert"
+    [dd_done_where]="Die Spieldaten liegen jetzt in:"
+    [dd_done_backup]="Gesichert wurde nach:"
+    [dd_done_note]="Der Pfad steht ab jetzt in der Datei
+\"datadir\" im Standardverzeichnis und gilt
+auch fuer den naechsten Start."
 
     # --- Key bindings -----------------------------------------------------
     # Keyed by the binding variable, so the settings list and the
@@ -728,6 +782,10 @@ Optionen:
                 Verzeichnis fuer alle dauerhaften Spieldaten: die
                 Konfigurationsdatei rowhammer.conf, die Bestenlisten,
                 den Spielstand, die Statistik und die Demos.
+                Dauerhaft verlegen laesst sich das Verzeichnis im
+                Einstellungsmenue ("Speicherort"); der neue Pfad steht
+                dann in ~/.config/rowhammer/datadir. Diese Option und
+                die Umgebungsvariable haben Vorrang davor.
                 Env: ROWHAMMER_DATA_DIR     Standard: ~/.config/rowhammer
   --no-color    ANSI-Farben abschalten. Jede Steinsorte wird dann mit
                 einem eigenen Zwei-Zeichen-Glyph gezeichnet (II OO TT SS
