@@ -2204,7 +2204,7 @@ demo_play_peers_end() {
 # DEMO_PLAYING is set).
 # Controls: the pause key toggles the replay (reusing the game's PAUSED
 # flag and therefore its box), left/right move the focus from seat to
-# seat, "-" and "+" step through DEMO_SPEEDS, the quit key or ESC leaves,
+# seat, down/"-" and up/"+" step through DEMO_SPEEDS, the quit key or ESC leaves,
 # and "r" restarts the demo once it has finished. The focus survives a
 # restart - whoever the watcher chose to follow, they chose to follow
 # them through the round again.
@@ -2291,26 +2291,24 @@ demo_play() {
                     PAUSED=$(( 1 - PAUSED ))
                     DIRTY=1
                     ;;
-                # The arrows pick the seat, "-" and "+" the speed.
-                # Both pairs used to do the speed together, so nothing is
-                # lost by splitting them - and the arrows are what every
-                # other list in this game is walked with, which is what
-                # the seats are (CLAUDE.md 5.20). A recording with a
-                # single seat simply has nothing to step to.
+                # Horizontal arrows pick the seat (CLAUDE.md 5.20).
+                # Vertical arrows control speed in every recording, so
+                # singleplayer playback also has working arrow controls.
+                # Keep "-"/"+" as alternatives for the same speed steps.
                 LEFT)
                     demo_focus_step -1
                     ;;
                 RIGHT)
                     demo_focus_step 1
                     ;;
-                -)
+                DOWN|-)
                     if [ "${DEMO_SPEED_IDX}" -gt 0 ]; then
                         DEMO_SPEED_IDX=$(( DEMO_SPEED_IDX - 1 ))
                         demo_speed_apply
                         DIRTY=1
                     fi
                     ;;
-                +)
+                UP|+)
                     if [ "${DEMO_SPEED_IDX}" -lt $(( ${#DEMO_SPEEDS[@]} - 1 )) ]; then
                         DEMO_SPEED_IDX=$(( DEMO_SPEED_IDX + 1 ))
                         demo_speed_apply

@@ -259,6 +259,7 @@ the game over screen."
     [key_arrow_down]="arrow down"
     [key_space_up]="space, arrow up"
     [key_arrows_lr]="arrow left/right"
+    [key_arrows_ud]="arrow up/down"
     [key_minus_plus]="-  /  +"
 
     # --- Text input -------------------------------------------------------
@@ -889,8 +890,9 @@ the screen - so a replay runs the round through the real game logic
 again: it costs about 2 kB per minute of play, is independent of the
 terminal size, the colors and the render mode of either session, and
 lasts as long as the round did. While a demo plays, the pause key
-(or space) halts it, the left/right arrows step the speed between 0.25x
-and 4x, and the quit key returns to the list; "r" replays it from the
+(or space) halts it, up speeds it up and down slows it down (0.25x to
+4x; + and - work too). Left/right pick the player in multiplayer demos.
+The quit key returns to the list; "r" replays it from the
 start once it has finished. Recordings live in <data-dir>/demos, the ten
 newest are kept, and the round being recorded is written to a RAM disk
 (XDG_RUNTIME_DIR resp. /dev/shm) so playing costs no disk writes.

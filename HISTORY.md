@@ -38,6 +38,7 @@ TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
 
 | Version | Thema | Konzept in CLAUDE.md |
 | --- | --- | --- |
+| Unveroeffentlicht | Demo-Tempo mit Pfeil hoch/runter in Einzel- und Mehrspieler-Aufnahmen | 3.8, 5.20 |
 | 0.1.0 | Spielbarer Kern (Phase 1) | 3.1, 4.3 |
 | 0.2.0 | Startmenue und Nutzer-Konfiguration | 4.2, 4.5 |
 | 0.3.0 | The-New-Tetris-Mechaniken (Phase 2) | 3.2, 4.4 |
@@ -2080,7 +2081,28 @@ folgten mit `1.4.0` (eigener Abschnitt unten).
       Wiedergabe davon abhalten, ihr simuliertes Rundenende als eigenes
       zu melden.
 
+## Demo-Tempo mit Pfeil hoch/runter (unveroeffentlicht)
+
+Pfeil hoch erhoeht und Pfeil runter senkt das Wiedergabetempo in Einzel-
+und Mehrspieler-Demos. Die fuenf Stufen von 0.25x bis 4x und die
+Alternativen `-`/`+` bleiben erhalten. Links/rechts waehlen weiterhin
+den Spieler einer Mehrspieler-Aufnahme. Hilfe und Anleitung nennen
+die getrennte Belegung.
+
+_Vorzustand: Seit 1.4.0 wechseln links/rechts ausschliesslich den
+Sitzplatz; in einer Einzelspieler-Demo bewirken sie deshalb nichts.
+Das Tempo war nur noch mit `-`/`+` bedienbar; die lange Hilfe nannte
+faelschlich weiterhin links/rechts fuer das Tempo._
+
+Abnahme: 160 Pruefungen in der echten Wiedergabeschleife mit simulierten
+Eingaben und isolierter Zeit-/Darstellungsschicht: beide Demo-Arten,
+Tempo samt Grenzen und `-`/`+`, Spielerwechsel, Pause und Verlassen.
+Die vorhandenen 72 Eingabesequenzen und der Rundenzustandstest bestehen.
+
 ## Mehrspieler-Demo: Wiedergabe (umgesetzt, Version 1.4.0)
+
+_Spaeter ueberholt: Die ausschliessliche Tempobedienung mit `-`/`+`
+wird unter "Demo-Tempo mit Pfeil hoch/runter" oben ergaenzt._
 
 Die Teilschritte 9.11 bis 9.14 des Punkts "Demo-Aufzeichnung der
 Mehrspieler-Runde" (Zielanforderung und Architektur in 5.20) - und

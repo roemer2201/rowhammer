@@ -471,8 +471,8 @@ durchzureichen:
    fuenf Zeilen, was in vieren steht. Dieselbe Rechnung noch einmal fuer
    die Zeile des Fokuswechsels (1.4.0, siehe 5.20): der Absatz sagt es
    jetzt in drei Zeilen. Die Tastenzeilen selbst sind unveraendert aus
-   dem laufenden Zustand gelesen - dass die Pfeile den Spieler waehlen
-   und `-`/`+` das Tempo, sind zwei Zeilen und nicht mehr eine.
+   dem laufenden Zustand gelesen - links/rechts waehlen den Spieler,
+   hoch/runter und `-`/`+` das Tempo, in zwei getrennten Zeilen.
 
 10. Mehrspieler (seit 1.1.0): dass jeder sein eigenes Feld mit
    derselben Steinfolge spielt, dass abgebaute Reihen dem Gegner
@@ -839,14 +839,13 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
 
 - Pausetaste (`p`) oder Leertaste haelt an und laeuft weiter; angezeigt
   wird das ueber denselben "PAUSED"-Kasten wie im Spiel.
-- `-` und `+` stellen das Tempo in fuenf Stufen von **0.25x bis 4x**
+- Pfeil runter/`-` und Pfeil hoch/`+` stellen das Tempo in fuenf Stufen von **0.25x bis 4x**
   (`DEMO_SPEEDS`). Die aktuelle Stufe steht im HUD in der linken Spalte
   (Zeile 18, Label "Demo") - die einzige Angabe, die dem Bild sonst
-  fehlen wuerde. Bis 1.3.0 stellten die Pfeiltasten dasselbe mit; sie
-  waehlen seit 1.4.0 den Sitzplatz einer Mehrspieler-Aufnahme (5.20),
-  weshalb das Tempo allein bei `-`/`+` liegt. In einer
-  Einzelspieler-Aufnahme gibt es nichts zu waehlen und die Pfeile tun
-  entsprechend nichts.
+  fehlen wuerde. Hoch beschleunigt, runter verlangsamt die Wiedergabe,
+  sowohl im Einzelspieler als auch im Mehrspieler. Links/rechts waehlen
+  den Sitzplatz einer Mehrspieler-Aufnahme (5.20); bei nur einem
+  Sitzplatz bewirken diese beiden Tasten nichts.
 - Quit-Taste (`x`) oder `ESC` kehrt zur Liste zurueck (zu der, aus der
   die Wiedergabe gestartet wurde - Demo-Liste oder Bestenliste), `r`
   spielt eine durchgelaufene Demo noch einmal von vorn.
@@ -4117,10 +4116,9 @@ Fokus-Slot gebunden. Der Renderer bleibt dadurch fast unveraendert:
   ohne fallenden Stein saehe neben vier anderen tot aus.
 - **Tasten:** Pfeil links/rechts waehlen den Fokus, umlaufend ueber die
   belegten Slots (`demo_focus_step`/`demo_focus_set` in `lib/demo.sh`);
-  `-`/`+` stellen das Tempo. Beide Paare lagen zuvor auf demselben
-  Tempo (`LEFT`/`-` und `RIGHT`/`+`, siehe 3.8), das Aufteilen hat also
-  keine Funktion gekostet - und die Pfeile sind das, womit in diesem
-  Spiel jede Liste durchgegangen wird, was die Sitzplaetze sind. Eine
+  Pfeil runter/`-` und Pfeil hoch/`+` stellen das Tempo (siehe 3.8).
+  Die getrennten Achsen erlauben Spielerwechsel und Tempowechsel ohne
+  doppelte Belegung. Eine
   Aufnahme mit einem einzigen Sitzplatz hat schlicht nichts zum
   Weiterschalten. Drei Festlegungen aus der Umsetzung:
   - **Der abtretende Sitzplatz wird erst veroeffentlicht.** Solange er

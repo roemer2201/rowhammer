@@ -275,6 +275,7 @@ und die Leertaste."
     [key_arrow_down]="Pfeil runter"
     [key_space_up]="Leertaste, Pfeil hoch"
     [key_arrows_lr]="Pfeil links/rechts"
+    [key_arrows_ud]="Pfeil hoch/runter"
     [key_minus_plus]="-  /  +"
 
     # --- Text input -------------------------------------------------------
@@ -940,8 +941,9 @@ Steinfolge der Runde - nicht der Bildschirm -, sodass die Wiedergabe die
 Runde wirklich noch einmal spielt: das kostet rund 2 kB je Spielminute,
 ist unabhaengig von Terminalgroesse, Farben und Render-Modus beider
 Sitzungen und dauert so lange wie die Runde. Waehrend einer Wiedergabe
-haelt die Pausetaste (oder die Leertaste) an, die Pfeiltasten links und
-rechts stellen das Tempo zwischen 0.25x und 4x, und die Quit-Taste
+haelt die Pausetaste (oder die Leertaste) an, Pfeil hoch beschleunigt
+und Pfeil runter bremst (0.25x bis 4x; auch mit + und -). Links/rechts
+waehlen den Spieler in Mehrspieler-Demos. Die Quit-Taste
 kehrt zur Liste zurueck; "r" spielt eine durchgelaufene Demo noch einmal
 ab. Die Aufnahmen liegen in <data-dir>/demos, die zehn neuesten werden
 aufbewahrt, und die laufende Runde wird auf eine RAM-Disk geschrieben
