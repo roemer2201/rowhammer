@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.8.0  (2026-09-05)
+# Version: 1.8.1  (2026-09-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -275,7 +275,8 @@ und die Leertaste."
     [key_arrow_down]="Pfeil runter"
     [key_space_up]="Leertaste, Pfeil hoch"
     [key_arrows_lr]="Pfeil links/rechts"
-    [key_minus_plus]="-  /  +"
+    [key_arrows_ud]="Pfeil hoch/runter"
+    [key_minus_plus]="+/-"
 
     # --- Text input -------------------------------------------------------
     [input_hint_type]="Tippen ersetzt den markierten Text."
@@ -940,8 +941,9 @@ Steinfolge der Runde - nicht der Bildschirm -, sodass die Wiedergabe die
 Runde wirklich noch einmal spielt: das kostet rund 2 kB je Spielminute,
 ist unabhaengig von Terminalgroesse, Farben und Render-Modus beider
 Sitzungen und dauert so lange wie die Runde. Waehrend einer Wiedergabe
-haelt die Pausetaste (oder die Leertaste) an, die Pfeiltasten links und
-rechts stellen das Tempo zwischen 0.25x und 4x, und die Quit-Taste
+haelt die Pausetaste (oder die Leertaste) an, Pfeil hoch beschleunigt
+und Pfeil runter bremst (0.25x bis 4x, ebenso + und -), Pfeil links und
+rechts waehlen den Spieler einer Mehrspieler-Demo, und die Quit-Taste
 kehrt zur Liste zurueck; "r" spielt eine durchgelaufene Demo noch einmal
 ab. Die Aufnahmen liegen in <data-dir>/demos, die zehn neuesten werden
 aufbewahrt, und die laufende Runde wird auf eine RAM-Disk geschrieben

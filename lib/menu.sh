@@ -96,7 +96,7 @@
 #   positions belong to the terminal size they were computed for.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.28.0  (2026-08-11)
+# Version: 0.28.1  (2026-09-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -485,14 +485,16 @@ menu_help_body() {
             menu_help_keys "${I18N[key_space]}" KEY_PAUSE
             printf -v line '%-17s %s' "${I18N[help_demo_pause]}" "${MENU_HELP_KEYS}"
             HELP_BODY+=("${line}")
-            # The arrows pick the seat of a versus recording and "-"/"+"
-            # the speed (1.4.0); before that both pairs did the speed,
-            # so the split cost no function (see CLAUDE.md 5.20).
+            # Left/right pick the seat of a versus recording (1.4.0);
+            # up/down carry the speed since 1.4.3, so a singleplayer
+            # recording keeps working arrow keys too (CLAUDE.md 5.20).
+            # The two speed labels are joined with a comma and not with
+            # a slash - both of them contain slashes of their own.
             printf -v line '%-17s %s' "${I18N[help_demo_focus]}" \
                 "${I18N[key_arrows_lr]}"
             HELP_BODY+=("${line}")
             printf -v line '%-17s %s' "${I18N[help_demo_speed]}" \
-                "${I18N[key_minus_plus]}"
+                "${I18N[key_arrows_ud]}, ${I18N[key_minus_plus]}"
             HELP_BODY+=("${line}")
             menu_help_keys "ESC" KEY_QUIT
             printf -v line '%-17s %s' "${I18N[help_demo_back]}" "${MENU_HELP_KEYS}"

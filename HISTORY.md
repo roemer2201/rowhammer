@@ -105,6 +105,7 @@ TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
 | 1.4.0 | Wiedergabe der Mehrspieler-Demo: Fokuswechsel, Rundenende, Gegenprobe (Teilschritte 9.11-9.14) | 5.6, 5.20 |
 | 1.4.1 | Grund des Ausscheidens im `KO` (Protokoll 5): eine gerissene Verbindung ist kein Top-Out mehr | 5.4, 5.8, 5.20 |
 | 1.4.2 | Drei Haertungen aus der Einzelspieler-Review: geprueft Uhr-Quelle, ausdrueckliche Stoerreihen-Regel im Quadrat, Ziffernkappe der Bestenlisten | 4.1, 4.4, 4.5 |
+| 1.4.3 | Demo-Tempo auch auf Pfeil hoch/runter, damit eine Einzelspieler-Wiedergabe wieder Pfeiltasten hat | 3.8, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2082,6 +2083,10 @@ folgten mit `1.4.0` (eigener Abschnitt unten).
 
 ## Mehrspieler-Demo: Wiedergabe (umgesetzt, Version 1.4.0)
 
+_Spaeter ueberholt: Die Festlegung, dass das Tempo allein auf `-`/`+`
+liegt, gilt seit 1.4.3 nicht mehr - siehe "Demo-Tempo mit Pfeil
+hoch/runter" am Ende dieser Datei. Alles Uebrige dieser Version steht._
+
 Die Teilschritte 9.11 bis 9.14 des Punkts "Demo-Aufzeichnung der
 Mehrspieler-Runde" (Zielanforderung und Architektur in 5.20) - und
 damit dessen Abschluss. Aufgezeichnet und gelesen wurde eine
@@ -2364,3 +2369,43 @@ Entscheidung und die Abnahme -, und eine Datei, die im Baum liegt,
 liest sich wie eine offene Liste. Die Mehrspieler-Review
 `CODEX-REVIEW.md` bleibt dagegen liegen: aus ihr ist ein Finding noch
 offen (TODO.md 2.2).
+
+## Demo-Tempo mit Pfeil hoch/runter (umgesetzt, Version 1.4.3)
+
+Pfeil hoch erhoeht und Pfeil runter senkt das Wiedergabetempo, in
+Einzel- wie in Mehrspieler-Aufnahmen. Die fuenf Stufen von 0.25x bis 4x
+und die Alternativen `+`/`-` bleiben, Pfeil links/rechts waehlt
+weiterhin den Sitzplatz einer Mehrspieler-Aufnahme (5.20). Die
+Anleitungsseite, beide `--help`-Texte und die README nennen die
+getrennte Belegung; die Tempozeile der Anleitung setzt sich aus den
+beiden Tastenbeschriftungen zusammen und traegt `+/-` in derselben
+Reihenfolge wie "hoch/runter", statt wie bisher `-  /  +` in der
+umgekehrten.
+
+_Vorzustand: Seit 1.4.0 waehlen links/rechts ausschliesslich den
+Sitzplatz. In einer Einzelspieler-Aufnahme gibt es keinen zu waehlen,
+also blieben dort beide Pfeilpaare wirkungslos und das Tempo lag allein
+auf `-`/`+`. Die Anleitungsseite sagte das seit 1.4.0 richtig, die
+lange `--help`-Ausgabe beider Sprachen dagegen nannte weiterhin
+links/rechts als Temporegelung - sie war beim Umbau in 1.4.0 uebersehen
+worden._
+
+Der neue Regressionstest `tools/demo-keys.sh` haelt genau diese
+Doppelpflege zusammen: er liest die Tastenzweige aus `demo_play`, die
+Anleitungszeilen aus `lib/menu.sh` und die Demo-Absaetze beider
+Sprachdateien und verlangt, dass sie dieselben Tasten nennen. Der
+Vorzustand oben waere daran gescheitert. Zusaetzlich misst er die
+gerenderten Anleitungszeilen gegen die 46 Zeichen aus 3.4 - die
+deutsche Tempozeile lag mit der alten Beschriftung bei 45 und damit
+ein Zeichen vor dem Rand.
+
+Abnahme: `tools/demo-keys.sh` (31 Pruefungen, im CI) ist ohne Befund und
+schlaegt gegen den Vorzustand mit genau vier Befunden an - den beiden
+Tastenzweigen und den beiden Woertern, die dem deutschen Hilfetext
+fehlten. Daneben `tools/key-scan.sh` (72, mit `--gap 0.06` 69),
+`tools/state-check.sh` (68), `tools/net-fuzz.sh` (599),
+`shellcheck --severity=error` und `tools/release.sh --mode check`, alle
+ohne Befund; beide `--help`-Ausgaben und die Anleitungsseite wurden
+gerendert und vermessen (18 von 18 Zeilen, laengste Zeile 45 von 46,
+die Tempozeile 40). Eine vollstaendige interaktive Wiedergabe wurde
+nicht gefahren.

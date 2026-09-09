@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.8.0  (2026-09-05)
+# Version: 1.8.1  (2026-09-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -259,7 +259,8 @@ the game over screen."
     [key_arrow_down]="arrow down"
     [key_space_up]="space, arrow up"
     [key_arrows_lr]="arrow left/right"
-    [key_minus_plus]="-  /  +"
+    [key_arrows_ud]="arrow up/down"
+    [key_minus_plus]="+/-"
 
     # --- Text input -------------------------------------------------------
     [input_hint_type]="Typing replaces the marked text."
@@ -889,14 +890,15 @@ the screen - so a replay runs the round through the real game logic
 again: it costs about 2 kB per minute of play, is independent of the
 terminal size, the colors and the render mode of either session, and
 lasts as long as the round did. While a demo plays, the pause key
-(or space) halts it, the left/right arrows step the speed between 0.25x
-and 4x, and the quit key returns to the list; "r" replays it from the
-start once it has finished. Recordings live in <data-dir>/demos, the ten
-newest are kept, and the round being recorded is written to a RAM disk
-(XDG_RUNTIME_DIR resp. /dev/shm) so playing costs no disk writes.
-Recording can be switched off with --demo-record off or in the settings
-menu; a replay never enters the highscore lists, the wonder progress or
-the statistics.
+(or space) halts it, arrow up speeds the replay up and arrow down slows
+it down (0.25x to 4x, as do + and -), the left and right arrows pick the
+player of a multiplayer demo, and the quit key returns to the list; "r"
+replays it from the start once it has finished. Recordings live in
+<data-dir>/demos, the ten newest are kept, and the round being recorded
+is written to a RAM disk (XDG_RUNTIME_DIR resp. /dev/shm) so playing
+costs no disk writes. Recording can be switched off with --demo-record
+off or in the settings menu; a replay never enters the highscore lists,
+the wonder progress or the statistics.
 
 Statistics: every finished round also adds its cleared rows, bonus rows
 (the gold/silver/Tetris part of the row credit) and the gold and silver

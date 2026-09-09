@@ -1,3 +1,23 @@
+rowhammer (1.4.3) unstable; urgency=medium
+
+  * The replay speed is on the up and down arrows as well, not only on
+    "+" and "-". Since 1.4.0 the left and right arrows pick the seat of
+    a multiplayer recording, which left a singleplayer replay with two
+    arrow pairs that did nothing at all.
+  * Both --help texts said the left and right arrows control the replay
+    speed. They had not since 1.4.0; the in-game help page was already
+    right, the long usage text had been missed.
+  * The help page joins its two speed labels with a comma and spells the
+    keys "+/-", in the same order as "up/down"; the old "-  /  +" read
+    in the opposite one and left the German line one character short of
+    the 46-column limit.
+  * New regression test tools/demo-keys.sh, run by the CI: it compares
+    the key branches of demo_play against the help page, both language
+    files and the rendered line widths, so the code and the four places
+    that document it cannot drift apart again.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 09 Sep 2026 12:00:00 +0200
+
 rowhammer (1.4.2) unstable; urgency=medium
 
   * The time source is resolved once at startup and verified before the
