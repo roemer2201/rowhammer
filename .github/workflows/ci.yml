@@ -98,7 +98,7 @@ jobs:
           )
           exit "${status}"
 
-      # The version lives in three files; release.sh is the one place that
+      # The version lives in four files; release.sh is the one place that
       # knows about all of them. Catching a drift here means the release
       # workflow never has to refuse a pushed tag.
       - name: Check version consistency
@@ -140,6 +140,24 @@ jobs:
 
       - name: Check slot separation and the state list
         run: ./tools/state-check.sh --silent
+
+  # ---------------------------------------------------------------------
+  # Demo player keys: the binding lives in demo_play, on the help page and
+  # in every language file, and it drifted apart once already - 1.4.0 moved
+  # the arrows to the seat of a multiplayer recording and both --help texts
+  # went on naming them for the speed until 1.4.3. The test compares the
+  # four against each other and measures the rendered help lines against
+  # the width the menu body has.
+  # ---------------------------------------------------------------------
+  demo-keys:
+    name: Demo player key binding test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Check the demo keys against their documentation
+        run: ./tools/demo-keys.sh --silent
 
   # ---------------------------------------------------------------------
   # Multiplayer parsers: feed the transport filter, the message parser and

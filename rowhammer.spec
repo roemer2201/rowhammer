@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.4.2
+Version:        1.4.3
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,14 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Wed Sep 09 2026 roemer2201 <r.oliver@web.de> - 1.4.3-1
+- The replay speed is on the up and down arrows too: since 1.4.0 left
+  and right pick the seat, which left a singleplayer replay with two
+  arrow pairs that did nothing.
+- Both --help texts still claimed left and right control the speed.
+- New regression test tools/demo-keys.sh keeps the key branches of
+  demo_play and the four places documenting them in step.
+
 * Sun Sep 06 2026 roemer2201 <r.oliver@web.de> - 1.4.2-1
 - The time source is resolved and verified once at startup: a date(1)
   without GNU's %N used to kill the game in mid-round or, worse, put its

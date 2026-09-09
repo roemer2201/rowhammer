@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-09-05)
+# Version: 0.9.1  (2026-09-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -2204,10 +2204,10 @@ demo_play_peers_end() {
 # DEMO_PLAYING is set).
 # Controls: the pause key toggles the replay (reusing the game's PAUSED
 # flag and therefore its box), left/right move the focus from seat to
-# seat, down/"-" and up/"+" step through DEMO_SPEEDS, the quit key or ESC leaves,
-# and "r" restarts the demo once it has finished. The focus survives a
-# restart - whoever the watcher chose to follow, they chose to follow
-# them through the round again.
+# seat, up/"+" and down/"-" step through DEMO_SPEEDS, the quit key or
+# ESC leaves, and "r" restarts the demo once it has finished. The focus
+# survives a restart - whoever the watcher chose to follow, they chose
+# to follow them through the round again.
 # The clock advances by the real time between two loop passes, scaled by
 # the speed, and events are applied when it passes their timestamp. The
 # row flash inside lock_and_next scales along with it (see flash_rows),
@@ -2291,10 +2291,14 @@ demo_play() {
                     PAUSED=$(( 1 - PAUSED ))
                     DIRTY=1
                     ;;
-                # Horizontal arrows pick the seat (CLAUDE.md 5.20).
-                # Vertical arrows control speed in every recording, so
-                # singleplayer playback also has working arrow controls.
-                # Keep "-"/"+" as alternatives for the same speed steps.
+                # Left/right pick the seat: the arrows are what every
+                # other list in this game is walked with, and the seats
+                # are such a list (CLAUDE.md 5.20). A recording with a
+                # single seat simply has nothing to step to - which is
+                # why up/down carry the speed as well: otherwise both
+                # arrow pairs would sit there without a function in a
+                # singleplayer recording. "-" and "+" stay the
+                # alternative they have been since 1.4.0.
                 LEFT)
                     demo_focus_step -1
                     ;;

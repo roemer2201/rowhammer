@@ -472,7 +472,7 @@ durchzureichen:
    die Zeile des Fokuswechsels (1.4.0, siehe 5.20): der Absatz sagt es
    jetzt in drei Zeilen. Die Tastenzeilen selbst sind unveraendert aus
    dem laufenden Zustand gelesen - links/rechts waehlen den Spieler,
-   hoch/runter und `-`/`+` das Tempo, in zwei getrennten Zeilen.
+   hoch/runter und `+`/`-` das Tempo, in zwei getrennten Zeilen.
 
 10. Mehrspieler (seit 1.1.0): dass jeder sein eigenes Feld mit
    derselben Steinfolge spielt, dass abgebaute Reihen dem Gegner
@@ -499,8 +499,8 @@ der Demo-Seite die Zahl der aufbewahrten Aufnahmen (`DEMO_MAX`) samt
 den Wiedergabetasten. Jeder
 Bildschirm bleibt in den 46 Zeichen Breite und
 den `MENU_BODY_MAX` Zeilen, die ein 48x22-Terminal laesst - die
-Bestenlisten-Seite nutzt sie mit 18 Zeilen genau aus, die Demo-Seite
-mit 17.
+Bestenlisten- und die Demo-Seite nutzen sie mit je 18 Zeilen genau aus
+(die Demo-Seite seit dem Fokuswechsel in 1.4.0).
 
 ### 3.6 Spielmodi (Ultra seit 0.34.0, Sprint seit 0.39.0, Time Attack seit 0.42.0, Hochwasser seit 0.49.0)
 
@@ -839,13 +839,16 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
 
 - Pausetaste (`p`) oder Leertaste haelt an und laeuft weiter; angezeigt
   wird das ueber denselben "PAUSED"-Kasten wie im Spiel.
-- Pfeil runter/`-` und Pfeil hoch/`+` stellen das Tempo in fuenf Stufen von **0.25x bis 4x**
-  (`DEMO_SPEEDS`). Die aktuelle Stufe steht im HUD in der linken Spalte
-  (Zeile 18, Label "Demo") - die einzige Angabe, die dem Bild sonst
-  fehlen wuerde. Hoch beschleunigt, runter verlangsamt die Wiedergabe,
-  sowohl im Einzelspieler als auch im Mehrspieler. Links/rechts waehlen
-  den Sitzplatz einer Mehrspieler-Aufnahme (5.20); bei nur einem
-  Sitzplatz bewirken diese beiden Tasten nichts.
+- Pfeil hoch/`+` und Pfeil runter/`-` stellen das Tempo in fuenf Stufen
+  von **0.25x bis 4x** (`DEMO_SPEEDS`). Die aktuelle Stufe steht im HUD
+  in der linken Spalte (Zeile 18, Label "Demo") - die einzige Angabe,
+  die dem Bild sonst fehlen wuerde. Bis 1.3.0 stellten die Pfeiltasten
+  links/rechts dasselbe mit; sie waehlen seit 1.4.0 den Sitzplatz einer
+  Mehrspieler-Aufnahme (5.20), und seit 1.4.3 tragen dafuer die
+  senkrechten Pfeile das Tempo. Der Grund ist derselbe, aus dem die
+  waagerechten den Sitzplatz waehlen: eine Einzelspieler-Aufnahme hat
+  keinen zu waehlen, und ohne die senkrechten stuenden dort beide
+  Pfeilpaare ohne Wirkung.
 - Quit-Taste (`x`) oder `ESC` kehrt zur Liste zurueck (zu der, aus der
   die Wiedergabe gestartet wurde - Demo-Liste oder Bestenliste), `r`
   spielt eine durchgelaufene Demo noch einmal von vorn.
@@ -1054,6 +1057,7 @@ rowhammer/
   tools/
     key-scan.sh        # Regressionstest der Eingabeschicht (Issue #7)
     net-fuzz.sh        # Fuzz-Test der Mehrspieler-Parser (siehe 5.5)
+    demo-keys.sh       # Regressionstest der Demo-Tasten (siehe 3.8)
     state-check.sh     # Regressionstest des Rundenzustands (siehe 5.20)
     release.sh         # Versions-Abgleich, Release-Notes, Release-Tag
     demo/              # Werkzeuge fuer die asciinema-Democlips
@@ -2053,6 +2057,7 @@ oeffentliche Paketquelle gibt (siehe 4.7).
   Bash-Syntax, ShellCheck, ASCII-Pruefung und `release.sh --mode check`;
   der Eingabe-Regressionstest `tools/key-scan.sh`, einmal normal und
   einmal mit `--gap 0.06` (die stueckweise Zustellung aus Issue #7);
+  der Tastentest der Demo-Wiedergabe `tools/demo-keys.sh` (siehe 3.8);
   Bau beider Pakete.
 - `release.yml` bei einem `v*`-Tag: prueft Tag gegen Baum, baut die
   Assets und veroeffentlicht das Release. Ein bereits vorhandenes
@@ -4116,11 +4121,15 @@ Fokus-Slot gebunden. Der Renderer bleibt dadurch fast unveraendert:
   ohne fallenden Stein saehe neben vier anderen tot aus.
 - **Tasten:** Pfeil links/rechts waehlen den Fokus, umlaufend ueber die
   belegten Slots (`demo_focus_step`/`demo_focus_set` in `lib/demo.sh`);
-  Pfeil runter/`-` und Pfeil hoch/`+` stellen das Tempo (siehe 3.8).
-  Die getrennten Achsen erlauben Spielerwechsel und Tempowechsel ohne
-  doppelte Belegung. Eine
-  Aufnahme mit einem einzigen Sitzplatz hat schlicht nichts zum
-  Weiterschalten. Drei Festlegungen aus der Umsetzung:
+  Pfeil hoch/`+` und Pfeil runter/`-` stellen das Tempo. Beide Paare
+  lagen bis 1.3.0 auf demselben Tempo (`LEFT`/`-` und `RIGHT`/`+`, siehe
+  3.8), das Aufteilen hat also keine Funktion gekostet - und die Pfeile
+  sind das, womit in diesem Spiel jede Liste durchgegangen wird, was die
+  Sitzplaetze sind. Eine Aufnahme mit einem einzigen Sitzplatz hat
+  schlicht nichts zum Weiterschalten; genau deshalb liegt das Tempo seit
+  1.4.3 zusaetzlich auf hoch/runter, sonst haette eine
+  Einzelspieler-Wiedergabe ueberhaupt keine Pfeiltaste mehr. Drei
+  Festlegungen aus der Umsetzung:
   - **Der abtretende Sitzplatz wird erst veroeffentlicht.** Solange er
     der Fokus war, wurde er aus dem Rundenzustand gezeichnet und
     `demo_step` hat ihn nie in die `MP_PEER_*`-Tabellen geschrieben;
