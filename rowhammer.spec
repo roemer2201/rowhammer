@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.4.3
+Version:        1.5.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,12 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Wed Sep 09 2026 roemer2201 <r.oliver@web.de> - 1.5.0-1
+- The settings menu can relocate the data directory for good; the
+  default path keeps a "datadir" link file naming the new place.
+- An empty or missing target is moved into without a question; a target
+  that already holds a config asks which of the two sides survives, and
+  the side given up is saved as backup-<stamp>.tar.gz beforehand.
 * Wed Sep 09 2026 roemer2201 <r.oliver@web.de> - 1.4.3-1
 - The replay speed is on the up and down arrows too: since 1.4.0 left
   and right pick the seat, which left a singleplayer replay with two

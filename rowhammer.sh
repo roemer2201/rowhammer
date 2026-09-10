@@ -160,29 +160,33 @@
 # Program flow:
 #   1. Parse arguments (kept aside until the config file is loaded).
 #   2. Verify the bash version (>= 4).
-#   3. Source the library modules (debug, config, i18n, demo, pieces,
-#      board, squares, highscore, save, stats, wonders, input, render,
-#      menu).
-#   4. Read the config file and resolve the interface language
+#   3. Source the library modules (debug, config, datadir, i18n, demo,
+#      pieces, board, squares, highscore, save, stats, wonders, input,
+#      render, menu).
+#   4. Point the data directory at the place the settings menu moved it
+#      to, if it did: the default path keeps a link file naming the new
+#      one (precedence default < link file < ROWHAMMER_DATA_DIR <
+#      --data-dir), and everything below reads files from it.
+#   5. Read the config file and resolve the interface language
 #      (default < config < ROWHAMMER_LANG < --lang), then load its text
 #      table - everything printed from here on is translated, --help
 #      and the reset report included. Print the help and exit if
 #      -h/--help was given.
-#   5. Rename a leftover "highscore" file to "highscore-marathon" once
+#   6. Rename a leftover "highscore" file to "highscore-marathon" once
 #      (the Marathon list names its mode like the other four since
 #      0.51.0), ahead of the reset so it works on the current name.
-#   6. Carry out --reset if requested: move the selected persistent
+#   7. Carry out --reset if requested: move the selected persistent
 #      files below the data directory aside to timestamped .bak copies
 #      and exit, without ever touching the terminal.
-#   7. Verify the remaining prerequisites (interactive terminal, minimum
+#   8. Verify the remaining prerequisites (interactive terminal, minimum
 #      size; the size is rechecked live via SIGWINCH while running).
-#   8. Resolve the remaining settings with precedence default < config
+#   9. Resolve the remaining settings with precedence default < config
 #      file < env < CLI and validate them.
-#   9. Install the cleanup trap, start the debug logs (when --debug is
+#  10. Install the cleanup trap, start the debug logs (when --debug is
 #      set), load the highscore lists, the savegame and the statistics
 #      and enter the alternate screen in raw input mode (echo and
 #      canonical mode off for the whole session).
-#  10. Run the main menu loop; the singleplayer entry picks a game mode and
+#  11. Run the main menu loop; the singleplayer entry picks a game mode and
 #      starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
 #      clearing, rendering), finished rounds are recorded - under the
@@ -195,7 +199,7 @@
 #      game while such a round waits asks for confirmation first. A
 #      round restarted via the pause menu is recorded like any other
 #      abandoned one before the fresh round replaces it.
-#  11. Restore the terminal on exit and close the debug logs.
+#  12. Restore the terminal on exit and close the debug logs.
 #
 # Usage:
 #   rowhammer.sh [--seed N] [--name NAME] [--lang de|en|auto]
@@ -212,7 +216,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.3.1  (2026-09-09)
+# Version: 1.4.0  (2026-09-09)
 
 set -euo pipefail
 
@@ -227,7 +231,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.4.3"
+ROWHAMMER_VERSION="1.5.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -272,12 +276,23 @@ DEBUG_OPT="${ROWHAMMER_DEBUG:-0}"
 DEBUG_DIR="${ROWHAMMER_DEBUG_DIR:-}"
 # Data directory for everything the game persists (rowhammer.conf,
 # highscore, later the savegame). Not part of the config file itself,
-# because the config file lives inside it; precedence is therefore
-# default < env < CLI like the debug switches.
+# because the config file lives inside it.
 # CHANGE 2026-07-20: default moved from ~/rowhammer to
 # ~/.config/rowhammer (user decision: keep the home directory clean);
 # no migration of the old path per the no-backward-compatibility rule.
-DATA_DIR="${ROWHAMMER_DATA_DIR:-${HOME}/.config/rowhammer}"
+# CHANGE 2026-09-09 (1.5.0): the settings menu can relocate the directory
+# for good (CLAUDE.md 4.12). What it leaves behind is a link file in the
+# default path naming the new one, read by datadir_link_load below - so
+# the precedence has a step more than the debug switches:
+# default < link file < env < CLI. DATA_DIR_EXPLICIT records whether the
+# two upper steps had something to say, because only then does the link
+# file have to keep quiet.
+DATA_DIR_DEFAULT="${HOME}/.config/rowhammer"
+DATA_DIR="${ROWHAMMER_DATA_DIR:-${DATA_DIR_DEFAULT}}"
+DATA_DIR_EXPLICIT=0
+if [ -n "${ROWHAMMER_DATA_DIR:-}" ]; then
+    DATA_DIR_EXPLICIT=1
+fi
 # Reset target: which persistent files below DATA_DIR to delete before
 # the game would start ("" = no reset, the normal case). Deliberately
 # not a config file setting - the config file is one of the things a
@@ -483,10 +498,12 @@ while [ "$#" -gt 0 ]; do
                 exit 2
             fi
             DATA_DIR="${2}"
+            DATA_DIR_EXPLICIT=1
             shift 2
             ;;
         --data-dir=*)
             DATA_DIR="${1#*=}"
+            DATA_DIR_EXPLICIT=1
             shift
             ;;
         --no-color)
@@ -857,7 +874,10 @@ TERM_RESIZED=0
 # state comes before demo: the playback binds one round state per seat of
 # the recording it plays (demo_play_states_build, CLAUDE.md 5.20), so the
 # list and its helpers have to exist before that module runs.
-for _lib in debug config i18n state demo pieces board squares highscore save stats wonders input render menu net proto hub mp; do
+# datadir comes right after config: it owns the link file that says where
+# the data directory is (CLAUDE.md 4.12) and reads CONFIG_NAME from that
+# module to tell a target that already holds game data from an empty one.
+for _lib in debug config datadir i18n state demo pieces board squares highscore save stats wonders input render menu net proto hub mp; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -865,6 +885,19 @@ for _lib in debug config i18n state demo pieces board squares highscore save sta
     . "${SCRIPT_DIR}/lib/${_lib}.sh"
 done
 unset _lib
+
+# --- Relocated data directory (default < link file < env < CLI) -----------
+# The settings menu can move the data directory for good and leaves a link
+# file in the default path naming the new one (CLAUDE.md 4.12). Reading it
+# has to happen here: before config_load below, which opens the first file
+# in that directory, and before the reset block and the highscore rename
+# further down, so --reset and the rename work on the directory that is
+# really played in. An explicit --data-dir or ROWHAMMER_DATA_DIR wins over
+# the stored location, which is why the link file is only consulted when
+# neither had anything to say.
+if [ "${DATA_DIR_EXPLICIT}" -eq 0 ]; then
+    datadir_link_load
+fi
 
 # --- Language resolution (default < config < env < CLI) -------------------
 # Ahead of everything else that talks to the user, because everything

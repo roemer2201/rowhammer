@@ -1037,6 +1037,7 @@ rowhammer/
     input.sh           # Nicht-blockierende Tastatureingabe
     menu.sh            # Startmenue (Einzel-/Mehrspieler, Einstellungen)
     config.sh          # Laden/Speichern der Nutzer-Konfiguration
+    datadir.sh         # Speicherort der Spieldaten: Zeigerdatei, Umzug, Sicherung
     debug.sh           # Debug-Modus: Session-Trace in Log-Dateien
     demo.sh            # Demo-Aufzeichnung und -Wiedergabe (Format, Ablage)
     i18n.sh            # Uebersetzungsschicht: Sprachwahl, Texttabelle
@@ -1125,7 +1126,7 @@ Reset, Debug, Mehrspieler).
 | `--seed N` | `ROWHAMMER_SEED` | - | reproduzierbare Teilfolge |
 | `--name NAME` | `ROWHAMMER_PLAYER_NAME` | ja | Spielername (Vorgabe der Namensabfrage, 3.7) |
 | `--lang de\|en\|auto` | `ROWHAMMER_LANG` | ja | Sprache, Standard `auto` (4.11) |
-| `--data-dir DIR` | `ROWHAMMER_DATA_DIR` | - | Datenverzeichnis (4.5) |
+| `--data-dir DIR` | `ROWHAMMER_DATA_DIR` | - | Datenverzeichnis (4.5); der im Einstellungsmenue gespeicherte Ort steht in einer eigenen Zeigerdatei, Praezedenz Standard < Zeiger < Env < CLI (4.12) |
 | `--no-color` | `ROWHAMMER_NO_COLOR` | - | Farben aus (siehe unten) |
 | `--color-mode auto\|basic\|extended` | `ROWHAMMER_COLOR_MODE` | - | Farbpalette, Standard `auto`; `--no-color` gewinnt (4.1) |
 | `--color-theme guideline\|classic\|mono\|colorblind` | `ROWHAMMER_COLOR_THEME` | ja | Farbschema, Standard `guideline` (4.1) |
@@ -1316,7 +1317,9 @@ jetzt steht die Regel dort, wo ueber sie entschieden wird.
 - Alle persistenten Spieldaten liegen gemeinsam im Datenverzeichnis
   `${HOME}/.config/rowhammer` (seit 0.13.0, vorher `${HOME}/rowhammer`;
   aenderbar per `--data-dir DIR` bzw.
-  `ROWHAMMER_DATA_DIR`): die Konfiguration `rowhammer.conf`, die
+  `ROWHAMMER_DATA_DIR`, seit 1.5.0 auch dauerhaft ueber das
+  Einstellungsmenue - dann steht der Pfad in der Zeigerdatei
+  `${HOME}/.config/rowhammer/datadir`, siehe 4.12): die Konfiguration `rowhammer.conf`, die
   Marathon-Bestenliste `highscore-marathon` (bis 0.50.0 `highscore`,
   siehe unten), die Ultra-Bestenliste `highscore-ultra`
   (seit 0.34.0, siehe 3.6), die Sprint-Bestenliste `highscore-sprint`
@@ -1339,7 +1342,9 @@ jetzt steht die Regel dort, wo ueber sie entschieden wird.
 - Alle Dateien werden atomar geschrieben (Tempdatei + `mv`).
 - `lib/config.sh` (seit 0.2.0, Pfad seit 0.7.0): das Einstellungsmenue
   (Spielername, Sprache seit 0.48.0, Farbschema seit 0.21.0,
-  Tastenbelegung, Demo-Aufzeichnung seit 0.46.0) schreibt
+  Tastenbelegung, Demo-Aufzeichnung seit 0.46.0; der Speicherort seit
+  1.5.0 steht als einziger Eintrag **nicht** hier, sondern in einer
+  eigenen Datei - siehe 4.12) schreibt
   `${DATA_DIR}/rowhammer.conf`;
   Werte werden validiert und single-quoted geschrieben, da die Datei
   gesourct wird. Das Farbschema wird als `COLOR_THEME='...'` gespeichert
@@ -1950,6 +1955,13 @@ Ablauf und Einordnung:
   0.51.0 die einmalige Umbenennung `highscore` ->
   `highscore-marathon` (`highscore_migrate_legacy`, siehe 4.5), damit
   `--reset highscore` die Datei unter ihrem aktuellen Namen antrifft.
+  Und davor wiederum wird seit 1.5.0 die Zeigerdatei gelesen (4.12), so
+  dass ein Reset das Verzeichnis trifft, in dem auch gespielt wird, und
+  nicht den leer gewordenen Standardpfad. Die Zeigerdatei selbst ist
+  **kein** Reset-Ziel: sie steht ausserhalb des Datenverzeichnisses, und
+  ein `--reset all`, das den Weg zu den Daten mit wegraeumt, waere die
+  ueberraschendere Antwort - zurueckgelegt wird der Ort ueber denselben
+  Menuepunkt, der ihn verlegt hat.
 - **Sicherheitsabfrage:** an einem Terminal listet `reset_run` erst die
   betroffenen Pfade und fragt dann `Bist du sicher, dass du <ziel>
   zuruecksetzen moechtest? [N/y]`; wie bei `menu_confirm` ist "nein" die
@@ -2347,6 +2359,155 @@ schon vorher zu lang waren und auf einem 48-Spalten-Terminal
 abgeschnitten wurden (Mehrspieler-Platzhalter, die drei Meldungen des
 Rebind-Dialogs, die Abbrechen-Fusszeile einer Sicherheitsabfrage und je
 eine Zeile der ersten und dritten Anleitungsseite) - sie sind umbrochen.
+
+### 4.12 Verlegen des Datenverzeichnisses (seit 1.5.0)
+
+Das Datenverzeichnis (4.5) laesst sich im **Einstellungsmenue**
+dauerhaft an einen anderen Ort legen (Nutzerwunsch). Bis dahin ging das
+nur mit `--data-dir` bzw. `ROWHAMMER_DATA_DIR`, also bei jedem Aufruf
+erneut - was praktisch heisst: gar nicht, denn der Starter in
+`/usr/games` (4.7) reicht keine Optionen durch. Der Eintrag
+**"Speicherort"** steht unter "Demo-Aufzeichnung" und nennt den
+aktuellen Pfad; die Mechanik liegt in `lib/datadir.sh`, der Dialog als
+`menu_datadir`/`menu_datadir_apply` in `lib/menu.sh` - dieselbe
+Aufteilung wie zwischen `lib/demo.sh` und `menu_demos`.
+
+**Der Standardpfad behaelt eine Zeigerdatei.** `${DATA_DIR_DEFAULT}/datadir`
+(also `~/.config/rowhammer/datadir`) traegt eine validierte Zeile
+`data_dir=<pfad>`. Vier Festlegungen dazu:
+
+- **Eine eigene Datei, kein Wert in `rowhammer.conf`.** Die Config liegt
+  *im* Datenverzeichnis und koennte deshalb nicht sagen, wo dieses
+  liegt. Die Zeigerdatei ist das Einzige, was am festen Ort bleiben
+  muss.
+- **Geparst, nicht gesourct** - wie Savegame und Statistik (4.5).
+  Gesourct wird allein `rowhammer.conf`, und auch nur, weil das
+  Einstellungsmenue sie schreibt. Der gelesene Pfad laeuft danach durch
+  dieselbe Pruefung wie ein getippter (`datadir_path_check`): eine von
+  Hand bearbeitete Zeigerdatei ist Fremdeingabe, und ihr Wert steht
+  gleich in jedem Dateipfad des Spiels.
+- **Eine Zeigerdatei, kein Symlink** (Nutzerentscheidung). Der
+  Standardordner bleibt damit ein echter Ordner, in dem die Sicherung
+  und die Zeigerdatei nebeneinander liegen koennen; ein Symlink haette
+  beides ins Ziel verschoben und `--data-dir`/`--reset` mehrdeutig
+  gemacht.
+- **Der Weg zurueck loescht sie.** Wird als Ziel wieder der
+  Standardpfad gewaehlt, schreibt `datadir_link_write` keine Datei,
+  sondern raeumt die vorhandene weg: der Standard braucht keinen
+  Vermerk, und einer, der "die Daten liegen, wo sie immer lagen" sagt,
+  waere nur eine weitere Stelle, die veralten kann.
+
+**Praezedenz: Standard < Zeigerdatei < Env < CLI.** `datadir_link_load`
+laeuft in `rowhammer.sh` direkt hinter der Modulschleife und nur, wenn
+`DATA_DIR_EXPLICIT` 0 ist - `--data-dir` und `ROWHAMMER_DATA_DIR`
+gewinnen also weiter. Der Platz ist zwingend: vor `config_load` (der
+ersten Datei, die aus dem Verzeichnis gelesen wird), vor
+`highscore_migrate_legacy` (4.5) und vor dem Reset-Block (4.8), damit
+`--reset` das Verzeichnis trifft, in dem auch gespielt wird. Solange die
+Sitzung per Option oder Umgebung festgelegt ist, aendert der Menuepunkt
+nichts, sondern sagt genau das - ein gespeicherter Pfad ohne Wirkung
+waere die schlechtere Antwort.
+
+**Was umzieht, ist "der Inhalt".** `datadir_entries` ist die eine
+Stelle, die das definiert: jeder Eintrag des Verzeichnisses, versteckte
+eingeschlossen, **ausser** der Zeigerdatei und vorhandenen Archiven
+(`*.zip`, `*.tar.gz`). Umzug, Sicherung, Loeschen und die
+Leer-Pruefung lesen alle sie und koennen sich deshalb nicht
+widersprechen. Bewusst keine Liste der bekannten Dateinamen: die
+`.bak`-Dateien eines Resets (4.8) und alles, was eine kuenftige Version
+dazulegt, gehoeren dem Spieler genauso, und eine Liste liesse sie
+stillschweigend zurueck.
+
+**Der Ablauf haengt am Zustand des Ziels** (`datadir_target_state`):
+
+| Zustand | was passiert |
+| --- | --- |
+| `new` (existiert nicht) | anlegen und verschieben, **ohne Rueckfrage** |
+| `empty` | verschieben, ohne Rueckfrage |
+| `foreign` (nicht leer, keine `rowhammer.conf`) | verschieben, wenn kein Name kollidiert; sonst Abbruch mit dem kollidierenden Eintrag |
+| `config` (traegt `rowhammer.conf`) | die Drei-Wege-Abfrage unten |
+| `blocked` (kein Verzeichnis oder nicht beschreibbar) | Meldung, nichts passiert |
+
+Der leere Fall ist der Normalfall und deshalb der rueckfragenfreie
+(Nutzerentscheidung): dort ist nichts zu verlieren. Was ein Ziel zu
+"jemandes Spieldaten" macht, ist die Anwesenheit von `rowhammer.conf` -
+das ist der eine Eintrag, der das sagt, waehrend ein paar fremde Dateien
+nur heissen, dass der Ordner nicht leer ist. Ein solches `foreign`-Ziel
+wird trotzdem nicht blind bezogen: ein Umzug darf nie stillschweigend
+etwas ueberschreiben, also entscheidet die Kollisionspruefung.
+
+**Die Drei-Wege-Abfrage** (`menu_run`, ESC zaehlt wie der erste
+Eintrag - die Antwort, die nichts aendert, muss auch die leichteste
+sein):
+
+1. **Nichts unternehmen.**
+2. **Daten hier verwerfen, Ziel uebernehmen.** Der Inhalt des
+   *aktuellen* Verzeichnisses wird als Archiv gesichert, dann die
+   Zeigerdatei geschrieben, dann der Inhalt geloescht. Im Normalfall
+   bleiben im Standardordner damit genau zwei Dinge liegen: das Archiv
+   und die Zeiger-Config.
+3. **Daten mitnehmen, Ziel ueberschreiben.** Der Inhalt des *Ziels*
+   wird dort als Archiv gesichert, das Ziel geleert, der eigene Inhalt
+   hineinverschoben und die Zeigerdatei geschrieben.
+
+Beide zerstoerenden Antworten fragen mit `menu_confirm` noch einmal
+zurueck und nennen dabei den betroffenen Pfad; "Nein" ist wie ueberall
+vorausgewaehlt (3.1).
+
+**Die Sicherung ist ein `tar.gz`, kein ZIP.** Gewuenscht war ein ZIP;
+`zip` gehoert aber nicht zu den Coreutils, und 4.1 laesst keine harte
+Abhaengigkeit darueber hinaus zu (Nutzerentscheidung nach Rueckfrage:
+lieber `tar.gz` als eine Abhaengigkeit oder ein Format, das von der
+Maschine abhaengt). Der Name ist
+`backup-YYYYMMDD-HHMMSS.tar.gz`, geschrieben in genau das Verzeichnis,
+dessen Inhalt er haelt. Drei Festlegungen:
+
+- **Gepackt werden die Eintraege, nicht das Verzeichnis.**
+  `tar -C <verz> -- <eintraege>` statt `tar -C <verz> .` mit
+  `--exclude`-Mustern: die Punkt-Form nimmt das Verzeichnis selbst als
+  Member auf, und die Temp-Datei, die waehrenddessen darin entsteht,
+  laesst `tar` mit "file changed as we read it" abbrechen (Exit 1).
+  Die Eintraege zu nennen liest das Verzeichnis gar nicht erst als
+  Objekt - und es ist ohnehin genau die Liste aus `datadir_entries`.
+- **Vorhandene Archive bleiben draussen** (Nutzervorgabe, urspruenglich
+  fuer ein ZIP formuliert): sonst packte jede Sicherung die vorige mit
+  ein. Sie werden aus demselben Grund weder verschoben noch geloescht -
+  ein Archiv beschreibt das Verzeichnis, in dem es liegt.
+  Die Ausnahme gilt nur oben: ein `foo.zip` **in** `demos/` ist Inhalt
+  und wandert mit.
+- **Ein leeres Verzeichnis bekommt kein Archiv.** Es gibt nichts zu
+  sichern, und `tar` weigert sich ohnehin, ein leeres Archiv zu bauen.
+
+**Reihenfolge der Schritte, und warum.** `datadir_link_probe` fragt
+**vor** allem Zerstoerenden, ob die Zeigerdatei ueberhaupt schreibbar
+waere - scheitert sie erst am Ende, laege die Daten am neuen Ort,
+waehrend jeder spaetere Start am alten suchte. In Antwort 2 wird die
+Zeigerdatei deshalb **vor** dem Loeschen geschrieben: umgekehrt waeren
+die Daten weg und das Spiel saehe weiter in den eben geleerten Ordner.
+Ein Umzug, der auf halber Strecke scheitert, **bricht ab und nennt den
+Eintrag**, statt zurueckzuraeumen: ein Rueckbau muesste Dateien in ein
+Verzeichnis schieben, das sie gerade nicht hergeben wollte.
+
+**Danach wird alles neu gelesen** (`datadir_reload`): Config, die sechs
+Bestenlisten, Savegame samt Wunderstand und Statistik. Antwort 2
+uebernimmt eine **fremde** `rowhammer.conf`, die eine andere Sprache,
+ein anderes Farbschema, einen anderen Namen oder andere Tasten nennen
+kann; `i18n_init` und `render_colors_init` laufen deshalb mit, und
+`RENDER_FULL=1` sorgt dafuer, dass der Diff-Renderer (4.3) die
+geaenderten Beschriftungen wirklich neu schreibt. Die Werte werden dabei
+**nachsichtig** geprueft: ein ungueltiger Eintrag behaelt den Wert, den
+die laufende Sitzung schon hatte, und vermerkt es im Debug-Log. Beim
+Start darf eine kaputte Config mit `die` enden, dort ist noch nichts
+verloren; mitten in einer Sitzung darf ausgerechnet ein Umzug nicht das
+sein, was sie beendet. Die Dubletten-Regel der Tastenbelegung wird dabei
+nicht durchgesetzt - eine doppelt belegte Taste macht eine Aktion
+unerreichbar, was der Spieler im Einstellungsmenue repariert, waehrend
+das Verwerfen der ganzen Datei die anderen acht Bindungen mitnaehme.
+
+**Im Debug-Log** nennt der Sitzungskopf die Zeigerdatei
+(`# datalink:`, 4.6) - ohne sie saehe eine verlegte Sitzung aus wie eine
+mit `--data-dir` gestartete.
+
 
 ## 5. Mehrspieler und Server-Betrieb
 

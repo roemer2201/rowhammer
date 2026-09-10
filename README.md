@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.4.3
+**Version:** 1.5.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -119,7 +119,7 @@ Das Startmenue:
 - **Statistik** - Zaehler ueber alle Runden oder je Modus
 - **Demos** - die aufgezeichneten Runden noch einmal ansehen
 - **Einstellungen** - Sprache, Farbschema, Tastenbelegung, Spielername,
-  Demo-Aufzeichnung
+  Demo-Aufzeichnung, Speicherort der Spieldaten
 - **Anleitung** - zehn Bildschirme Spielerklaerung, mit den Pfeiltasten
   links/rechts durchblaetterbar
 
@@ -371,7 +371,7 @@ Unterverzeichnis `demos` - liegen im Datenverzeichnis
 | `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
 | `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername fuer die Bestenlisten        |
 | `--lang CODE`    | `ROWHAMMER_LANG`         | Sprache: `auto` (Standard, folgt der Locale), `de`, `en` |
-| `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis                         |
+| `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (siehe oben)            |
 | `--no-color`     | `ROWHAMMER_NO_COLOR`     | Keine ANSI-Farben, je Steinsorte ein eigenes Zeichen |
 | `--color-mode M` | `ROWHAMMER_COLOR_MODE`   | Farbpalette: `auto` (Standard), `basic`, `extended` |
 | `--color-theme N`| `ROWHAMMER_COLOR_THEME`  | Farbschema: `guideline` (Standard), `classic`, `mono`, `colorblind` |
@@ -387,6 +387,33 @@ Dazu die Mehrspieler-Optionen `--mp-host`, `--mp-join`, `--mp-session`,
 `--mp-transport`, `--mp-port`, `--mp-dir`, `--mp-max`, `--mp-view`,
 `--mp-target`, `--mp-mode`, `--mp-garbage` und `--mp-bot` - `--help`
 zeigt sie alle.
+
+### Speicherort verlegen
+
+Der Menuepunkt *Einstellungen -> Speicherort* verlegt das
+Datenverzeichnis dauerhaft. Nach der Eingabe des neuen Pfades (absolut
+oder mit `~/` beginnend) wandert alles dorthin, und in
+`~/.config/rowhammer/datadir` bleibt eine kleine Datei zurueck, die den
+neuen Ort nennt - jeder spaetere Start liest sie. `--data-dir` und
+`ROWHAMMER_DATA_DIR` haben weiterhin Vorrang; stellt man den Pfad wieder
+auf `~/.config/rowhammer`, verschwindet die Datei.
+
+Ist das Zielverzeichnis leer oder noch nicht vorhanden, wird ohne
+Rueckfrage verschoben. Liegt dort schon eine `rowhammer.conf`, fragt das
+Spiel, was damit geschehen soll:
+
+1. **Nichts unternehmen.**
+2. **Daten hier verwerfen, Ziel uebernehmen** - weitergespielt wird mit
+   den Daten, die am Zielort liegen.
+3. **Daten mitnehmen, Ziel ueberschreiben** - weitergespielt wird mit
+   den eigenen Daten.
+
+Bei 2 und 3 wird die Seite, die aufgegeben wird, vorher als
+`backup-JJJJMMTT-HHMMSS.tar.gz` in genau dem Verzeichnis gesichert, in
+dem sie lag; bereits vorhandene Archive bleiben dabei aussen vor. Ein
+Zielverzeichnis, das zwar nicht leer ist, aber keine `rowhammer.conf`
+enthaelt, wird ohne Rueckfrage bezogen, solange kein Dateiname
+kollidiert.
 
 ### Sprache
 

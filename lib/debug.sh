@@ -8,8 +8,8 @@
 #   directory (default ${XDG_STATE_HOME:-~/.local/state}/rowhammer/debug/
 #   <timestamp>.<pid>, overridable with --debug-dir / ROWHAMMER_DEBUG_DIR):
 #     events.log - session header (version, bash, terminal, seed, player,
-#                  render mode, key bindings, data directory, loaded
-#                  config files)
+#                  render mode, key bindings, data directory and the link
+#                  file that named it, loaded config files)
 #                  followed by every
 #                  game action: spawns, moves and rotations (including
 #                  blocked attempts), gravity falls, locks, square
@@ -34,7 +34,7 @@
 #   rowhammer.sh (defaults/env/CLI blocks); this module only reads them.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.4.0  (2026-08-03)
+# Version: 0.5.0  (2026-09-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -95,6 +95,10 @@ debug_init() {
         printf '# render:   %s\n' "${RENDER_MODE}"
         printf '# keys:     %s\n' "${keys}"
         printf '# data:     %s\n' "${DATA_DIR}"
+        # Which link file put the data directory where it is, if any
+        # (CLAUDE.md 4.12) - otherwise a relocated session looks like one
+        # that was started with --data-dir.
+        printf '# datalink: %s\n' "${DATADIR_LINK_LOADED:-none}"
         printf '# config:   %s\n' "${CONFIG_LOADED_FILES:-none}"
         printf '# Line format: [elapsed_ms] [f screen_update_no] message.\n'
         printf '# An event tagged f N happened after screen update N.\n'

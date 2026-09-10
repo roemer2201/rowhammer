@@ -73,6 +73,16 @@ CI-Paketbau (0.40.0) sind erledigt. Offen:
       serverweiten Wunder-Bildschirm (5.17) gleichermassen und ist damit
       unabhaengig von Phase 6 umsetzbar.
 
+- [ ] **Lange Pfade in der Speicherort-Eingabe** (aufgefallen beim Bauen
+      von 1.5.0, siehe 4.12): Die Eingabezeile nimmt 40 Zeichen an -
+      genau so viel, wie sie in einem 48-Spalten-Terminal zeigen kann.
+      Ein laengerer Pfad ist damit nur ueber `--data-dir` erreichbar,
+      und dann sperrt der Menuepunkt sich selbst. Zu klaeren waere, ob
+      `menu_text_input` einen laengeren Wert mitfuehren und nur seinen
+      Schwanz zeigen soll (wie `datadir_short` es fuer die Anzeige tut)
+      - das betraefe auch die Adresseingabe des Mehrspielers, die
+      dieselbe Grenze hat.
+
 ### 1.3 Mehrspieler (Phase 5, `1.x.x`)
 
 Der Kern laeuft seit 1.1.0, der Gastgeberwechsel seit 1.2.0, die
