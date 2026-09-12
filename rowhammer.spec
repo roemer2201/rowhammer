@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.5.0
+Version:        1.5.1
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,11 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sat Sep 12 2026 roemer2201 <r.oliver@web.de> - 1.5.1-1
+- Improvements to the full-screen display: it is drawn over the whole
+  terminal instead of the fixed 48x22 block and follows a resize.
+- It writes what changed per cell rather than per line and paces itself
+  against its own frame deadline, which makes it both faster and cheaper.
 * Wed Sep 09 2026 roemer2201 <r.oliver@web.de> - 1.5.0-1
 - The settings menu can relocate the data directory for good; the
   default path keeps a "datadir" link file naming the new place.

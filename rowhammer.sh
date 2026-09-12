@@ -216,7 +216,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.4.0  (2026-09-09)
+# Version: 1.5.0  (2026-09-12)
 
 set -euo pipefail
 
@@ -231,7 +231,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.5.0"
+ROWHAMMER_VERSION="1.5.1"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -421,6 +421,21 @@ MP_BOT="${ROWHAMMER_MP_BOT:-0}"
 # tell the bot where to play; without them the menu is the way in.
 MP_HOST_OPT="${ROWHAMMER_MP_HOST:-0}"
 MP_JOIN="${ROWHAMMER_MP_JOIN:-}"
+
+# Full-screen attract mode (--screensaver, ROWHAMMER_SCREENSAVER). Runs
+# instead of the menu and ends with the first key press. It is a hidden
+# extra rather than a feature of the game, which is why it appears
+# neither in the menu nor in --help; lib/screensaver.sh says the rest.
+SCREENSAVER_OPT="${ROWHAMMER_SCREENSAVER:-0}"
+# Frames per second it draws at (--screensaver-fps, ROWHAMMER_SCREENSAVER_FPS).
+# Unlike the game block, whose cost is the fixed 48x22, this picture costs
+# what the terminal is big, so the rate is capped rather than left to the
+# tick. 15 is the default because the motion itself is quantized: a piece
+# moves in whole rows about every 110 ms, so above roughly that rate there
+# is little left to see - what a higher rate buys is a finer fade and a
+# quicker reaction to a key press. The fall and fade timings do not depend
+# on it, so raising it changes the picture's smoothness, not its speed.
+SCREENSAVER_FPS="${ROWHAMMER_SCREENSAVER_FPS:-15}"
 
 # -h/--help only raises this flag; the text itself is printed further
 # down, once the modules are sourced and the language is resolved. The
@@ -642,6 +657,22 @@ while [ "$#" -gt 0 ]; do
             MP_JOIN="${1#*=}"
             shift
             ;;
+        --screensaver)
+            SCREENSAVER_OPT=1
+            shift
+            ;;
+        --screensaver-fps)
+            if [ "$#" -lt 2 ]; then
+                printf '%s: option %s requires an argument\n' "${SCRIPT_NAME}" "${1}" >&2
+                exit 2
+            fi
+            SCREENSAVER_FPS="${2}"
+            shift 2
+            ;;
+        --screensaver-fps=*)
+            SCREENSAVER_FPS="${1#*=}"
+            shift
+            ;;
         --debug)
             DEBUG_OPT=1
             shift
@@ -749,6 +780,23 @@ case "${FORCE_OPT}" in
         exit 2
         ;;
 esac
+case "${SCREENSAVER_OPT}" in
+    0|1) : ;;
+    *)
+        printf '%s: ROWHAMMER_SCREENSAVER expects 0 or 1, got: %s\n' \
+            "${SCRIPT_NAME}" "${SCREENSAVER_OPT}" >&2
+        exit 2
+        ;;
+esac
+# 120 is the upper end because nothing above it can still be told apart
+# on a terminal; 1 is allowed because a single frame per second is a way
+# to watch what one frame actually does.
+if ! [[ "${SCREENSAVER_FPS}" =~ ^[0-9]{1,3}$ ]] || [ "${SCREENSAVER_FPS}" -lt 1 ] \
+    || [ "${SCREENSAVER_FPS}" -gt 120 ]; then
+    printf '%s: --screensaver-fps expects a frame rate in 1..120, got: %s\n' \
+        "${SCRIPT_NAME}" "${SCREENSAVER_FPS}" >&2
+    exit 2
+fi
 # Multiplayer options. Validated here with the other command line values
 # and before anything touches the terminal; the patterns are written out
 # rather than taken from lib/net.sh, which is not sourced yet.
@@ -874,10 +922,13 @@ TERM_RESIZED=0
 # state comes before demo: the playback binds one round state per seat of
 # the recording it plays (demo_play_states_build, CLAUDE.md 5.20), so the
 # list and its helpers have to exist before that module runs.
+# screensaver comes last: it only reads what the modules before it built
+# (the piece tables, the theme colors, the output funnel and the input
+# layer) and nothing reads it back.
 # datadir comes right after config: it owns the link file that says where
 # the data directory is (CLAUDE.md 4.12) and reads CONFIG_NAME from that
 # module to tell a target that already holds game data from an empty one.
-for _lib in debug config datadir i18n state demo pieces board squares highscore save stats wonders input render menu net proto hub mp; do
+for _lib in debug config datadir i18n state demo pieces board squares highscore save stats wonders input render menu net proto hub mp screensaver; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -2691,6 +2742,15 @@ main() {
     # Debug logging starts before the alternate screen, so init errors
     # (unwritable log directory etc.) stay readable.
     debug_init
+    # The attract mode is not a round: it touches no savegame, no list
+    # and no statistics, so it runs before all of that is even loaded and
+    # takes the program with it when the first key ends it.
+    if [ "${SCREENSAVER_OPT}" -eq 1 ]; then
+        term_setup
+        screensaver_run
+        term_restore
+        return 0
+    fi
     # Load the persistent highscore lists once; rounds update them in
     # memory and rewrite their file when they enter one. Ultra, Sprint,
     # Time Attack and Hochwasser keep separate files with their own
