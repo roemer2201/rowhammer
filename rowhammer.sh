@@ -216,7 +216,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.5.0  (2026-09-12)
+# Version: 1.5.1  (2026-09-13)
 
 set -euo pipefail
 
@@ -797,6 +797,10 @@ if ! [[ "${SCREENSAVER_FPS}" =~ ^[0-9]{1,3}$ ]] || [ "${SCREENSAVER_FPS}" -lt 1 
         "${SCRIPT_NAME}" "${SCREENSAVER_FPS}" >&2
     exit 2
 fi
+# CHANGE 2026-09-13: the checks above accept leading zeroes as decimal
+# digits, but bash arithmetic reads them as octal. Normalize once here
+# so 08 cannot abort the display and 015 still means fifteen frames.
+SCREENSAVER_FPS=$(( 10#${SCREENSAVER_FPS} ))
 # Multiplayer options. Validated here with the other command line values
 # and before anything touches the terminal; the patterns are written out
 # rather than taken from lib/net.sh, which is not sourced yet.

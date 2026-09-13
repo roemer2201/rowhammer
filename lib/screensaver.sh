@@ -23,7 +23,8 @@
 #     1. screensaver_run: resolve the speed, start the clocks, build the
 #        geometry, then loop.
 #     2. Per tick: read a key through the shared input layer (which also
-#        applies a pending resize), then update and draw.
+#        applies a pending resize), rebase the frame deadline if the
+#        wall clock moved backwards, then update and draw.
 #     3. screensaver_update: advance the scaled clock, fade the trail
 #        cells one step per fall interval, move and rotate every drop
 #        that is due, respawn one that left the screen at the bottom.
@@ -33,7 +34,7 @@
 #   Library file: sourced by rowhammer.sh, not meant to be executed
 #   directly.
 #
-# Version: 1.0.0  (2026-09-12)
+# Version: 1.0.1  (2026-09-13)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -438,7 +439,7 @@ screensaver_draw() {
 # and "+"/"-" step the speed, every other key ends the screensaver - it
 # is a screensaver, and "any key" is how one is expected to stop.
 screensaver_run() {
-    local next_draw tick_saved tick_ms
+    local next_draw last_wall tick_saved tick_ms
     debug_event "screensaver: start (speed ${SS_SPEEDS[SS_SPEED_IDX]}%, ${SCREENSAVER_FPS} fps)"
     SS_SPEED_IDX="${SS_SPEED_DEFAULT}"
     screensaver_speed_apply
@@ -467,6 +468,7 @@ screensaver_run() {
     screensaver_geometry
     now_ms
     next_draw="${NOW_MS}"
+    last_wall="${NOW_MS}"
     while :; do
         read_key
         if [ "${REDRAW_PENDING}" -eq 1 ]; then
@@ -497,6 +499,16 @@ screensaver_run() {
         # it is shown only costs time. Everything that could arrive as
         # one large step is capped (SS_DELTA_MAX_MS).
         now_ms
+        # CHANGE 2026-09-13: detect a backward wall-clock jump before
+        # testing the deadline. The negative-delta guard in update cannot
+        # help while an old deadline keeps that function from running.
+        # Compare every tick, including ticks between drawn frames, and
+        # rebase both real-time anchors without changing simulation time.
+        if [ "${NOW_MS}" -lt "${last_wall}" ]; then
+            next_draw="${NOW_MS}"
+            SS_REAL_MS="${NOW_MS}"
+        fi
+        last_wall="${NOW_MS}"
         if [ "${NOW_MS}" -ge "${next_draw}" ]; then
             screensaver_update
             screensaver_draw

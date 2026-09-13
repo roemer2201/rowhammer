@@ -2544,3 +2544,14 @@ zellenweisen Ausgabe waren es 9 % und 30 %); eine angeforderte Bildrate
 von 30 kam als 27 bis 29 an, von 15 als 14 bis 15,5 - vorher als 20,5
 bzw. 11,0. Was daran fehlt, ist die Schleife selbst: ein Bild, das
 laenger braucht als sein Abstand, verschiebt das naechste.
+
+Nachpruefung 2026-09-13: Bildraten mit fuehrenden Nullen werden nach
+der Validierung dezimal normalisiert; `08` brach zuvor bei der Division
+ab, `015` wurde als Oktalzahl gelesen. Ein Ruecksprung der Systemuhr
+setzt Bildtermin und Echtzeitanker jetzt vor der Terminpruefung neu,
+auch zwischen zwei Bildern. Zuvor blieb die Anzeige bis zum alten Termin
+stehen, weil der Schutz vor negativen Zeitschritten gar nicht erreicht
+wurde. Die Simulationszeit bleibt beim Neuansetzen erhalten.
+`tools/display-check.py` prueft gueltige und ungueltige Bildraten,
+normale Bildtermine, grosse, kleine und wiederholte Uhr-Rueckspruenge
+sowie die unveraenderte Begrenzung bei Vorwaertsspruengen; laeuft in CI.
