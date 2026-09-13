@@ -1,4 +1,12 @@
-.claude/
+# Local Claude Code state (settings.local.json, session data). The skills
+# below are project configuration and belong in the repository: a fresh
+# clone has to bring the concept skill with it, or the pointer into
+# docs/konzept/ is missing. Ignoring the directory contents rather than
+# the directory itself is what makes the re-include possible - git does
+# not descend into an excluded directory.
+.claude/*
+!.claude/skills/
+
 # Package build artifacts: the output directory shared by build-deb.sh and
 # build-rpm.sh (the latter also keeps its private rpmbuild tree in there)
 # plus the dpkg-buildpackage / debhelper litter.

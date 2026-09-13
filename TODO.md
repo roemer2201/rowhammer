@@ -9,14 +9,16 @@ nachzujustieren ist (Abschnitt 2).
 | Datei | Inhalt |
 | --- | --- |
 | **TODO.md** (diese) | offene Punkte - Roadmap und Entscheidungen |
-| [CLAUDE.md](CLAUDE.md) | technisches Konzept und Arbeitskonventionen |
+| [CLAUDE.md](CLAUDE.md) | Projektueberblick, Wegweiser, Arbeitskonventionen |
+| [docs/konzept/](docs/konzept/) | das technische Konzept, Abschnitte 2 bis 5 |
 | [HISTORY.md](HISTORY.md) | Archiv der erledigten Punkte, nach Version |
 | [README.md](README.md) | Anleitung fuer Spielerinnen und Spieler |
 
 Nackte Abschnittsnummern in dieser Datei ("siehe 5.20") verweisen auf
-**CLAUDE.md**, wo das Konzept zum jeweiligen Punkt ausformuliert ist.
-Ein Punkt wird hier nicht ausgeschrieben, wenn CLAUDE.md ihn schon
-beschreibt - dann steht hier die Aufgabe und dort das Warum.
+das **technische Konzept**, wo der jeweilige Punkt ausformuliert ist;
+welche Konzeptdatei einen Abschnitt fuehrt, sagt der Wegweiser in
+CLAUDE.md. Ein Punkt wird hier nicht ausgeschrieben, wenn das Konzept
+ihn schon beschreibt - dann steht hier die Aufgabe und dort das Warum.
 
 ## Arbeitsregeln fuer diese Liste
 
@@ -24,7 +26,7 @@ Die verbindlichen Regeln stehen in [CLAUDE.md, Abschnitt 6](CLAUDE.md);
 fuer diese Liste sind drei davon einschlaegig:
 
 - **Ein erledigter Punkt wandert nach HISTORY.md**, samt seiner
-  Begruendung - und wer ihn verschiebt, zieht CLAUDE.md 1-5 und (soweit
+  Begruendung - und wer ihn verschiebt, zieht das Konzept und (soweit
   spielersichtbar) die README nach.
 - **Aenderungen an dieser Liste duerfen direkt auf `main`** vorgenommen
   werden, ohne Feature-Branch und Pull Request. Dasselbe gilt fuer
