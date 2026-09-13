@@ -1,3 +1,17 @@
+rowhammer (1.5.1) unstable; urgency=medium
+
+  * Improvements to the full-screen display: it is built over the whole
+    terminal instead of the fixed 48x22 block, it follows a resize, and
+    its frame rate is capped so the cost stays bounded on a large
+    terminal.
+  * It writes what changed per cell rather than per line, which suits a
+    sparsely filled screen; the key tick is scaled to the frame interval
+    and restored afterwards, and a frame deadline is counted on from the
+    one before it. A requested 30 frames per second arrive as 29 instead
+    of 20, at about a third of the cost.
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 12 Sep 2026 21:30:00 +0000
+
 rowhammer (1.5.0) unstable; urgency=medium
 
   * The settings menu can move the data directory for good. Until now

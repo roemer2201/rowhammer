@@ -159,6 +159,9 @@ jobs:
       - name: Check the demo keys against their documentation
         run: ./tools/demo-keys.sh --silent
 
+      - name: Check full-screen frame rates and clock recovery
+        run: python3 tools/display-check.py
+
   # ---------------------------------------------------------------------
   # Multiplayer parsers: feed the transport filter, the message parser and
   # the beacon collector random and hostile lines and check that nothing

@@ -107,6 +107,7 @@ TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
 | 1.4.2 | Drei Haertungen aus der Einzelspieler-Review: geprueft Uhr-Quelle, ausdrueckliche Stoerreihen-Regel im Quadrat, Ziffernkappe der Bestenlisten | 4.1, 4.4, 4.5 |
 | 1.4.3 | Demo-Tempo auch auf Pfeil hoch/runter, damit eine Einzelspieler-Wiedergabe wieder Pfeiltasten hat | 3.8, 5.20 |
 | 1.5.0 | Speicherort der Spieldaten im Einstellungsmenue verlegbar, mit Zeigerdatei und Sicherung | 4.12 |
+| 1.5.1 | Verbesserungen bei der Vollbildanzeige | - |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2495,3 +2496,62 @@ vier ungueltigen Pfadformen und eine defekte Zeigerdatei (Meldung auf
 STDERR, Rueckfall auf den Standardpfad). Nach einem Neustart standen
 Wunderfortschritt (8500 Reihen) und Bestenliste am neuen Ort, und
 `--reset save --force` traf das verlegte Verzeichnis.
+
+## Verbesserungen bei der Vollbildanzeige (umgesetzt, Version 1.5.1)
+
+Die Vollbildanzeige zeichnet ueber die **ganze Terminalflaeche** statt
+nur im festen 48x22-Block (3.4): das Bild wird aus der gemessenen
+Terminalgroesse aufgebaut, ein Resize legt es neu aus, und die Bildrate
+ist gedeckelt, damit die Kosten auf einem grossen Terminal beschraenkt
+bleiben - anders als beim Spielblock waechst der Aufwand hier mit der
+Flaeche.
+
+Geschrieben wird wie im Spiel nur, was sich geaendert hat - anders als
+dort aber **je Zelle** statt je Zeile, jede mit ihrer eigenen
+Cursor-Positionierung und alle zusammen in einem Aufruf (4.3). Das Bild
+ist hier duenn besetzt, wo das Spielfeld dicht ist: ein zeilenweiser
+Neubau kostete die volle Zeilenbreite an Nachschlagen je betroffener
+Zeile und hielt die Bildrate bei rund 20 fest, gleich was eingestellt
+war. Dazu zwei Dinge, die erst dadurch sichtbar wurden:
+
+- **Der Tastatur-Tick war die halbe Zeit.** Die Schleife wird wie der
+  Game-Loop von `read_key` getaktet, und dessen `TICK_S` von 20 ms
+  verbraucht bei einer schnellen Bildrate mehr als das Bild selbst. Sie
+  setzt ihn deshalb fuer ihre Dauer auf ein Drittel des Bildabstands
+  (5 bis 20 ms) und stellt ihn danach zurueck - er gehoert der
+  Eingabeschicht.
+- **Der naechste Bildzeitpunkt wird vom faelligen aus gezaehlt**, nicht
+  von "jetzt": die Schleife wacht im Raster ihres Tastatur-Ticks auf,
+  trifft einen Termin also regelmaessig ein paar Millisekunden zu spaet,
+  und die waeren sonst bei jedem einzelnen Bild verloren. Nur ein Bild,
+  das laenger als der Abstand selbst gebraucht hat, setzt neu auf, damit
+  ein langsames Terminal keinen Rueckstand aufbaut, den es nie aufholt.
+
+Ein Schritt der Simulation wird auf denselben Deckel begrenzt wie die
+Uhr: alles, was die Schleife laenger anhalten kann - ein Resize, die
+"resize me"-Overlay, eine ausgelastete Maschine -, kaeme sonst als ein
+einziger grosser Sprung an.
+
+Abnahme: `bash -n` ueber den ganzen Baum, `shellcheck --severity=error`
+und die ASCII-Pruefung ohne Befund, `tools/release.sh --mode check`
+ebenso; `tools/state-check.sh` (68), `tools/key-scan.sh` (72) und
+`tools/demo-keys.sh` (31) unveraendert ohne Befund. Gefahren an einem
+Pseudo-Terminal in 80x24, 100x30 und 200x50, mit und ohne Farbe,
+einschliesslich Verkleinern unter das Minimum (die "resize me"-Overlay
+greift wie ueberall) und Vergroessern danach. Gemessen bei 15 Bildern je
+Sekunde rund 6 % einer CPU in 80x24 und rund 12 % in 200x50 (vor der
+zellenweisen Ausgabe waren es 9 % und 30 %); eine angeforderte Bildrate
+von 30 kam als 27 bis 29 an, von 15 als 14 bis 15,5 - vorher als 20,5
+bzw. 11,0. Was daran fehlt, ist die Schleife selbst: ein Bild, das
+laenger braucht als sein Abstand, verschiebt das naechste.
+
+Nachpruefung 2026-09-13: Bildraten mit fuehrenden Nullen werden nach
+der Validierung dezimal normalisiert; `08` brach zuvor bei der Division
+ab, `015` wurde als Oktalzahl gelesen. Ein Ruecksprung der Systemuhr
+setzt Bildtermin und Echtzeitanker jetzt vor der Terminpruefung neu,
+auch zwischen zwei Bildern. Zuvor blieb die Anzeige bis zum alten Termin
+stehen, weil der Schutz vor negativen Zeitschritten gar nicht erreicht
+wurde. Die Simulationszeit bleibt beim Neuansetzen erhalten.
+`tools/display-check.py` prueft gueltige und ungueltige Bildraten,
+normale Bildtermine, grosse, kleine und wiederholte Uhr-Rueckspruenge
+sowie die unveraenderte Begrenzung bei Vorwaertsspruengen; laeuft in CI.
