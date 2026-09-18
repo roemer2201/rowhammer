@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        1.5.1
+Version:        2.0.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,14 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Thu Sep 18 2026 roemer2201 <r.oliver@web.de> - 2.0.0-1
+- The round logic no longer draws, reads the keyboard or closes any
+  books: the row flash became a clear pause the game loop drives, and
+  recording a finished round moved out of the game functions into
+  whoever drives them. That completes phase 5 of the multiplayer.
+- Demo recordings are format 4 and carry the length of that pause, so a
+  replay waits exactly as long as the round it replays did. Recordings
+  in the older formats 2 and 3 are no longer read.
 * Sat Sep 12 2026 roemer2201 <r.oliver@web.de> - 1.5.1-1
 - Improvements to the full-screen display: it is drawn over the whole
   terminal instead of the fixed 48x22 block and follows a resize.

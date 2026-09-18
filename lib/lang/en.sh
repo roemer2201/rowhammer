@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.9.0  (2026-09-09)
+# Version: 1.10.0  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -364,6 +364,12 @@ cannot be brought back."
 another version and cannot be played.
 
 You can delete it in the demo menu."
+    # Shown instead of demo_invalid when the recording is intact but its
+    # format version is one this build no longer reads (2.0.0).
+    [demo_old_format]="This demo format is no longer supported.
+
+You can delete the recording in the demo
+menu."
 
     # --- HUD --------------------------------------------------------------
     [hud_hold]="Hold"

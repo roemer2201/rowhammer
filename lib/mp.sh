@@ -28,7 +28,7 @@
 #   are worth (see lib/hub.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.4.2  (2026-09-05)
+# Version: 1.4.3  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -518,9 +518,12 @@ mp_handle() {
 # mp_poll
 # Drain the link and apply everything that arrived. Returns 1 when the
 # link is gone, which the caller turns into "connection lost". Called once
-# per game tick and, during the clear animation, from flash_rows as well:
-# 280 ms without reading would let the hub's messages pile up right at the
-# moment a clear is being reported.
+# per game tick - which since 2.0.0 covers the clear animation too: the
+# pause a clear rests for no longer holds the loop, so its ~280 ms are
+# ordinary ticks and the link is drained through them like any other
+# (CLAUDE.md 5.3). It used to need a second caller inside the animation,
+# because 280 ms without reading let the hub's messages pile up at the
+# very moment a clear is being reported.
 mp_poll() {
     local line
     [ "${MP_ACTIVE}" -eq 1 ] || return 0
@@ -2007,10 +2010,18 @@ mp_bot_main() {
     local target="${MP_JOIN}" tick=0 want_x=0 want_rot=0
     net_require || die "socat is required for --mp-bot (package: socat)"
     [ -n "${target}" ] || die "--mp-bot needs --mp-join HOST[:PORT]"
-    # No terminal, so nothing may draw. The clear animation is the one
-    # part of the game logic that renders on its own; switching it off is
-    # what keeps this loop silent (see flash_rows in rowhammer.sh).
-    FLASH_CYCLES=0
+    # No clear pause for a bot: it has no screen to blink on, and its own
+    # loop below does not drive one - only game_run and the demo playback
+    # do (CLAUDE.md 5.3). Without this the first completed row would arm a
+    # pause that nobody ever resolves and the bot would stand still for
+    # the rest of the round.
+    # CLEAR_PAUSE_MS rather than FLASH_CYCLES, which is what this used to
+    # set: the pause is derived from the two flash constants once, at load
+    # time, so setting them here would no longer change it (see
+    # clear_pause_arm in rowhammer.sh). Before 2.0.0 the reason was a
+    # different one - the animation drew and read all by itself, and
+    # switching it off was what kept a terminal-less loop silent.
+    CLEAR_PAUSE_MS=0
     # And nothing may be kept either: a bot's rounds are test traffic,
     # and their recordings would sit in a data directory as real ones,
     # counting against DEMO_MAX and pushing out rounds somebody played.

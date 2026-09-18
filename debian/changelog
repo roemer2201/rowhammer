@@ -1,3 +1,19 @@
+rowhammer (2.0.0) unstable; urgency=medium
+
+  * The round logic is decoupled from the screen and the keyboard, the
+    last open point of multiplayer phase 5: the row flash no longer runs
+    its animation from inside a lock, and a finished round is no longer
+    booked from inside the game functions. Both are now driven by
+    whoever drives the round - the game loop, or the demo playback.
+  * The pause a completed row rests for is round state with a deadline,
+    like the lock delay beside it. It costs the loop nothing, so the
+    multiplayer link is drained through it like through any other tick.
+  * Demo recordings are format 4: they carry the length of that pause,
+    so a replay clears at the same moment the recorded round did, at any
+    playback speed. Recordings in formats 2 and 3 are rejected on load.
+
+ -- roemer2201 <r.oliver@web.de>  Thu, 18 Sep 2026 12:00:00 +0000
+
 rowhammer (1.5.1) unstable; urgency=medium
 
   * Improvements to the full-screen display: it is built over the whole

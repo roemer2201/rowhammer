@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 1.5.1
+**Version:** 2.0.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -194,6 +194,13 @@ Aufbewahrt werden die 10 neuesten Runden. Aufnahmen, die noch einen
 Highscore-Eintrag halten, sind mit `*` markiert und bleiben darueber
 hinaus erhalten. Umgekehrt startet **Enter** in einer Bestenliste die
 Aufnahme des dort ausgewaehlten Eintrags.
+
+> **Hinweis zu Version 2.0.0:** Das Dateiformat der Aufnahmen ist auf
+> Version 4 gewechselt. Aeltere Aufnahmen werden nicht mehr abgespielt:
+> sie stehen weiter in der Liste, dort aber als `(defekt)` mit ihrem
+> Dateinamen, und der Versuch, eine abzuspielen, meldet "Dieses
+> Demo-Format wird nicht mehr unterstuetzt." Loeschen laesst sie sich
+> aus der Liste heraus. Neue Runden werden wie gewohnt aufgezeichnet.
 
 Eine **Mehrspieler-Runde** wird ebenfalls aufgezeichnet, mit den Zuegen
 aller Teilnehmer. Beim Abspielen laeuft jedes Feld seine Runde noch

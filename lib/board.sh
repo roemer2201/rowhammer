@@ -14,8 +14,8 @@
 #   lib/squares.sh. A four-row clear also raises the round's rowhammer
 #   counter (ROWHAMMER_COUNT in rowhammer.sh), the move the game is
 #   named after. board_full_rows reports the full rows before they
-#   are removed, so the caller can flash them first (see flash_rows in
-#   rowhammer.sh). The two top rows are hidden spawn rows; board_top_out
+#   are removed, so the caller can flash them first (see clear_pause_arm
+#   in rowhammer.sh). The two top rows are hidden spawn rows; board_top_out
 #   reports whether anything has come to rest in them, which ends the
 #   round wherever it is asked.
 #   board_flood_row lifts the whole board by one row and lets a row with a
@@ -27,7 +27,7 @@
 #   next frame.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.10.0  (2026-08-11)
+# Version: 0.10.1  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

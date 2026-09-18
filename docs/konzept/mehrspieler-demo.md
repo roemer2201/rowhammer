@@ -226,18 +226,24 @@ Drei Festlegungen dazu:
   aenderte die Aufzeichnung das Spiel (3.8), und `--demo-record off`
   waere am Verkehr zu erkennen.
 
-**Demo-Format Version 3.**
-Der Lader nimmt **Version 2 und 3**, geschrieben wird 3. Eine
-Einzelspieler-Aufnahme ist eine echte Teilmenge, und die vorhandenen
-Aufnahmen - an denen Highscore-Eintraege haengen - bleiben damit
-lesbar. Das ist eine bewusste, eng begrenzte Ausnahme von der
-Arbeitsregel "keine Abwaertskompatibilitaet" (Abschnitt 6,
-Nutzerentscheidung), wie sie 4.5 fuer die Bestenlisten schon einmal
-getroffen hat.
+**Demo-Format Version 4.**
+Der Lader nimmt **nur Version 4**, geschrieben wird 4. Der
+Sitzungsblock unten kam mit Version 3 (Schritt 9.6), `clearpause` mit
+Version 4 (2.0.0, siehe 4.10 und 5.3).
+_Vorzustand bis 1.5.1: gelesen wurden 2 und 3. Eine
+Einzelspieler-Aufnahme war eine echte Teilmenge, und die vorhandenen
+Aufnahmen - an denen Highscore-Eintraege haengen - blieben damit lesbar;
+das war eine bewusste, eng begrenzte Ausnahme von der Arbeitsregel
+"keine Abwaertskompatibilitaet" (Abschnitt 6, Nutzerentscheidung), wie
+sie 4.5 fuer die Bestenlisten schon einmal getroffen hat. Mit
+`clearpause` traegt die Datei eine Zahl, die die Wiedergabe braucht und
+die sich fuer eine aeltere Datei nicht erfinden laesst, also endet die
+Ausnahme hier (Nutzerentscheidung 2026-09-18, Begruendung in 4.10)._
 
 ```
-version=3   game=1.4.0   mode=versus   name=...   date=...
+version=4   game=2.0.0   mode=versus   name=...   date=...
 time=123456        eigene Spielzeit (HUD, Statistik)
+clearpause=280     Laenge der Clear-Pause dieser Runde (5.3)
 length=245000      Laenge der Zeitachse = Dauer der Runde
 end=over|goal|quit|lost
 players=4   slot=1   mpmode=survival   garbage=1   winner=2
@@ -248,8 +254,8 @@ p=1 120l           <slot> <delta zum letzten Ereignis DIESES slots><aktion>
 v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
 ```
 
-- **"Teilmenge" heisst woertlich: eine Einzelspieler-Aufnahme der
-  Version 3 ist byteweise die der Version 2.** Der ganze Block oben -
+- **Eine Einzelspieler-Aufnahme ist eine echte Teilmenge.** Der ganze
+  Block oben -
   `length`, `players`, `slot`, `mpmode`, `garbage`, `winner`, `peer=`,
   `p=` und `v=` - wird nur in einer Versus-Aufnahme geschrieben, und die
   vier Einzelspieler-Modi behalten ihren einen Strom `e=`. Es waere
@@ -511,10 +517,24 @@ Fokus-Slot gebunden. Der Renderer bleibt dadurch fast unveraendert:
   Bildschirm sonst nicht sagt - die Gegner tragen ihren Namen ueber
   ihrer Spalte, das mittlere Feld nie, weil es in einer echten Runde
   das eigene ist.
-- **Die Blink-Animation laeuft nur fuer den Fokus.** `flash_rows` haelt
-  den Loop an (3.1); bei den uebrigen verschwindet die Reihe sofort,
-  denn alles andere hiesse, den Loop bis zu fuenfmal je Sekunde
-  anzuhalten.
+- **Jeder Sitz blinkt fuer sich** (seit 2.0.0). Die Pause nach einem
+  Clear ist Rundenzustand (`CLEAR_PENDING`, `CLEAR_START_MS`,
+  `FLASH_ROWS`, `FLASH_STATE` in `STATE_VARS`), also traegt jeder Sitz
+  eine eigene, und `demo_step` dreht sie fuer jeden Sitz auf der
+  Demo-Uhr weiter. Die Frist ist dabei genauso ein Faelligkeitstermin
+  wie ein Ereignis: beide stehen in `DEMO_NEXT_MS[slot]`, und was
+  frueher faellig ist, wird zuerst angewandt. Das muss so sein, denn die
+  Reihenfolge entscheidet ueber das Ergebnis - eine Stoerreihe, die
+  waehrend der Pause ankommt, gehoert in das Brett, aus dem der Clear
+  noch nicht heraus ist.
+  Gezeichnet wird davon nur der Fokus, aber das ist eine Sache des
+  Renderers und keine der Rundenlogik.
+  _Vorzustand bis 1.5.1: `flash_rows` hielt den ganzen Loop an, also
+  blinkte nur der Sitz im Fokus (`DEMO_SIM_FOCUS`) und bei den uebrigen
+  verschwand die Reihe sofort - alles andere haette die Wiedergabe bis
+  zu fuenfmal je Reihenabbau angehalten. Damit raeumten die uebrigen
+  Sitze ihre Reihen 280 ms zu frueh ab; heute tut es jeder Sitz genau
+  dann, wann sein echter Client es tat._
 - **Der Kasten am Ende nennt Platz und Grund** - beides fuer den
   Sitzplatz im Fokus und nicht fuer die Aufnahme, denn der Fokus wandert
   (`demo_focus_outcome` in `lib/demo.sh`, gelesen von

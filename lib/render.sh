@@ -70,7 +70,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.28.0  (2026-08-29)
+# Version: 0.28.1  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -148,7 +148,9 @@ PANE_BLANK="            "
 # before they are removed. FLASH_ROWS holds those board rows keyed by
 # their y coordinate, FLASH_STATE switches the highlight on (1) and off
 # (0); with FLASH_ROWS empty draw_frame renders exactly as before. Both
-# are driven by flash_rows in rowhammer.sh.
+# are driven by the clear pause in rowhammer.sh (clear_pause_arm and
+# clear_pause_step); both are round state since 2.0.0, so in a demo
+# playback every simulated seat carries a flash of its own.
 declare -A FLASH_ROWS=()
 FLASH_STATE=0
 

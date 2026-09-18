@@ -31,20 +31,18 @@ fuer diese Liste sind drei davon einschlaegig:
 - **Aenderungen an dieser Liste duerfen direkt auf `main`** vorgenommen
   werden, ohne Feature-Branch und Pull Request. Dasselbe gilt fuer
   HISTORY.md, soweit nur Erledigtes dorthin wandert.
-- **`2.0.0` ist fuer den fertigen Mehrspieler reserviert.** Bis dahin
-  laeuft alles unten in der **`1.x`-Reihe** - die offenen
-  Einzelspieler-Punkte ebenso wie der Rest der Phase 5; eine
-  Minor-Version je Zuwachs, eine Patch-Version je Korrektur. Die
-  Server-Phase 6 beginnt hinter `2.0.0`.
+- **`2.0.0` war fuer den fertigen Mehrspieler reserviert und ist
+  vergeben** (Phase 5 abgeschlossen, siehe 1.3). Was jetzt folgt, laeuft
+  in der **`2.x`-Reihe**: eine Minor-Version je Zuwachs, eine
+  Patch-Version je Korrektur. Die Server-Phase 6 baut darauf auf.
 
 ## 1. Offene Roadmap-Punkte
 
-Die abgeschlossenen Phasen 1 bis 4 sowie der Mehrspieler-Kern (Phase 5,
-Schritte 1-8 und 10-12) stehen mit ihrer Begruendung in
+Die abgeschlossenen Phasen 1 bis 5 stehen mit ihrer Begruendung in
 [HISTORY.md](HISTORY.md); dessen Uebersichtstabelle listet jede Version
 mit ihrem Thema.
 
-### 1.1 Paketierung (`1.x.x`)
+### 1.1 Paketierung (`2.x.x`)
 
 Debian-Paket (0.17.0), RPM-Paket (0.37.0) und die Release-Struktur samt
 CI-Paketbau (0.40.0) sind erledigt. Offen:
@@ -63,7 +61,7 @@ CI-Paketbau (0.40.0) sind erledigt. Offen:
       Signier-Schritt im Release-Workflow (Schluessel als Secret) waere
       der naechste Schritt, sobald die Lizenzfrage entschieden ist.
 
-### 1.2 Politur (`1.x.x`)
+### 1.2 Politur (`2.x.x`)
 
 - [ ] **Weltwunder-Animation** (Nutzerwunsch, Konzept in 5.18): Der
       Wunder-Bildschirm deckt die ASCII-Art bislang nur statisch
@@ -85,27 +83,23 @@ CI-Paketbau (0.40.0) sind erledigt. Offen:
       - das betraefe auch die Adresseingabe des Mehrspielers, die
       dieselbe Grenze hat.
 
-### 1.3 Mehrspieler (Phase 5, `1.x.x`)
+### 1.3 Mehrspieler (Phase 5) - abgeschlossen mit 2.0.0
 
-Der Kern laeuft seit 1.1.0, der Gastgeberwechsel seit 1.2.0, die
-Sitzordnung mit fuenf Spielern seit 1.3.0 und die Demo-Aufzeichnung
-einer Mehrspieler-Runde seit 1.4.0 (siehe Abschnitt 5). Offen ist damit
-noch ein Punkt:
+**Phase 5 ist fertig.** Der Kern laeuft seit 1.1.0, der Gastgeberwechsel
+seit 1.2.0, die Sitzordnung mit fuenf Spielern seit 1.3.0, die
+Demo-Aufzeichnung einer Mehrspieler-Runde seit 1.4.0 und die
+vollstaendige Entkopplung der Rundenlogik seit 2.0.0 (siehe 5.3). Alles
+davon steht mit seiner Begruendung in [HISTORY.md](HISTORY.md).
 
-- [ ] **Rest aus Schritt 1 - Entkopplung der Rundenlogik** (siehe 5.3).
-      Der Mehrspieler brauchte davon nur, was er benutzt, und laeuft
-      damit; vollstaendig entkoppelt ist die Rundenlogik aber nicht:
-      `flash_rows` haelt den Loop weiterhin an (es leert im Mehrspieler
-      immerhin die Leitung mit) und `record_round` verbucht und zeigt
-      noch in einem. Das ist Aufraeumarbeit ohne sichtbare Wirkung und
-      steht deshalb hinter allem anderen. `2.0.0` ist dem Stand nach
-      dieser Entkopplung vorbehalten.
+Was offen bleibt, ist keine Bauaufgabe mehr, sondern die Justierung nach
+Playtesting - sie steht in Abschnitt 2.1 und 2.2.
 
 ### 1.4 Server-Betrieb, Accounts, Web (Phase 6, `2.x.x`)
 
-Spezifiziert in 5.11 bis 5.19, noch nicht umgesetzt. Diese Phase beginnt
-hinter `2.0.0` und setzt einen fertigen, per Playtesting bewaehrten
-Mehrspieler-Kern voraus. Die Reihenfolge ist in 5.11-5.19 begruendet:
+Spezifiziert in 5.11 bis 5.19, noch nicht umgesetzt. Der fertige
+Mehrspieler-Kern, den diese Phase voraussetzt, steht seit `2.0.0`;
+offen ist nur noch das Playtesting, das ihn bewaehren muss.
+Die Reihenfolge ist in 5.11-5.19 begruendet:
 Deployment zuerst (ohne Server kein Bedarf fuer Accounts), Accounts vor
 dem Persistenz-Umbau (das Datenbankschema haengt vom Kontomodell ab),
 serverweite Statistik und gemeinsames Weltwunder direkt danach (sie

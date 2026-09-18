@@ -138,21 +138,14 @@ erledigte Punkte dorthin verschoben oder dort nachgetragen werden.
 
 ### 6.2 Arbeitsregeln fuer den Code
 
-Arbeitsregel: **`2.0.0` kommt erst, wenn der Mehrspieler fertig ist**
-(Nutzerentscheidung, ueberarbeitet mit 1.1.0). Bis dahin laeuft die
-Arbeit am Mehrspieler in der **`1.x`-Reihe** weiter, Seite an Seite mit
-allem anderen, was am Spiel nachgezogen wird: eine Minor-Version je
-Zuwachs, eine Patch-Version je Korrektur. Eine Versionsnummer ist eine
-Aussage ueber den Zustand, nicht ueber die Menge der Arbeit - `2.0.0`
-ist deshalb dem Stand vorbehalten, an dem Phase 5 abgeschlossen ist:
-die Demo-Aufzeichnung einer Mehrspieler-Runde steht seit 1.4.0 (5.20),
-offen ist allein die vollstaendige Entkopplung der Rundenlogik (5.3,
-siehe TODO.md); die Server-Phase 6 baut danach darauf auf. SemVer
-traegt das: die Formate des Mehrspielers (Protokoll,
-Sitzungsverzeichnis) sind bislang nur untereinander im Umlauf, und die
-Regel darunter laesst sie ohnehin
-brechen - eine Protokollversion, die ein alter Client nicht kennt, weist
-der Hub sauber ab.
+Arbeitsregel: **`2.0.0` war dem fertigen Mehrspieler vorbehalten und
+ist vergeben** (Nutzerentscheidung, ueberarbeitet mit 1.1.0). Eine
+Versionsnummer ist eine Aussage ueber den Zustand, nicht ueber die Menge
+der Arbeit: `2.0.0` markiert den Stand, an dem **Phase 5 abgeschlossen**
+ist - die Demo-Aufzeichnung einer Mehrspieler-Runde seit 1.4.0 (5.20)
+und die vollstaendige Entkopplung der Rundenlogik seit 2.0.0 (5.3).
+Weiter geht es in der **`2.x`-Reihe**: eine Minor-Version je Zuwachs,
+eine Patch-Version je Korrektur; die Server-Phase 6 baut darauf auf.
 
 Arbeitsregel: **Keine Abwaertskompatibilitaet noetig.** Das Projekt wird
 sequenziell entwickelt und war nie anderswo installiert; Migrationslogik

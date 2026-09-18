@@ -466,12 +466,39 @@ Modulschnitt (neue Dateien, siehe auch 4.2):
 - Gegner-Darstellung kommt in `lib/render.sh` dazu (`render_peer`,
   `draw_frame`-Erweiterung), damit alles Zeichnen an einer Stelle bleibt.
 
-Voraussetzung im bestehenden Code: die Rundenlogik muss ohne Rendering
-und ohne Tastatur laufen koennen (offener Punkt, siehe TODO.md).
-Konkret: `game_reset`, `step_down`, `lock_and_next`, `hold_piece`,
-`try_move`, `try_rotate` duerfen weder zeichnen noch lesen; `DIRTY`
-markiert nur. Das ist ohnehin fast erreicht - offen sind die Stellen, an
-denen `flash_rows` den Loop anhaelt und `record_round` Bildschirme zeigt.
+Voraussetzung im bestehenden Code: die Rundenlogik laeuft ohne Rendering
+und ohne Tastatur. Konkret: `game_reset`, `step_down`, `lock_and_next`,
+`hold_piece`, `try_move`, `try_rotate` zeichnen nicht und lesen nicht;
+`DIRTY` markiert nur. **Seit 2.0.0 gilt das vollstaendig** - damit ist
+Phase 5 abgeschlossen. Die beiden Stellen, die es vorher brachen, sind
+umgebaut:
+
+- **Die Pause nach einem Clear ist Rundenzustand mit Frist.**
+  `lock_and_next` sperrt den Stein, erkennt Quadrate und schaltet ueber
+  `clear_pause_arm` die Pause scharf; die zweite Haelfte
+  (`clear_and_continue`) raeumt die Reihen ab, verbucht sie, meldet den
+  Clear und laesst den naechsten Stein erscheinen. Dazwischen liegt
+  nichts als eine Frist, die derselbe Loop weiterdreht, der auch das
+  Lock Delay weiterdreht (`clear_pause_step`). Der Rundenzustand traegt
+  dafuer `CLEAR_PENDING`, `CLEAR_START_MS`, `FLASH_ROWS` und
+  `FLASH_STATE` (siehe 5.20).
+  Waehrend der Pause faellt und sperrt nichts, keine Flutreihe steigt
+  und keine Modus-Uhr beendet die Runde - Letzteres nicht aus Ordnung,
+  sondern weil die Reihen dieses Clears erst von `clear_and_continue`
+  verbucht werden und eine dort abgeschnittene Sprint- oder
+  Time-Attack-Runde sie verloere. Tasten werden geschluckt wie zuvor.
+- **Gebucht wird von dem, der die Runde treibt.** Die Rundenlogik setzt
+  `GAME_OVER` bzw. `GOAL_REACHED` und sonst nichts; `record_round` ruft
+  der Game-Loop am Ende des Ticks (im Mehrspieler weiterhin erst, wenn
+  `END` kommt, siehe 5.8). `record_round` selbst ist die
+  Praesentationshaelfte - Namensabfrage und Reihenfolge -, die reine
+  Buchhaltung steht daneben in `round_book`.
+
+Was der Umbau nebenbei erledigt: der Mehrspieler-Link wird waehrend der
+Pause durch die normalen Ticks geleert statt durch einen Sonderaufruf
+aus der Animation heraus (rund 14-mal je Pause statt 4-mal), und die
+Wiedergabe braucht keine Sonderregeln mehr fuer den Sitz auf dem
+Bildschirm (siehe 5.20).
 
 ### 5.4 Protokoll (Version 5)
 
