@@ -245,7 +245,22 @@ ehrlichen Wert, den man fuer eine Datei ohne sie erfinden koennte.
 Gelesen wird deshalb **nur noch 4** (`DEMO_FORMAT_MIN_VERSION`,
 Nutzerentscheidung 2026-09-18); aeltere Aufnahmen werden beim Laden mit
 Begruendung abgewiesen wie jede andere Datei, die dieses Programm nicht
-liest. Umgekehrt gilt die Strenge weiter: eine hoehere Version faellt
+liest.
+
+**Dem Spieler wird der Unterschied gesagt.** Eine Aufnahme aelteren
+Formats ist nicht kaputt - sie ist heil, nur spielt dieses Programm sie
+nicht mehr -, und wer Aufnahmen ueber den Wechsel auf 2.0.0 hinweg
+behalten hat, bekommt darum eine eigene Meldung: "Dieses Demo-Format
+wird nicht mehr unterstuetzt." (`demo_old_format`) statt der Meldung
+fuer beschaedigte Dateien (`demo_invalid`). Getrennt werden die beiden
+ueber `DEMO_BAD_VERSION`, das `demo_header_read` genau dann setzt, wenn
+die Versionspruefung der einzige Grund der Ablehnung war. Dass das
+ueberhaupt entscheidbar ist, liegt daran, dass **jede** Aufnahme dieses
+Spiels ein `version=` traegt - schon das allererste Format (0.42.0)
+schrieb es; eine Datei ganz ohne Angabe zaehlt als Version 0 und faellt
+in denselben Fall.
+In der Demo-Liste steht eine solche Aufnahme wie jede andere unlesbare
+als `(defekt)` mit ihrem Dateinamen und laesst sich von dort loeschen. Umgekehrt gilt die Strenge weiter: eine hoehere Version faellt
 heraus, und eine Datei, die `mode=versus` in einer Version ohne
 Sitzungsblock behauptet, ebenfalls - das ist keine kurze Aufnahme,
 sondern eine bearbeitete Datei.

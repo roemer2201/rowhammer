@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.10.0  (2026-09-18)
+# Version: 0.11.0  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -413,6 +413,14 @@ DEMO_CLOCK_MS=0
 # The remaining header fields are validated on load like these but not
 # kept: the replay recomputes every counter as it runs, so keeping them
 # would only invite reading a stored number where the live one belongs.
+# Why the last demo_header_read refused a file: 1 when it was the format
+# version and nothing else, 0 for every other reason (a damaged file, a
+# key that does not belong, a session block that does not add up). The
+# two are one message to a player otherwise, and they are not the same
+# thing: a recording of an older format is intact, it is just not one
+# this build plays, and saying so is the honest answer (2.0.0, see
+# DEMO_FORMAT_VERSION and demo_play).
+DEMO_BAD_VERSION=0
 DEMO_HDR_MODE="marathon"
 DEMO_HDR_DATE=""
 DEMO_HDR_TIME=0
@@ -1289,7 +1297,9 @@ demo_prune() {
 # Refuse the recording being read, saying why. The reason goes into the
 # debug log rather than onto the screen: the player is told once, in
 # their own language, that a recording cannot be played (demo_invalid,
-# lib/lang), while which field of which file was wrong is a diagnosis and
+# or demo_old_format when the format version is the only thing wrong -
+# see DEMO_BAD_VERSION), while which field of which file was wrong is a
+# diagnosis and
 # belongs where the game keeps its diagnoses (CLAUDE.md 4.6). Callers use
 # it as "... || { demo_reject '...'; return 1; }" - it returns 1 itself
 # so a caller may also end on it.
@@ -1327,6 +1337,7 @@ demo_reject() {
 demo_header_read() {
     local file="${1}" line key val version=0 slot name i peers=0
     DEMO_READ_FILE="${file}"
+    DEMO_BAD_VERSION=0
     DEMO_HDR_MODE=""
     DEMO_HDR_DATE=""
     DEMO_HDR_TIME=0
@@ -1456,6 +1467,12 @@ demo_header_read() {
     done < "${file}"
     if [ "${version}" -lt "${DEMO_FORMAT_MIN_VERSION}" ] || \
        [ "${version}" -gt "${DEMO_FORMAT_VERSION}" ]; then
+        # Every recording this game ever wrote carries "version=" - the
+        # very first format did already (0.42.0) - so a file that lands
+        # here is one whose format this build does not play, including a
+        # file that names no version at all (it counts as 0). That is a
+        # different message to a player than a damaged one.
+        DEMO_BAD_VERSION=1
         demo_reject "format version ${version} is not read by this build"
         return 1
     fi
@@ -2299,6 +2316,16 @@ demo_play() {
     # after it pauses by its own constant again.
     local clear_pause_saved="${CLEAR_PAUSE_MS}"
     if ! demo_load "${file}"; then
+        # An older format is not a damaged file, and a player who kept
+        # recordings across the 2.0.0 upgrade is owed the difference:
+        # there is nothing wrong with their recording, this build simply
+        # does not play it any more (see DEMO_FORMAT_MIN_VERSION).
+        if [ "${DEMO_BAD_VERSION}" -eq 1 ]; then
+            i18n_lines demo_old_format
+            menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
+            debug_event "demo: refused to play ${file}, its format is no longer supported"
+            return 1
+        fi
         i18n_lines demo_invalid
         menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
         debug_event "demo: refused to play invalid recording ${file}"

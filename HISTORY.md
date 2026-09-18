@@ -2588,6 +2588,16 @@ noch 4, die Formate 2 und 3 werden beim Laden mit Begruendung
 abgewiesen. Begruendung in 4.10; Nutzerentscheidung vom 2026-09-18, auf
 die Frage hin, ob ein sauberes neues Format den alten vorzuziehen sei.
 
+Wer eine solche Aufnahme abspielen will, bekommt dafuer eine **eigene
+Meldung** - "Dieses Demo-Format wird nicht mehr unterstuetzt."
+(`demo_old_format`) statt der Meldung fuer beschaedigte Dateien. Eine
+Aufnahme aelteren Formats ist ja nicht kaputt, und das ist dem, der
+Aufnahmen ueber den Wechsel hinweg behalten hat, auch zu sagen.
+Entscheidbar ist das, weil jede Aufnahme dieses Spiels ein `version=`
+traegt - schon das erste Format (0.42.0) schrieb es -, sodass
+`demo_header_read` ueber `DEMO_BAD_VERSION` melden kann, ob die Version
+der einzige Grund der Ablehnung war (Nutzerwunsch 2026-09-18).
+
 Abnahme: `bash -n` ueber den ganzen Baum und die ASCII-Pruefung ohne
 Befund, `tools/release.sh --mode check` ebenso; `tools/state-check.sh`
 (68 Pruefungen unveraendert - es vergleicht STATE_VARS gegen

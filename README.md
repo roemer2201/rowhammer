@@ -198,8 +198,9 @@ Aufnahme des dort ausgewaehlten Eintrags.
 > **Hinweis zu Version 2.0.0:** Das Dateiformat der Aufnahmen ist auf
 > Version 4 gewechselt. Aeltere Aufnahmen werden nicht mehr abgespielt:
 > sie stehen weiter in der Liste, dort aber als `(defekt)` mit ihrem
-> Dateinamen, und lassen sich von dort loeschen. Neue Runden werden wie
-> gewohnt aufgezeichnet.
+> Dateinamen, und der Versuch, eine abzuspielen, meldet "Dieses
+> Demo-Format wird nicht mehr unterstuetzt." Loeschen laesst sie sich
+> aus der Liste heraus. Neue Runden werden wie gewohnt aufgezeichnet.
 
 Eine **Mehrspieler-Runde** wird ebenfalls aufgezeichnet, mit den Zuegen
 aller Teilnehmer. Beim Abspielen laeuft jedes Feld seine Runde noch

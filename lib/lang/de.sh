@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.9.0  (2026-09-09)
+# Version: 1.10.0  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -384,6 +384,13 @@ aus einer anderen Version und kann nicht
 abgespielt werden.
 
 Du kannst sie im Demo-Menue loeschen."
+    # Shown instead of demo_invalid when the recording is intact but its
+    # format version is one this build no longer reads (2.0.0).
+    [demo_old_format]="Dieses Demo-Format wird nicht mehr
+unterstuetzt.
+
+Du kannst die Aufzeichnung im Demo-Menue
+loeschen."
 
     # --- HUD --------------------------------------------------------------
     # The left pane gives a label six columns; anything longer is cut
