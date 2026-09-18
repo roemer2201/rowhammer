@@ -55,9 +55,10 @@ Changelog-Eintrag ergaebe ein Release ohne Release-Notes.
 
 ## 3. Ablauf eines Releases
 
-1. **Aendern und dokumentieren.** Die Aenderung selbst, dazu CLAUDE.md,
-   HISTORY.md und README.md gemaess der Arbeitsregeln aus CLAUDE.md
-   Abschnitt 6.
+1. **Aendern und dokumentieren.** Die Aenderung selbst, dazu die
+   zustaendige Konzeptdatei unter `docs/konzept/` (Wegweiser in
+   CLAUDE.md), HISTORY.md und README.md gemaess der Arbeitsregeln aus
+   CLAUDE.md Abschnitt 6.
 2. **Version hochzaehlen** - an allen vier Stellen aus Abschnitt 2:
    `ROWHAMMER_VERSION` in `rowhammer.sh`, eine neue Strophe in
    `debian/changelog`, `Version:` und ein `%changelog`-Eintrag in

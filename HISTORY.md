@@ -10,7 +10,8 @@ umgesetzt ist; TODO.md fuehrt damit nur noch, was tatsaechlich offen ist.
 | --- | --- |
 | **HISTORY.md** (diese) | Archiv der erledigten Punkte, nach Version |
 | [TODO.md](TODO.md) | offene Punkte - Roadmap und Entscheidungen |
-| [CLAUDE.md](CLAUDE.md) | technisches Konzept und Arbeitskonventionen |
+| [CLAUDE.md](CLAUDE.md) | Projektueberblick, Wegweiser, Arbeitskonventionen |
+| [docs/konzept/](docs/konzept/) | das technische Konzept, Abschnitte 2 bis 5 |
 | [README.md](README.md) | Anleitung fuer Spielerinnen und Spieler |
 
 **Lesehinweis - was hier steht und was nicht:**
@@ -19,24 +20,27 @@ umgesetzt ist; TODO.md fuehrt damit nur noch, was tatsaechlich offen ist.
   samt der damaligen Begruendung. Das ist der Zweck dieser Datei: sie
   bewahrt das "warum", das aus einem Diff nicht mehr hervorgeht. Ein
   _"Vorzustand: ..."_ nennt dabei, was die Version abgeloest hat - die
-  Beschreibung in CLAUDE.md fuehrt nur den heutigen Stand.
-- Der **aktuelle** Zustand einer Funktion steht **nicht hier**, sondern in
-  CLAUDE.md (Abschnitte 1 bis 5: Spielkonzept, technisches Konzept,
-  Mehrspieler-Spezifikation) und - fuer alles Spielersichtbare - in der
+  Beschreibung im Konzept fuehrt nur den heutigen Stand.
+- Der **aktuelle** Zustand einer Funktion steht **nicht hier**, sondern im
+  technischen Konzept (Abschnitte 2 bis 5: Spielkonzept, technische
+  Umsetzung, Mehrspieler-Spezifikation; Wegweiser in CLAUDE.md) und -
+  fuer alles Spielersichtbare - in der
   README.md. Wo eine spaetere Version einen Eintrag ueberholt hat, steht
   darunter eine Zeile _"Spaeter ueberholt: ..."_ mit dem Verweis auf die
   abloesende Version.
 - **Nackte Abschnittsnummern** ("siehe 3.1", "siehe 5.20") verweisen
-  immer auf **CLAUDE.md**.
-- Im Zweifel gilt CLAUDE.md/README.md, nicht diese Datei.
+  immer auf das **Konzept**; ein aelterer Eintrag schreibt dafuer
+  "CLAUDE.md 5.20", was dieselbe Nummer meint (die Nummern sind stabil,
+  nur die Ablage hat sich geaendert).
+- Im Zweifel gilt das Konzept bzw. die README.md, nicht diese Datei.
 
 Arbeitsregel dazu (siehe CLAUDE.md Abschnitt 6): Wer einen Punkt aus
-TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob CLAUDE.md
-1-5 und die README.md den neuen Zustand richtig beschreiben.
+TODO.md abschliesst, verschiebt ihn hierher **und** prueft, ob das
+Konzept und die README.md den neuen Zustand richtig beschreiben.
 
 ## Uebersicht
 
-| Version | Thema | Konzept in CLAUDE.md |
+| Version | Thema | Konzept |
 | --- | --- | --- |
 | 0.1.0 | Spielbarer Kern (Phase 1) | 3.1, 4.3 |
 | 0.2.0 | Startmenue und Nutzer-Konfiguration | 4.2, 4.5 |

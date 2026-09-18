@@ -488,11 +488,12 @@ Logs einem Bug-Report an.
 
 ## Mitmachen / Entwicklung
 
-Vier Dateien, vier Rollen:
+Fuenf Dateien, fuenf Rollen:
 
 | Datei | Inhalt |
 | --- | --- |
-| [CLAUDE.md](CLAUDE.md) | technisches Konzept, Architektur und die verbindlichen Skript-Konventionen - der Startpunkt fuer jede Weiterentwicklung |
+| [CLAUDE.md](CLAUDE.md) | Projektueberblick, Wegweiser ins Konzept und die verbindlichen Skript-Konventionen - der Startpunkt fuer jede Weiterentwicklung |
+| [docs/konzept/](docs/konzept/) | das technische Konzept in sieben Dateien: Spielregeln, Technik, Persistenz, Demos, Mehrspieler - jeweils samt Begruendung |
 | [TODO.md](TODO.md) | was noch offen ist: Roadmap und ungeklaerte Entscheidungen |
 | [HISTORY.md](HISTORY.md) | was bereits umgesetzt ist, je Version und mit der Begruendung von damals |
 | README.md (diese) | die Anleitung fuer Spielerinnen und Spieler |
