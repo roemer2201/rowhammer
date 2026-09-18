@@ -216,7 +216,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 1.5.1  (2026-09-13)
+# Version: 2.0.0  (2026-09-18)
 
 set -euo pipefail
 
@@ -231,7 +231,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="1.5.1"
+ROWHAMMER_VERSION="2.0.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -1337,6 +1337,14 @@ NOW_MS=0; LAST_FALL=0
 # the lock fires once the delay has elapsed (see lock_touchdown, step_down
 # and the game loop).
 LOCK_PENDING=0; TOUCHDOWN_MS=0
+# Clear pause (2.0.0): the pause a lock that completed rows buys them, so
+# they can blink before they are taken away. Built like the lock delay
+# above and for the same reason - it is a deadline the round keeps, not
+# something the round logic sits out: CLEAR_PENDING marks that the round
+# is waiting, CLEAR_START_MS is the ROUND_NOW_MS the wait started at, and
+# the driver runs clear_and_continue once CLEAR_PAUSE_MS have passed (see
+# clear_pause_arm, clear_pause_step and the game loop).
+CLEAR_PENDING=0; CLEAR_START_MS=0
 # Play time of the current round in milliseconds and the timestamp the
 # currently running play segment was last accounted from. Only time spent
 # actually playing counts: pauses (the "p" toggle and the pause menu) and
@@ -1458,6 +1466,22 @@ LOCK_DELAY_MS=250
 # LEVEL_SPEEDS and LOCK_DELAY_MS. FLASH_CYCLES=0 turns the animation off.
 FLASH_MS=70
 FLASH_CYCLES=2
+# The two of them as the one number the round actually waits: the length
+# of the pause a completed row buys itself (clear_pause_arm). Derived once
+# rather than multiplied out at every lock, and the number a recording
+# stores in its header - a replay pauses for as long as the round it
+# replays did, not for as long as the build watching it would (4.10).
+CLEAR_PAUSE_MS=$(( FLASH_MS * 2 * FLASH_CYCLES ))
+
+# The clock the round logic measures its own deadlines against, in
+# milliseconds. Whoever drives a round sets it before the round functions
+# run: the game loop from the real clock (NOW_MS), a playback from the
+# demo clock of the seat it is stepping (DEMO_CLOCK_MS, lib/demo.sh).
+# Session state, not round state - a playback of five seats still has one
+# clock, it just binds a different board behind it (lib/state.sh).
+# Introduced in 2.0.0 with the clear pause, which is the first deadline
+# the round logic keeps itself (CLAUDE.md 5.3).
+ROUND_NOW_MS=0
 
 # now_ms: put the current time in milliseconds into the global NOW_MS.
 # Uses bash 5's EPOCHREALTIME when available (no fork); older bash falls
@@ -1721,19 +1745,30 @@ round_rank_preview() {
 # Wonder progress and statistics do not care about the mode - those rows
 # were really cleared, and per the concept even an aborted round counts.
 record_round() {
-    # A replayed round is not a round: it books nothing into the
-    # highscore lists, the wonder counter or the statistics, and it is
-    # not recorded as a demo either. The guard sits here rather than at
-    # the call sites because a replay reaches this function through the
-    # very game functions it replays (lock_and_next on the Ultra goal,
-    # spawn_piece on a blocked spawn).
-    if [ "${DEMO_PLAYING}" -eq 1 ]; then
-        return 0
-    fi
+    # CHANGE 2.0.0: the guard against a replayed round is gone, together
+    # with the reason it existed. It used to sit here because a replay
+    # reached this function through the very game functions it replayed -
+    # lock_and_next on the Ultra goal, spawn_piece on a blocked spawn.
+    # Since the round logic no longer closes any books (it sets GAME_OVER
+    # and whoever drives the round decides what that means, CLAUDE.md
+    # 5.3), a playback cannot reach this function at all: demo_play simply
+    # does not call it.
     if [ "${ROUND_RECORDED}" -eq 1 ]; then
         return 0
     fi
     ROUND_RECORDED=1
+    # A clear that was still blinking when the round ended: the rows were
+    # completed, so they belong to the round the books are being closed
+    # on - take them away now rather than let them fall off the end. The
+    # window is narrow (the ~280 ms of a clear pause) but real: in a
+    # multiplayer round the hub's END arrives whenever it arrives, and
+    # before 2.0.0 the animation held the loop and finished the clear on
+    # its own (CLAUDE.md 5.3). This is also what keeps the round from
+    # ending with a pause nobody will ever resolve - see handle_key.
+    if [ "${CLEAR_PENDING}" -eq 1 ]; then
+        debug_event "clear pause settled by the end of the round"
+        clear_and_continue
+    fi
     # Where the recorded timeline ends, taken before anything below can
     # take time: the name prompt waits for a person, and the round clock
     # a multiplayer recording runs on does not stop for one (lib/demo.sh).
@@ -1753,6 +1788,22 @@ record_round() {
         prompt_round_name
         name="${ROUND_NAME}"
     fi
+    round_book "${name}"
+    return 0
+}
+
+# round_book NAME
+# The books themselves, split out of record_round in 2.0.0: the highscore
+# entry, the wonder counter, the all-time statistics and the demo file,
+# all filed under NAME. Nothing here draws and nothing here reads - the
+# one part of closing a round that did both, the name prompt, stayed with
+# record_round above, which is the presentation half (CLAUDE.md 5.3).
+# Split rather than merely reordered because the two halves answer to
+# different things: the prompt is a screen and belongs to whoever owns the
+# terminal, the booking is arithmetic over the round's counters and would
+# run just as correctly with no terminal at all.
+round_book() {
+    local name="${1}"
     # The round's identifier, computed once and handed to both books it
     # appears in: the highscore entry stores it as its last field, and
     # the demo recording carries it in its file name, which is what lets
@@ -1923,7 +1974,12 @@ round_finish() {
         mp_send_topout
         return 0
     fi
-    record_round
+    # CHANGE 2.0.0: the books are no longer closed here. GAME_OVER is set
+    # by the caller that detected the top-out, and whoever drives the
+    # round decides what that means - the game loop records it, a playback
+    # simply lets the seat stand (CLAUDE.md 5.3). That is also what made
+    # the DEMO_PLAYING guard above unnecessary for the booking; it stays
+    # only for the multiplayer reporting below it.
     return 0
 }
 
@@ -1940,7 +1996,6 @@ sprint_time_up() {
     GOAL_REACHED=1
     GAME_OVER=1
     debug_event "sprint time up: time=${PLAY_MS}ms/${SPRINT_TIME_MS}ms rows=${ROW_CREDIT} lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
-    record_round
     DIRTY=1
     return 0
 }
@@ -1958,7 +2013,6 @@ time_attack_time_up() {
     GOAL_REACHED=1
     GAME_OVER=1
     debug_event "time attack clock empty: time=${PLAY_MS}ms/${TIME_ATTACK_BUDGET_MS}ms rows=${ROW_CREDIT} lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
-    record_round
     DIRTY=1
     return 0
 }
@@ -1996,7 +2050,6 @@ flood_raise() {
     if ! board_flood_row "${hole}"; then
         GAME_OVER=1
         debug_event "flood blocked: stack at the ceiling (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} pieces=${PIECE_COUNT})"
-        record_round
         DIRTY=1
         return 0
     fi
@@ -2009,7 +2062,6 @@ flood_raise() {
     if board_top_out; then
         GAME_OVER=1
         debug_event "flood row hole=${hole}: stack pushed above the field - game over (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT} pieces=${PIECE_COUNT})"
-        record_round
         DIRTY=1
         return 0
     fi
@@ -2025,7 +2077,6 @@ flood_raise() {
         else
             GAME_OVER=1
             debug_event "flood row hole=${hole}: no room left for ${CUR_TYPE} at ${CUR_X},${CUR_Y} - game over (lines=${CLEARED_TOTAL} rows=${ROW_CREDIT})"
-            record_round
             DIRTY=1
             return 0
         fi
@@ -2063,79 +2114,101 @@ spawn_piece() {
     DIRTY=1
 }
 
-# flash_rows: blink the rows that a lock just completed, before they are
-# removed from the board. The rows come from board_full_rows (FULL_ROWS);
-# the render layer draws the highlight for FLASH_ROWS whenever FLASH_STATE
-# is 1, so the animation is nothing but toggling that flag and redrawing.
-# The wait between the half cycles reuses a timed read instead of sleep:
-# no fork per frame, and key presses arriving during the animation are
-# swallowed on purpose so a burst of them cannot fire at once on the piece
-# that spawns right afterwards (same rationale as the resize overlay in
-# lib/input.sh). A pending SIGWINCH interrupts the read and is applied by
-# read_key on the next tick, as usual.
-flash_rows() {
-    if [ "${FLASH_CYCLES}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
-        return 0
+# clear_pause_arm: start the pause a completed row buys itself, so it can
+# blink before it is removed from the board. The rows come from
+# board_full_rows (FULL_ROWS); the render layer draws the highlight for
+# FLASH_ROWS whenever FLASH_STATE is 1, so the animation is nothing but
+# toggling that flag and redrawing.
+# Returns 1 when there is nothing to pause for, which is the caller's
+# signal to clear the rows right away.
+#
+# CHANGE 2.0.0 (CLAUDE.md 5.3): this used to be flash_rows, which ran the
+# whole animation on the spot - it drew, it read the keyboard and it
+# drained the link, from inside the round logic, and held the loop for its
+# ~280 ms. That is what stood between the round logic and running without
+# a screen. The pause is now round state with a deadline, exactly like the
+# lock delay next to it (LOCK_PENDING/TOUCHDOWN_MS), and the loop that
+# drives the round drives it too (clear_pause_step). Nothing here draws,
+# reads or sends.
+clear_pause_arm() {
+    local y
+    if [ "${CLEAR_PAUSE_MS}" -le 0 ] || [ "${#FULL_ROWS[@]}" -eq 0 ]; then
+        return 1
     fi
-    # In a multiplayer playback only the seat on screen blinks: the
-    # animation holds the whole loop for its ~280 ms, and doing that for
-    # every simulated board would stop the replay once per clear per
-    # player (CLAUDE.md 5.20). The rows of the others simply vanish, which
-    # is what they do in the mini board of a live round too.
-    if [ "${DEMO_SIM_FOCUS}" -eq 0 ]; then
-        return 0
-    fi
-    local y i ms="${FLASH_MS}"
     FLASH_ROWS=()
     for y in "${FULL_ROWS[@]}"; do
         FLASH_ROWS["${y}"]=1
     done
-    # During a demo playback the animation is scaled with the playback
-    # speed. It runs on real time while the rest of the replay runs on
-    # the demo clock, so an unscaled flash would eat demo time at double
-    # speed and the replay would jump over the events right after a clear
-    # (at half speed it would drag). One millisecond is the floor, so a
-    # very fast replay still blinks instead of dividing down to a
-    # zero-length read.
-    if [ "${DEMO_PLAYING}" -eq 1 ]; then
-        ms=$(( FLASH_MS * 100 / DEMO_SPEED ))
-        if [ "${ms}" -lt 1 ]; then
-            ms=1
-        fi
-    fi
-    debug_event "row flash: rows=${FULL_ROWS[*]} cycles=${FLASH_CYCLES} ms=${ms}"
-    for (( i = 0; i < FLASH_CYCLES; i++ )); do
-        FLASH_STATE=1
-        draw_frame
-        key_drain "${ms}"
-        # The animation holds the loop for its ~280 ms, and in a
-        # multiplayer round those are exactly the milliseconds around a
-        # clear - the moment the hub has the most to say. The link is
-        # therefore drained here too; key presses stay swallowed, as they
-        # always were.
-        if [ "${MP_ACTIVE}" -eq 1 ] && [ "${DEMO_PLAYING}" -eq 0 ]; then
-            mp_poll || :
-        fi
-        FLASH_STATE=0
-        draw_frame
-        key_drain "${ms}"
-        if [ "${MP_ACTIVE}" -eq 1 ] && [ "${DEMO_PLAYING}" -eq 0 ]; then
-            mp_poll || :
-        fi
-    done
-    FLASH_ROWS=()
-    FLASH_STATE=0
+    CLEAR_PENDING=1
+    CLEAR_START_MS="${ROUND_NOW_MS}"
+    FLASH_STATE=1
+    debug_event "clear pause: rows=${FULL_ROWS[*]} ms=${CLEAR_PAUSE_MS} at=${CLEAR_START_MS}"
     return 0
 }
 
-# lock_and_next: lock the active piece, detect squares, flash and clear
-# completed rows, update credit/level and spawn the next piece. The flash
-# (flash_rows) blocks the loop for its short duration, which is intended:
-# the round waits for the animation before the next piece appears. Square
+# clear_pause_step: move a running clear pause along, measured against
+# ROUND_NOW_MS - the clock of whoever is driving this round (the game loop
+# feeds it real time, a playback the demo clock, see game_run and
+# demo_step). Returns 0 while the pause is still running and 1 when it is
+# over, which is the driver's signal to run clear_and_continue.
+#
+# The half cycles are derived from the time elapsed since the pause was
+# armed rather than stepped one per call. A driver that misses a tick -
+# a slow terminal, a busy machine, a playback pass that covered several
+# events - then skips to the half cycle it is really in instead of
+# stretching the pause by one tick per half cycle. That is what keeps the
+# pause the ~280 ms it says it is (user requirement, 2.0.0) whatever the
+# tick rate of the driver above it.
+clear_pause_step() {
+    local elapsed half half_ms state
+    elapsed=$(( ROUND_NOW_MS - CLEAR_START_MS ))
+    # A clock that went backwards (NTP, a suspended machine) must not
+    # freeze the round: treat it as "no time has passed yet".
+    if [ "${elapsed}" -lt 0 ]; then
+        elapsed=0
+        CLEAR_START_MS="${ROUND_NOW_MS}"
+    fi
+    if [ "${elapsed}" -ge "${CLEAR_PAUSE_MS}" ]; then
+        CLEAR_PENDING=0
+        FLASH_ROWS=()
+        FLASH_STATE=0
+        return 1
+    fi
+    # The half cycle is measured out of the pause rather than read from
+    # FLASH_MS, so the blink always fits the wait exactly: during a
+    # playback the length of the pause comes from the recording
+    # (DEMO_HDR_CLEARPAUSE) while the number of cycles is this build's
+    # own, and a hard-coded half cycle would either finish early or be
+    # cut off. With no cycles to show, the round simply rests.
+    if [ "${FLASH_CYCLES}" -le 0 ]; then
+        return 0
+    fi
+    half_ms=$(( CLEAR_PAUSE_MS / (2 * FLASH_CYCLES) ))
+    if [ "${half_ms}" -lt 1 ]; then
+        half_ms=1
+    fi
+    half=$(( elapsed / half_ms ))
+    state=$(( 1 - half % 2 ))
+    if [ "${state}" -ne "${FLASH_STATE}" ]; then
+        FLASH_STATE="${state}"
+        DIRTY=1
+    fi
+    return 0
+}
+
+# lock_and_next: lock the active piece, detect squares and hand the
+# completed rows to the clear pause - the round then rests for its ~280 ms
+# before clear_and_continue below takes the rows away and spawns the next
+# piece. Square
 # detection runs before line clearing on purpose: a piece that completes a square
 # and a row at once still forms the square first, so the cleared row
 # already earns the square's bonus credit. Forming a square earns no
 # instant points (only its strips pay off when their rows clear later).
+#
+# The split into two halves is what lets the round wait without the loop
+# waiting with it (CLAUDE.md 5.3). A caller must therefore expect that no
+# piece has spawned when this returns: the round may be sitting in its
+# clear pause, and the driver above resumes it.
 lock_and_next() {
     lock_piece "${CUR_TYPE}" "${CUR_ROT}" "${CUR_X}" "${CUR_Y}"
     # One more piece placed this round: this is the only spot where a
@@ -2155,9 +2228,24 @@ lock_and_next() {
     fi
     # Let completed rows blink briefly before they vanish (the square
     # detection above already ran, so a row through a fresh gold/silver
-    # square flashes as the scoring row it is).
+    # square flashes as the scoring row it is). With the animation off, or
+    # with nothing completed, there is nothing to wait for and the second
+    # half runs straight away.
     board_full_rows
-    flash_rows
+    if clear_pause_arm; then
+        DIRTY=1
+        return 0
+    fi
+    clear_and_continue
+}
+
+# clear_and_continue: the second half of a lock - take the completed rows
+# away, book what they were worth, let the multiplayer know, and spawn the
+# next piece. Called by lock_and_next when there was nothing to pause for,
+# and by whoever drives the round when the clear pause is over (game_run,
+# demo_step). Split off in 2.0.0 so the pause between the two halves costs
+# the loop nothing (CLAUDE.md 5.3).
+clear_and_continue() {
     clear_lines
     if (( CLEARED > 0 )); then
         CLEARED_TOTAL=$(( CLEARED_TOTAL + CLEARED ))
@@ -2190,7 +2278,6 @@ lock_and_next() {
             GOAL_REACHED=1
             GAME_OVER=1
             debug_event "ultra goal reached: rows=${ROW_CREDIT}/${ULTRA_TARGET_ROWS} time=${PLAY_MS}ms lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
-            record_round
             debug_board_snapshot
             DIRTY=1
             return 0
@@ -2380,6 +2467,23 @@ handle_key() {
     if [ -z "${KEY}" ]; then
         return 0
     fi
+    # The round is resting on a clear: every key is swallowed, the pause
+    # key and the pause menu included. That is what the animation always
+    # did - it read the keyboard itself and threw away what it got
+    # (flash_rows before 2.0.0, same rationale as the resize overlay in
+    # lib/input.sh) - and the reason is unchanged: a burst of keys
+    # arriving during the ~280 ms must not fire at once on the piece that
+    # spawns right afterwards. Read through the normal path now, so an
+    # escape sequence split across the pause is still assembled by
+    # key_feed rather than arriving as a bare ESC.
+    # The GAME_OVER test is a safety net, not a case that should occur:
+    # record_round settles a pending pause before it closes the books, so
+    # a finished round has none. Without it, a pause left standing by a
+    # path nobody thought of would swallow the keys of the game over
+    # screen and there would be no way off it.
+    if [ "${CLEAR_PENDING}" -eq 1 ] && [ "${GAME_OVER}" -eq 0 ]; then
+        return 0
+    fi
     if [ "${GAME_OVER}" -eq 1 ]; then
         case "${KEY}" in
             r)
@@ -2536,6 +2640,13 @@ game_reset() {
     GOAL_REACHED=0
     ROUND_RECORDED=0
     LOCK_PENDING=0
+    # No clear is blinking on a fresh board. Reset here with the rest of
+    # the round state because this is the other end of the list in
+    # lib/state.sh - what a round resets is what a round consists of.
+    CLEAR_PENDING=0
+    CLEAR_START_MS=0
+    FLASH_ROWS=()
+    FLASH_STATE=0
     PLAY_MS=0
     # Back to the plain start time: the credit that bought the last
     # round's extra time is gone with ROW_CREDIT above.
@@ -2658,58 +2769,95 @@ game_run() {
             # below). play_clock_resume set PLAY_LAST to "now" at every
             # resume, so an idle phase never lands in PLAY_MS.
             play_clock_tick
+            # The round's own clock for this pass. play_clock_tick just
+            # refreshed NOW_MS, so this is "now" as the round sees it -
+            # a playback puts the demo clock here instead (2.0.0, see
+            # ROUND_NOW_MS and CLAUDE.md 5.3).
+            ROUND_NOW_MS="${NOW_MS}"
             # Time Attack: refresh the budget the rows scored so far have
             # bought, so the check below and the HUD read the same number
             # (the clock counts down against a target that moves).
             if [ "${GAME_MODE}" = "timeattack" ]; then
                 time_attack_budget
             fi
-            # Hochwasser mode: the play time just accounted may have
-            # brought the next flood row due. Its own "if" rather than a
-            # branch of the chain below, because a rise is not an ending
-            # and must not cost the tick its gravity - the water comes
-            # while the piece keeps falling, that is the whole mode. It
-            # can still end the round (a stack pushed against the
-            # ceiling), which is what the GAME_OVER test in front of the
-            # chain catches: nothing should fall or lock after that.
-            if [ "${GAME_MODE}" = "flood" ] && \
-               (( PLAY_MS >= FLOOD_NEXT_MS )); then
-                # The gap column is drawn where the rise really happens;
-                # a replay feeds the recorded one to the same function.
-                flood_raise "$(( RANDOM % BOARD_W ))"
-            fi
-            # Sprint mode: the play time just accounted may have used up
-            # the run's three minutes. Checked before gravity so no piece
-            # falls or locks on time that is already over - which holds
-            # for the Time Attack countdown in the branch below just as
-            # much.
-            if [ "${GAME_OVER}" -eq 1 ]; then
-                # The flood above ended the round on this very tick:
-                # nothing falls, locks or times out on a finished round.
-                :
-            elif [ "${GAME_MODE}" = "sprint" ] && \
-               (( PLAY_MS >= SPRINT_TIME_MS )); then
-                sprint_time_up
-            elif [ "${GAME_MODE}" = "timeattack" ] && \
-                 (( PLAY_MS >= TIME_ATTACK_BUDGET_MS )); then
-                time_attack_time_up
-            elif [ "${LOCK_PENDING}" -eq 1 ]; then
-                # Resting piece: lock once the grace window has elapsed.
-                # Gravity is idle here - the piece cannot fall anyway.
-                if (( NOW_MS - TOUCHDOWN_MS >= LOCK_DELAY_MS )); then
-                    debug_event "lock delay expired at ${CUR_X},${CUR_Y}"
-                    # The two things the clock does to a round on its own
-                    # are recorded like the player's keys, so a replay
-                    # needs no timers of its own: it simply applies the
-                    # events on the timeline they were recorded at.
-                    round_event k
-                    lock_and_next
+            # The round is resting on a clear: the rows a lock completed
+            # are blinking and nothing else happens to this board until
+            # they are gone (2.0.0, CLAUDE.md 5.3). Nothing else at all -
+            # no water rises, no piece falls or locks, and neither clock
+            # ends the round. The last of those is not tidiness but
+            # arithmetic: the rows of this clear are credited by
+            # clear_and_continue, and a Sprint or Time Attack run cut off
+            # in the middle of the pause would lose them.
+            # Before the flood block rather than inside the chain below it
+            # for the same reason - a rise during the pause would land in
+            # a board the clear has not been taken out of yet.
+            if [ "${CLEAR_PENDING}" -eq 1 ]; then
+                if ! clear_pause_step; then
+                    clear_and_continue
+                    DIRTY=1
                 fi
-            elif (( NOW_MS - LAST_FALL >= FALL_MS )); then
-                LAST_FALL="${NOW_MS}"
-                round_event g
-                step_down
+            else
+                # Hochwasser mode: the play time just accounted may have
+                # brought the next flood row due. Its own "if" rather than a
+                # branch of the chain below, because a rise is not an ending
+                # and must not cost the tick its gravity - the water comes
+                # while the piece keeps falling, that is the whole mode. It
+                # can still end the round (a stack pushed against the
+                # ceiling), which is what the GAME_OVER test in front of the
+                # chain catches: nothing should fall or lock after that.
+                if [ "${GAME_MODE}" = "flood" ] && \
+                   (( PLAY_MS >= FLOOD_NEXT_MS )); then
+                    # The gap column is drawn where the rise really happens;
+                    # a replay feeds the recorded one to the same function.
+                    flood_raise "$(( RANDOM % BOARD_W ))"
+                fi
+                # Sprint mode: the play time just accounted may have used up
+                # the run's three minutes. Checked before gravity so no piece
+                # falls or locks on time that is already over - which holds
+                # for the Time Attack countdown in the branch below just as
+                # much.
+                if [ "${GAME_OVER}" -eq 1 ]; then
+                    # The flood above ended the round on this very tick:
+                    # nothing falls, locks or times out on a finished round.
+                    :
+                elif [ "${GAME_MODE}" = "sprint" ] && \
+                   (( PLAY_MS >= SPRINT_TIME_MS )); then
+                    sprint_time_up
+                elif [ "${GAME_MODE}" = "timeattack" ] && \
+                     (( PLAY_MS >= TIME_ATTACK_BUDGET_MS )); then
+                    time_attack_time_up
+                elif [ "${LOCK_PENDING}" -eq 1 ]; then
+                    # Resting piece: lock once the grace window has elapsed.
+                    # Gravity is idle here - the piece cannot fall anyway.
+                    if (( NOW_MS - TOUCHDOWN_MS >= LOCK_DELAY_MS )); then
+                        debug_event "lock delay expired at ${CUR_X},${CUR_Y}"
+                        # The two things the clock does to a round on its own
+                        # are recorded like the player's keys, so a replay
+                        # needs no timers of its own: it simply applies the
+                        # events on the timeline they were recorded at.
+                        round_event k
+                        lock_and_next
+                    fi
+                elif (( NOW_MS - LAST_FALL >= FALL_MS )); then
+                    LAST_FALL="${NOW_MS}"
+                    round_event g
+                    step_down
+                fi
             fi
+        fi
+        # The round ended on this pass and nobody has closed its books
+        # yet: that is this loop's job since 2.0.0 - the round logic sets
+        # GAME_OVER and leaves the consequences to whoever drives it
+        # (CLAUDE.md 5.3). Before the frame below, because the game over
+        # box shows the place the round took and record_round is what
+        # works it out. The multiplayer keeps its own rule and is left
+        # alone here: a topped-out board is not a finished round, the hub
+        # decides when the round is over (CLAUDE.md 5.8, see the END
+        # branch above).
+        if [ "${GAME_OVER}" -eq 1 ] && [ "${ROUND_RECORDED}" -eq 0 ] && \
+           [ "${MP_ACTIVE}" -eq 0 ]; then
+            record_round
+            DIRTY=1
         fi
         if [ "${DIRTY}" -eq 1 ]; then
             draw_frame

@@ -29,10 +29,10 @@
 #   payload as key presses: X10 mouse reports, OSC/DCS terminal replies,
 #   8-bit CSI, over-long CSI sequences and bracketed paste. Bytes that are
 #   not printable ASCII are discarded rather than reported.
-#   Callers that pause the game and throw input away (the row-clear
-#   flash, the "resize me" overlay) use key_drain rather than reading
-#   bytes raw, so a discarded sequence is discarded whole instead of
-#   leaving its tail behind for the next read.
+#   Callers that pause the game and throw input away (the "resize me"
+#   overlay) use key_drain rather than reading bytes raw, so a discarded
+#   sequence is discarded whole instead of leaving its tail behind for
+#   the next read.
 #   Enter is reported as ENTER so the menu system can use it as "select".
 #   In debug mode every received key press is recorded (raw bytes plus
 #   mapped symbol) via debug_input from lib/debug.sh. Terminal resizing is
@@ -44,7 +44,7 @@
 #   overlay until it grows back.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.0  (2026-08-03)
+# Version: 0.9.1  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -582,16 +582,19 @@ key_feed() {
 # Wait about MS milliseconds while throwing away everything the user
 # types - but route the bytes through the escape parser instead of
 # reading them raw. Callers that deliberately pause the game (the
-# row-clear flash in rowhammer.sh, the "resize me" overlay above) used to
-# read single bytes directly, which reintroduced issue #7 behind the
-# parser's back: a raw read that swallows only the ESC of an arrow key
-# leaves "[C" in the buffer, and the next read_key applies the "C" as the
-# hold key "c". Feeding the bytes to key_feed keeps a sequence atomic, so
-# either all of it is discarded or none of it.
-# Keys that do resolve are dropped on purpose - they must not fire on the
-# piece that appears after the animation. A sequence still in flight when
-# the window closes keeps its parser state and is finished by the next
-# read_key, which is better than losing its tail.
+# "resize me" overlay above) used to read single bytes directly, which
+# reintroduced issue #7 behind the parser's back: a raw read that
+# swallows only the ESC of an arrow key leaves "[C" in the buffer, and
+# the next read_key applies the "C" as the hold key "c". Feeding the
+# bytes to key_feed keeps a sequence atomic, so either all of it is
+# discarded or none of it.
+# Keys that do resolve are dropped on purpose. A sequence still in flight
+# when the window closes keeps its parser state and is finished by the
+# next read_key, which is better than losing its tail.
+# CHANGE 2.0.0: the row-clear flash was the other caller until the clear
+# pause stopped holding the loop (CLAUDE.md 5.3). It drops its keys the
+# ordinary way now - read_key reads them, handle_key throws them away -
+# which keeps a sequence atomic for the same reason, one layer up.
 key_drain() {
     local ms="${1}" left b rc timeout
     now_ms

@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.1  (2026-09-09)
+# Version: 0.10.0  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -141,16 +141,24 @@ DEMO_FILE_EXT=".demo"
 # Version 3 (step 9.6) added the multiplayer: the session block of the
 # header, one event stream per participant and the checkpoints of what
 # the hub reported about them.
-DEMO_FORMAT_VERSION=3
-# The oldest version still read. Version 2 is the one deliberate
-# exception to "no backward compatibility" in this format (CLAUDE.md
-# 5.20/6, user decision), and it costs nothing: a singleplayer recording
-# of version 3 is written exactly as version 2 was - the whole
-# multiplayer section only exists in a versus recording - so a version 2
-# file is a version 3 file that could not have had one. Throwing away the
-# recordings the highscore entries hang off for a section they never
-# could have carried would be a loss without a gain.
-DEMO_FORMAT_MIN_VERSION=2
+# Version 4 (2.0.0) added "clearpause": the pause a lock that completed
+# rows buys them before they are taken away. It became a number a
+# recording has to carry when the row flash stopped holding the game loop
+# and turned into round state with a deadline (CLAUDE.md 5.3). A replay
+# has to wait exactly as long as the round it replays did - a build whose
+# own pause was tuned differently, or switched off, would otherwise clear
+# at a different moment than the recording says and drift away from its
+# own checkpoints.
+DEMO_FORMAT_VERSION=4
+# The oldest version still read - the same one, so nothing older is.
+# Versions 2 and 3 are gone rather than tolerated: the pause above is not
+# a section an older file simply lacks, it is a number the replay needs
+# to place every clear, and there is no honest value to invent for a file
+# that never carried one. That ends the one deliberate exception this
+# format used to make to "no backward compatibility" (CLAUDE.md 6, user
+# decision 2026-09-18) - older recordings are rejected on load with the
+# reason, like any other file this build does not read.
+DEMO_FORMAT_MIN_VERSION=4
 
 # How many recordings are kept. Ten like the highscore lists, and for the
 # same reason: it is the number a player still finds their way around in.
@@ -283,8 +291,13 @@ DEMO_V_MS=1000
 # --- Playback state -------------------------------------------------------
 # DEMO_PLAYING is read outside this module: queue_fill (lib/pieces.sh)
 # takes its pieces from the recorded stream instead of the bag while it is
-# set, record_round (rowhammer.sh) refuses to bank a replayed round, and
-# the renderer (lib/render.sh) shows the speed and the end-of-demo box.
+# set, and the renderer (lib/render.sh) shows the speed and the
+# end-of-demo box.
+# CHANGE 2.0.0: it no longer holds record_round off. A replay used to
+# reach the books through the very game functions it replays, and the
+# guard there was the answer; since the round logic stopped closing books
+# at all (CLAUDE.md 5.3), the playback loop below simply never asks for
+# them - which is a boundary rather than a veto.
 DEMO_PLAYING=0
 DEMO_ENDED=0
 DEMO_SPEED_IDX="${DEMO_SPEED_DEFAULT}"
@@ -345,14 +358,15 @@ DEMO_CK_CUR=()
 # rather than only a run that was not.
 DEMO_CK_OK=0
 DEMO_CK_BAD=0
-# The seat currently being simulated, and whether it is the focus. The
-# second one is read by flash_rows (rowhammer.sh): the row flash holds
-# the whole loop for its ~280 ms, so it runs for the seat on screen and
-# nowhere else - blinking for five boards would stop the replay five
-# times per clear. It is 1 outside a playback, where there is only ever
-# the one board the player is looking at.
+# The seat currently being simulated.
+# CHANGE 2.0.0: the companion flag DEMO_SIM_FOCUS is gone. It told the
+# row flash to run for the seat on screen and nowhere else, because the
+# flash held the whole loop for its ~280 ms and blinking for five boards
+# would have stopped the replay five times per clear. The clear pause
+# that replaced it is round state, so every seat carries one of its own
+# and none of them stops anything (CLAUDE.md 5.3); which board is drawn
+# was never the flash's business to decide.
 DEMO_SIM_SLOT=0
-DEMO_SIM_FOCUS=1
 
 # --- The loaded event streams ---------------------------------------------
 # A recording holds one stream per participant: "e=" fills stream 0,
@@ -403,6 +417,11 @@ DEMO_HDR_MODE="marathon"
 DEMO_HDR_DATE=""
 DEMO_HDR_TIME=0
 DEMO_HDR_ROWS=0
+# The pause a clear rested for in the recorded round, in milliseconds
+# (format 4, see DEMO_FORMAT_VERSION). Fed to CLEAR_PAUSE_MS for the
+# length of the playback, so every clear of the replay waits exactly as
+# long as it did in the round - whatever this build's own constant says.
+DEMO_HDR_CLEARPAUSE=0
 DEMO_HDR_END="quit"
 # The session block of a versus recording, empty for every other mode.
 # DEMO_HDR_MP is what tells the two apart everywhere below - a reader
@@ -1029,6 +1048,10 @@ demo_record_finish() {
         "name=${PLAYER_NAME}"
         "date=$(date '+%Y-%m-%d %H:%M')"
         "time=${PLAY_MS}"
+        # The pause every clear of this round rested for (format 4). A
+        # property of the round, not of whoever watches it later, so it
+        # travels with the recording - see DEMO_FORMAT_VERSION.
+        "clearpause=${CLEAR_PAUSE_MS}"
     )
     # The session block, and only in a versus recording - which is what
     # keeps a singleplayer recording of this version exactly what it was
@@ -1308,6 +1331,7 @@ demo_header_read() {
     DEMO_HDR_DATE=""
     DEMO_HDR_TIME=0
     DEMO_HDR_ROWS=0
+    DEMO_HDR_CLEARPAUSE=-1
     DEMO_HDR_END=""
     DEMO_HDR_MP=0
     DEMO_HDR_LENGTH=-1
@@ -1354,6 +1378,14 @@ demo_header_read() {
             rows)
                 [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad rows" "${val}"; return 1; }
                 DEMO_HDR_ROWS=$(( 10#${val} ))
+                ;;
+            # How long a clear rested in the round this file holds
+            # (format 4). Zero is a legal value and means the round was
+            # played with the animation off - a bot's round, or a build
+            # tuned that way - so the replay clears on the spot.
+            clearpause)
+                [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad clearpause" "${val}"; return 1; }
+                DEMO_HDR_CLEARPAUSE=$(( 10#${val} ))
                 ;;
             lines)
                 [[ "${val}" =~ ${DEMO_NUM_RE} ]] || { demo_reject "bad lines" "${val}"; return 1; }
@@ -1432,6 +1464,14 @@ demo_header_read() {
     if [ -z "${DEMO_HDR_MODE}" ] || [ -z "${DEMO_HDR_END}" ] || \
        [ -z "${DEMO_HDR_DATE}" ]; then
         demo_reject "header is missing mode, end or date"
+        return 1
+    fi
+    # The clear pause is not optional in format 4: without it the replay
+    # would have to fall back on this build's own constant, which is
+    # exactly the guess the field exists to avoid (see
+    # DEMO_FORMAT_VERSION). Zero is a value, "absent" is not.
+    if [ "${DEMO_HDR_CLEARPAUSE}" -lt 0 ]; then
+        demo_reject "header is missing clearpause"
         return 1
     fi
     if [ "${DEMO_HDR_MODE}" = "versus" ]; then
@@ -1628,9 +1668,9 @@ demo_load() {
             # stream would otherwise pass unread: a file that has one is
             # not a recording this game wrote, and is rejected rather
             # than half-read.
-            version|game|mode|name|date|time|length|lines|rows|level|gold| \
-            silver|rowhammers|pieces|goal|end|players|slot|mpmode|garbage| \
-            winner|peer)
+            version|game|mode|name|date|time|clearpause|length|lines|rows| \
+            level|gold|silver|rowhammers|pieces|goal|end|players|slot| \
+            mpmode|garbage|winner|peer)
                 [ "${body}" -eq 0 ] || { demo_reject "header key '${key}' behind the stream"; return 1; }
                 ;;
             *) demo_reject "unknown key" "${key}"; return 1 ;;
@@ -1734,7 +1774,6 @@ demo_focus_set() {
     DEMO_FOCUS="${slot}"
     MP_SLOT="${slot}"
     DEMO_SIM_SLOT="${slot}"
-    DEMO_SIM_FOCUS=1
     state_bind "${slot}" || return 1
     demo_focus_sync
     # The play clock is round state (STATE_VARS), so every seat carries
@@ -2032,15 +2071,13 @@ demo_events_left() {
 # rebuilding a frame fifty times a second for a picture that did not
 # change would cost more than the round itself.
 demo_step() {
-    local slot cur n did=0
+    local slot cur n did=0 pause_due ev_due
     for slot in "${DEMO_SEATS[@]}"; do
         [ "${DEMO_NEXT_MS[slot]}" -ge 0 ] || continue
         [ "${DEMO_NEXT_MS[slot]}" -le "${DEMO_CLOCK_MS}" ] || continue
         demo_stream_bind "${slot}" || continue
         state_bind "${slot}" || continue
         DEMO_SIM_SLOT="${slot}"
-        DEMO_SIM_FOCUS=0
-        [ "${slot}" -ne "${DEMO_FOCUS}" ] || DEMO_SIM_FOCUS=1
         cur="${DEMO_CUR[slot]}"
         n="${DEMO_EV_N[slot]}"
         # A checkpoint that holds for the position this seat is already
@@ -2049,7 +2086,38 @@ demo_step() {
         demo_verify "${slot}" "${cur}"
         # Everything due by now, in order. A single pass may cover
         # several events - a burst of inputs, or a slow terminal.
-        while [ "${cur}" -lt "${n}" ] &&               [ "${DEMO_EV_T[cur]}" -le "${DEMO_CLOCK_MS}" ]; do
+        # Two kinds of thing can be due for a seat since 2.0.0, and they
+        # are taken strictly in time order: the next recorded event, and
+        # the end of a clear pause this seat is resting in (CLAUDE.md
+        # 5.3). Interleaved rather than one after the other because the
+        # order decides the outcome - a garbage line that arrives during
+        # the pause has to be queued against the board the clear has not
+        # been taken out of yet, exactly as it was in the round.
+        # ROUND_NOW_MS is set to the due time itself rather than to the
+        # loop's clock, so a clear of the replay resolves at the very
+        # millisecond it resolved at in the round, however coarsely the
+        # playback loop happens to be ticking.
+        while :; do
+            pause_due=-1
+            if [ "${CLEAR_PENDING}" -eq 1 ]; then
+                pause_due=$(( CLEAR_START_MS + CLEAR_PAUSE_MS ))
+            fi
+            ev_due=-1
+            if [ "${cur}" -lt "${n}" ]; then
+                ev_due="${DEMO_EV_T[cur]}"
+            fi
+            if [ "${pause_due}" -ge 0 ] && \
+               [ "${pause_due}" -le "${DEMO_CLOCK_MS}" ] && \
+               { [ "${ev_due}" -lt 0 ] || [ "${pause_due}" -le "${ev_due}" ]; }; then
+                ROUND_NOW_MS="${pause_due}"
+                if ! clear_pause_step; then
+                    clear_and_continue
+                fi
+                continue
+            fi
+            [ "${ev_due}" -ge 0 ] || break
+            [ "${ev_due}" -le "${DEMO_CLOCK_MS}" ] || break
+            ROUND_NOW_MS="${ev_due}"
             demo_apply "${DEMO_EV_A[cur]}"
             cur=$(( cur + 1 ))
             # After each single event rather than after the burst: a
@@ -2060,11 +2128,23 @@ demo_step() {
             demo_verify "${slot}" "${cur}"
         done
         DEMO_CUR[slot]="${cur}"
+        # When this seat wants attention next: its own next event, the
+        # end of a clear pause it is resting in, or whichever of the two
+        # comes first. A seat resting on a clear is never "done" - the
+        # rows are still on its board and somebody has to take them away
+        # (this is also what keeps demo_events_left from calling the
+        # replay finished while a clear is still standing).
+        ev_due=-1
         if [ "${cur}" -lt "${n}" ]; then
-            DEMO_NEXT_MS[slot]="${DEMO_EV_T[cur]}"
-        else
-            DEMO_NEXT_MS[slot]=-1
+            ev_due="${DEMO_EV_T[cur]}"
         fi
+        if [ "${CLEAR_PENDING}" -eq 1 ]; then
+            pause_due=$(( CLEAR_START_MS + CLEAR_PAUSE_MS ))
+            if [ "${ev_due}" -lt 0 ] || [ "${pause_due}" -lt "${ev_due}" ]; then
+                ev_due="${pause_due}"
+            fi
+        fi
+        DEMO_NEXT_MS[slot]="${ev_due}"
         # The focus is drawn from the round state itself; only the others
         # go through the peer tables.
         if [ "${slot}" -ne "${DEMO_FOCUS}" ]; then
@@ -2072,13 +2152,11 @@ demo_step() {
         fi
         did=1
     done
-    # Back to the focus unconditionally: the flash flag must never be
-    # left on a seat that is not the one on screen, whatever went wrong
-    # in the loop above. The round state itself only has to be put back
-    # when it really moved, which is exactly when something was applied -
-    # nothing between the bind and "did" can fail.
+    # Back to the focus unconditionally, whatever went wrong in the loop
+    # above. The round state itself only has to be put back when it
+    # really moved, which is exactly when something was applied - nothing
+    # between the bind and "did" can fail.
     DEMO_SIM_SLOT="${DEMO_FOCUS}"
-    DEMO_SIM_FOCUS=1
     if [ "${did}" -eq 1 ]; then
         state_bind "${DEMO_FOCUS}" || return 1
         return 0
@@ -2148,9 +2226,6 @@ demo_play_states_build() {
 # a live round runs on take their place again (state_unbind). Called on
 # every path out of demo_play, and harmless when nothing was built.
 demo_play_states_release() {
-    # The row flash is on again for whatever runs next: outside a
-    # playback there is only ever the one board being looked at.
-    DEMO_SIM_FOCUS=1
     [ "${DEMO_STATES}" -eq 1 ] || return 0
     state_release_all
     DEMO_STATES=0
@@ -2200,8 +2275,9 @@ demo_play_peers_end() {
 # demo_play FILE
 # Replay one recording. Runs its own loop instead of game_run: there is no
 # input to react to here, the timeline drives everything, and the round
-# must not be recorded, banked or ranked (record_round refuses while
-# DEMO_PLAYING is set).
+# must not be recorded, banked or ranked - this loop never calls
+# record_round, which since 2.0.0 is the whole of what keeps a replay off
+# the books (CLAUDE.md 5.3).
 # Controls: the pause key toggles the replay (reusing the game's PAUSED
 # flag and therefore its box), left/right move the focus from seat to
 # seat, up/"+" and down/"-" step through DEMO_SPEEDS, the quit key or
@@ -2210,11 +2286,18 @@ demo_play_peers_end() {
 # to follow them through the round again.
 # The clock advances by the real time between two loop passes, scaled by
 # the speed, and events are applied when it passes their timestamp. The
-# row flash inside lock_and_next scales along with it (see flash_rows),
-# so the pacing holds at every speed.
+# clear pause a lock arms runs on that same clock and therefore scales
+# with it for free (demo_step) - before 2.0.0 the row flash ran on real
+# time and had to be scaled by hand to keep the pacing at every speed.
 demo_play() {
     local file="${1}"
     local last_real delta restart scaled rem
+    # The clear pause of this build, put aside for the length of the
+    # playback: while a recording is being watched, its own pause is the
+    # one that counts (DEMO_HDR_CLEARPAUSE, format 4). Restored on every
+    # path out of here, next to demo_play_states_release - the live round
+    # after it pauses by its own constant again.
+    local clear_pause_saved="${CLEAR_PAUSE_MS}"
     if ! demo_load "${file}"; then
         i18n_lines demo_invalid
         menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
@@ -2228,6 +2311,7 @@ demo_play() {
         return 1
     fi
     DEMO_TIMELINE_MS="${DEMO_HDR_LENGTH}"
+    CLEAR_PAUSE_MS="${DEMO_HDR_CLEARPAUSE}"
     # A versus recording plays every seat: the opponents get the session
     # dress the renderer reads, and the loop below walks all of their
     # streams. A singleplayer recording walks the one stream it has, by
@@ -2264,6 +2348,7 @@ demo_play() {
             debug_event "demo: could not build the round state of ${file}"
             demo_play_states_release
             demo_play_peers_end
+            CLEAR_PAUSE_MS="${clear_pause_saved}"
             DEMO_PLAYING=0
             i18n_lines demo_invalid
             menu_message "${I18N[demo_title]}" "${I18N_LINES[@]}"
@@ -2325,6 +2410,7 @@ demo_play() {
                     DEMO_ENDED=0
                     demo_play_states_release
                     demo_play_peers_end
+                    CLEAR_PAUSE_MS="${clear_pause_saved}"
                     return 0
                     ;;
                 r)
@@ -2360,6 +2446,25 @@ demo_play() {
                 # did not change would cost more than the round itself.
                 if demo_step; then
                     DIRTY=1
+                fi
+                # The blink of the seat on screen, between the moment its
+                # clear pause was armed and the moment demo_step resolves
+                # it. demo_step visits a seat only when something of its
+                # own is due, which is the right rule for the simulation
+                # and too coarse for an animation - so the focus, which
+                # is bound right now, gets its half cycles here (2.0.0,
+                # CLAUDE.md 5.3). clear_pause_step raises DIRTY itself
+                # when the highlight really changed. The deadline can no
+                # longer be reached at this point, demo_step above just
+                # ran on the same clock, but it is handled rather than
+                # assumed away: a pause dropped here would leave the rows
+                # standing on the board for good.
+                if [ "${CLEAR_PENDING}" -eq 1 ]; then
+                    ROUND_NOW_MS="${DEMO_CLOCK_MS}"
+                    if ! clear_pause_step; then
+                        clear_and_continue
+                        DIRTY=1
+                    fi
                 fi
                 # The HUD reads PLAY_MS; feeding it the demo clock makes
                 # the time counter (and the Sprint countdown) run like it

@@ -34,7 +34,7 @@
 #   4. state_bind OTHER - switch to another slot (no unbinding needed).
 #   5. state_release SLOT - drop a slot's variables when it is done.
 #
-# Version: 1.1.0  (2026-09-02)
+# Version: 1.2.0  (2026-09-18)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -56,10 +56,14 @@ fi
 #     and the one screen, not to a round - a playback of five rounds still
 #     draws one picture and has one exit flag.
 #   - Values transient within a single lock: NEXT_TYPE (bag_next hands it
-#     to spawn_piece), FULL_ROWS and FLASH_ROWS (board_full_rows fills
-#     them, clear_lines and flash_rows consume them right after). They
+#     to spawn_piece) and FULL_ROWS (board_full_rows fills it,
+#     clear_pause_arm copies what it needs out of it right after). They
 #     never survive the function that produced them, so a slot cannot
 #     carry them across a context switch either.
+#     FLASH_ROWS was one of them until 2.0.0 and is round state now: the
+#     clear pause it belongs to spans ticks since the row flash stopped
+#     holding the loop (CLAUDE.md 5.3), and in a playback five seats can
+#     be resting on a clear at the same time.
 #   - Everything the player configured (keys, colours, name) and every
 #     tuning constant (LEVEL_SPEEDS, ULTRA_TARGET_ROWS, ...): the same for
 #     every slot by definition.
@@ -107,6 +111,16 @@ STATE_VARS=(
     s:TOUCHDOWN_MS
     s:PLAY_MS
     s:PLAY_LAST
+    # The clear pause: whether this board is resting on a completed row,
+    # when that rest started (in the clock of whoever drives the round,
+    # ROUND_NOW_MS) and which rows are blinking meanwhile. Round state
+    # since 2.0.0, when the row flash stopped holding the loop - a
+    # playback simulates every seat, and every one of them can be resting
+    # on a clear of its own (CLAUDE.md 5.3).
+    s:CLEAR_PENDING
+    s:CLEAR_START_MS
+    A:FLASH_ROWS
+    s:FLASH_STATE
     # Mode state: the Time Attack budget and the play time the next flood
     # row of a Hochwasser round is due at.
     s:TIME_ATTACK_BUDGET_MS

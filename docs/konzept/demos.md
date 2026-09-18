@@ -153,10 +153,16 @@ Entscheidungen dahinter:
   bevor `game_reset` die neue beginnt, liegt sie danach als fertige
   Aufnahme vor und die neue Runde zeichnet von vorn auf - ohne dass die
   Demo-Schicht diesen Weg kennen muesste.
-- **Die Blink-Animation skaliert mit** (`flash_rows`): sie laeuft auf
-  echter Zeit, waehrend die Wiedergabe auf der Demo-Uhr laeuft. Bliebe
-  sie ungeskaliert, wuerde bei 4x nach jedem Reihenabbau ein Stueck
-  Demo-Zeit verschluckt und die naechsten Ereignisse kaemen im Schwall.
+- **Die Blink-Animation laeuft auf der Demo-Uhr** und skaliert damit von
+  selbst: die Pause nach einem Clear ist Rundenzustand mit einer Frist,
+  und die Wiedergabe stempelt diese Frist in derselben Uhr, in der sie
+  die Ereignisse anwendet (`ROUND_NOW_MS`, siehe 5.3). Bei 4x dauert
+  eine 280-ms-Pause 70 ms Echtzeit und endet trotzdem genau bei
+  280 Demo-Millisekunden.
+  _Vorzustand bis 1.5.1: `flash_rows` lief auf echter Zeit und musste
+  von Hand mit `DEMO_SPEED` heruntergerechnet werden, sonst verschluckte
+  jeder Reihenabbau bei hohem Tempo ein Stueck Demo-Zeit und die
+  naechsten Ereignisse kamen im Schwall._
 - **Die Aufzeichnung aendert das Spiel nicht.** `demo_record_event`
   rechnet den Zeitstempel so aus, wie `play_clock_tick` es taete,
   schreibt ihn aber nicht in die Spieluhr zurueck - `PLAY_MS` treibt die
@@ -175,13 +181,13 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 (`DEMO_*_RE`). Erst der Kopf, dann die Steinfolge, dann die Ereignisse:
 
 ```
-version=3            Formatversion (2 und 3 werden gelesen, 3 wird
-                     geschrieben - siehe unten)
-game=0.52.0          Spielversion, die aufgenommen hat (nur Info)
+version=4            Formatversion (nur 4 wird gelesen - siehe unten)
+game=2.0.0           Spielversion, die aufgenommen hat (nur Info)
 mode=marathon        marathon|ultra|sprint|timeattack|flood|versus
 name=Player          Spielername
 date=2026-08-03 21:40
 time=123456          Spielzeit der Runde in Millisekunden
+clearpause=280       wie lange ein Clear dieser Runde geruht hat, in ms
 lines=42 rows=98 level=4 gold=1 silver=2 rowhammers=1 pieces=57
 goal=0               ob das Modus-Ziel erreicht wurde
 end=over             over|goal|quit|lost - wie die Runde endete
@@ -215,18 +221,32 @@ korrekt ablaufen, aber die Regel "keine Abwaertskompatibilitaet" gilt
 auch hier, und genau die Frage, welche alten Versionen nahe genug sind,
 soll diese eine Zahl ersparen.
 
-**Version 3** kam mit dem Mehrspieler und ist die eine
-Stelle, an der das Format doch kulant ist: gelesen werden **2 und 3**
-(`DEMO_FORMAT_MIN_VERSION`), geschrieben wird 3. Das ist die bewusste,
-eng begrenzte Ausnahme von der Arbeitsregel (Abschnitt 6,
-Nutzerentscheidung, so schon in 5.20 vorgesehen), und sie kostet nichts:
-eine **Einzelspieler-Aufnahme der Version 3 ist byteweise die der
-Version 2** - der ganze Sitzungsblock existiert nur in einer
-Versus-Aufnahme -, eine Version-2-Datei ist also eine Version-3-Datei
-ohne einen Abschnitt, den sie gar nicht haben konnte. Die Aufnahmen, an
-denen Highscore-Eintraege haengen, dafuer wegzuwerfen waere ein Verlust
-ohne Gegenwert. Umgekehrt gilt die Strenge weiter: eine hoehere Version
-faellt heraus, und eine Datei, die `mode=versus` in einer Version ohne
+**Version 3** kam mit dem Mehrspieler: Sitzungsblock, ein Ereignisstrom
+je Teilnehmer und die Checkpoints (5.20).
+
+**Version 4** (2.0.0) kam mit `clearpause` - der Laenge der Pause, die
+ein Clear in dieser Runde geruht hat (5.3). Sie musste ins Format, weil
+die Pause mit der Entkopplung der Rundenlogik zu einer Frist wurde, die
+die Wiedergabe selbst einhalten muss: haette sie die eigene Konstante
+des zuschauenden Programms genommen, raeumte eine Wiedergabe die Reihen
+zu einem anderen Zeitpunkt ab als die Runde und liefe von deren eigenen
+Checkpoints weg. Eine Aufnahme sagt darum selbst, wie lange sie wartet -
+`0` ist ein gueltiger Wert und heisst "ohne Animation gespielt".
+
+Mit Version 4 endet zugleich die **eine Ausnahme**, die dieses Format
+von der Arbeitsregel "keine Abwaertskompatibilitaet" (Abschnitt 6)
+machte: bis 1.5.1 wurden 2 und 3 gelesen, weil eine
+Einzelspieler-Aufnahme der Version 3 byteweise die der Version 2 war und
+das Verwerfen der Aufnahmen, an denen Highscore-Eintraege hingen, ein
+Verlust ohne Gegenwert gewesen waere. Bei `clearpause` liegt es anders:
+das ist kein Abschnitt, den eine aeltere Datei nicht haben konnte,
+sondern eine Zahl, die die Wiedergabe braucht - und es gibt keinen
+ehrlichen Wert, den man fuer eine Datei ohne sie erfinden koennte.
+Gelesen wird deshalb **nur noch 4** (`DEMO_FORMAT_MIN_VERSION`,
+Nutzerentscheidung 2026-09-18); aeltere Aufnahmen werden beim Laden mit
+Begruendung abgewiesen wie jede andere Datei, die dieses Programm nicht
+liest. Umgekehrt gilt die Strenge weiter: eine hoehere Version faellt
+heraus, und eine Datei, die `mode=versus` in einer Version ohne
 Sitzungsblock behauptet, ebenfalls - das ist keine kurze Aufnahme,
 sondern eine bearbeitete Datei.
 

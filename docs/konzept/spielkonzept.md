@@ -162,23 +162,33 @@ Die fuer uns relevanten Merkmale des Originals:
   werden dann entfernt. Die Reihen werden vor dem Abbau ermittelt
   (`board_full_rows` in `lib/board.sh`), die Animation wechselt
   `FLASH_CYCLES`-mal zwischen hell hervorgehobener und normaler
-  Darstellung (`FLASH_ROWS`/`FLASH_STATE` in `lib/render.sh`, gesteuert
-  von `flash_rows` in `rowhammer.sh`; Standard 2 Zyklen a 2x70 ms =
-  rund 280 ms, justierbar in `FLASH_MS`/`FLASH_CYCLES`,
-  `FLASH_CYCLES=0` schaltet die Animation ab). Die Quadrat-Erkennung
-  laeuft vorher, sodass eine Reihe durch ein frisch gebildetes Quadrat
-  bereits in ihrer Gold-/Silber-Wertigkeit blinkt. Die Animation haelt
-  den Game-Loop fuer ihre Dauer an (das naechste Teil erscheint erst
-  danach); Tastendruecke waehrend des Blinkens werden bewusst verworfen,
-  damit sie nicht gesammelt auf dem neuen Stein losgehen. Das Warten
-  nutzt wie der uebrige Loop ein `read` mit Timeout (kein `sleep`-Fork),
-  und zwar ueber `key_drain` (`lib/input.sh`, seit 0.23.0) statt eines
-  rohen `read`: `key_drain` schickt die Bytes durch denselben
-  Zustandsautomaten wie das Spiel (siehe 4.3) und verwirft nur die
-  fertig erkannten Tasten, sodass eine Escape-Sequenz entweder ganz oder
-  gar nicht geschluckt wird - ein Roh-Read koennte ihre Haelfte
-  schlucken und den Rest als eigene Taste durchreichen. Dieselbe
-  Funktion nutzt die "resize me"-Overlay.
+  Darstellung (`FLASH_ROWS`/`FLASH_STATE` in `lib/render.sh`; Standard
+  2 Zyklen a 2x70 ms = rund 280 ms, justierbar in
+  `FLASH_MS`/`FLASH_CYCLES`, `FLASH_CYCLES=0` schaltet die Animation
+  ab). Die Quadrat-Erkennung laeuft vorher, sodass eine Reihe durch ein
+  frisch gebildetes Quadrat bereits in ihrer Gold-/Silber-Wertigkeit
+  blinkt.
+  **Die Runde ruht fuer diese Zeit** - das naechste Teil erscheint erst
+  danach, nichts faellt, nichts sperrt, keine Flutreihe steigt und keine
+  Modus-Uhr beendet die Runde. Tastendruecke waehrend des Blinkens
+  werden bewusst verworfen, damit sie nicht gesammelt auf dem neuen
+  Stein losgehen.
+  Seit 2.0.0 ist diese Ruhe ein **Rundenzustand mit Frist**
+  (`CLEAR_PENDING`/`CLEAR_START_MS`, gesetzt von `clear_pause_arm`,
+  weitergedreht von `clear_pause_step`, abgeschlossen von
+  `clear_and_continue` - alle in `rowhammer.sh`), genau wie das Lock
+  Delay darueber. Der Game-Loop dreht sie weiter und laeuft dabei
+  normal; die Tasten werden auf dem gewohnten Weg gelesen und in
+  `handle_key` verworfen, sodass eine Escape-Sequenz entweder ganz oder
+  gar nicht geschluckt wird. Die Halbzyklen werden aus der verstrichenen
+  Zeit abgeleitet statt je Durchlauf einen weiterzuzaehlen: ein langsamer
+  Durchlauf springt damit in den Halbzyklus, in dem er wirklich steckt,
+  und die Pause bleibt die 280 ms, die sie verspricht (gemessen: 282 ms).
+  _Vorzustand bis 1.5.1: `flash_rows` spielte die Animation an Ort und
+  Stelle ab und hielt den Game-Loop dafuer an; gewartet wurde mit
+  `key_drain` (`lib/input.sh`), das die Bytes durch denselben
+  Zustandsautomaten schickte wie das Spiel. Das war der Grund, warum die
+  Rundenlogik nicht ohne Bildschirm laufen konnte (siehe 5.3)._
 
 ### 3.2 Quadrat-System (Gold/Silber)
 

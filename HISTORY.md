@@ -112,6 +112,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 1.4.3 | Demo-Tempo auch auf Pfeil hoch/runter, damit eine Einzelspieler-Wiedergabe wieder Pfeiltasten hat | 3.8, 5.20 |
 | 1.5.0 | Speicherort der Spieldaten im Einstellungsmenue verlegbar, mit Zeigerdatei und Sicherung | 4.12 |
 | 1.5.1 | Verbesserungen bei der Vollbildanzeige | - |
+| 2.0.0 | Rundenlogik vollstaendig entkoppelt: Clear-Pause als Rundenzustand, Buchung beim Treiber der Runde; Demo-Format 4. Phase 5 abgeschlossen | 3.1, 4.10, 5.3, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2047,6 +2048,9 @@ folgten mit `1.4.0` (eigener Abschnitt unten).
       Kopfzeilen hinter dem Strom, Version zu alt und zu neu sowie
       ANSI-Sequenzen, `$(...)`, Backticks und eine 100-kB-Zeile: jede
       mit ihrem Grund im Debug-Log abgewiesen, kein Befehl ausgefuehrt.
+      _Spaeter ueberholt: 2.0.0 schreibt Format 4 und liest nur noch
+      dieses - die Kulanz fuer Version 2 ist damit beendet, siehe
+      dort und 4.10._
       Eine Format-2-Aufnahme und eine Einzelspieler-Aufnahme der Version
       3 spielen unveraendert.
 - [x] **9.9 Wiedergabe: Zustaende aufbauen.** Je Sitzplatz ein Zustand,
@@ -2500,6 +2504,110 @@ vier ungueltigen Pfadformen und eine defekte Zeigerdatei (Meldung auf
 STDERR, Rueckfall auf den Standardpfad). Nach einem Neustart standen
 Wunderfortschritt (8500 Reihen) und Bestenliste am neuen Ort, und
 `--reset save --force` traf das verlegte Verzeichnis.
+
+## Rundenlogik entkoppelt - Phase 5 abgeschlossen (umgesetzt, Version 2.0.0)
+
+Der letzte offene Punkt der Mehrspieler-Phase 5: die Rundenlogik laeuft
+jetzt **ohne Bildschirm und ohne Tastatur** (5.3). Zwei Stellen brachen
+das bisher, und beide sind umgebaut.
+
+**Die Blink-Animation ist eine Pause mit Frist geworden.** `flash_rows`
+spielte die Animation an Ort und Stelle ab: es zeichnete, las die
+Tastatur und leerte nebenher den Mehrspieler-Link - aus einer Funktion
+heraus, die mitten im Sperren eines Steins steht - und hielt den Loop
+dafuer rund 280 ms an. An seine Stelle treten drei Teile:
+`lock_and_next` sperrt und schaltet ueber `clear_pause_arm` die Pause
+scharf, `clear_pause_step` dreht sie weiter, `clear_and_continue` raeumt
+die Reihen ab und macht den Rest. Dazwischen liegt nichts als eine
+Frist, die derselbe Loop weiterdreht, der auch das Lock Delay
+weiterdreht - `CLEAR_PENDING`/`CLEAR_START_MS` neben
+`LOCK_PENDING`/`TOUCHDOWN_MS`, gemessen an `ROUND_NOW_MS`, der Uhr
+dessen, der die Runde gerade treibt.
+_Vorzustand: `flash_rows` in `rowhammer.sh`, mit `draw_frame`,
+`key_drain` und `mp_poll` im Rumpf._
+
+**Gebucht wird von dem, der die Runde treibt.** `record_round` wurde aus
+der Rundenlogik heraus gerufen - beim Ultra-Ziel, beim Top-Out, an den
+drei Enden des Hochwasser-Modus - und musste sich deshalb mit einem
+`DEMO_PLAYING`-Guard gegen die eigene Wiedergabe wehren. Jetzt setzt die
+Rundenlogik nur noch `GAME_OVER` bzw. `GOAL_REACHED`, und der Game-Loop
+bucht am Ende des Ticks (im Mehrspieler weiterhin erst bei `END`, 5.8).
+`record_round` selbst ist die Praesentationshaelfte geblieben
+(Namensabfrage, Reihenfolge), die reine Buchhaltung steht daneben in
+`round_book`.
+_Vorzustand: sechs `record_round`-Aufrufe in der Rundenlogik und der
+Guard, der sie fuer eine Wiedergabe wirkungslos machte._
+
+**Was dabei ersatzlos wegfaellt** - jedes Stueck davon war eine Kruecke
+fuer genau diese Kopplung:
+
+- der `DEMO_PLAYING`-Guard in `record_round` (eine Wiedergabe ruft die
+  Funktion gar nicht mehr),
+- `DEMO_SIM_FOCUS`, das der Animation sagte, nur fuer den Sitz auf dem
+  Bildschirm zu laufen (5.20),
+- die Handrechnung, die die Animation mit `DEMO_SPEED` herunterskalierte
+  (die Pause laeuft jetzt ohnehin auf der Demo-Uhr),
+- `mp_poll` innerhalb der Animation: die Leitung wird durch die normalen
+  Ticks geleert, bei 20 ms Tick rund 14-mal je Pause statt 4-mal.
+
+Der Test-Bot (`--mp-bot`) schaltet weiter ab, was er nicht braucht, aber
+jetzt ueber `CLEAR_PAUSE_MS=0` statt `FLASH_CYCLES=0` - die Pausenlaenge
+wird einmal beim Laden abgeleitet, und seine eigene Schleife treibt
+keine Frist weiter. Ohne das waere er nach dem ersten Reihenabbau
+stehengeblieben.
+
+**Sichtbare Wirkung, entgegen der urspruenglichen Annahme.** Der Punkt
+stand in TODO.md als "Aufraeumarbeit ohne sichtbare Wirkung". Zwei
+Stellen sind es doch: die Halbzyklen laufen nun im Raster des Loops
+(20 ms), und die Tasten der Pause werden auf dem gewohnten Weg gelesen
+statt von `key_drain`. Damit die Pause die 280 ms bleibt, die sie
+verspricht (Nutzervorgabe: Jitter so klein wie moeglich), leitet
+`clear_pause_step` den Halbzyklus aus der **verstrichenen Zeit** ab,
+statt je Durchlauf einen weiterzuzaehlen: ein langsamer Durchlauf
+springt in den Halbzyklus, in dem er wirklich steckt, und der Fehler
+summiert sich nicht ueber die vier Halbzyklen auf. Gemessen an einer
+echten Runde: 282 ms statt 280.
+
+**Demo-Format 4.** Die Pause ist damit eine Frist, die eine Wiedergabe
+selbst einhalten muss - also muss sie wissen, wie lang sie war. Eine
+Aufnahme traegt sie als `clearpause` im Kopf (4.10); die Wiedergabe
+setzt `CLEAR_PAUSE_MS` fuer ihre Dauer darauf. Haette sie stattdessen
+die Konstante des zuschauenden Programms genommen, raeumte sie die
+Reihen zu einem anderen Zeitpunkt ab als die aufgezeichnete Runde und
+liefe von deren eigenen Checkpoints weg. `demo_step` behandelt die Frist
+je Sitz als Faelligkeitstermin neben den Ereignissen - beide in
+`DEMO_NEXT_MS[slot]`, der fruehere zuerst -, weil die Reihenfolge ueber
+das Ergebnis entscheidet: eine Stoerreihe, die waehrend der Pause
+ankommt, gehoert in das Brett, aus dem der Clear noch nicht heraus ist.
+Nebenbei raeumt damit **jeder** Sitz seine Reihen dann ab, wann sein
+echter Client es tat, statt wie bisher 280 ms zu frueh.
+
+Mit Version 4 endet die eine Ausnahme, die dieses Format von der
+Arbeitsregel "keine Abwaertskompatibilitaet" machte: gelesen wird nur
+noch 4, die Formate 2 und 3 werden beim Laden mit Begruendung
+abgewiesen. Begruendung in 4.10; Nutzerentscheidung vom 2026-09-18, auf
+die Frage hin, ob ein sauberes neues Format den alten vorzuziehen sei.
+
+Abnahme: `bash -n` ueber den ganzen Baum und die ASCII-Pruefung ohne
+Befund, `tools/release.sh --mode check` ebenso; `tools/state-check.sh`
+(68 Pruefungen unveraendert - es vergleicht STATE_VARS gegen
+`game_reset`, und die vier neuen Zustandsnamen stehen in beiden),
+`tools/key-scan.sh` (72, auch mit Byte-Luecke), `tools/net-fuzz.sh`,
+`tools/demo-keys.sh` und `tools/display-check.py` ohne Befund.
+ShellCheck auf Error-Stufe ueber den ganzen Baum ohne Befund.
+Dazu an einem Pseudo-Terminal gefahren: eine Marathon-Runde mit drei
+abgebauten Reihen - die Pause im Debug-Log 282 ms vor dem Abbau, die
+Runde beim Top-Out vom Loop verbucht, Namensabfrage und Ergebniskasten
+wie zuvor. Deren Aufnahme (Format 4, `clearpause=280`) wiedergegeben:
+dieselben drei Reihen, dieselben 12509 ms, die Pause auf der Demo-Uhr
+bei `at=3547`; bei 4x-Tempo dieselben Demo-Zeitstempel bei einem Viertel
+der Echtzeit. Eine auf Version 3 zurueckgeschriebene Datei wird mit
+"format version 3 is not read by this build" abgewiesen, ohne die
+Demo-Liste zu stoeren. Mehrspieler ueber einen Unix-Socket: Hub mit zwei
+Bots spielte eine Survival-Runde bis zum KO und beendete sie sauber
+(kein Bot blieb an einer Pause haengen); eine Versus-Runde aus Hub, Bot
+und echtem Client aufgezeichnet und wiedergegeben - "checkpoints 5
+matched, 0 diverged".
 
 ## Verbesserungen bei der Vollbildanzeige (umgesetzt, Version 1.5.1)
 
