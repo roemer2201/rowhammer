@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.11.0  (2026-09-18)
+# Version: 0.11.1  (2026-09-19)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -593,6 +593,15 @@ demo_record_piece() {
 # it back - recording must never change how the round plays, and PLAY_MS
 # is what the Sprint mode and the HUD read. Only NOW_MS is refreshed,
 # which every caller in the game loop re-reads anyway.
+# It is the same timeline the round logic measures its own deadlines
+# against (round_clock_tick in rowhammer.sh keeps ROUND_NOW_MS on it),
+# and deliberately so: the clear pause a lock arms has to end at the same
+# moment in the round and in its replay (CLAUDE.md 5.3). What this player
+# does is therefore no longer stamped here at all but taken from
+# ROUND_NOW_MS itself (demo_record_event, 2.0.1) - the two would differ
+# by the millisecond that passes between the two calls. What is left for
+# this function are the moments nobody set the round clock for: the
+# events that come off the wire and the end of the timeline.
 DEMO_STAMP_MS=0
 demo_stamp() {
     if [ "${DEMO_MP}" -eq 1 ]; then
@@ -664,12 +673,25 @@ demo_slot_event() {
 # one. Not called while the round is paused (the game loop and handle_key
 # skip everything that could record then), so the stale PLAY_LAST of a
 # pause can never leak into a delta.
+# The moment is the round clock, not a stamp of this module's: what a
+# player does comes through round_event (rowhammer.sh), which has just
+# put "now" into ROUND_NOW_MS, and the deadline this very event may arm -
+# the clear pause of a lock that completed rows - is armed on that same
+# number. Taking a stamp again here would put the event one millisecond
+# behind the pause it armed, and the replay, which arms the pause at the
+# recorded timestamp, would end it one millisecond after the round did
+# (bugfix 2.0.1, CLAUDE.md 5.3). A whole tick's worth of that was the
+# first half of the same fault - see game_run.
+# The one caller that does not come through round_event is the flood row
+# of the Hochwasser mode (flood_raise, which the move stream has no
+# letter for): it is raised by the game loop straight after the same
+# round_clock_tick, so the clock is just as fresh there.
 demo_record_event() {
     local delta
     if [ "${DEMO_RECORDING}" -eq 0 ]; then
         return 0
     fi
-    demo_stamp
+    DEMO_STAMP_MS="${ROUND_NOW_MS}"
     if [ "${DEMO_MP}" -eq 1 ]; then
         # The checkpoint goes out BEFORE the event, not after it. Every
         # caller of round_event (rowhammer.sh) reports the action before
@@ -1965,10 +1987,13 @@ demo_apply_out() {
 # It is reported to the debug log and nowhere else: a watcher can do
 # nothing about it, and the log is where this game keeps its diagnoses
 # (CLAUDE.md 4.6).
-# Called after every applied event, so CUR is exactly the position a
-# checkpoint names. The loop is "<=" all the same: a hand-edited file
-# whose positions run backwards must not wedge the cursor - it then gets
-# a divergence note it has earned.
+# Called in front of every applied event and once more when the stream
+# runs out, always with the seat settled - no clear pause standing - so
+# CUR is exactly the position a checkpoint names and the state behind it
+# is the state the round had when it wrote the checkpoint (demo_step).
+# The loop is "<=" all the same: a hand-edited file whose positions run
+# backwards must not wedge the cursor - it then gets a divergence note it
+# has earned.
 # The seat's round state and its stream are bound by the caller
 # (demo_step), which is what makes the counters below the seat's own.
 demo_verify() {
@@ -2097,10 +2122,6 @@ demo_step() {
         DEMO_SIM_SLOT="${slot}"
         cur="${DEMO_CUR[slot]}"
         n="${DEMO_EV_N[slot]}"
-        # A checkpoint that holds for the position this seat is already
-        # at: the one before its first event, which is the only one that
-        # can be due without an event of this pass falling before it.
-        demo_verify "${slot}" "${cur}"
         # Everything due by now, in order. A single pass may cover
         # several events - a burst of inputs, or a slow terminal.
         # Two kinds of thing can be due for a seat since 2.0.0, and they
@@ -2132,17 +2153,35 @@ demo_step() {
                 fi
                 continue
             fi
+            # The seat has settled at this position: everything up to CUR
+            # has been applied and no clear stands between it and whatever
+            # comes next. That is the moment a checkpoint describes, so
+            # that is where it is compared.
+            # Before the event rather than after it, and only with the
+            # pause resolved (bugfix 2.0.1): a checkpoint names a position
+            # in the stream, and the round wrote it into the file in front
+            # of the next event it recorded (demo_own_checkpoint) - by
+            # which time the clear pause of the lock before it had ended
+            # and its rows were booked. Compared straight after the lock,
+            # as this used to be, a correct recording accused a correct
+            # replay of having diverged, because the replay had not taken
+            # the rows away yet. The counters of a peer come from a
+            # message and name a moment of their own, but they are laid
+            # out on the stream the same way, so the same point is the
+            # right one for them (CLAUDE.md 5.20).
+            # It costs a guard per event, which is nothing against the
+            # events themselves, and it is per event rather than per burst
+            # because comparing a checkpoint against a state two events
+            # further on would report a divergence the replay does not
+            # have.
+            if [ "${CLEAR_PENDING}" -eq 0 ]; then
+                demo_verify "${slot}" "${cur}"
+            fi
             [ "${ev_due}" -ge 0 ] || break
             [ "${ev_due}" -le "${DEMO_CLOCK_MS}" ] || break
             ROUND_NOW_MS="${ev_due}"
             demo_apply "${DEMO_EV_A[cur]}"
             cur=$(( cur + 1 ))
-            # After each single event rather than after the burst: a
-            # checkpoint names a position, and comparing it against a
-            # state two events further on would report a divergence the
-            # replay does not have. The call costs a guard per event,
-            # which is nothing against the events themselves.
-            demo_verify "${slot}" "${cur}"
         done
         DEMO_CUR[slot]="${cur}"
         # When this seat wants attention next: its own next event, the

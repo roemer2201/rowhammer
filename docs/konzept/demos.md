@@ -163,11 +163,15 @@ Entscheidungen dahinter:
   von Hand mit `DEMO_SPEED` heruntergerechnet werden, sonst verschluckte
   jeder Reihenabbau bei hohem Tempo ein Stueck Demo-Zeit und die
   naechsten Ereignisse kamen im Schwall._
-- **Die Aufzeichnung aendert das Spiel nicht.** `demo_record_event`
-  rechnet den Zeitstempel so aus, wie `play_clock_tick` es taete,
-  schreibt ihn aber nicht in die Spieluhr zurueck - `PLAY_MS` treibt die
-  Zeitmodi und das HUD, und eine laufende Aufnahme darf daran nichts
-  aendern.
+- **Die Aufzeichnung aendert das Spiel nicht.** Sie hat keine Uhr
+  eigener Art: `demo_record_event` stempelt mit `ROUND_NOW_MS`, der
+  Rundenuhr, die ihr Treiber ohnehin fuehrt (seit 2.0.1, siehe 5.3) -
+  in einer Versus-Runde die Rundenuhr des Hubs, sonst die Spielzeit.
+  Was vom Netz kommt und das Ende der Zeitachse stempelt `demo_stamp`
+  auf derselben Achse, nur ohne fremde Vorgabe. Damit tragen ein
+  Ereignis und die Frist, die es scharf schaltet, **dieselbe Zahl** -
+  die Bedingung dafuer, dass eine Wiedergabe die Clear-Pause dort
+  beendet, wo die Runde sie beendet hat.
 
 
 ### 4.10 Demo-Format und Ablage (seit 0.46.0)
