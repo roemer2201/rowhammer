@@ -487,6 +487,33 @@ umgebaut:
   sondern weil die Reihen dieses Clears erst von `clear_and_continue`
   verbucht werden und eine dort abgeschnittene Sprint- oder
   Time-Attack-Runde sie verloere. Tasten werden geschluckt wie zuvor.
+
+  **Die Uhr dieser Frist ist die der Aufnahme, und sie wird vor der
+  Taste gestellt** (seit 2.0.1). `round_clock_tick` fuehrt
+  `ROUND_NOW_MS` auf genau der Zeitachse, mit der eine Aufnahme ihre
+  Ereignisse stempelt (4.10): in einer Versus-Runde die Rundenuhr des
+  Hubs, sonst die Spielzeit der Runde, die bei einer Pause stehenbleibt.
+  Der Game-Loop stellt sie **vor** `handle_key` und loest eine faellige
+  Pause dort auf - an genau einer Stelle je Durchlauf. Beides entscheidet
+  darueber, ob eine Wiedergabe dieselbe Runde ergibt:
+
+  - Ein Hard Drop schaltet die Pause auf `ROUND_NOW_MS` scharf, und die
+    Aufnahme stempelt das Ereignis mit derselben Zahl
+    (`demo_record_event`). Stand die Uhr noch auf dem vorherigen
+    Durchlauf, begann die Pause der Runde bis zu einen Tick vor der
+    Pause ihrer Wiedergabe - und ein weiterer Hard Drop in dieser Luecke
+    setzte live schon den naechsten Stein, in der Wiedergabe noch einmal
+    den alten.
+  - `handle_key` schluckt jede Taste, solange die Runde ruht. Eine
+    Taste, die nach dem Faelligkeitstermin ankommt, muss die Pause
+    deshalb beendet vorfinden - was die Wiedergabe genauso haelt
+    (`demo_step` loest eine faellige Pause vor einem Ereignis desselben
+    Moments auf).
+
+  Wer eine Runde ohne Terminal treibt, treibt die Frist mit: der
+  Test-Bot (`--mp-bot`, `lib/mp.sh`) tut das seit 2.0.1 in seiner
+  eigenen Schleife, denn eine Aufnahme der Sitzung gilt fuer den ganzen
+  Tisch (5.20).
 - **Gebucht wird von dem, der die Runde treibt.** Die Rundenlogik setzt
   `GAME_OVER` bzw. `GOAL_REACHED` und sonst nichts; `record_round` ruft
   der Game-Loop am Ende des Ticks (im Mehrspieler weiterhin erst, wenn

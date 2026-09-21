@@ -425,9 +425,16 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
     vorwerfen.
 
   **Verglichen wird beim Abspielen** (`demo_verify` in `lib/demo.sh`,
-  gerufen aus `demo_step` nach jedem einzelnen angewandten Ereignis -
-  nach dem ganzen Schwung waere die Stellung schon zwei Ereignisse
-  weiter). Ein Cursor je Sitzplatz laeuft durch dessen Pruefpunkte, wie
+  gerufen aus `demo_step` je einzelnem Ereignis - nach dem ganzen
+  Schwung waere die Stellung schon zwei Ereignisse weiter). Verglichen
+  wird **vor** dem Ereignis und nur bei **ruhendem Sitzplatz**, also
+  ohne stehende Clear-Pause (seit 2.0.1): ein Pruefpunkt nennt eine
+  Position im Strom, und die Runde hat ihn vor das naechste Ereignis
+  geschrieben, das sie aufzeichnete - da war die Pause des Locks davor
+  abgelaufen und dessen Reihen verbucht (5.3). Gleich hinter dem Lock
+  verglichen, wirft eine korrekte Aufnahme einer korrekten Wiedergabe
+  eine Abweichung vor, weil die Wiedergabe die Reihen noch gar nicht
+  abgeraeumt hat. Ein Cursor je Sitzplatz laeuft durch dessen Pruefpunkte, wie
   einer durch dessen Ereignisse laeuft; stimmen die sechs Zahlen nicht,
   geht eine Zeile mit beiden Staenden ins Debug-Log (4.6), und am Ende
   der Wiedergabe eine mit der Bilanz - **auch ein sauberer Lauf sagt
@@ -437,7 +444,14 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
 - **Ein Test-Bot (`--mp-bot`) zeichnet nicht auf.** Seine Runden sind
   Testverkehr, und seine Aufnahmen laegen in einem Datenverzeichnis als
   echte - sie zaehlten gegen `DEMO_MAX` und verdraengten Runden, die
-  jemand gespielt hat.
+  jemand gespielt hat. **Er ruht aber wie alle anderen auf einem
+  Clear** (seit 2.0.1): eine Aufnahme traegt **eine** Pausenlaenge fuer
+  den ganzen Tisch (`clearpause`, 4.10), und die gilt bei der Wiedergabe
+  fuer jeden Sitzplatz. Ein Platz, der ohne Pause gespielt hat, wird
+  also mit ihr wiedergegeben - und jeder Zug, den er in den ~280 ms nach
+  einem Clear machte, trifft dort noch den Stein, der laengst ersetzt
+  war. Seine Schleife dreht die Frist deshalb weiter wie `game_run`
+  (5.3).
 
 **Ein Strom muss vollstaendig sein.** Ein einziger fehlender Zug
 verschiebt den Stein, auf dem er lag, und von da an ist das ganze Brett

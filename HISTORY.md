@@ -113,6 +113,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 1.5.0 | Speicherort der Spieldaten im Einstellungsmenue verlegbar, mit Zeigerdatei und Sicherung | 4.12 |
 | 1.5.1 | Verbesserungen bei der Vollbildanzeige | - |
 | 2.0.0 | Rundenlogik vollstaendig entkoppelt: Clear-Pause als Rundenzustand, Buchung beim Treiber der Runde; Demo-Format 4. Phase 5 abgeschlossen | 3.1, 4.10, 5.3, 5.20 |
+| 2.0.1 | Runde und Aufnahme auf einer Uhr: Clear-Pause vor der Taste, Pruefpunkte am ruhenden Sitz, Bot ruht mit | 4.10, 5.3, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2555,6 +2556,9 @@ jetzt ueber `CLEAR_PAUSE_MS=0` statt `FLASH_CYCLES=0` - die Pausenlaenge
 wird einmal beim Laden abgeleitet, und seine eigene Schleife treibt
 keine Frist weiter. Ohne das waere er nach dem ersten Reihenabbau
 stehengeblieben.
+_Spaeter ueberholt: 2.0.1 - eine Aufnahme traegt eine Pausenlaenge fuer
+den ganzen Tisch, also muss auch der Bot ruhen; seine Schleife dreht die
+Frist seither selbst weiter._
 
 **Sichtbare Wirkung, entgegen der urspruenglichen Annahme.** Der Punkt
 stand in TODO.md als "Aufraeumarbeit ohne sichtbare Wirkung". Zwei
@@ -2677,3 +2681,89 @@ wurde. Die Simulationszeit bleibt beim Neuansetzen erhalten.
 `tools/display-check.py` prueft gueltige und ungueltige Bildraten,
 normale Bildtermine, grosse, kleine und wiederholte Uhr-Rueckspruenge
 sowie die unveraenderte Begrenzung bei Vorwaertsspruengen; laeuft in CI.
+
+## Runde und Aufnahme auf einer Uhr (umgesetzt, Version 2.0.1)
+
+Drei Fehler aus der Pruefung von PR #110 (Stand `45af0ce`), alle drei an
+derselben Naht: der Clear-Pause, die 2.0.0 aus der Blink-Animation
+gemacht hat (5.3). Sie ist eine **Frist**, und eine Frist ist nur so viel
+wert wie die Uhr, an der sie haengt - live wie in der Wiedergabe.
+
+**1. Die Uhr stand eine Taste zu spaet.** `handle_key` lief im Game-Loop
+**vor** der Aktualisierung von `ROUND_NOW_MS`. Ein Hard Drop schaltete
+die Pause also mit der Uhrzeit des **vorherigen** Durchlaufs scharf,
+waehrend die Aufnahme desselben Ereignisses den Moment trug, in dem die
+Taste wirklich ankam: die Pause der Runde endete bis zu einen Tick vor
+der Pause ihrer Wiedergabe. Ein weiterer Hard Drop in dieser Luecke
+setzte live schon den naechsten Stein, in der Wiedergabe noch einmal den
+alten - und von da an waren Brett und Steinfolge verschieden.
+Dazu kam, dass die beiden Zahlen ueberhaupt nicht dieselbe Art Zeit
+waren: die Pause hing an der Echtzeit (`NOW_MS`), die Aufnahme stempelt
+auf der Spielzeit bzw. auf der Rundenuhr des Hubs. Ein Resize waehrend
+der Pause (die Spieluhr steht dabei still, die Echtzeit nicht) verkuerzte
+deshalb die Pause der Runde, nicht die ihrer Wiedergabe.
+Jetzt fuehrt `round_clock_tick` die Rundenuhr auf genau der Zeitachse der
+Aufnahme, `round_event` stellt sie unmittelbar vor der Aktion, und
+`demo_record_event` stempelt mit `ROUND_NOW_MS` statt mit einer eigenen
+Rechnung - Ereignis und Frist tragen damit **dieselbe Zahl**. Der
+Game-Loop nimmt die Uhr und loest eine faellige Pause **vor**
+`handle_key` auf, an genau einer Stelle je Durchlauf: eine Taste nach dem
+Faelligkeitstermin findet die Pause beendet vor, wie in der Wiedergabe.
+_Vorzustand: `ROUND_NOW_MS="${NOW_MS}"` im Rumpf des Loops hinter
+`handle_key`, eine eigene Stempelrechnung in `demo_stamp` fuer die
+eigenen Ereignisse, und `clear_pause_step` am Ende des Durchlaufs._
+
+**2. Pruefpunkte klagten korrekte Aufnahmen an.** Ein `v=`-Pruefpunkt
+nennt eine Position im Ereignisstrom (5.20), und seit 2.0.0 kann sich
+der Spielstand **zwischen** zwei Ereignissen aendern: wenn die
+Clear-Pause ablaeuft und `clear_and_continue` die Reihen verbucht. Die
+Aufnahme schreibt den Pruefpunkt vor das naechste Ereignis - also nach
+dem Abbau -, die Wiedergabe verglich ihn unmittelbar nach dem
+ausloesenden Lock - also davor. Aufgezeichnet "eine Reihe", geprueft
+"null Reihen", gemeldet `diverged`; danach raeumte dieselbe Wiedergabe
+die Reihe korrekt ab. Jetzt vergleicht `demo_step` **vor** dem Ereignis
+und nur bei **ruhendem Sitzplatz** (`CLEAR_PENDING` gleich 0) - genau
+der Moment, den der Pruefpunkt beschreibt.
+_Vorzustand: `demo_verify` hinter jedem `demo_apply` und einmal zu Beginn
+jedes Durchlaufs, beides ohne Ruecksicht auf eine stehende Pause._
+
+**3. Der Test-Bot spielte ohne Pause und wurde mit ihr wiedergegeben.**
+`mp_bot_main` setzte `CLEAR_PAUSE_MS=0` (seine eigene Schleife drehte
+keine Frist weiter). Eine Aufnahme der Sitzung stammt aber von einem
+normalen Client und traegt **eine** Pausenlaenge fuer den ganzen Tisch
+(`clearpause=280`, 4.10) - die gilt bei der Wiedergabe fuer jeden Sitz.
+Jeder Zug, den der Bot in den ~280 ms nach einem Clear machte, traf in
+der Wiedergabe noch den Stein, den er laengst abgelegt hatte. Jetzt ruht
+der Bot wie alle anderen: seine Schleife nimmt `round_clock_tick` und
+dreht `clear_pause_step` weiter, ihre Nachrichten gehen waehrend der
+Pause weiter hinaus wie bei einem Spieler.
+Die andere Moeglichkeit - die Pausenlaenge je Spieler zu speichern -
+haette das Protokoll um ein Feld erweitert, das nur eine Testrolle
+braucht, und der Bot waere ein Client geblieben, der nach anderen Regeln
+spielt als die, mit denen er die Sitzung testen soll.
+_Vorzustand: `CLEAR_PAUSE_MS=0` in `mp_bot_main`, und die Zugschleife
+ohne jede Abfrage auf `CLEAR_PENDING`._
+
+**Abnahme.** `bash -n` ueber den ganzen Baum und die ASCII-Pruefung ohne
+Befund, `tools/release.sh --mode check` ebenso; `tools/state-check.sh`,
+`tools/key-scan.sh` (72 Faelle), `tools/net-fuzz.sh` und
+`tools/demo-keys.sh` unveraendert ohne Befund.
+Dazu drei Reproduktionen ohne Terminal, jede gegen **beide** Staende
+gefahren (der alte aus dem Merge-Commit von PR #110): eine Runde mit
+gestellter Uhr durch die echten Funktionen gespielt, aufgezeichnet und
+ueber `demo_step` wiedergegeben, Brett und Zaehler verglichen.
+1. Hard Drop mit Reihenabbau, dann ein zweiter Hard Drop 276 ms spaeter:
+   alter Stand live eine Reihe, Wiedergabe zwei Reihen und ein voellig
+   anderes Brett; neuer Stand beide Male eine Reihe und dasselbe Brett
+   (die zweite Taste faellt in die Pause und wird geschluckt, live wie in
+   der Aufnahme). Die Pause wird jetzt bei `armed=513` scharf und das
+   Ereignis mit `513` gestempelt; zuvor `1502` gegen `513`.
+2. Versus-Aufnahme mit einem Pruefpunkt unmittelbar hinter dem
+   abbauenden Lock: alter Stand "7 matched, 1 diverged" bei fehlerfreier
+   Aufnahme, neuer Stand "7 matched, 0 diverged".
+3. Runde in der Schleifenform des Bots, wiedergegeben mit
+   `clearpause=280`: alter Stand verliert den Stein, den der Bot 100 ms
+   nach dem Clear ablegte; neuer Stand gibt den Sitz wieder, wie er
+   gespielt wurde.
+Nicht gefahren: eine echte Mehrspieler-Sitzung ueber Sockets - in dieser
+Umgebung ist `socat` nicht vorhanden.

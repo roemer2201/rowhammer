@@ -28,7 +28,7 @@
 #   are worth (see lib/hub.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.4.3  (2026-09-18)
+# Version: 1.4.4  (2026-09-19)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -2010,19 +2010,17 @@ mp_bot_main() {
     local target="${MP_JOIN}" tick=0 want_x=0 want_rot=0
     net_require || die "socat is required for --mp-bot (package: socat)"
     [ -n "${target}" ] || die "--mp-bot needs --mp-join HOST[:PORT]"
-    # No clear pause for a bot: it has no screen to blink on, and its own
-    # loop below does not drive one - only game_run and the demo playback
-    # do (CLAUDE.md 5.3). Without this the first completed row would arm a
-    # pause that nobody ever resolves and the bot would stand still for
-    # the rest of the round.
-    # CLEAR_PAUSE_MS rather than FLASH_CYCLES, which is what this used to
-    # set: the pause is derived from the two flash constants once, at load
-    # time, so setting them here would no longer change it (see
-    # clear_pause_arm in rowhammer.sh). Before 2.0.0 the reason was a
-    # different one - the animation drew and read all by itself, and
-    # switching it off was what kept a terminal-less loop silent.
-    CLEAR_PAUSE_MS=0
-    # And nothing may be kept either: a bot's rounds are test traffic,
+    # A bot rests on a clear like everybody else - its loop below drives
+    # the pause the way game_run does (CLAUDE.md 5.3). It has no screen to
+    # blink on, so the blink is wasted on it, but the rest is not: a
+    # recording of the session carries one pause length for the whole
+    # table (clearpause, see 4.10), and a seat that played without the
+    # pause is replayed with it - every move the bot made in the ~280 ms
+    # after a clear then lands on the piece that has not been replaced
+    # yet, and the replay of that seat runs apart from the round
+    # (bugfix 2.0.1; this used to switch the pause off here instead, see
+    # HISTORY.md).
+    # Nothing may be kept either: a bot's rounds are test traffic,
     # and their recordings would sit in a data directory as real ones,
     # counting against DEMO_MAX and pushing out rounds somebody played.
     # Switched off here rather than asked for at the call site, so a bot
@@ -2088,40 +2086,55 @@ mp_bot_main() {
         if [ "${MP_ENDED}" -eq 1 ] || mp_link_silent; then
             break
         fi
-        play_clock_tick
+        # The round clock of this pass, exactly as game_run takes it: a
+        # bot keeps the round's own deadlines like any other client, and
+        # the clear pause below is measured against this (CLAUDE.md 5.3).
+        round_clock_tick
         if [ "${GAME_OVER}" -eq 0 ]; then
-            # One decision per piece: a target column and a rotation,
-            # both drawn at random. Then one step towards it per tick and
-            # a hard drop once it is reached - which produces a stack
-            # that fills up at a believable pace.
-            if [ "${tick}" -eq 0 ]; then
-                mp_bot_column
-                want_x="${MP_BOT_COLUMN}"
-                want_rot=$(( RANDOM % 4 ))
-            fi
-            tick=$(( tick + 1 ))
-            # A blocked move or rotation ends the plan instead of being
-            # retried: the target column is chosen without looking at the
-            # piece's width, so the right-hand columns are regularly out
-            # of reach, and a bot that kept pushing against the wall
-            # would never drop another piece.
-            # Announced through the same funnel a player's keys go
-            # through, so a bot produces a real move stream: without it
-            # the streams could only ever be tested with as many
-            # terminals as players (CLAUDE.md 5.20).
-            if [ "${CUR_ROT}" -ne "${want_rot}" ]; then
-                round_event c
-                try_rotate 1 || want_rot="${CUR_ROT}"
-            elif [ "${CUR_X}" -gt "${want_x}" ]; then
-                round_event l
-                try_move -1 0 || want_x="${CUR_X}"
-            elif [ "${CUR_X}" -lt "${want_x}" ]; then
-                round_event r
-                try_move 1 0 || want_x="${CUR_X}"
+            if [ "${CLEAR_PENDING}" -eq 1 ]; then
+                # Resting on a clear: no move this pass, the rows of the
+                # lock before it are taken away when the pause is up. The
+                # messages below go out all the same - a player's loop
+                # feeds the link through the pause as well, and a bot that
+                # went quiet for ~280 ms would be a test partner behaving
+                # like nothing this game has.
+                if ! clear_pause_step; then
+                    clear_and_continue
+                fi
             else
-                round_event h
-                hard_drop
-                tick=0
+                # One decision per piece: a target column and a rotation,
+                # both drawn at random. Then one step towards it per tick
+                # and a hard drop once it is reached - which produces a
+                # stack that fills up at a believable pace.
+                if [ "${tick}" -eq 0 ]; then
+                    mp_bot_column
+                    want_x="${MP_BOT_COLUMN}"
+                    want_rot=$(( RANDOM % 4 ))
+                fi
+                tick=$(( tick + 1 ))
+                # A blocked move or rotation ends the plan instead of
+                # being retried: the target column is chosen without
+                # looking at the piece's width, so the right-hand columns
+                # are regularly out of reach, and a bot that kept pushing
+                # against the wall would never drop another piece.
+                # Announced through the same funnel a player's keys go
+                # through, so a bot produces a real move stream: without
+                # it the streams could only ever be tested with as many
+                # terminals as players (CLAUDE.md 5.20).
+                if [ "${CUR_ROT}" -ne "${want_rot}" ]; then
+                    round_event c
+                    try_rotate 1 || want_rot="${CUR_ROT}"
+                elif [ "${CUR_X}" -gt "${want_x}" ]; then
+                    round_event l
+                    try_move -1 0 || want_x="${CUR_X}"
+                elif [ "${CUR_X}" -lt "${want_x}" ]; then
+                    round_event r
+                    try_move 1 0 || want_x="${CUR_X}"
+                else
+                    round_event h
+                    hard_drop
+                    tick=0
+                fi
             fi
             mp_send_state
             mp_act_flush

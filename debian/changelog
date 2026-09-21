@@ -1,3 +1,22 @@
+rowhammer (2.0.1) unstable; urgency=medium
+
+  * A round and its recording now keep the same clock. The pause a
+    completed row rests for is armed on the round clock, the recording
+    stamps the same event with that very number, and the game loop takes
+    the clock and finishes a due pause before it handles the key. A
+    replay therefore ends the pause at the moment the round ended it
+    instead of up to one tick later.
+  * The counter checkpoints of a multiplayer recording are compared where
+    they were written: before the next event and with no clear pause
+    standing. A correct recording no longer reports a divergence for the
+    rows a clear had not booked yet.
+  * The test bot rests on a clear like every other client. A recording
+    carries one pause length for the whole table, so a seat that played
+    without the pause was replayed with it - and every move it made in
+    the following 280 ms landed on the piece it had already dropped.
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 19 Sep 2026 12:00:00 +0000
+
 rowhammer (2.0.0) unstable; urgency=medium
 
   * The round logic is decoupled from the screen and the keyboard, the

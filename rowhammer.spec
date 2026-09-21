@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        2.0.0
+Version:        2.0.1
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,16 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sat Sep 19 2026 roemer2201 <r.oliver@web.de> - 2.0.1-1
+- A round and its recording keep one clock: the clear pause is armed on
+  the round clock, the recording stamps the same event with that number,
+  and the game loop finishes a due pause before it handles the key. A
+  replay now ends the pause where the round ended it.
+- Checkpoints of a multiplayer recording are compared before the next
+  event and only with no clear pause standing, so a correct recording no
+  longer reports a divergence.
+- The test bot rests on a clear like every other client; a recording
+  carries one pause length for the whole table.
 * Thu Sep 18 2026 roemer2201 <r.oliver@web.de> - 2.0.0-1
 - The round logic no longer draws, reads the keyboard or closes any
   books: the row flash became a clear pause the game loop drives, and

@@ -216,7 +216,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 2.0.0  (2026-09-18)
+# Version: 2.0.1  (2026-09-19)
 
 set -euo pipefail
 
@@ -231,7 +231,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="2.0.0"
+ROWHAMMER_VERSION="2.0.1"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -1626,6 +1626,36 @@ play_clock_resume() {
     fi
 }
 
+# round_clock_tick: account the play time of this pass (play_clock_tick)
+# and put the round's own timeline into ROUND_NOW_MS - the clock the round
+# logic measures its own deadlines against (see ROUND_NOW_MS above).
+#
+# It is deliberately the very clock the recording stamps its events with
+# (demo_stamp, lib/demo.sh): a versus round runs on the hub's round clock,
+# the one clock everybody at the table shares, every other round on its own
+# play time, which stands still while the round is paused. The two have to
+# name the same moment, because a replay arms a clear pause at the
+# timestamp of the event that armed it - a round that armed it on a clock
+# of its own would end the pause somewhere else than the replay does
+# (CLAUDE.md 5.3).
+# CHANGE 2.0.1: this used to be the wall clock (NOW_MS), which the game
+# loop wrote into ROUND_NOW_MS directly. Two things came of that and both
+# were wrong: the recording counts in play time, so a resize during a
+# clear pause (which stops the play clock but not the wall clock) shortened
+# the pause of the round but not the pause of its replay; and the loop
+# refreshed the clock only after the keys had been handled, so a hard drop
+# armed the pause with the timestamp of the previous pass (see game_run).
+round_clock_tick() {
+    play_clock_tick
+    if [ "${MP_ACTIVE}" -eq 1 ]; then
+        mp_round_ms
+        ROUND_NOW_MS="${MP_ROUND_MS}"
+        return 0
+    fi
+    ROUND_NOW_MS="${PLAY_MS}"
+    return 0
+}
+
 # time_attack_budget: refresh TIME_ATTACK_BUDGET_MS, the play time the
 # running Time Attack round has bought itself so far - the start time
 # plus TIME_ATTACK_ROW_MS per row of credit. Derived from ROW_CREDIT
@@ -1652,6 +1682,18 @@ time_attack_budget() {
 # recording runs - a round has to produce the same traffic either way,
 # or --demo-record would be visible on the wire.
 round_event() {
+    # The moment this happened, on the round's own timeline. Taken here
+    # rather than left at the value the top of the game loop put there,
+    # because an action and the deadline it arms have to carry the same
+    # moment: a lock that completes rows arms the clear pause from
+    # ROUND_NOW_MS (clear_pause_arm), and the recording stamps the event
+    # with that very number (demo_record_event) - which is what lets the
+    # replay arm the pause where the round armed it (CLAUDE.md 5.3).
+    # The two callers outside the game loop refresh it through this
+    # funnel as well: the bot loop (lib/mp.sh) drives a round without a
+    # terminal, and a playback sets ROUND_NOW_MS to the timestamp of the
+    # event it is applying and never comes through here at all.
+    round_clock_tick
     demo_record_event "${1}"
     mp_act_event "${1}"
     return 0
@@ -2706,6 +2748,31 @@ game_run() {
         # where a pending SIGWINCH is applied (remeasure, clear, and block
         # on the too-small overlay while the terminal is undersized).
         read_key
+        # The round's clock for this pass, and the one deadline the round
+        # logic keeps itself - both before the key is handled, and that
+        # order is the whole point (bugfix 2.0.1, CLAUDE.md 5.3):
+        #   - The clock has to be "now" when a key arms a deadline. A hard
+        #     drop that completes rows arms the clear pause from
+        #     ROUND_NOW_MS, and with the clock still standing at the
+        #     previous pass the pause started up to a tick too early -
+        #     while the recording of that same drop carried the moment the
+        #     key really arrived, so a replay ended the pause later than
+        #     the round did and the two ran apart from there.
+        #   - A pause that is over has to be gone when the key arrives.
+        #     handle_key swallows every key while the round rests, so a
+        #     key that comes in after the deadline must find the rest
+        #     finished - which is exactly what the replay does with it
+        #     (demo_step resolves a due pause before it applies an event
+        #     of the same moment).
+        # The guard is the one the play clock has everywhere: a paused or
+        # finished round has no time to account and no deadline to keep.
+        if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
+            round_clock_tick
+            if [ "${CLEAR_PENDING}" -eq 1 ] && ! clear_pause_step; then
+                clear_and_continue
+                DIRTY=1
+            fi
+        fi
         handle_key
         # Multiplayer: drain the link once per tick and apply what came
         # in - peer counters, garbage, the knock-outs and the end of the
@@ -2764,16 +2831,16 @@ game_run() {
             DIRTY=1
         fi
         if [ "${PAUSED}" -eq 0 ] && [ "${GAME_OVER}" -eq 0 ]; then
-            # Accumulate the play time of the segment since the last
-            # accounted moment (and refresh NOW_MS for the gravity checks
-            # below). play_clock_resume set PLAY_LAST to "now" at every
-            # resume, so an idle phase never lands in PLAY_MS.
-            play_clock_tick
-            # The round's own clock for this pass. play_clock_tick just
-            # refreshed NOW_MS, so this is "now" as the round sees it -
-            # a playback puts the demo clock here instead (2.0.0, see
+            # The round's clock again: the link was drained since the top
+            # of the pass and that took time, which the gravity checks
+            # below and the mode clocks have to see. It accumulates the
+            # play time of the segment since the last accounted moment and
+            # refreshes NOW_MS on the way (play_clock_tick inside it);
+            # play_clock_resume set PLAY_LAST to "now" at every resume, so
+            # an idle phase never lands in PLAY_MS. A playback puts the
+            # demo clock into ROUND_NOW_MS instead (2.0.0, see
             # ROUND_NOW_MS and CLAUDE.md 5.3).
-            ROUND_NOW_MS="${NOW_MS}"
+            round_clock_tick
             # Time Attack: refresh the budget the rows scored so far have
             # bought, so the check below and the HUD read the same number
             # (the clock counts down against a target that moves).
@@ -2791,12 +2858,13 @@ game_run() {
             # Before the flood block rather than inside the chain below it
             # for the same reason - a rise during the pause would land in
             # a board the clear has not been taken out of yet.
-            if [ "${CLEAR_PENDING}" -eq 1 ]; then
-                if ! clear_pause_step; then
-                    clear_and_continue
-                    DIRTY=1
-                fi
-            else
+            # The pause itself is not driven here but at the top of the
+            # pass, in front of the key (bugfix 2.0.1): it moves at exactly
+            # one point per pass, so nothing that happens in between - a
+            # key, an arriving garbage row - can land on one side of the
+            # deadline in the round and on the other side of it in the
+            # replay. Here the rest is only sat out.
+            if [ "${CLEAR_PENDING}" -eq 0 ]; then
                 # Hochwasser mode: the play time just accounted may have
                 # brought the next flood row due. Its own "if" rather than a
                 # branch of the chain below, because a rise is not an ending
