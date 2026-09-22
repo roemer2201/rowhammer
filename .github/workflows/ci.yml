@@ -181,6 +181,26 @@ jobs:
         run: ./tools/net-fuzz.sh --random 400 --silent
 
   # ---------------------------------------------------------------------
+  # Multiplayer sessions: a real hub against scripted socat clients -
+  # seats that empty, starting alone, the start of a round, a host leaving
+  # mid-round, the end of a session, dropped clients and a handover in the
+  # unix transport (tools/hub-check.sh, since 2.0.2). socat is what the
+  # multiplayer needs and is not on the runner by default.
+  # ---------------------------------------------------------------------
+  hub-check:
+    name: Multiplayer session test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install socat
+        run: sudo apt-get update && sudo apt-get install -y socat
+
+      - name: Run the hub session checks
+        run: ./tools/hub-check.sh --silent
+
+  # ---------------------------------------------------------------------
   # Debian package: build it, install it and run the installed game far
   # enough to prove the layout works (the starter is a relative symlink
   # into /usr/share, so a wrong path only shows up after installing).

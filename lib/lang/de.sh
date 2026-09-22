@@ -882,9 +882,9 @@ Optionen:
                 werden und nicht ungefragt passieren.
                 Env: ROWHAMMER_MP_GARBAGE   Standard: off
   --mp-bot      Testclient ohne Terminal: verbindet sich mit einer
-                Sitzung und spielt zufaellige Zuege, damit eine Runde
-                mit mehreren Spielern ohne mehrere Terminals getestet
-                werden kann.
+                Sitzung und spielt einfache, gelegentlich absichtlich
+                schlechte Zuege, damit eine Runde mit mehreren Spielern
+                ohne mehrere Terminals getestet werden kann.
                 Env: ROWHAMMER_MP_BOT       Standard: 0
   --reset ZIEL  Dauerhafte Daten im Datenverzeichnis zuruecksetzen und
                 beenden, ohne das Spiel zu starten. ZIEL ist eines von:

@@ -28,7 +28,7 @@
 #   then a length and a character class and has no gaps.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.3.0  (2026-09-05)
+# Version: 1.4.0  (2026-09-22)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -68,7 +68,16 @@ fi
 # because END travels ahead of the roster. A version 4 client would fail
 # the message on its field count and drop it, which is a round whose
 # places never arrive - hence the new number.
-PROTO_VERSION=5
+# Version 6 (2.0.2) adds VACANT: a seat in the lobby is empty again. The
+# roster only ever names the occupied seats, so a player who left the
+# lobby stayed on every other screen - and in the recording of the round
+# as a seat without a move, which the playback refuses. A version 5
+# client would ignore the verb and keep exactly those ghosts, which is
+# why the number goes up rather than the verb being slipped in. The same
+# version lets the move stream carry two marks ("y", "q", see
+# PROTO_ACT_RE) that a version 5 parser would reject along with the whole
+# message - and with it every move of the window.
+PROTO_VERSION=6
 
 # --- Field patterns -------------------------------------------------------
 # Every field of every message is checked against exactly one of these.
@@ -110,14 +119,22 @@ PROTO_BOARD_RE='^[.IOTSZJLgsx]{200}$'
 # of the same stream. The letters are the demo format's own alphabet for
 # what a player does (CLAUDE.md 4.10): l/r move, c/a rotate, s soft drop,
 # h hard drop, o hold, g a gravity step, k the lock delay running out.
-# Deliberately only those: the events a hub or a recording derives for
-# itself - incoming garbage, queue length, elimination - are not something
-# a client gets to claim.
+# Deliberately only those as far as what happens to a board is concerned:
+# the events a hub or a recording derives for itself - incoming garbage,
+# queue length, elimination - are not something a client gets to claim.
+# Two letters more since protocol 6, and they claim nothing: "y" and "q"
+# are marks, without a payload, for "the hub's GARBAGE resp. QUEUE for me
+# arrived here, between these two moves". How many rows and which gap is
+# still the hub's to say; the mark only tells a recording where in this
+# player's stream the hub's event belongs (demo_record_peer_act, see
+# CLAUDE.md 5.20). A client that sends marks for rows it never got moves
+# nothing, and one that leaves them out only costs the recording the
+# exact position.
 # Both bounds are what keeps the message inside MP_LINE_MAX: at most six
 # digits per delta (a token every ten minutes is not a stream any more)
 # and at most 48 tokens, so the field cannot exceed 336 characters however
 # it is composed.
-PROTO_ACT_RE='^([0-9]{1,6}[acghklors]){1,48}$'
+PROTO_ACT_RE='^([0-9]{1,6}[acghklorsyq]){1,48}$'
 # Why a player is out of the running (KO). Deliberately narrower than the
 # roster's state pattern: a place is only ever handed to somebody who
 # topped out, whose connection died, or who was still playing when the
@@ -184,6 +201,11 @@ declare -A PROTO_MSG=(
     # (mp_promote in lib/mp.sh).
     [WELCOME]="s n n N"
     [ROSTER]="s N f S"
+    # A seat of the lobby is empty again: its player left before the
+    # round. Sent to everybody, because the roster only names the seats
+    # that are taken and a seat that is merely no longer named would stay
+    # on every screen (protocol 6, see hub_client_close).
+    [VACANT]="s"
     [SEED]="n"
     [START]="n"
     [PEER]="s n n n n n n n S"
@@ -199,7 +221,7 @@ declare -A PROTO_MSG=(
     # Who runs the lobby. Sent to a client when it is let in and again to
     # everybody whenever the role moves on - which happens when the
     # current host leaves and somebody is still there to inherit it (see
-    # hub_host_reassign). It is a slot rather than a flag because every
+    # hub_migrate_begin). It is a slot rather than a flag because every
     # client has to be able to see who it is, not only the one it is.
     [HOST]="s"
     # "Take over": sent to the one player who is to start a hub of their
@@ -280,12 +302,18 @@ proto_field_ok() {
 # for a valid one, 2 for a verb this version does not know (ignore it) and
 # 1 for anything else: a wrong field count, a field that fails its
 # pattern, a lower-case verb, an empty line.
-# The line is split on spaces with the shell's word splitting, which is
-# safe here because the charset filter in lib/net.sh has already rejected
-# every byte outside 0x20-0x7E - there are no tabs, no newlines and no
-# quotes with a meaning left in it. The last field of a message that holds
-# free text (ERR) is deliberately the only one allowed to contain spaces,
-# and it is reassembled rather than split.
+# The line is split on spaces by "read -a", which is safe here because the
+# charset filter in lib/net.sh has already rejected every byte outside
+# 0x20-0x7E - there are no tabs and no newlines left in it. The last field
+# of a message that holds free text (ERR) is deliberately the only one
+# allowed to contain spaces, and it is reassembled rather than split.
+# CHANGE 2.0.2: the split used to be an unquoted "fields=(${line})". That
+# is word splitting *and* pathname expansion: a field like "/*/*/*/*/*/*"
+# made the parser walk the whole file system (measured: more than six
+# seconds for one line, and every one of the 64 lines a client may send
+# per second would have started another walk - a hub frozen for every
+# player of the session), and "?in" came back as "bin", a name that had
+# never been on the wire. "read -a" splits without expanding anything.
 proto_parse() {
     local line="${1}" verb spec
     local -a fields spec_a
@@ -303,8 +331,7 @@ proto_parse() {
         return 2
     fi
     spec="${PROTO_MSG[${verb}]}"
-    # shellcheck disable=SC2206  # deliberate splitting of our own table
-    spec_a=(${spec})
+    IFS=' ' read -r -a spec_a <<< "${spec}"
     n="${#spec_a[@]}"
     if [ "${n}" -eq 0 ]; then
         # A message without arguments must not carry any.
@@ -312,8 +339,7 @@ proto_parse() {
         PROTO_VERB="${verb}"
         return 0
     fi
-    # shellcheck disable=SC2206  # deliberate splitting of a charset-filtered line
-    fields=(${line})
+    IFS=' ' read -r -a fields <<< "${line}"
     # The trailing free-text field swallows the rest of the line, so an
     # error message may contain spaces; every other class is one word.
     if [ "${spec_a[n - 1]}" = "t" ] && [ "${#fields[@]}" -gt $(( n + 1 )) ]; then

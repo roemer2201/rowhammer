@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 2.0.1
+**Version:** 2.0.2
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -333,8 +333,9 @@ links - das eigene Feld bleibt in der Mitte. Ist das Terminal breit
 genug, hat ein Gegnerfeld dieselbe Breite wie das eigene (140 Spalten bei
 vier Gegnern); sonst werden daraus halb so breite Felder (100 Spalten bei
 vieren). Reicht auch das nicht, werden aus den Gegnern zwei Zeilen bzw.
-eine Zeile je Gegner, sodass eine Runde auch im 48x22-Minimum laeuft
-(`--mp-view`).
+eine Zeile je Gegner - die knappste Form ist eine Rangliste nach Rows,
+Ausgeschiedene am Ende mit ihrem Platz -, sodass eine Runde auch im
+48x22-Minimum laeuft (`--mp-view`).
 
 **Wenn der Gastgeber geht:** Verlaesst er die **Lobby**, uebernimmt der
 Spieler, der **zuerst beigetreten** ist - die Sitzung laeuft unter
@@ -344,7 +345,10 @@ neue Gastgeber darf die Regeln aendern), und jeder bekommt eine Meldung
 mit dem neuen Gastgeber, die er mit `Enter` bestaetigt. Ist niemand mehr
 da, der uebernehmen kann, meldet das Spiel die Sitzung als geschlossen.
 Waehrend einer **laufenden Runde** ist das Weggehen des Gastgebers
-dagegen ein gewoehnliches Ausscheiden - die Runde wird zu Ende gespielt.
+dagegen ein gewoehnliches Ausscheiden - die Runde wird zu Ende gespielt,
+auch wenn er vorher schon selbst ausgeschieden war. Nach dem Rundenende
+ist die Sitzung vorbei: niemand uebernimmt sie mehr, und niemand kann
+ihr noch beitreten.
 Hoert eine Sitzung ganz ohne Abschied auf (Rechner aus, Netz weg), merken
 das die Clients nach sechs Sekunden von selbst und kehren ins Menue
 zurueck.
@@ -360,7 +364,9 @@ spart `--mp-transport unix` die Netzwerkschicht: die Sitzung laeuft dann
 ueber einen Unix-Socket im Sitzungsverzeichnis.
 
 **Testen ohne mehrere Terminals:** `--mp-bot` ist ein Client ohne
-Bildschirm, der einer Sitzung beitritt und zufaellig spielt:
+Bildschirm, der einer Sitzung beitritt und einfach spielt - mit einem
+gelegentlichen absichtlichen Fehlgriff, damit auch eine Runde ohne
+Stoerreihen irgendwann endet:
 
 ```
 rowhammer --mp-bot --mp-join 127.0.0.1

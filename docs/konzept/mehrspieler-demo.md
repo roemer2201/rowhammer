@@ -166,6 +166,14 @@ der Wiedergabe.
     Stoerreihen, Warteschlangenlaenge, Ausscheiden - darf ein Client
     nicht behaupten; und die Flutreihe `w<spalte>` gehoert dem
     Hochwasser-Modus, der im Mehrspieler nicht vorkommt.
+  - **Dazu zwei Marken ohne Nutzlast** (seit 2.0.2, Protokoll 6): `y`
+    und `q` heissen "hier, zwischen diesen beiden Zuegen, kam das
+    `GARBAGE` bzw. `QUEUE` des Hubs fuer mich an". Sie behaupten nichts
+    ueber Menge oder Lochspalte - die bleiben beim Hub - und sagen nur,
+    wohin im Strom das Ereignis des Hubs gehoert (siehe unten). Ein
+    Client, der Marken fuer nie erhaltene Reihen schickt, bewegt damit
+    nichts; einer, der sie weglaesst, kostet die Aufnahme nur die genaue
+    Stelle.
 - **`PEERACT <slot> <t> <tokens>`** (Hub -> alle ausser dem Absender):
   unveraendert weitergereicht. Der Hub schaut nicht hinein und merkt
   sich nichts davon - es ist die einzige Nachricht, die er rein
@@ -274,19 +282,42 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   zuletzt geschriebene Ereignis; je Slot bleibt jeder Strom monoton, und
   die Wiedergabe fuehrt schlicht fuenf Cursor. Was diese Monotonie
   sichert, ist eine Klemme auf 0 - dieselbe, die eine rueckwaerts
-  gesprungene Uhr abfaengt. Sie greift regelmaessig bei den drei
-  Ereignissen, die vom Hub kommen (`y`, `q`, `n`/`z`): die werden
-  gestempelt, wenn sie eintreffen, waehrend die Zuege eines Gegners bis
-  zu ein Sendefenster (`MP_ACT_MS`) aelter sind als ihre Ankunft. Der
-  betroffene Strom ist danach fuer genau ein Ereignis um hoechstens
-  dieses Fenster gestaucht und laeuft dann wieder richtig; die Wirkung
-  der Ereignisse selbst verschiebt sich gar nicht, denn Stoerreihen
-  werden eingereiht und erst beim naechsten Lock eingeschoben.
+  gesprungene Uhr abfaengt.
+- **Die Ereignisse des Hubs fuer einen Mitspieler warten auf dessen
+  Marke** (seit 2.0.2, `DEMO_HOLD`, `demo_hold_mark` in `lib/demo.sh`).
+  `y` und `q` fuer einen fremden Sitz werden nicht geschrieben, wenn sie
+  hier ankommen, sondern zurueckgehalten, bis im Zugstrom dieses Sitzes
+  die passende Marke erscheint - und dann **an der Stelle der Marke**
+  geschrieben, mit ihrer Zeit. Das ist die Stelle, an der der Mitspieler
+  das Ereignis wirklich bekommen hat, und nur sie entscheidet, welcher
+  Lock die Reihen einschiebt. Der Hub schickt die Nachrichten in einer
+  Reihenfolge, und der Mitspieler nimmt sie in derselben entgegen; die
+  erste zurueckgehaltene ihrer Art ist also die gemeinte.
+  Kommt binnen `DEMO_HOLD_MS` (2000 ms) keine Marke - ein Mitspieler im
+  Pausenmenue, dessen Zugfenster dort nicht gesendet wird, oder ein
+  Client, der die Marken weglaesst -, wird das Ereignis mit seiner
+  Ankunftszeit geschrieben: der Sitz hat in der Zwischenzeit nichts
+  getan, also gehoert es dorthin. `n` und `z` haben keine Marke; sie
+  kommen ohnehin nach dem letzten Zug des Sitzes und gehen denselben
+  Weg. Was beim Schliessen der Aufnahme noch wartet, wird dann
+  geschrieben. Die Ereignisse des **eigenen** Sitzes warten nicht: sie
+  werden auf derselben Uhr gestempelt wie die eigenen Zuege um sie herum.
+  _Vorzustand bis 2.0.1: sofort geschrieben, mit der Ankunftszeit beim
+  Aufzeichnenden. Das war das "Finding 1" aus
+  [CODEX-REVIEW.md](../../CODEX-REVIEW.md) - gemessen hat es sich in
+  der ersten Runde mit Stoerreihen: ein Bot sperrte 23 ms nach dem
+  Eintreffen der Reihen den naechsten Stein, der Aufzeichnende las sie
+  erst in seinem naechsten Tick, und die Wiedergabe schob sie einen Lock
+  zu spaet ein. Ein Vergleich der beiden Uhren statt der Marke war der
+  erste Versuch und reicht nicht, eben weil der Aufzeichnende spaeter
+  liest, als ein Lock dauert._
 - **Das Alphabet** sind die vorhandenen Buchstaben (`l r c a s h o g k`,
   siehe 4.10) plus `y<nn><h>` eingehende Stoerreihen (Anzahl 01 bis 10,
   Lochspalte 0 bis 9), `q<nn>` verbindliche Warteschlangenlaenge,
   `n<n>` Ausscheiden mit Platz und `z<n>` Verbindungsverlust mit Platz.
-  `w<spalte>` bleibt dem Hochwasser-Modus. Die Datei kennt damit **nur
+  `w<spalte>` bleibt dem Hochwasser-Modus. Die Marken `y`/`q` des
+  Zugstroms (Protokoll 6) kommen in der Datei nicht vor - sie sagen nur,
+  wo das `y`/`q` des Hubs hingeschrieben wird. Die Datei kennt damit **nur
   ihr eigenes Alphabet**: keine rohen Protokollzeilen, keine Wiedergabe
   durch den Nachrichten-Dispatcher und keine Verb-Whitelist - eine
   `.demo`-Datei ist Fremddatum im Sinne von 5.5, und was sie nicht
@@ -397,19 +428,29 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
     seines Slots das letzte vor ihm geschriebene Ereignis erreicht hat.
     Er ist kein Ereignis, sondern eine Aussage ueber den Strom um ihn
     herum.
-  - **Er wird hinter die Zuege gelegt, die er beschreibt.** Ein
-    Mitspieler schickt am Ende seines Ticks erst seine Zaehler (`STATE`)
-    und danach sein Zugfenster: die Zahlen koennen also bis zu ein
-    Fenster vor den Zuegen ankommen, die sie erzeugt haben. Ein dort
-    abgelegter Pruefpunkt wuerde einer korrekten Wiedergabe eine
-    Abweichung vorwerfen. Also wird der zuletzt gemeldete Stand
-    aufgehoben und erst hinter dem naechsten `PEERACT` dieses Slots
-    geschrieben.
+  - **Er steht hinter den Zuegen, die er beschreibt, und nie in einer
+    Clear-Pause** (seit 2.0.2). Der Mitspieler schickt vor seinen
+    Zaehlern erst sein Zugfenster (`mp_send_state` leert es), und
+    waehrend sein Brett auf einem Clear ruht, schickt er gar keine: die
+    Reihen dieses Clears sind dann noch nicht verbucht, der Stand ist
+    weder der vor dem Lock noch der danach. Der Aufzeichnende schreibt
+    den Pruefpunkt deshalb sofort, wenn `PEER` ankommt - der letzte Zug
+    dieses Sitzes in der Datei ist genau der letzte, den die Zahlen
+    beschreiben. _Vorzustand bis 2.0.1: die Zaehler gingen vor dem
+    Zugfenster hinaus, der Pruefpunkt wurde bis hinter das naechste
+    `PEERACT` aufgehoben - das dann Zuege tragen konnte, die nach den
+    Zahlen gemacht wurden -, und Zaehler aus einer Clear-Pause wurden
+    wie jede andere gemeldet. Beides warf korrekten Wiedergaben
+    Abweichungen vor, sobald ein Sitz zuegig Reihen abbaute; mit den
+    alten Test-Bots, die kaum je eine Reihe schafften, fiel es nicht
+    auf._
   - **Hoechstens einer je Sekunde und Slot** (`DEMO_V_MS`, gemessen auf
     der Uhr des Stroms). Die Zaehler aendern sich bei jedem Lock (schon
     wegen der Stapelhoehe), und einen Pruefpunkt je gemeldeter Aenderung
     zu schreiben wuerde eine Fuenf-Spieler-Aufnahme vervielfachen, ohne
-    mehr zu pruefen. Den eigenen Slot schreibt der Aufzeichnende dabei
+    mehr zu pruefen. Eine Meldung, die zu frueh nach dem letzten
+    Pruefpunkt kommt, wird schlicht nicht geschrieben (aufheben laesst
+    sie sich nicht mehr, siehe oben). Den eigenen Slot schreibt der Aufzeichnende dabei
     aus seinen **lebenden** Zaehlern mit: er kam nie ueber das Netz und
     ist damit die schaerfste Probe darauf, ob die Wiedergabe das Spiel
     richtig nachspielt.
@@ -451,7 +492,15 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   also mit ihr wiedergegeben - und jeder Zug, den er in den ~280 ms nach
   einem Clear machte, trifft dort noch den Stein, der laengst ersetzt
   war. Seine Schleife dreht die Frist deshalb weiter wie `game_run`
-  (5.3).
+  (5.3). **Und er zieht seinen Zufall nicht aus `RANDOM`** (seit 2.0.2,
+  `mp_bot_rand`): `RANDOM` ist die gemeinsame Steinfolge (5.9), und ein
+  Bot, der daraus seine Zugwahl zog, spielte ab dem naechsten Nachfuellen
+  des Beutels andere Steine als die Aufnahme fuer seinen Sitz traegt.
+  Seit 2.0.2 plant er seine Zuege ausserdem mit einer einfachen
+  Platzierungssuche (`mp_bot_plan`) statt mit einer formblinden
+  Spaltenwahl, die nach einem Dutzend Steinen einen Turm gebaut hatte:
+  erst damit baut ein Bot so viele Reihen ab, dass Stoerreihen,
+  Verrechnungen und diese Gegenprobe ueberhaupt etwas zu tun bekommen.
 
 **Ein Strom muss vollstaendig sein.** Ein einziger fehlender Zug
 verschiebt den Stein, auf dem er lag, und von da an ist das ganze Brett
@@ -478,7 +527,29 @@ drei gefunden von der Gegenprobe oben, die dafuer da ist:
 - **Der Hub verliert keine angelesene Zeile mehr** (siehe 5.3). Eine
   abgeschnittene Nachricht ist im laufenden Spiel kaum zu sehen, weil
   der naechste Schnappschuss darueber hinweggeht; in der Aufnahme bleibt
-  das Loch.
+  das Loch. Seit 2.0.2 lesen Hub und Client dafuer in Bloecken (5.3):
+  auch das Aufheben eines angelesenen Zeilenanfangs verlor unter Last
+  noch Zeilen, weil ein `read -t`, dessen Timer gerade beim Zeilenende
+  ablief, die fertige Zeile wie eine unfertige meldete.
+
+**Ein Strom muss auch dieselben Steine und dieselbe Reihenfolge haben.**
+Zwei weitere Stellen fand dieselbe Gegenprobe mit 2.0.2, nachdem die
+Test-Bots so spielten, dass Reihen, Stoerreihen und Verrechnungen
+ueberhaupt vorkamen (Sitzungen mit vier Plaetzen und eingeschalteten
+Stoerreihen: 92 bzw. 47 abweichende Pruefpunkte je Aufnahme auf den
+Zwischenstaenden, danach 0 in allen drei Modi, auch mit fuenf
+Plaetzen - nachdem auch das Lesen der Leitung keine Zeilen mehr
+verklebte, siehe 5.3); eine dritte fiel bei der Durchsicht der
+Verrechnung auf:
+
+- **Die Stoerreihen eines Mitspielers standen an der falschen Stelle
+  seines Stroms** - geloest mit den Marken, siehe oben.
+- **Der Bot zog andere Steine**, weil er `RANDOM` fuer seine Zugwahl
+  benutzte (siehe den Test-Bot oben und 5.9).
+- **Ein `QUEUE` nach einem schnellen Lock schob Reihen doppelt ein** -
+  kein Aufzeichnungsfehler, sondern einer der Runde selbst, den eine
+  Wiedergabe nur treu nachspielen wuerde (5.7, `mp_queue_set`; aus dem
+  Code hergeleitet, in den Testlaeufen nicht beobachtet).
 
 **Wiedergabe.**
 Je Frame wird fuer jeden Slot umgebunden, alle faelligen Ereignisse
@@ -653,7 +724,11 @@ wissen muss. Sechs Festlegungen aus dieser Umsetzung:
   die Reihen in genau dem Lock, in dem sie damals landeten. `q<nn>`
   **setzt** die Laenge, statt abzuziehen: verrechnet hat der Hub, und
   eine Wiedergabe, die selbst rechnet, laeuft beim ersten
-  gekuerzten Angriff auseinander. `n<n>`/`z<n>` beenden den Sitzplatz
+  gekuerzten Angriff auseinander. Gesetzt wird sie durch dieselbe
+  Funktion wie in der Runde (`mp_queue_set`, seit 2.0.2): abzueglich der
+  Reihen, die der Sitz seit seiner letzten Clear-Meldung eingeschoben
+  hat (5.7) - `MP_APPLIED` steht dafuer in `STATE_VARS`.
+  `n<n>`/`z<n>` beenden den Sitzplatz
   (`GAME_OVER`) und schreiben Zustand und Platz in die
   Mitspieler-Tabellen, wo die Gegnerspalte sie liest.
 - **Die Mini-Bretter der Wiedergabe tragen den fallenden Stein.** Der

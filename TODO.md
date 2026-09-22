@@ -221,22 +221,21 @@ und werden nach Playtesting nachgezogen, nicht je Runde gewaehlt.
 - [ ] **Kein Reconnect in v1** (siehe 5.8): Haeufen sich Abbrueche im
       Alltag, waere ein Wiedereinstieg mit vollstaendiger
       Zustandsuebertragung ein eigener spaeterer Punkt.
-- [ ] **Ursprungszeit und Ankunftszeit im Zugstrom** (siehe 5.20,
-      "Finding 1" aus [CODEX-REVIEW.md](CODEX-REVIEW.md)):
-      `demo_slot_event` klemmt ein negatives Delta auf 0, ein
-      verspaetetes `PEERACT`-Fenster landet damit hinter einem
-      Hub-Ereignis, das spaeter passiert ist. Die Begruendung in 5.20 -
-      die Wirkung verschiebe sich nicht, weil Stoerreihen nur eingereiht
-      werden - hat eine Luecke: enthaelt das nachgeholte Fenster einen
-      Lock (`h`/`k`), wird eine Flut ein Lock zu frueh eingeschoben und
-      das Brett laeuft ab da auseinander. Dasselbe gilt fuer `q`, das
-      die Warteschlangenlaenge absolut setzt. Zuerst **messen**: die
-      Bilanz von `demo_verify` im Debug-Log sagt, ob der Fall in echten
-      Runden mit eingeschalteten Stoerreihen ueberhaupt auftritt. Falls
-      ja, waere der Weg, Hub-Ereignisse eines fremden Slots
-      zurueckzustellen, bis dessen Strom ihre Ankunftszeit erreicht hat
-      (offene Frage dabei: der Timeout fuer einen Spieler, der gerade
-      nichts sendet). Falls nein, ist es eine Zeile Doku in 5.20.
+- [ ] **Ein Client, der nicht mehr liest, kann den Hub anhalten**
+      (aufgefallen bei der Pruefung fuer 2.0.2, siehe 5.3/5.5): der Hub
+      schreibt jede Nachricht blockierend in das FIFO der Bridge
+      (`hub_send`), und die Bridge reicht sie mit `cat` an den Socket
+      weiter. Liest ein angemeldeter Client seinen Socket nicht mehr, aber
+      beantwortet weiter `PING` - das kann nur ein manipulierter Client -,
+      laufen erst die Socket-Puffer, dann das FIFO (64 kB) voll, und der
+      naechste Schreibversuch haelt den ganzen Hub an. Bei den Mengen
+      einer Runde (5.4) dauert das viele Minuten, und es verletzt Regel 3
+      aus 5.5 ("zum Haengen bringen") nur fuer genau diesen Fall. Bash
+      kennt kein nicht-blockierendes Schreiben; denkbar waere eine Bridge,
+      die das FIFO selbst leert und bei vollem Socket verwirft, oder ein
+      Fuellstands-Zaehler je Slot im Hub. Zuerst klaeren, ob sich der
+      Aufwand fuer ein Vertrauensmodell lohnt, das Mitspieler ohnehin als
+      halb vertrauenswuerdig ansieht.
 - [ ] **Der Platz eines Ueberlebenden fehlt in der Aufnahme** (siehe
       5.20): seit 1.4.1 schreibt die Aufzeichnung fuer ein `KO` mit dem
       Grund `play` nichts - in `sprint` und `ultra` bekommt damit ein
@@ -302,8 +301,10 @@ Bestaetigung, bevor der jeweilige Roadmap-Schritt beginnt:
 Mehrspieler-Demoaufzeichnung vom 5. September 2026, eine
 **fremde Momentaufnahme, die nicht gepflegt wird**. Ihr zweites Finding
 (ein ausbleibendes `ROSTER` laesst eine gerissene Verbindung als
-Top-Out in die Aufnahme) ist mit 1.4.1 behoben, siehe HISTORY.md; ihr
-erstes steht als offener Punkt in 2.2.
+Top-Out in die Aufnahme) ist mit 1.4.1 behoben, ihr erstes
+(Ursprungszeit und Ankunftszeit im Zugstrom) mit 2.0.2 - beides siehe
+HISTORY.md. Damit ist aus ihr nichts mehr offen; sie bleibt im Baum,
+bis jemand sie wie die Einzelspieler-Review ins Archiv verabschiedet.
 
 `CODEX-REVIEW-SINGLEPLAYER.md`, die Code-Review des Einzelspielers vom
 5. September 2026, ist **nicht mehr im Baum**: alle drei Findings

@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        2.0.1
+Version:        2.0.2
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,20 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Tue Sep 22 2026 roemer2201 <r.oliver@web.de> - 2.0.2-1
+- Multiplayer: received lines are split without pathname expansion.
+- Multiplayer sessions: lobby seats that empty are announced (protocol
+  6), starting alone no longer ends the session, a host leaving after a
+  top-out no longer ends the round, a finished session admits and
+  promotes nobody, dropped clients are really disconnected, a moved unix
+  session keeps its socket.
+- Garbage rows are no longer pushed in twice after a quick lock.
+- Multiplayer recordings place the garbage of other players exactly and
+  write counter checkpoints where they belong; both ends read the link in
+  blocks, so no line end is lost under load.
+- The test bot plans its moves and keeps out of the shared piece
+  sequence; the smallest opponent view ranks by rows; new session test
+  tools/hub-check.sh.
 * Sat Sep 19 2026 roemer2201 <r.oliver@web.de> - 2.0.1-1
 - A round and its recording keep one clock: the clear pause is armed on
   the round clock, the recording stamps the same event with that number,

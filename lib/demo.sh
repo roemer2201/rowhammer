@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.11.1  (2026-09-19)
+# Version: 0.12.0  (2026-09-22)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -265,10 +265,9 @@ DEMO_LAST_MS=0
 DEMO_MP=0
 DEMO_MP_SLOT=0
 # Per slot: the round time of that slot's last recorded event (the deltas
-# are counted against it), the counters of the checkpoint waiting to be
-# written, and when the last checkpoint for that slot was written.
+# are counted against it) and where in that slot's stream the last
+# checkpoint was written.
 DEMO_SLOT_LAST_MS=()
-DEMO_V_PEND=()
 DEMO_V_LAST_MS=()
 # How many pieces that slot has taken out of the sequence: one per spawn,
 # counted from the events that cause one (see demo_slot_event). It is
@@ -287,6 +286,32 @@ DEMO_END_MS=0
 # every lock (the stack height does), and writing one per reported change
 # would multiply the size of a five player recording for no gain.
 DEMO_V_MS=1000
+# The hub's events for another seat (garbage, queue, elimination), held
+# back per slot until it is clear where in that seat's own stream they
+# belong. Each entry is "<round time>:<token>", in the order they arrived,
+# and a slot's list is a single string of them.
+# Why they wait: this client stamps them when it gets round to reading
+# them - a tick and a frame after they arrived - and the moves of that
+# seat arrive up to one send window later than they happened. Put into
+# the file at once, a lock the seat made just before the garbage reached
+# it could land behind the garbage in the stream, or one made just after
+# it in front of it, and the replay pushed the rows in one lock too early
+# or too late - from there the board ran apart from the round (the
+# "Finding 1" of CODEX-REVIEW.md, fixed with 2.0.2; a comparison of the
+# two clocks was tried first and is not good enough: a bot locks 20 ms
+# after the rows arrive, and this end reads them later than that).
+# The seat itself says where: its client puts a mark ("y" for GARBAGE,
+# "q" for QUEUE, protocol 6) into its move stream the moment it takes the
+# hub's message in, and the held event is written at that mark
+# (demo_hold_mark). The mark carries no numbers - the rows and the gap
+# are still the hub's. A seat that sends no mark within DEMO_HOLD_MS - a
+# player sitting in the pause menu, whose window is not flushed there, or
+# a client that leaves the marks out - gets its events written at the
+# moment they arrived; the eliminations ("n", "z") have no mark and come
+# after the seat's last move anyway, so they are always written that way.
+DEMO_HOLD=()
+DEMO_HOLD_N=0
+DEMO_HOLD_MS=2000
 
 # --- Playback state -------------------------------------------------------
 # DEMO_PLAYING is read outside this module: queue_fill (lib/pieces.sh)
@@ -558,9 +583,10 @@ demo_record_start() {
         fi
         DEMO_MP=1
         DEMO_MP_SLOT="${MP_SLOT}"
+        DEMO_HOLD_N=0
         for (( i = 0; i < MP_MAX; i++ )); do
             DEMO_SLOT_LAST_MS[i]=0
-            DEMO_V_PEND[i]=""
+            DEMO_HOLD[i]=""
             DEMO_V_LAST_MS[i]=0
             # One already: every round opens with the spawn game_reset
             # does before a single event can have happened.
@@ -767,50 +793,50 @@ demo_record_peer_act() {
     [ "${DEMO_MP}" -eq 1 ] || return 0
     demo_slot_ok "${slot}" || return 0
     [ "${slot}" -ne "${DEMO_MP_SLOT}" ] || return 0
+    local action
     while [ -n "${rest}" ]; do
-        [[ "${rest}" =~ ^([0-9]{1,6})([acghklors])(.*)$ ]] || break
+        [[ "${rest}" =~ ^([0-9]{1,6})([acghklorsyq])(.*)$ ]] || break
         t=$(( t + 10#${BASH_REMATCH[1]} ))
-        demo_slot_event "${slot}" "${t}" "${BASH_REMATCH[2]}"
+        action="${BASH_REMATCH[2]}"
         rest="${BASH_REMATCH[3]}"
+        case "${action}" in
+            # A mark: the hub's GARBAGE resp. QUEUE for this seat arrived
+            # here. It is not an event of its own - it says where the
+            # held event of the hub goes (see DEMO_HOLD).
+            y|q) demo_hold_mark "${slot}" "${action}" "${t}" ;;
+            *)   demo_slot_event "${slot}" "${t}" "${action}" ;;
+        esac
     done
-    # A checkpoint waiting for this slot goes out behind the moves it
-    # describes; see demo_record_peer_state for why it waits at all.
-    demo_checkpoint_flush "${slot}"
     return 0
 }
 
 # demo_record_peer_state SLOT LINES ROWS LEVEL GOLD SILVER HEIGHT
-# The counters the hub reported for another player (PEER). They are not
-# written straight away but kept until that slot's next moves have been
-# written (demo_record_peer_act). The reason is the order the two leave
-# the player they describe: their game loop sends its counters at the end
-# of the tick and flushes its move window afterwards, so the counters can
-# be up to one window ahead of the moves that produced them. A checkpoint
-# placed there would accuse a correct replay of having diverged.
-# Only the latest is kept - a checkpoint is a cross-check, and the newest
-# one is the only interesting one.
+# The counters the hub reported for another player (PEER), written as a
+# checkpoint right where the stream of that slot stands - at most one per
+# DEMO_V_MS of that slot's stream, measured on the stream rather than on
+# the clock so the spacing means the same thing when the file is read as
+# when it was written. A report that comes too soon after the last
+# checkpoint is simply not written: a checkpoint is a cross-check, and one
+# a second is plenty.
+# Written at once since 2.0.2, because it can be: the player sends the
+# moves that produced the counters before the counters themselves, and
+# only while their board is not resting on a clear (mp_send_state,
+# lib/mp.sh) - so the last move of this slot in the file is the last move
+# these numbers describe. Before that the counters could leave ahead of
+# their moves and were held back until the next PEERACT of the slot; the
+# window that followed could then carry moves made after the counters were
+# taken, and a checkpoint taken during a clear pause did not describe any
+# position a replay settles on. Both made a correct replay report a
+# divergence.
 demo_record_peer_state() {
     local slot="${1}"
     [ "${DEMO_RECORDING}" -eq 1 ] || return 0
     [ "${DEMO_MP}" -eq 1 ] || return 0
     demo_slot_ok "${slot}" || return 0
     [ "${slot}" -ne "${DEMO_MP_SLOT}" ] || return 0
-    DEMO_V_PEND[slot]="${2} ${3} ${4} ${5} ${6} ${7}"
-    return 0
-}
-
-# demo_checkpoint_flush SLOT
-# Write the checkpoint waiting for a slot, at most every DEMO_V_MS of
-# that slot's stream. Measured on the stream rather than on the clock, so
-# the spacing means the same thing when the file is read as when it was
-# written.
-demo_checkpoint_flush() {
-    local slot="${1}"
-    [ -n "${DEMO_V_PEND[slot]}" ] || return 0
     (( DEMO_SLOT_LAST_MS[slot] - DEMO_V_LAST_MS[slot] >= DEMO_V_MS )) || return 0
     DEMO_V_LAST_MS[slot]="${DEMO_SLOT_LAST_MS[slot]}"
-    DEMO_BUF+=("v=${slot} ${DEMO_V_PEND[slot]}")
-    DEMO_V_PEND[slot]=""
+    DEMO_BUF+=("v=${slot} ${2} ${3} ${4} ${5} ${6} ${7}")
     demo_buf_full
     return 0
 }
@@ -856,8 +882,7 @@ demo_record_garbage() {
     [ "${count}" -le 99 ] || count=99
     [ "${hole}" -le 9 ] || hole=9
     printf -v token 'y%02d%d' "${count}" "${hole}"
-    demo_stamp
-    demo_slot_event "${slot}" "${DEMO_STAMP_MS}" "${token}"
+    demo_slot_hub_event "${slot}" "${token}"
     return 0
 }
 
@@ -873,8 +898,7 @@ demo_record_queue() {
     demo_slot_ok "${slot}" || return 0
     [ "${count}" -le 99 ] || count=99
     printf -v token 'q%02d' "${count}"
-    demo_stamp
-    demo_slot_event "${slot}" "${DEMO_STAMP_MS}" "${token}"
+    demo_slot_hub_event "${slot}" "${token}"
     return 0
 }
 
@@ -909,8 +933,95 @@ demo_record_ko() {
         *)    return 0 ;;
     esac
     [ "${place}" -le 9 ] || place=9
+    demo_slot_hub_event "${slot}" "${letter}${place}"
+    return 0
+}
+
+# demo_slot_hub_event SLOT TOKEN
+# One of the hub's events for a seat (y, q, n, z), stamped with the moment
+# it arrived. For this player's own seat that moment is exact - the moves
+# of this seat are stamped on the same clock as they happen - and the
+# event is written at once. For every other seat it is held back until
+# that seat says where it belongs (see DEMO_HOLD).
+demo_slot_hub_event() {
+    local slot="${1}" token="${2}"
     demo_stamp
-    demo_slot_event "${slot}" "${DEMO_STAMP_MS}" "${letter}${place}"
+    if [ "${slot}" -eq "${DEMO_MP_SLOT}" ]; then
+        demo_slot_event "${slot}" "${DEMO_STAMP_MS}" "${token}"
+        return 0
+    fi
+    DEMO_HOLD[slot]+="${DEMO_STAMP_MS}:${token} "
+    DEMO_HOLD_N=$(( DEMO_HOLD_N + 1 ))
+    return 0
+}
+
+# demo_hold_mark SLOT KIND T
+# The seat's mark for its next held event of KIND ("y" or "q"): write that
+# event into the seat's stream at round time T, which is where the seat
+# took it in. The hub sends these in order and the seat takes them in in
+# the same order, so the first held one of the kind is the one meant. A
+# mark with nothing held for it - its event was written already because
+# the mark came late (DEMO_HOLD_MS), or the client sends marks for rows it
+# never got - is ignored: it has nothing to say without the hub's event.
+demo_hold_mark() {
+    local slot="${1}" kind="${2}" t="${3}" item token done=0 rest=""
+    local -a items
+    [ -n "${DEMO_HOLD[slot]:-}" ] || return 0
+    # Split with "read -a" rather than an unquoted expansion: the entries
+    # are this module's own numbers and letters, but a split that also
+    # expands pathnames is not one to have anywhere near a recording.
+    IFS=' ' read -r -a items <<< "${DEMO_HOLD[slot]}"
+    for item in "${items[@]}"; do
+        token="${item#*:}"
+        if [ "${done}" -eq 0 ] && [ "${token:0:1}" = "${kind}" ]; then
+            demo_slot_event "${slot}" "${t}" "${token}"
+            DEMO_HOLD_N=$(( DEMO_HOLD_N - 1 ))
+            done=1
+            continue
+        fi
+        rest+="${item} "
+    done
+    DEMO_HOLD[slot]="${rest}"
+    return 0
+}
+
+# demo_hold_release SLOT UPTO
+# Write the held events of a seat that arrived at round time UPTO or
+# earlier, each at the moment it arrived, in the order they came; UPTO -1
+# writes all of them. This is the way out for everything no mark has
+# claimed (see DEMO_HOLD).
+demo_hold_release() {
+    local slot="${1}" upto="${2}" item t rest=""
+    local -a items
+    [ -n "${DEMO_HOLD[slot]:-}" ] || return 0
+    IFS=' ' read -r -a items <<< "${DEMO_HOLD[slot]}"
+    for item in "${items[@]}"; do
+        t="${item%%:*}"
+        if [ "${upto}" -lt 0 ] || [ "${t}" -le "${upto}" ]; then
+            demo_slot_event "${slot}" "${t}" "${item#*:}"
+            DEMO_HOLD_N=$(( DEMO_HOLD_N - 1 ))
+        else
+            rest+="${item} "
+        fi
+    done
+    DEMO_HOLD[slot]="${rest}"
+    return 0
+}
+
+# demo_hold_expire
+# Write the held events that have waited DEMO_HOLD_MS for a mark: the
+# moment they arrived is the best place left for them (see DEMO_HOLD).
+# Called once per poll of the link (mp_poll), and nearly free when nothing
+# is held.
+demo_hold_expire() {
+    local i
+    [ "${DEMO_RECORDING}" -eq 1 ] || return 0
+    [ "${DEMO_MP}" -eq 1 ] || return 0
+    [ "${DEMO_HOLD_N}" -gt 0 ] || return 0
+    demo_stamp
+    for (( i = 0; i < MP_MAX; i++ )); do
+        demo_hold_release "${i}" "$(( DEMO_STAMP_MS - DEMO_HOLD_MS ))"
+    done
     return 0
 }
 
@@ -959,6 +1070,8 @@ demo_record_discard() {
     # session that is over, and leaving the flag set would route the next
     # round's events into a stream nobody asked for.
     DEMO_MP=0
+    DEMO_HOLD=()
+    DEMO_HOLD_N=0
     return 0
 }
 
@@ -1026,6 +1139,13 @@ demo_record_finish() {
     local -a lines
     if [ "${DEMO_RECORDING}" -eq 0 ]; then
         return 0
+    fi
+    # Whatever the hub said about the other seats and is still waiting for
+    # their moves goes in now: no more moves are coming.
+    if [ "${DEMO_MP}" -eq 1 ]; then
+        for (( i = 0; i < MP_MAX; i++ )); do
+            demo_hold_release "${i}" -1
+        done
     fi
     demo_flush || return 0
     if [ ! -s "${DEMO_TMP_FILE}" ]; then
@@ -1941,7 +2061,10 @@ demo_apply() {
         # cancelling is the hub's arithmetic, and a replay that did it
         # itself would drift apart from the round at the first attack
         # that was cancelled.
-        q[0-9][0-9]) MP_PENDING=$(( 10#${1:1:2} )) ;;
+        # Through mp_queue_set, like the round: the rows this seat pushed
+        # in since its last clear came off the queue before the hub's
+        # number arrived, and they must not be pushed in twice.
+        q[0-9][0-9]) mp_queue_set "$(( 10#${1:1:2} ))" ;;
         # Out of the round, by a top-out ("n") or a lost connection
         # ("z"), with the place taken. The board freezes where it is:
         # GAME_OVER is what stops the seat, and the place is what the
@@ -2266,6 +2389,7 @@ demo_play_states_build() {
         # own empty queue.
         MP_PENDING=0
         MP_HOLE=0
+        MP_APPLIED=0
         # The opponents start as the empty boards they were, so the very
         # first frame already shows five fields rather than five blanks
         # that fill in on the first move.

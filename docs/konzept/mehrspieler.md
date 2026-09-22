@@ -23,16 +23,17 @@ einschliesslich der Demo-Aufzeichnung einer Mehrspieler-Runde (5.20):
 sie wird bei jedem Teilnehmer aufgezeichnet, wieder gelesen und
 abgespielt, der Fokus wechselt waehrend der Wiedergabe mit den
 Pfeiltasten, der Kasten am Ende nennt Platz und Grund, und die
-Wiedergabe prueft sich gegen die Pruefpunkte der Aufnahme. Was
-[TODO.md](../../TODO.md) an Phase 5 noch fuehrt, ist Aufraeumarbeit ohne
-sichtbare Wirkung: die vollstaendige Entkopplung der Rundenlogik von
-Bildschirm und Tastatur (5.3), der `2.0.0` vorbehalten ist.
+Wiedergabe prueft sich gegen die Pruefpunkte der Aufnahme. Seit
+`2.0.0` ist auch die vollstaendige Entkopplung der Rundenlogik von
+Bildschirm und Tastatur (5.3) erledigt; was
+[TODO.md](../../TODO.md) zum Mehrspieler noch fuehrt, sind Fragen fuers
+Playtesting.
 
-Drei Nachrichten kamen beim Bauen hinzu, die die urspruengliche
+Vier Nachrichten kamen beim Bauen hinzu, die die urspruengliche
 Spezifikation nicht hatte; sie stehen in der Nachrichtentabelle 5.4 und
-hier zusammen begruendet, weil sie alle drei dieselbe Luecke schliessen -
-die Spezifikation nannte eine Wirkung, ohne zu sagen, woher der Absender
-weiss, dass sie noetig ist:
+hier zusammen begruendet, weil sie alle vier dieselbe Luecke schliessen -
+die Spezifikation nannte eine Wirkung, ohne zu sagen, woher der
+Empfaenger weiss, dass sie noetig ist:
 
 - **`VIEW <0|1>`** (Client -> Hub): "ich zeichne die Gegnerfelder".
   `NEEDBOARD` war vorgesehen, aber der Hub kann nicht wissen, welche
@@ -43,6 +44,12 @@ weiss, dass sie noetig ist:
   meinem Stapel". Zusammen halten die beiden die Warteschlange an genau
   einer Stelle - beim Hub, dem die Verrechnung gehoert; zwei Kopien
   derselben Zahl koennten nur auseinanderlaufen.
+- **`VACANT <slot>`** (Hub -> Clients, seit 2.0.2): "dieser Platz der
+  Lobby ist wieder frei". Das `ROSTER` nennt nur die besetzten Plaetze;
+  ein Platz, der bloss nicht mehr genannt wird, blieb auf allen anderen
+  Bildschirmen stehen - in der Lobby, als leeres Brett in der Runde und
+  in deren Aufnahme als Sitz ohne einen einzigen Zug, den die Wiedergabe
+  zu Recht abweist.
 
 Leitentscheidung (ueberarbeitet mit dem Beginn der Lobby-Arbeit,
 Nutzerentscheidung): **serverfreier Mehrspieler im LAN**. Es gibt keinen
@@ -70,12 +77,17 @@ im Code nur eine andere socat-Adresse: Prozessmodell (5.3), Protokoll
   dazwischen gibt es bewusst nicht** - der
   Host entscheidet, wann gestartet wird. Die Lobby fuellt sich also,
   bis er startet oder der fuenfte Platz belegt ist; der Starteintrag
-  bleibt gesperrt (mit Hinweis), solange er allein dort sitzt. Eine
+  bleibt gesperrt (mit Hinweis), solange er allein dort sitzt. Die
+  Sperre sitzt im Client, der Hub prueft trotzdem: allein bekommt der
+  Gastgeber `ERR alone` - eine Antwort, kein Fehler, und die Lobby bleibt
+  offen (bis 2.0.2 beendete jede Fehlermeldung die Lobby, und der
+  Starteintrag war nicht gesperrt). Eine
   erwartete Spielerzahl vorher festzulegen waere eine Zahl, die
   niemanden bindet: wer zu spaet kommt, findet die Sitzung ohnehin
   nicht mehr, und wer fehlt, haelt sonst alle auf.
-  Umgesetzt ohne eigene Nachricht: der Host ist Slot 0 (die erste
-  Verbindung), und sein `READY 1` **ist** der Start - fuer ihn ist der
+  Umgesetzt ohne eigene Nachricht: der Host ist, wer sich zuerst
+  anmeldet (in einer frischen Sitzung Slot 0; wer es ist, sagt der Hub
+  mit `HOST`), und sein `READY 1` **ist** der Start - fuer ihn ist der
   Lobby-Eintrag ohnehin der Startknopf, und solange er allein sitzt,
   antwortet der Hub mit `ERR alone`.
   `--mp-max N` bleibt als **Obergrenze**, die der Host enger setzen
@@ -243,7 +255,19 @@ Entscheidungen dazu:
   das ein gewoehnliches Ausscheiden und die Runde spielt sich zu Ende
   (`hub_client_close`); ein Umzug mitten im Spiel muesste den ganzen
   Rundenzustand mitnehmen. Der Hub laeuft dann bis zum Rundenende
-  weiter, wie er es auch ohne diesen Fall taete.
+  weiter, wie er es auch ohne diesen Fall taete. Das gilt ausdruecklich
+  auch fuer einen Gastgeber, der **schon ausgeschieden** ist und dann
+  sein Ergebnisbild verlaesst - der gewoehnliche Weg hinaus; der Hub
+  fragt dafuer, ob eine Runde laeuft, nicht, ob der Gehende noch spielt.
+- **Mit dem Rundenende ist die Sitzung vorbei** (seit 2.0.2,
+  `HUB_OVER` in `lib/hub.sh`). Eine Sitzung traegt eine Runde (5.8);
+  ab `END` gibt es keine Lobby mehr, die jemand erben koennte, und
+  niemand wird mehr eingelassen (`ERR over`, im Beacon steht sie wie
+  eine laufende). Wer sein Ergebnisbild verlaesst, behaelt auf den
+  anderen Bildschirmen Namen, Zahlen und Platz. Der Hub endet, wenn der
+  Letzte gegangen ist. Ein Client, den ein Hub trotzdem ausserhalb der
+  Lobby um die Uebernahme bittet, lehnt mit `PROMOTED 0` ab, statt
+  mitten in einem Ergebnisbild einen Hub zu starten.
 
 ### 5.2 Transport: socat, LAN-Broadcast und Unix-Domain-Socket
 
@@ -428,18 +452,48 @@ Vier Rollen, strikt getrennt (die vierte nur im Transport `lan`):
   auf einer Maschine - der Normalfall waehrend eines Gastgeberwechsels,
   siehe 5.1 - einander nicht das Postfach unter den Bruecken
   wegziehen.
-  **Beide Leseseiten heben eine angelesene Zeile auf.** Ein `read` mit
-  Zeitlimit gibt beim Ablauf zurueck, was es bis dahin hatte - und das
-  ist mitten in einer Zeile eben deren Anfang. Der Client tut das seit
-  jeher (`NET_PART` in `net_poll`, `lib/net.sh`), der Hub seit 1.4.0
-  (`HUB_INBOX_PART` in `hub_main`): sein Postfach-`read` laeuft alle
-  50 ms ab, und ein Hub, der genau dann verdraengt wird - was eine volle
-  Sitzung auf einer beschaeftigten Maschine tut -, verwarf die Zeile
-  samt allem, was sie noch zu sagen hatte. Im Spiel faellt das kaum auf,
-  weil der naechste Schnappschuss darueber hinweggeht; einer
-  Demo-Aufnahme bleibt das Loch (siehe 5.20). Beide Puffer sind auf
-  `MP_LINE_MAX` gedeckelt, damit ein Schreiber ohne Zeilenende sie nicht
-  wachsen laesst.
+  **Beide Leseseiten lesen in Bloecken und zerlegen selbst** (seit
+  2.0.2: `net_read_chunk` und `net_take_lines` in `lib/net.sh`, genutzt
+  von `net_poll` und `hub_main`). Gelesen wird mit `read -N` statt
+  zeilenweise, das Zeilenende ist also ein Zeichen wie jedes andere, und
+  ein angefangener Rest wartet im Puffer (`NET_BUF`, `HUB_INBOX_BUF`) auf
+  sein Ende. Vorher lasen beide mit `read -t` zeilenweise und hoben einen
+  beim Zeitablauf angelesenen Anfang auf. Das ist nicht sicher: laeuft
+  der Timer in dem Moment ab, in dem Bash das Zeilenende gerade gelesen
+  hat, meldet `read` trotzdem den Ablauf, und die vollstaendige Zeile ist
+  von einer unfertigen nicht zu unterscheiden - die naechste wurde an sie
+  gehaengt, und beide gingen als eine fehlerhafte Nachricht verloren. Das
+  trifft eine volle Sitzung auf einer beschaeftigten Maschine; gemessen
+  in einer Runde mit fuenf Plaetzen, in der so ein Zugfenster eines
+  Spielers verschwand und die Aufnahme dieses Spielers von da an
+  auseinanderlief, und in einem Belastungstest der beiden Lesarten
+  (einige hundert verklebte von 12000 Zeilen auf die alte Art, keine
+  auf die neue). Der Hub wartet sein Taktintervall (50 ms) mit einem
+  `read -N 1` ab, das beim ersten Byte zurueckkehrt, der Client mit
+  `read -t 0` und liest dann hoechstens zwei Millisekunden lang. Beide
+  Puffer sind gedeckelt - der Client liest nicht weiter, solange mehr
+  als ein Tick an Zeilen darin liegt, sodass ein Fluter den
+  Socket-Puffer fuellt und nicht den Prozess -, und eine Zeile, die ohne
+  Ende ueber `MP_LINE_MAX` waechst (in der Inbox das Doppelte, weil vor
+  jeder Nachricht die Bridge-Kennung steht), wird bis zu ihrem
+  Zeilenende verworfen, statt dass ihr Rest als eigene Nachricht
+  ankommt.
+  **Der Hub trennt eine Verbindung, indem er ihre Bridge beendet**
+  (`hub_bridge_end`/`hub_bridge_kill`, seit 2.0.2). Den Socket haelt
+  nicht der Hub, sondern socat und die Bridge; ein Hub, der einen
+  Client nur vergass, liess dessen Verbindung offen - einen wegen
+  Fluten oder Muell abgewiesenen Client ebenso wie einen stummen, und
+  weil der Listener hoechstens `MP_MAX` Verbindungen annimmt
+  (`max-children`), sperrte eine Handvoll davon die Sitzung fuer alle
+  anderen. Die Kennung einer Bridge ist ihre Prozessnummer; der Hub
+  schickt ihr `TERM` - erst `HUB_STOP_GRACE_MS` nach seiner letzten
+  Nachricht an sie, damit ein `ERR` noch hinausgeht, und nur, solange ihr
+  FIFO besteht, also die Bridge noch lebt. Ihr Trap nimmt den `cat` und
+  das FIFO mit, und socat schliesst den Socket. Beim Beenden raeumt der
+  Hub so auch alle noch stehenden Bridges ab, statt ihre Clients auf den
+  Stille-Timeout warten zu lassen. Eine Verbindung, die noch kein
+  `HELLO` gesagt hat, bekommt ausserdem keine Rundnachrichten (Roster,
+  Pings) - sie ist bis dahin kein Spieler.
 - **Discover-Sammler** (`rowhammer.sh --mp-discover`, ein kurzlebiger
   Prozess je empfangenem Beacon, nur Transport `lan`): wird von
   `socat UDP4-RECVFROM:<port>,fork,...` gestartet, liest das Datagramm
@@ -527,7 +581,7 @@ aus der Animation heraus (rund 14-mal je Pause statt 4-mal), und die
 Wiedergabe braucht keine Sonderregeln mehr fuer den Sitz auf dem
 Bildschirm (siehe 5.20).
 
-### 5.4 Protokoll (Version 5)
+### 5.4 Protokoll (Version 6)
 
 - **Rahmen:** eine Nachricht = eine Zeile, `\n`-terminiert, reines
   druckbares ASCII (0x20-0x7E), maximal **512 Byte** inklusive Zeilenende.
@@ -535,10 +589,10 @@ Bildschirm (siehe 5.20).
   Grossbuchstaben. Unbekannte Verben werden ignoriert (Vorwaerts-
   kompatibilitaet), fehlerhafte Zeilen fuehren zum Verbindungsabbruch
   (siehe 5.5).
-- **Versionierung:** `PROTO_VERSION=5`. Der Hub lehnt abweichende
+- **Versionierung:** `PROTO_VERSION=6`. Der Hub lehnt abweichende
   Versionen im `HELLO` mit `ERR proto ...` ab. Gemaess der Arbeitsregel
   "keine Abwaertskompatibilitaet" wird das Protokoll bei Bedarf
-  hochgezaehlt statt kompatibel erweitert; genau das ist viermal
+  hochgezaehlt statt kompatibel erweitert; genau das ist fuenfmal
   passiert. **Version 2** kam mit den Sitzungseinstellungen (1.1.0,
   siehe 5.1): `SETUP` in beide Richtungen. **Version 3** kam mit dem
   Gastgeberwechsel (1.2.0, siehe unten und 5.8): `HOST`, `PROMOTE`,
@@ -562,17 +616,26 @@ Bildschirm (siehe 5.20).
   keine Plaetze mehr ankommen; deshalb die neue Nummer statt eines
   angehaengten Feldes. Was daran haengt, steht in 5.8 (Anzeige) und
   5.20 (Aufzeichnung).
+  **Version 6** (2.0.2) bringt `VACANT <slot>`: ein Platz der Lobby ist
+  wieder frei (Begruendung in der Einleitung von Abschnitt 5). Dazu
+  kennt der Zugstrom (`ACT`/`PEERACT`) zwei **Marken** ohne Nutzlast:
+  `y` und `q` stehen fuer "hier kam das `GARBAGE` bzw. `QUEUE` des Hubs
+  fuer mich an" und sagen einer Aufnahme, an welche Stelle des Stroms
+  das Ereignis des Hubs gehoert (5.20). Ein Version-5-Client wuerde
+  `VACANT` still uebergehen - also genau die Geister behalten, die es
+  beseitigen soll - und ein `ACT` mit Marke als fehlerhaft verwerfen,
+  samt aller Zuege des Fensters.
 - **Client -> Hub**
 
   | Nachricht | Felder | Bedeutung |
   | --- | --- | --- |
   | `HELLO` | `<proto> <name> <caps>` | Anmeldung; `caps` = Komma-Liste (z. B. `board`) |
   | `READY` | `<0 oder 1>` | Bereitschaft in der Lobby |
-  | `STATE` | `<lines> <rows> <level> <gold> <silver> <height> <pending>` | eigener Zaehlerstand, bei Aenderung, max. 10/s |
+  | `STATE` | `<lines> <rows> <level> <gold> <silver> <height> <pending>` | eigener Zaehlerstand, bei Aenderung, max. 10/s; nie waehrend einer Clear-Pause und immer hinter dem Zugfenster, das ihn erzeugt hat (seit 2.0.2, siehe 5.20) |
   | `BOARD` | `<200 Zeichen>` | Feld-Snapshot, nur wenn der Hub `NEEDBOARD 1` gesetzt hat, max. 5/s |
   | `CLEAR` | `<lines> <silver> <gold>` | ein Reihenabbau als Angriffs-Meldung (Hub rechnet daraus die Garbage aus) |
   | `APPLIED` | `<count>` | eingeschobene Stoerreihen (seit 1.1.0, siehe unten) |
-  | `ACT` | `<t> <tokens>` | die eigenen Zuege eines Zeitfensters (seit Protokoll 4, siehe unten) |
+  | `ACT` | `<t> <tokens>` | die eigenen Zuege eines Zeitfensters (seit Protokoll 4), seit Protokoll 6 mit den Marken `y`/`q` (siehe 5.20) |
   | `VIEW` | `<0 oder 1>` | ob dieser Client die Gegnerfelder zeichnet (seit 1.1.0) |
   | `SETUP` | `<modus> <garbage>` | Sitzungseinstellungen, nur vom Gastgeber (seit 1.1.0, siehe 5.1) |
   | `PROMOTED` | `<port>` | "mein Hub laeuft auf diesem Port" - Antwort auf `PROMOTE` (seit 1.2.0) |
@@ -586,6 +649,7 @@ Bildschirm (siehe 5.20).
   | --- | --- | --- |
   | `WELCOME` | `<slot> <proto> <maxplayers> <sitzung>` | Anmeldung akzeptiert; der Sitzungsname seit 1.2.0 (siehe oben) |
   | `ROSTER` | `<slot> <name> <ready> <state>` | eine Zeile je Spieler, bei jeder Aenderung |
+  | `VACANT` | `<slot>` | ein Platz der Lobby ist wieder frei (seit Protokoll 6) |
   | `SETUP` | `<modus> <garbage>` | die geltenden Sitzungseinstellungen, an alle (seit 1.1.0) |
   | `HOST` | `<slot>` | wer die Sitzung fuehrt (seit 1.2.0) |
   | `PROMOTE` | - | "uebernimm die Sitzung" - nur an den Nachfolger (seit 1.2.0) |
@@ -631,10 +695,14 @@ Bildschirm (siehe 5.20).
   des Hubs alle `MP_PING_MS` (2000 ms) ist damit nicht nur eine Frage,
   sondern zugleich das Lebenszeichen, auf das der Client wartet - drei
   ausgefallene reichen. Gefragt wird an jeder Stelle, an der ein Client
-  auf den Hub wartet: Lobby, Einstellungsmenue, Namensabfrage,
+  auf den Hub wartet: Lobby, Einstellungsmenue, Gastgeber-Meldung,
   Countdown und Game-Loop. Ohne diese Pruefung erkennt ein Client nur
   das, was ihm gesagt wird - und ein Hub, dessen Maschine ausgeschaltet
-  wurde, sagt nichts mehr (siehe 5.8).
+  wurde, sagt nichts mehr (siehe 5.8). Die Namensabfrage gehoert nicht
+  dazu, obwohl dieser Abschnitt das bis 2.0.1 behauptete: sie kommt im
+  Mehrspieler erst nach `END`, und seit 2.0.2 ist die Sitzung dann
+  vorbei (5.1) - ein Hub, der einen Spieler waehrend des Tippens wegen
+  Stille verabschiedet, aendert an nichts mehr etwas.
 
 ### 5.5 Sicherheit
 
@@ -677,7 +745,11 @@ kommen deshalb hinzu:
   wird getrennt, und `max-children` der socat-Adresse deckelt die Zahl
   offener Verbindungen auf `--mp-max`. Sonst haelt ein Dutzend
   stummer Verbindungen die Lobby besetzt, ohne je eine Nachricht zu
-  senden.
+  senden. "Getrennt" heisst seit 2.0.2 wirklich getrennt: der Hub
+  beendet die Bridge der Verbindung (5.3). Vorher vergass er nur den
+  Platz, und die Verbindung blieb offen - womit ausgerechnet
+  `max-children` die Sitzung fuer alle sperrte, sobald `--mp-max`
+  abgewiesene oder stumme Verbindungen beisammen waren.
 
 Regeln, verbindlich fuer `lib/net.sh`, `lib/proto.sh`, `lib/hub.sh` und
 jede Stelle, die Empfangenes anfasst:
@@ -686,6 +758,14 @@ jede Stelle, die Empfangenes anfasst:
   Empfangenem.** Nie einen Befehlsstring aus Netzdaten bauen. Empfangene
   Werte landen ausschliesslich in Variablen und werden ausschliesslich
   als `"${var}"` benutzt.
+- **Zerlegt wird mit `read -a`, nie mit einer unquotierten Expansion.**
+  `fields=(${line})` ist nicht nur Wortzerlegung, sondern auch
+  Pfadnamen-Expansion: ein Feld `?in` wurde zum Namen einer Datei im
+  Arbeitsverzeichnis, und `/*/*/*/*/*/*` liess den Parser das
+  Dateisystem durchlaufen - ueber sechs Sekunden fuer eine einzige Zeile,
+  und ein Client darf 64 davon je Sekunde schicken, der Beacon-Sammler
+  sogar von jedem im Netz (behoben mit 2.0.2 in `proto_parse` und
+  `net_discover_poll`; `tools/net-fuzz.sh` prueft es seither).
 - **Arithmetik ist ein Injektionsziel.** `$(( ))` und `((  ))` werten
   ihren Inhalt rekursiv aus: `$(( x ))` mit `x='a[$(rm -rf ~)]'` fuehrt
   den Befehl aus. Deshalb: jedes Zahlenfeld **vor** der ersten Rechnung
@@ -698,7 +778,10 @@ jede Stelle, die Empfangenes anfasst:
   sonst den Bildschirm des Gegners umschreiben, den Fenstertitel setzen
   oder - je nach Terminal - ueber Antwort-Sequenzen Text in dessen
   Eingabepuffer schreiben. Der Filter greift im Empfangspfad, also
-  einmal zentral, nicht erst beim Zeichnen.
+  einmal zentral, nicht erst beim Zeichnen - auf beiden Seiten: beim
+  Client in `net_poll`, beim Hub seit 2.0.2 vor dem Parser
+  (`hub_client_msg`; die Bridge kuerzt eine Zeile nur, sie sieht sich
+  ihre Bytes nicht an).
 - **Whitelist statt Blacklist.** Zerlegen mit `read -r verb rest`,
   danach `case "${verb}"` mit genau den Verben aus 5.4; jedes Feld hat
   ein eigenes Muster (`^[A-Za-z0-9_-]{1,16}$` fuer Namen,
@@ -740,12 +823,22 @@ jede Stelle, die Empfangenes anfasst:
   Protokollfehler und Angriffsversuche nachvollziehbar sind.
 - **Testbarkeit:** ein Fuzz-Skript (`tools/net-fuzz.sh`) speist zufaellige
   und gezielt boesartige Zeilen (ANSI-Escapes, `$(...)`, Backticks,
-  `../`-Pfade, 100-kB-Zeilen, Nullbytes, halbe Zeilen ohne `\n`) in
+  `../`-Pfade, 100-kB-Zeilen, Nullbytes, halbe Zeilen ohne `\n`,
+  seit 2.0.2 auch Glob-Muster samt Zeitgrenze) in
   Hub- und Client-Parser - **und in den Beacon-Sammler**, der im LAN
   der erste Parser ist, den ein Fremder ueberhaupt erreicht (er
   braucht dafuer nicht einmal eine Verbindung). Abnahmekriterium: kein Prozess stirbt, kein
   Befehl wird ausgefuehrt, kein Byte ausserhalb 0x20-0x7E erreicht das
   Terminal.
+- **Sitzungstest:** `tools/hub-check.sh` (seit 2.0.2)
+  laesst einen echten Hub gegen geskriptete socat-Clients laufen und
+  prueft die Sitzungsregeln, an denen die Pruefung von 2.0.2 Fehler
+  fand: ein frei werdender Platz wird gemeldet, "Start" allein beendet
+  nichts, eine Verbindung ohne `HELLO` ist beim Rundenstart kein
+  Spieler, ein ausgeschiedener Gastgeber, der geht, laesst die Runde
+  weiterlaufen, nach dem Rundenende kommt niemand mehr hinein und wird
+  niemand befoerdert, ein abgewiesener Client ist wirklich getrennt, und
+  im Transport `unix` behaelt eine umgezogene Sitzung ihren Socket.
 
 ### 5.6 Darstellung der Mitspieler
 
@@ -815,8 +908,18 @@ Stufe):
   Platz: ab 3 Gegnern entfaellt die Vorschau des dritten Next-Steins.
   Bedarf: unveraendert 48 Spalten, aber 2 Zeilen je Gegner.
 - **Stufe 0 "score" - Scoreboard.** Eine Zeile je Gegner:
-  `<platz> <name8> <rows>`, sortiert nach Rows, KO-Spieler grau und
-  ans Ende. Braucht 1 Zeile je Gegner und passt immer in 48x22.
+  `<platz>.<name7> <rows>` (`render_pane_scoreboard`), oben die noch
+  Spielenden nach Rows, darunter die Ausgeschiedenen in der Reihenfolge
+  ihrer Plaetze. Die Zahl vorn ist der Stand: fuer einen
+  Ausgeschiedenen sein Platz vom Hub, fuer einen noch Spielenden sein
+  Rang nach Rows unter allen, die noch spielen - einen selbst
+  eingeschlossen, Gleichstand an den niedrigeren Slot wie beim Hub
+  (5.8). Die beiden Zaehlungen kommen sich nie in die Quere, weil der
+  Hub Plaetze von hinten vergibt. Braucht 1 Zeile je Gegner und passt
+  immer in 48x22. (Bis 2.0.2 in Sitzordnung und mit dem Platz vom Hub
+  davor, der bis zum Ausscheiden 0 ist - fast die ganze Runde stand
+  also "0." vor jedem Namen. Grau sind die Ausgeschiedenen nicht; die
+  Zeile traegt keine Farbe, und der Platz am Ende sagt dasselbe.)
 
 Auswahlregel fuer `auto` (bei jedem Resize neu ausgewertet, der
 SIGWINCH-Pfad aus 0.19.0 ruft sie mit auf):
@@ -884,6 +987,21 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   Warteschlange gehalten. Ein eigener Abbau reduziert erst die eigene
   Warteschlange, nur der Rest geht raus. Das belohnt Gegenangriffe statt
   reiner Reaktion.
+  **Das `QUEUE` des Hubs gilt abzueglich dessen, was seither eingeschoben
+  wurde** (`mp_queue_set`, seit 2.0.2). Der Hub verrechnet einen Angriff
+  gegen die Warteschlange, wie sie beim Eintreffen des `CLEAR` stand;
+  sperrt der Client dazwischen schon den naechsten Stein - der erste
+  Stein nach der Clear-Pause, im selben Tick fallen gelassen, in dem die
+  Pause endet -, hat er die Warteschlange bereits unverrechnet
+  eingeschoben, und sein `APPLIED` ist noch unterwegs. Die Zahl des Hubs
+  unveraendert zu uebernehmen setzte genau diese Reihen wieder in die
+  Warteschlange, und der naechste Lock schob sie ein zweites Mal ein.
+  Der Client zaehlt deshalb seit seiner letzten Clear-Meldung
+  eingeschobene Reihen mit (`MP_APPLIED`) und zieht sie ab; der Hub
+  klemmt das verspaetete `APPLIED` auf dieselbe Weise, sodass beide
+  wieder dieselbe Zahl haben. Dass die unverrechneten Reihen im Stapel
+  bleiben, ist hinzunehmen - eingeschoben ist eingeschoben. Die
+  Wiedergabe nimmt `q` durch dieselbe Funktion (5.20).
 - **Einspielen:** ausstehende Garbage wird **beim naechsten Lock nach dem
   Reihenabbau** von unten eingeschoben, nie waehrend ein Stein faellt.
   Damit bleibt der laufende Zug planbar; die Warteschlange ist im HUD
@@ -951,7 +1069,7 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   `mp_link_silent`, siehe 5.4): ein ausgeschalteter Rechner, ein
   gezogenes Kabel oder ein WLAN, das mitten in der Lobby weg ist,
   schickt kein EOF. Gefragt wird an jeder Warte-Stelle - Lobby,
-  Einstellungsmenue, Namensabfrage, Countdown und Game-Loop -, sodass
+  Einstellungsmenue, Gastgeber-Meldung, Countdown und Game-Loop -, sodass
   eine tote Sitzung nirgends stehen bleibt; im Game-Loop endet die
   Runde damit wie bei jedem anderen Verbindungsverlust.
 - **Der Gastgeber verlaesst die Lobby:** die Sitzung zieht zum zuerst
@@ -961,6 +1079,14 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   mit `CLOSED` und die Clients kehren ins Menue zurueck. **Waehrend der
   Runde** ist das Weggehen des Gastgebers dagegen ein gewoehnliches
   Ausscheiden wie bei jedem anderen.
+- **Nach dem Rundenende ist die Sitzung vorbei** (seit 2.0.2, siehe
+  5.1): wer sein Ergebnisbild verlaesst, behaelt bei den anderen Platz
+  und Zahlen, niemand wird befoerdert, niemand eingelassen, und der Hub
+  endet mit dem letzten Spieler. Reisst die Leitung nach `END` ab - der
+  Hub beendet beim Gehen seine Verbindungen -, bleibt die Runde, wie sie
+  entschieden wurde, statt nachtraeglich als "Verbindung verloren" zu
+  gelten; kommt `END` zusammen mit dem Leitungsende an, wird es trotzdem
+  noch gelesen (`mp_poll`).
 - **Verlassen ueber das Menue:** wie im Einzelspieler beendet "Runde
   beenden" die Runde; zusaetzlich geht ein `BYE` raus. Eine
   Mehrspieler-Runde kann **nicht** ins Hauptmenue gelegt und spaeter
@@ -1026,6 +1152,15 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   niemand bekommt.
 - **Seed (CLI):** `--seed` wird im Mehrspieler vom Hub-Seed uebersteuert; ein
   gesetzter `--seed` beim Host wird zum Sitzungs-Seed.
+- **`RANDOM` gehoert waehrend der Runde der Steinfolge.** Der Seed setzt
+  `RANDOM`, und daraus zieht jeder Teilnehmer seine Beutel - nur solange
+  nichts anderes daraus zieht, ist es fuer alle dieselbe Folge. Ein
+  normaler Client zieht in einer Versus-Runde nichts sonst daraus; der
+  Test-Bot tat es fuer seine Zugwahl und spielte damit ab dem naechsten
+  Nachfuellen (alle 63 Steine) eine andere Folge als alle anderen - auf
+  dem Bildschirm unsichtbar, in jeder Aufnahme der Runde aber ein Sitz,
+  der ab Stein 64 auseinanderlief (gefunden mit 2.0.2 von der Gegenprobe,
+  5.20). Seither hat der Bot einen eigenen Generator (`mp_bot_rand`).
 - **Terminalgroesse:** der SIGWINCH-Pfad waehlt zusaetzlich die
   Detailstufe neu (siehe 5.6).
 - **Demo-Schicht:** eine Mehrspieler-Runde wird wie jede andere
@@ -1065,7 +1200,7 @@ Standard < Config < Env < CLI, wie in Abschnitt 6 gefordert):
 | `--mp-hub` | - | interner Modus: Hub-Prozess (nicht dokumentiert im Menue) |
 | `--mp-bridge` | - | interner Modus: Socket-Bridge |
 | `--mp-discover` | - | interner Modus: Beacon-Sammler (siehe 5.3) |
-| `--mp-bot` | `ROWHAMMER_MP_BOT` | Testclient ohne Terminal, spielt zufaellig |
+| `--mp-bot` | `ROWHAMMER_MP_BOT` | Testclient ohne Terminal, spielt eine einfache Platzierungssuche mit gelegentlichem Fehlgriff (seit 2.0.2, `mp_bot_plan`) |
 
 Menuefuehrung: "Mehrspieler" -> "Spiel eroeffnen" / "Spiel beitreten"
 (Liste der gefundenen Sitzungen: im Transport `lan` aus den Beacons,
