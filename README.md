@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 2.0.2
+**Version:** 2.0.3
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -195,10 +195,11 @@ Highscore-Eintrag halten, sind mit `*` markiert und bleiben darueber
 hinaus erhalten. Umgekehrt startet **Enter** in einer Bestenliste die
 Aufnahme des dort ausgewaehlten Eintrags.
 
-> **Hinweis zu Version 2.0.0:** Das Dateiformat der Aufnahmen ist auf
-> Version 4 gewechselt. Aeltere Aufnahmen werden nicht mehr abgespielt:
-> sie stehen weiter in der Liste, dort aber als `(defekt)` mit ihrem
-> Dateinamen, und der Versuch, eine abzuspielen, meldet "Dieses
+> **Hinweis zu Version 2.0.3:** Das Dateiformat der Aufnahmen ist auf
+> Version 5 gewechselt (zuvor mit 2.0.0 auf Version 4). Aeltere
+> Aufnahmen werden nicht mehr abgespielt, auch keine von
+> Einzelspieler-Runden: sie stehen weiter in der Liste, dort aber als
+> `(defekt)` mit ihrem Dateinamen, und der Versuch, eine abzuspielen, meldet "Dieses
 > Demo-Format wird nicht mehr unterstuetzt." Loeschen laesst sie sich
 > aus der Liste heraus. Neue Runden werden wie gewohnt aufgezeichnet.
 
@@ -337,7 +338,8 @@ eine Zeile je Gegner - die knappste Form ist eine Rangliste nach Rows,
 Ausgeschiedene am Ende mit ihrem vorlaeufigen Platz -, sodass eine Runde
 auch im 48x22-Minimum laeuft (`--mp-view`). Nach Rundenende zeigt und
 sortiert diese Liste die endgueltigen Platzierungen des Hubs; bei Sprint
-und Ultra koennen ausgeschiedene Spieler vor noch stehenden liegen.
+und Ultra koennen ausgeschiedene Spieler vor noch stehenden liegen. Das
+gilt auch fuer das Ende einer abgespielten Aufnahme.
 
 **Wenn der Gastgeber geht:** Verlaesst er die **Lobby**, uebernimmt der
 Spieler, der **zuerst beigetreten** ist - die Sitzung laeuft unter

@@ -185,7 +185,7 @@ und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster
 (`DEMO_*_RE`). Erst der Kopf, dann die Steinfolge, dann die Ereignisse:
 
 ```
-version=4            Formatversion (nur 4 wird gelesen - siehe unten)
+version=5            Formatversion (nur 5 wird gelesen - siehe unten)
 game=2.0.0           Spielversion, die aufgenommen hat (nur Info)
 mode=marathon        marathon|ultra|sprint|timeattack|flood|versus
 name=Player          Spielername
@@ -246,10 +246,16 @@ Verlust ohne Gegenwert gewesen waere. Bei `clearpause` liegt es anders:
 das ist kein Abschnitt, den eine aeltere Datei nicht haben konnte,
 sondern eine Zahl, die die Wiedergabe braucht - und es gibt keinen
 ehrlichen Wert, den man fuer eine Datei ohne sie erfinden koennte.
-Gelesen wird deshalb **nur noch 4** (`DEMO_FORMAT_MIN_VERSION`,
-Nutzerentscheidung 2026-09-18); aeltere Aufnahmen werden beim Laden mit
-Begruendung abgewiesen wie jede andere Datei, die dieses Programm nicht
-liest.
+Gelesen wird deshalb **nur die aktuelle Version**
+(`DEMO_FORMAT_MIN_VERSION`, Nutzerentscheidung 2026-09-18); aeltere
+Aufnahmen werden beim Laden mit Begruendung abgewiesen wie jede andere
+Datei, die dieses Programm nicht liest.
+
+**Version 5** (2.0.3) kam mit `place` - den Endplaetzen aller Sitze
+einer Mehrspieler-Runde, die der Hub entschieden hat (5.20). Eine
+Einzelspieler-Aufnahme ist dabei unveraendert geblieben, wird als
+Version 4 aber trotzdem abgewiesen: die Regel oben gilt ohne neue
+Ausnahme (Nutzerentscheidung 2026-09-23).
 
 **Dem Spieler wird der Unterschied gesagt.** Eine Aufnahme aelteren
 Formats ist nicht kaputt - sie ist heil, nur spielt dieses Programm sie
