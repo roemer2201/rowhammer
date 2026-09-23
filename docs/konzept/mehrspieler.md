@@ -926,7 +926,10 @@ Stufe):
   stehende Spieler; die gesamte Tabelle wird danach sortiert. Platz 1
   kommt fuer den Sieger aus `END`, alle anderen aus `KO`. Das ist bei
   Sprint und Ultra noetig, weil ausgeschiedene Spieler nach Rows vor
-  noch stehenden Spielern liegen koennen (5.8).
+  noch stehenden Spielern liegen koennen (5.8). Eine Wiedergabe tut
+  dasselbe, sobald ihre Zeitachse zu Ende ist und die Aufnahme einen
+  Sieger nennt; die Plaetze kommen dann aus dem Kopf der Datei
+  (`place=`, 5.20).
   Braucht 1 Zeile je Gegner und passt
   immer in 48x22. (Bis 2.0.2 in Sitzordnung und mit dem Platz vom Hub
   davor, der bis zum Ausscheiden 0 ist - fast die ganze Runde stand

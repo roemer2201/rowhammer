@@ -70,7 +70,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.28.3  (2026-09-23)
+# Version: 0.28.4  (2026-09-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1522,22 +1522,35 @@ render_pane_peers() {
 # arrives, every rank and the order come from the hub instead: sprint
 # and ultra award final places by rows, so an eliminated player can finish
 # ahead of a standing one. The winner's place comes from END itself.
+# A replay has no END; its equivalent is the end of the timeline of a
+# recording that names a winner, where demo_finish_marks has put the
+# places from the header in (format 5). MP_ENDED stays 0 there on
+# purpose: it means "the hub has decided" to the status box and to the
+# session loops, and a replay has no hub.
+# CHANGE 2.0.3: a replay kept the provisional ranks after its end, so a
+# sprint recording could show place 2 twice where the hub had given 2
+# and 3.
 # CHANGE 2.0.2: the lines used to come in seat order and led with the
 # place from the hub, which is 0 until a player is out - so for most of
 # the round the scoreboard read "0." in front of every name and ranked
 # nobody.
 render_pane_scoreboard() {
-    local i j slot row line name rank rows other n final=0
+    local i j slot row line name rank rows other n final=0 winner=-1
     local -a order=() alive=() outs=() places=()
     row="${PEER_PANE_ROW}"
     if [ "${MP_ENDED}" -eq 1 ] && [ "${MP_WINNER}" -ge 0 ]; then
         final=1
+        winner="${MP_WINNER}"
+    elif [ "${DEMO_PLAYING:-0}" -eq 1 ] && [ "${DEMO_ENDED:-0}" -eq 1 ] \
+        && [ "${DEMO_HDR_WINNER:--1}" -ge 0 ]; then
+        final=1
+        winner="${DEMO_HDR_WINNER}"
     fi
     for (( i = 0; i < MP_PEER_COUNT; i++ )); do
         slot="${MP_PEER_SLOTS[i]}"
         rank="${MP_PEER_PLACE[slot]:-0}"
         [[ "${rank}" =~ ^[0-9]$ ]] || rank=9
-        if [ "${final}" -eq 1 ] && [ "${slot}" -eq "${MP_WINNER}" ]; then
+        if [ "${final}" -eq 1 ] && [ "${slot}" -eq "${winner}" ]; then
             rank=1
         fi
         places[slot]="${rank}"

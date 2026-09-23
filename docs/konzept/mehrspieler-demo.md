@@ -234,10 +234,11 @@ Drei Festlegungen dazu:
   aenderte die Aufzeichnung das Spiel (3.8), und `--demo-record off`
   waere am Verkehr zu erkennen.
 
-**Demo-Format Version 4.**
-Der Lader nimmt **nur Version 4**, geschrieben wird 4. Der
+**Demo-Format Version 5.**
+Der Lader nimmt **nur Version 5**, geschrieben wird 5. Der
 Sitzungsblock unten kam mit Version 3 (Schritt 9.6), `clearpause` mit
-Version 4 (2.0.0, siehe 4.10 und 5.3).
+Version 4 (2.0.0, siehe 4.10 und 5.3), `place` mit Version 5 (2.0.3).
+_Vorzustand bis 2.0.2: gelesen und geschrieben wurde 4, ohne `place`._
 _Vorzustand bis 1.5.1: gelesen wurden 2 und 3. Eine
 Einzelspieler-Aufnahme war eine echte Teilmenge, und die vorhandenen
 Aufnahmen - an denen Highscore-Eintraege haengen - blieben damit lesbar;
@@ -249,7 +250,7 @@ die sich fuer eine aeltere Datei nicht erfinden laesst, also endet die
 Ausnahme hier (Nutzerentscheidung 2026-09-18, Begruendung in 4.10)._
 
 ```
-version=4   game=2.0.0   mode=versus   name=...   date=...
+version=5   game=2.0.3   mode=versus   name=...   date=...
 time=123456        eigene Spielzeit (HUD, Statistik)
 clearpause=280     Laenge der Clear-Pause dieser Runde (5.3)
 length=245000      Laenge der Zeitachse = Dauer der Runde
@@ -257,6 +258,8 @@ end=over|goal|quit|lost
 players=4   slot=1   mpmode=survival   garbage=1   winner=2
 peer=0 Alice       je Teilnehmer eine Zeile
 peer=1 Bob
+place=0 3          Endplatz je Teilnehmer, nur zusammen mit winner=
+place=1 2
 pcs=IOTSZJL...     die gemeinsame Steinfolge - eine fuer alle
 p=1 120l           <slot> <delta zum letzten Ereignis DIESES slots><aktion>
 v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
@@ -277,6 +280,19 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   `time`; und `winner` fehlt, wenn es keinen gibt (eine Runde, die
   dieser Client vor dem Ende verlassen hat), statt eine Zahl
   hinzuschreiben, die jemand als Slot liest.
+- **Die Endplaetze stehen im Kopf** (`place=<slot> <platz>`, seit 2.0.3),
+  und zwar genau dann, wenn `winner` dort steht: eine entschiedene Runde
+  gibt jedem Sitz seinen Platz, eine vorzeitig verlassene keinem. Der
+  Lader verlangt, dass sie aufgehen - je Sitz eine Zeile, die Plaetze 1
+  bis `players` je einmal, der Sieger auf 1 -, sonst ist die Datei
+  bearbeitet worden. Noetig sind sie fuer Sprint und Ultra: dort vergibt
+  der Hub am Ende auch den noch stehenden Brettern ihren Platz nach Rows
+  (`hub_places_by_rows`, 5.8), und fuer die steht kein Ereignis im
+  Strom - sie haben die Runde nicht verlassen (`demo_record_ko`).
+  Nachrechnen aus den abgespielten Rows waere geraten: der Hub zaehlt
+  nach den gemeldeten Zaehlern, und die koennen dem Brett um eine
+  Clear-Pause oder um die Zuege zwischen Ablauf seiner Uhr und `END`
+  hinterherlaufen.
 - **Das Delta gilt je Slot, nicht global.** Die Zuege eines Gegners
   treffen mit Netzverzoegerung ein und koennen aelter sein als das
   zuletzt geschriebene Ereignis; je Slot bleibt jeder Strom monoton, und
@@ -646,6 +662,12 @@ Fokus-Slot gebunden. Der Renderer bleibt dadurch fast unveraendert:
     saesse das siegreiche Brett in Rundenkleidung da, waehrend jede
     andere Spalte zeigt, wie sie ausging. Im Fokus steht dann
     "GEWONNEN", in der Gegnerspalte "SIEG".
+    Im selben Zug bekommt jeder Sitz den Endplatz aus `place=`; ein
+    noch stehender behaelt dabei seinen Zustand, ein Platz ist kein
+    Ausscheiden. Der Kasten nennt so auch fuer ihn den Platz, und die
+    Rangliste der Stufe 0 (5.6) schaltet wie nach `END` einer echten
+    Runde auf die Plaetze des Hubs um - ohne `MP_ENDED` zu setzen, das
+    fuer Kasten und Sitzungsschleifen "der Hub hat entschieden" heisst.
   - **Der K.O.-Kasten wartet auf den Platz.** In der Wiedergabe fallen
     Top-Out und Ausscheiden auseinander: das Brett endet, wo es endete,
     der Platz kommt mit dem `n`/`z`, das der Hub eine Weile spaeter

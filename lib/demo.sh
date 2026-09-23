@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.12.1  (2026-09-23)
+# Version: 0.13.0  (2026-09-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -149,16 +149,27 @@ DEMO_FILE_EXT=".demo"
 # own pause was tuned differently, or switched off, would otherwise clear
 # at a different moment than the recording says and drift away from its
 # own checkpoints.
-DEMO_FORMAT_VERSION=4
+# Version 5 (2.0.3) added "place": the final place of every seat of a
+# versus round the hub decided. In sprint and ultra the hub ranks the
+# boards that were still standing by rows as well (hub_places_by_rows),
+# and nothing in the event streams says which place they got - they did
+# not leave the round, the round left them (demo_record_ko). Working it
+# out again from the replayed rows would be a guess: the hub ranks by
+# the counters the clients reported, which can trail the board by a
+# clear pause or by the moves between its clock running out and END
+# arriving.
+DEMO_FORMAT_VERSION=5
 # The oldest version still read - the same one, so nothing older is.
-# Versions 2 and 3 are gone rather than tolerated: the pause above is not
-# a section an older file simply lacks, it is a number the replay needs
-# to place every clear, and there is no honest value to invent for a file
-# that never carried one. That ends the one deliberate exception this
+# Versions 2 and 3 went with 2.0.0: the pause of format 4 is not a
+# section an older file simply lacks, it is a number the replay needs to
+# place every clear, and there is no honest value to invent for a file
+# that never carried one. That ended the one deliberate exception this
 # format used to make to "no backward compatibility" (CLAUDE.md 6, user
-# decision 2026-09-18) - older recordings are rejected on load with the
-# reason, like any other file this build does not read.
-DEMO_FORMAT_MIN_VERSION=4
+# decision 2026-09-18). Version 4 went with 2.0.3 under the plain rule
+# (user decision 2026-09-23): a decided versus round of format 4 cannot
+# name the places of its standing seats. Older recordings are rejected on
+# load with the reason, like any other file this build does not read.
+DEMO_FORMAT_MIN_VERSION=5
 
 # How many recordings are kept. Ten like the highscore lists, and for the
 # same reason: it is the number a player still finds their way around in.
@@ -236,6 +247,10 @@ DEMO_END_RE='^(over|goal|quit|lost)$'
 # field separator.
 DEMO_MPMODE_RE='^(survival|sprint|ultra)$'
 DEMO_PEER_RE='^([0-9]) ([A-Za-z0-9_-]{1,16})$'
+# The final place of one seat, "<slot> <place>" (format 5). A session has
+# at most DEMO_STREAM_MAX seats, so one digit each is all either needs;
+# 0 is not a place - it is what a seat has before it gets one.
+DEMO_PLACE_RE='^([0-9]) ([1-9])$'
 # One event of a versus stream, as the value of a "p=" line: the slot,
 # then the delta and the action written back to back the way the move
 # stream sends them. The payload widths are the ones the writer uses
@@ -465,6 +480,8 @@ DEMO_HDR_END="quit"
 # watched the rest of it; DEMO_HDR_SLOT is the seat they sat in and
 # DEMO_HDR_WINNER is -1 when the recording names no winner (a round this
 # client left before the hub called it).
+# DEMO_HDR_PLACE holds the final place per seat (format 5), 0 for none:
+# every seat has one exactly when the recording names a winner.
 DEMO_HDR_MP=0
 DEMO_HDR_LENGTH=0
 DEMO_HDR_PLAYERS=0
@@ -472,6 +489,7 @@ DEMO_HDR_SLOT=0
 DEMO_HDR_MPMODE=""
 DEMO_HDR_GARBAGE=0
 DEMO_HDR_WINNER=-1
+DEMO_HDR_PLACE=()
 
 # Entries of the demo list screen, filled by demo_scan: the file paths,
 # the menu labels belonging to them and, per entry, whether the recording
@@ -916,7 +934,9 @@ demo_record_queue() {
 # out every place by row credit when the round is decided
 # (hub_places_by_rows, lib/hub.sh), boards that were still standing
 # included. Nothing is written for those - they did not leave the round,
-# the round left them, and that is what a replay shows anyway.
+# the round left them, and that is what a replay shows anyway. Their
+# place goes into the header instead ("place", format 5), together with
+# every other seat's (demo_record_finish).
 # A second KO for a slot that already has one is written as well rather
 # than dropped: those same modes hand the places out again, and a replay
 # "simply takes the newer one" (demo_apply). Kept apart, the recording
@@ -1140,6 +1160,7 @@ demo_pieces_topup() {
 # again, and an empty recording is only noise in the list.
 demo_record_finish() {
     local end="${1}" hash="${2:--}" name path tmp i suffix written players=0
+    local place
     local -a lines
     if [ "${DEMO_RECORDING}" -eq 0 ]; then
         return 0
@@ -1252,6 +1273,23 @@ demo_record_finish() {
             [ -n "${MP_PEER_NAME[i]}" ] || continue
             lines+=("peer=${i} ${MP_PEER_NAME[i]}")
         done
+        # The final place of every seat, this player's own included, and
+        # only for a round the hub decided (format 5). The hub sends the
+        # places as KO ahead of END on the same link, so once END is in
+        # they all are. The winner is the exception: END names them and
+        # no KO gives them place 1. Written for the seats that were still
+        # standing in the first place - their place is in no event stream
+        # (demo_record_ko), and a replay has no honest way to work it out.
+        if [ "${MP_WINNER}" -ge 0 ]; then
+            for (( i = 0; i < MP_MAX; i++ )); do
+                [ -n "${MP_PEER_NAME[i]}" ] || continue
+                place="${MP_PEER_PLACE[i]:-0}"
+                if [ "${i}" -eq "${MP_WINNER}" ]; then
+                    place=1
+                fi
+                lines+=("place=${i} ${place}")
+            done
+        fi
     fi
     # The stream is cut into lines of at most 80 letters so no line of
     # the file grows unbounded (DEMO_PCS_RE caps it at that length).
@@ -1481,7 +1519,8 @@ demo_reject() {
 # to no other, its seats have to add up - run after the loop, because the
 # keys may stand in any order in the file.
 demo_header_read() {
-    local file="${1}" line key val version=0 slot name i peers=0
+    local file="${1}" line key val version=0 slot name i peers=0 places=0
+    local taken=""
     DEMO_READ_FILE="${file}"
     DEMO_BAD_VERSION=0
     DEMO_HDR_MODE=""
@@ -1498,8 +1537,10 @@ demo_header_read() {
     DEMO_HDR_GARBAGE=0
     DEMO_HDR_WINNER=-1
     DEMO_PEER_NAME=()
+    DEMO_HDR_PLACE=()
     for (( i = 0; i < DEMO_STREAM_MAX; i++ )); do
         DEMO_PEER_NAME[i]=""
+        DEMO_HDR_PLACE[i]=0
     done
     if [ ! -r "${file}" ]; then
         demo_reject "not readable"
@@ -1602,6 +1643,17 @@ demo_header_read() {
                 DEMO_PEER_NAME[slot]="${name}"
                 peers=$(( peers + 1 ))
                 ;;
+            # The final places (format 5), one line per seat like "peer".
+            # Whether they add up to a session is a question for the
+            # cross-checks below, which know the seats and the winner.
+            place)
+                [[ "${val}" =~ ${DEMO_PLACE_RE} ]] || { demo_reject "bad place" "${val}"; return 1; }
+                slot="${BASH_REMATCH[1]}"
+                [ "${slot}" -lt "${DEMO_STREAM_MAX}" ] || { demo_reject "place slot ${slot} out of range"; return 1; }
+                [ "${DEMO_HDR_PLACE[slot]}" -eq 0 ] || { demo_reject "place slot ${slot} given twice"; return 1; }
+                DEMO_HDR_PLACE[slot]="${BASH_REMATCH[2]}"
+                places=$(( places + 1 ))
+                ;;
             # The remaining header fields (game, level, gold, silver,
             # rowhammers, pieces) are informational for a human reading
             # the file; like name, lines and goal above they are checked
@@ -1629,7 +1681,7 @@ demo_header_read() {
         demo_reject "header is missing mode, end or date"
         return 1
     fi
-    # The clear pause is not optional in format 4: without it the replay
+    # The clear pause is not optional since format 4: without it the replay
     # would have to fall back on this build's own constant, which is
     # exactly the guess the field exists to avoid (see
     # DEMO_FORMAT_VERSION). Zero is a value, "absent" is not.
@@ -1674,10 +1726,46 @@ demo_header_read() {
             demo_reject "session block is missing mpmode or length"
             return 1
         fi
+        # The places come with the winner and not without one: a round
+        # the hub decided hands every seat its place, and a round this
+        # client left early knows none of them. When they are there they
+        # are 1 to "players", each once, on seats of this session, and
+        # the winner holds 1 - what hub_places_by_rows and hub_eliminate
+        # hand out between them, and nothing a replay could be asked to
+        # draw beyond that.
+        if [ "${DEMO_HDR_WINNER}" -lt 0 ]; then
+            if [ "${places}" -gt 0 ]; then
+                demo_reject "places without a winner"
+                return 1
+            fi
+        else
+            if [ "${places}" -ne "${DEMO_HDR_PLAYERS}" ]; then
+                demo_reject "${places} place lines for ${DEMO_HDR_PLAYERS} players"
+                return 1
+            fi
+            for (( i = 0; i < DEMO_STREAM_MAX; i++ )); do
+                [ "${DEMO_HDR_PLACE[i]}" -gt 0 ] || continue
+                if [ -z "${DEMO_PEER_NAME[i]}" ]; then
+                    demo_reject "place slot ${i} is not a seat of this session"
+                    return 1
+                fi
+                if [ "${DEMO_HDR_PLACE[i]}" -gt "${DEMO_HDR_PLAYERS}" ] || \
+                   [[ "${taken}" == *"${DEMO_HDR_PLACE[i]}"* ]]; then
+                    demo_reject "place ${DEMO_HDR_PLACE[i]} of slot ${i} does not fit the session"
+                    return 1
+                fi
+                taken+="${DEMO_HDR_PLACE[i]}"
+            done
+            if [ "${DEMO_HDR_PLACE[DEMO_HDR_WINNER]}" -ne 1 ]; then
+                demo_reject "winner ${DEMO_HDR_WINNER} does not hold place 1"
+                return 1
+            fi
+        fi
     else
         # And the other way round: a session block in a singleplayer
         # recording describes a round that cannot have had one.
         if [ "${peers}" -gt 0 ] || [ "${DEMO_HDR_PLAYERS}" -gt 0 ] || \
+           [ "${places}" -gt 0 ] || \
            [ "${DEMO_HDR_SLOT}" -ge 0 ] || [ "${DEMO_HDR_WINNER}" -ge 0 ] || \
            [ -n "${DEMO_HDR_MPMODE}" ] || [ "${DEMO_HDR_LENGTH}" -ge 0 ]; then
             demo_reject "session block in a ${DEMO_HDR_MODE} recording"
@@ -1833,7 +1921,7 @@ demo_load() {
             # than half-read.
             version|game|mode|name|date|time|clearpause|length|lines|rows| \
             level|gold|silver|rowhammers|pieces|goal|end|players|slot| \
-            mpmode|garbage|winner|peer)
+            mpmode|garbage|winner|peer|place)
                 [ "${body}" -eq 0 ] || { demo_reject "header key '${key}' behind the stream"; return 1; }
                 ;;
             *) demo_reject "unknown key" "${key}"; return 1 ;;
@@ -1973,18 +2061,30 @@ demo_focus_step() {
 }
 
 # demo_finish_marks
-# Mark the winner when the replay reaches the end of the round. Nobody
-# ever wrote a place for them: "n" and "z" are what leaving the round
+# Mark the winner when the replay reaches the end of the round, and give
+# every seat the final place the header names (format 5). Nobody ever
+# wrote a place for the winner: "n" and "z" are what leaving the round
 # looks like, and the winner did neither - the seat still standing when
 # the timeline runs out is the one the recording names in its header.
 # Without this the winning board would sit there in mid-round dress
 # while every other column shows how it ended.
+# The same goes for the seats still standing next to the winner in
+# sprint and ultra: the hub ranked them by rows, and only the header
+# says where. Their state stays "play" - a place is not an elimination
+# (see KO in mp_handle) - but the scoreboard and the end-of-demo box
+# can name their place now. For the seats that went out the header
+# repeats what their last "n"/"z" already said.
 demo_finish_marks() {
-    local winner="${DEMO_HDR_WINNER}"
+    local winner="${DEMO_HDR_WINNER}" slot
     [ "${DEMO_HDR_MP}" -eq 1 ] || return 0
     # A round this client left before it was decided names no winner.
     [ "${winner}" -ge 0 ] || return 0
     [ -n "${MP_PEER_NAME[winner]}" ] || return 0
+    for slot in "${DEMO_SEATS[@]}"; do
+        if [ "${DEMO_HDR_PLACE[slot]:-0}" -gt 0 ]; then
+            MP_PEER_PLACE[slot]="${DEMO_HDR_PLACE[slot]}"
+        fi
+    done
     MP_PEER_STATE[winner]="win"
     MP_PEER_PLACE[winner]=1
     demo_focus_sync

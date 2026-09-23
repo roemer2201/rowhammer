@@ -1,3 +1,12 @@
+rowhammer (2.0.3) unstable; urgency=medium
+
+  * Demo playback: a replay of a sprint or ultra recording shows the final
+    places of the hub once it has run to the end, the boards that were
+    still standing included. Demo format 5 records them in the header;
+    recordings of format 4 are refused with their own message.
+
+ -- roemer2201 <r.oliver@web.de>  Wed, 23 Sep 2026 12:00:00 +0000
+
 rowhammer (2.0.2) unstable; urgency=medium
 
   * Multiplayer: received lines are split without pathname expansion. A

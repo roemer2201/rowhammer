@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        2.0.2
+Version:        2.0.3
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,10 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Wed Sep 23 2026 roemer2201 <r.oliver@web.de> - 2.0.3-1
+- The replay of a sprint or ultra recording shows the final places of the
+  hub once it has run to the end, the boards that were still standing
+  included. Demo format 5 records them; older recordings are refused.
 * Tue Sep 22 2026 roemer2201 <r.oliver@web.de> - 2.0.2-1
 - Multiplayer: received lines are split without pathname expansion.
 - Multiplayer sessions: lobby seats that empty are announced (protocol

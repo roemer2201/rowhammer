@@ -115,6 +115,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 2.0.0 | Rundenlogik vollstaendig entkoppelt: Clear-Pause als Rundenzustand, Buchung beim Treiber der Runde; Demo-Format 4. Phase 5 abgeschlossen | 3.1, 4.10, 5.3, 5.20 |
 | 2.0.1 | Runde und Aufnahme auf einer Uhr: Clear-Pause vor der Taste, Pruefpunkte am ruhenden Sitz, Bot ruht mit | 4.10, 5.3, 5.20 |
 | 2.0.2 | Pruefung des Mehrspielers: Glob-Luecke im Parser, Sitzungsfehler (Lobby-Geister, Start allein, Gastgeber-Abgang, Sitzungsende, Trennen), Protokoll 6, Stoerreihen doppelt, Demo-Reihenfolge ("Finding 1"), Test-Bot, Sitzungstest | 4.9, 5.1, 5.3-5.9, 5.20 |
+| 2.0.3 | Endplaetze in der Demo-Wiedergabe: Demo-Format 5 mit `place`, Rangliste am Ende einer Wiedergabe | 4.10, 5.6, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2610,6 +2611,7 @@ Arbeitsregel "keine Abwaertskompatibilitaet" machte: gelesen wird nur
 noch 4, die Formate 2 und 3 werden beim Laden mit Begruendung
 abgewiesen. Begruendung in 4.10; Nutzerentscheidung vom 2026-09-18, auf
 die Frage hin, ob ein sauberes neues Format den alten vorzuziehen sei.
+_Spaeter ueberholt: 2.0.3 - gelesen wird nur noch Format 5._
 
 Wer eine solche Aufnahme abspielen will, bekommt dafuer eine **eigene
 Meldung** - "Dieses Demo-Format wird nicht mehr unterstuetzt."
@@ -3002,6 +3004,8 @@ Randfaelle des obigen Zwischenstands wurden vor dem Merge korrigiert:
   erscheinen, obwohl der Hub Platz 2 und 3 vergeben hatte. Jetzt
   folgen nach einem entschiedenen Rundenende Zahlen und Sortierung den
   Hub-Plaetzen; der Sieger wird aus `END` als Platz 1 uebernommen.
+  _Spaeter ueberholt: 2.0.3 - auch eine Wiedergabe schaltet an ihrem
+  Ende auf die Endplaetze um, die seither im Kopf der Aufnahme stehen._
 
 Nachweis: `tools/multiplayer-check.py` prueft alle drei Faelle samt
 Batch-Grenzen, unfertiger Schlusszeile, einer geteilten Nachricht,
@@ -3010,3 +3014,69 @@ einem gegnerischen Sieger. Vor den Korrekturen schlugen 13 Unterfaelle
 fehl; danach bestehen alle 11 Testmethoden. Der Test laeuft im CI
 zusammen mit dem Parser-Fuzz-Test. Die Paketversion bleibt 2.0.2, da
 die Korrekturen zum selben noch offenen PR gehoeren.
+
+## Endplaetze in der Demo-Wiedergabe (umgesetzt, Version 2.0.3)
+
+**Anlass.** Bei der Pruefung der Nachkorrekturen zu PR #112 fiel auf,
+dass die Rangliste der Stufe 0 (5.6) nur in einer echten Runde auf die
+Endplaetze des Hubs umschaltet. Eine Wiedergabe setzt nie `MP_ENDED`
+und blieb deshalb auch nach ihrem Ende bei den vorlaeufigen Raengen:
+am Ende einer Sprint-Aufnahme stand Platz 2 doppelt da, obwohl der Hub
+2 und 3 vergeben hatte. Dahinter lag eine Luecke im Format: die
+Endplaetze der Bretter, die bei Rundenende noch standen, schrieb die
+Aufnahme gar nicht (`demo_record_ko` laesst den Grund `play` bewusst
+aus), und fuer genau diese Sitze blieb auch der Endkasten der
+Wiedergabe ohne Platz.
+
+**Umsetzung.**
+
+- **Demo-Format 5** (`DEMO_FORMAT_VERSION`): eine Versus-Aufnahme, die
+  einen Sieger nennt, traegt je Sitz eine Kopfzeile
+  `place=<slot> <platz>`. Geschrieben wird sie beim Abschluss der
+  Aufnahme aus `MP_PEER_PLACE`, der Sieger mit 1; der Hub schickt die
+  Plaetze als `KO` vor `END` auf derselben Leitung, sie sind dann also
+  alle da. `demo_header_read` verlangt, dass sie aufgehen (je Sitz eine
+  Zeile, die Plaetze 1 bis `players` je einmal, der Sieger auf 1, keine
+  Plaetze ohne Sieger); `demo_load` kennt den Schluessel als Kopfzeile.
+- **Wiedergabe:** `demo_finish_marks` setzt am Ende der Zeitachse die
+  Plaetze aus dem Kopf. Noch stehende Sitze behalten ihren Zustand -
+  ein Platz ist kein Ausscheiden -, und `demo_focus_sync` gibt dem
+  Fokus seinen Platz, sodass der Endkasten ihn auch fuer sie nennt.
+- **Rangliste:** `render_pane_scoreboard` schaltet ausser nach `END`
+  auch dann auf die Endplaetze um, wenn eine Wiedergabe mit Sieger zu
+  Ende gelaufen ist (`DEMO_ENDED`, `DEMO_HDR_WINNER`). `MP_ENDED` bleibt
+  dabei 0: es heisst fuer den Statuskasten und die Sitzungsschleifen
+  "der Hub hat entschieden", und eine Wiedergabe hat keinen Hub.
+
+**Verworfen: die Plaetze aus den Rows nachrechnen.** Das haette ohne
+Formatwechsel funktioniert, waere aber geraten: der Hub ordnet nach den
+Zaehlern, die die Clients gemeldet haben (`HUB_ROWS`), die Wiedergabe
+kennt nur das simulierte Brett. Die beiden koennen um eine Clear-Pause
+(`mp_send_state` sendet waehrend einer Clear-Pause nicht) oder um die
+Zuege zwischen dem Ablauf der Sprint-Uhr im Hub und dem Eintreffen von
+`END` auseinanderliegen - bei knappem Stand mit einer anderen
+Reihenfolge als der des Hubs.
+
+**Format 4 wird nicht mehr gelesen**, auch nicht fuer
+Einzelspieler-Aufnahmen, deren Inhalt sich nicht geaendert hat: die
+Regel "keine Abwaertskompatibilitaet" gilt ohne neue Ausnahme
+(Nutzerentscheidung 2026-09-23). Eine solche Aufnahme bekommt die
+Meldung fuer aeltere Formate (`demo_old_format`).
+_Vorzustand: Format 4 ohne `place`; die Rangliste einer Wiedergabe
+blieb nach deren Ende vorlaeufig, der Endkasten eines noch stehenden
+Sitzes nannte keinen Platz._
+
+Abnahme: `tools/multiplayer-check.py` prueft zusaetzlich den echten
+Schreibweg (`demo_record_finish`) samt Einlesen durch
+`demo_header_read` und `demo_load`, eine unentschiedene Aufnahme ohne
+`place`, die Ablehnung von Format 4 als Formatfrage, acht Arten nicht
+aufgehender Plaetze, die Rangliste am Ende einer Wiedergabe, die
+vorlaeufigen Raenge davor und ohne Sieger sowie den Endkasten eines
+noch stehenden Sitzes. Gegen den Stand vor der Aenderung schlagen 13
+Unterfaelle fehl, der Ladetest zusaetzlich gegen eine Fassung ohne den
+Schluessel in `demo_load`; danach bestehen alle 19 Testmethoden.
+`bash -n`, ShellCheck (Stufe error), die ASCII-Pruefung,
+`tools/release.sh --mode check`, `state-check.sh`, `demo-keys.sh`,
+`display-check.py`, `key-scan.sh`, `net-fuzz.sh` und `hub-check.sh`
+laufen ohne Befund. Eine Wiedergabe im echten Terminal wurde nicht
+durchgespielt.
