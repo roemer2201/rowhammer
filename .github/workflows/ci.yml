@@ -180,6 +180,9 @@ jobs:
       - name: Fuzz the multiplayer parsers
         run: ./tools/net-fuzz.sh --random 400 --silent
 
+      - name: Check EOF delivery, demo holds and final standings
+        run: python3 tools/multiplayer-check.py
+
   # ---------------------------------------------------------------------
   # Multiplayer sessions: a real hub against scripted socat clients -
   # seats that empty, starting alone, the start of a round, a host leaving

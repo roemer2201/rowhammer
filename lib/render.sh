@@ -70,7 +70,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.28.2  (2026-09-22)
+# Version: 0.28.3  (2026-09-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1517,19 +1517,36 @@ render_pane_peers() {
 # order of their places.
 # The number in front is the standing: for a player who is out it is the
 # place the hub gave them, for one still playing their rank by rows among
-# everybody still playing, this player included. The two never collide -
-# the hub hands places out from the back, so a player who is out always
-# ranks behind everybody still standing.
+# everybody still playing, this player included. These provisional ranks
+# do not collide while the hub hands places out from the back. Once END
+# arrives, every rank and the order come from the hub instead: sprint
+# and ultra award final places by rows, so an eliminated player can finish
+# ahead of a standing one. The winner's place comes from END itself.
 # CHANGE 2.0.2: the lines used to come in seat order and led with the
 # place from the hub, which is 0 until a player is out - so for most of
 # the round the scoreboard read "0." in front of every name and ranked
 # nobody.
 render_pane_scoreboard() {
-    local i j slot row line name rank rows other n
-    local -a order=() alive=() outs=()
+    local i j slot row line name rank rows other n final=0
+    local -a order=() alive=() outs=() places=()
     row="${PEER_PANE_ROW}"
+    if [ "${MP_ENDED}" -eq 1 ] && [ "${MP_WINNER}" -ge 0 ]; then
+        final=1
+    fi
     for (( i = 0; i < MP_PEER_COUNT; i++ )); do
         slot="${MP_PEER_SLOTS[i]}"
+        rank="${MP_PEER_PLACE[slot]:-0}"
+        [[ "${rank}" =~ ^[0-9]$ ]] || rank=9
+        if [ "${final}" -eq 1 ] && [ "${slot}" -eq "${MP_WINNER}" ]; then
+            rank=1
+        fi
+        places[slot]="${rank}"
+        if [ "${final}" -eq 1 ]; then
+            # Put every seat through the place sort, including boards
+            # still standing. Their provisional row rank is now obsolete.
+            outs+=("${slot}")
+            continue
+        fi
         case "${MP_PEER_STATE[slot]}" in
             ko|gone) outs+=("${slot}") ;;
             *) alive+=("${slot}") ;;
@@ -1555,12 +1572,10 @@ render_pane_scoreboard() {
     done
     n="${#order[@]}"
     for slot in ${outs[@]+"${outs[@]}"}; do
-        rank="${MP_PEER_PLACE[slot]:-0}"
-        [[ "${rank}" =~ ^[0-9]$ ]] || rank=9
+        rank="${places[slot]}"
         j="${#order[@]}"
         for (( i = n; i < ${#order[@]}; i++ )); do
-            other="${MP_PEER_PLACE[${order[i]}]:-0}"
-            [[ "${other}" =~ ^[0-9]$ ]] || other=9
+            other="${places[${order[i]}]}"
             if [ "${rank}" -lt "${other}" ]; then
                 j="${i}"
                 break
@@ -1572,10 +1587,9 @@ render_pane_scoreboard() {
         name="${MP_PEER_NAME[slot]:0:7}"
         rows="${MP_PEER_ROWS[slot]}"
         [[ "${rows}" =~ ^[0-9]{1,9}$ ]] || rows=0
-        case "${MP_PEER_STATE[slot]}" in
-            ko|gone)
-                rank="${MP_PEER_PLACE[slot]:-0}"
-                [[ "${rank}" =~ ^[0-9]$ ]] || rank=9
+        case "${final}:${MP_PEER_STATE[slot]}" in
+            1:*|0:ko|0:gone)
+                rank="${places[slot]}"
                 ;;
             *)
                 # One plus everybody still playing who is ahead: more

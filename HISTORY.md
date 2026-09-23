@@ -2982,3 +2982,31 @@ wiedergegeben, auf dem Endstand: `survival` mit fuenf Plaetzen zweimal
 mit drei Plaetzen (42), jeweils ohne eine Abweichung und ohne eine
 verworfene Zeile im Hub. Nach den Tests blieb kein Prozess zurueck (vor
 dem Trap der Bridge waren es verwaiste `cat`).
+
+**Nachkorrekturen aus Review von PR #112 (2026-09-23).** Drei
+Randfaelle des obigen Zwischenstands wurden vor dem Merge korrigiert:
+
+- `net_poll` lieferte bei EOF nur den ersten Stapel von hoechstens 16
+  Nachrichten aus und loeschte danach auch vollstaendige Restzeilen.
+  Jetzt merkt `NET_READ_EOF` das Leitungsende, bis alle Stapel
+  ausgeliefert sind. Schreibversuche waehrenddessen koennen das
+  Ausliefern nicht durch einen vorzeitigen Sendefehler abbrechen.
+- `demo_hold_expire` uebergab in den ersten 2000 ms einen negativen
+  Ablaufzeitpunkt, den `demo_hold_release` als "alles freigeben"
+  behandelte. Jetzt wartet die Ablaufpruefung diese Anfangszeit ab;
+  nur der ausdrueckliche Abschluss nutzt den Freigabewert `-1`.
+  Fruehe Stoerreihen bleiben damit bis zu ihrer Marke hinter den
+  vorherigen Zuegen des Mitspielers.
+- Das Scoreboard errechnete auch nach `END` die Plaetze stehender
+  Spieler nur untereinander. In Sprint konnte dadurch Platz 2 doppelt
+  erscheinen, obwohl der Hub Platz 2 und 3 vergeben hatte. Jetzt
+  folgen nach einem entschiedenen Rundenende Zahlen und Sortierung den
+  Hub-Plaetzen; der Sieger wird aus `END` als Platz 1 uebernommen.
+
+Nachweis: `tools/multiplayer-check.py` prueft alle drei Faelle samt
+Batch-Grenzen, unfertiger Schlusszeile, einer geteilten Nachricht,
+Schreibversuch nach EOF, Zeitgrenzen, explizitem Aufnahmeabschluss und
+einem gegnerischen Sieger. Vor den Korrekturen schlugen 13 Unterfaelle
+fehl; danach bestehen alle 11 Testmethoden. Der Test laeuft im CI
+zusammen mit dem Parser-Fuzz-Test. Die Paketversion bleibt 2.0.2, da
+die Korrekturen zum selben noch offenen PR gehoeren.

@@ -574,7 +574,9 @@ oeffentliche Paketquelle gibt (siehe 4.7).
   der Tastentest der Demo-Wiedergabe `tools/demo-keys.sh` (siehe 3.8)
   samt `tools/display-check.py`; der Rundenzustandstest
   `tools/state-check.sh` (siehe 5.20); fuer den Mehrspieler der
-  Fuzz-Test der Parser `tools/net-fuzz.sh` und seit 2.0.2 der
+  Fuzz-Test der Parser `tools/net-fuzz.sh`, die Regressionen fuer
+  EOF-Auslieferung, Demo-Wartezeiten und Endplatzierungen in
+  `tools/multiplayer-check.py` (ohne Terminal oder socat) und seit 2.0.2 der
   Sitzungstest `tools/hub-check.sh`, der einen echten Hub gegen
   geskriptete socat-Clients laufen laesst (beides siehe 5.5; der Job
   installiert `socat` dafuer nach); Bau beider Pakete.

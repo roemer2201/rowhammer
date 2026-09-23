@@ -116,7 +116,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.12.0  (2026-09-22)
+# Version: 0.12.1  (2026-09-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -997,7 +997,7 @@ demo_hold_release() {
     IFS=' ' read -r -a items <<< "${DEMO_HOLD[slot]}"
     for item in "${items[@]}"; do
         t="${item%%:*}"
-        if [ "${upto}" -lt 0 ] || [ "${t}" -le "${upto}" ]; then
+        if [ "${upto}" -eq -1 ] || [ "${t}" -le "${upto}" ]; then
             demo_slot_event "${slot}" "${t}" "${item#*:}"
             DEMO_HOLD_N=$(( DEMO_HOLD_N - 1 ))
         else
@@ -1019,6 +1019,10 @@ demo_hold_expire() {
     [ "${DEMO_MP}" -eq 1 ] || return 0
     [ "${DEMO_HOLD_N}" -gt 0 ] || return 0
     demo_stamp
+    # No event can be old enough yet. A negative cutoff used to mean
+    # "release all", placing early garbage ahead of earlier peer moves;
+    # at 1999 ms it would even equal the explicit finish sentinel -1.
+    [ "${DEMO_STAMP_MS}" -ge "${DEMO_HOLD_MS}" ] || return 0
     for (( i = 0; i < MP_MAX; i++ )); do
         demo_hold_release "${i}" "$(( DEMO_STAMP_MS - DEMO_HOLD_MS ))"
     done

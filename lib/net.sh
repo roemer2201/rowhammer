@@ -35,7 +35,7 @@
 #   mirrored into net.log in debug mode.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.0.1  (2026-09-22)
+# Version: 1.0.2  (2026-09-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -140,6 +140,10 @@ NET_BUF=""
 # too, up to its newline, instead of arriving as a message of its own
 # (CLAUDE.md 5.5).
 NET_SKIP=0
+# EOF may arrive with more complete lines than one poll may hand out.
+# Keep the receive side logically up until those batches are drained;
+# no further reads or writes are attempted on the closed transport.
+NET_READ_EOF=0
 # Why the link went down, for the message the client shows afterwards:
 # "eof" (the other end closed), "send" (writing failed).
 NET_LINK_ERROR=""
@@ -402,6 +406,7 @@ net_connect() {
     # would otherwise be glued to the first line of the new one.
     NET_BUF=""
     NET_SKIP=0
+    NET_READ_EOF=0
     debug_event "net: link up via ${addr} (socat pid ${NET_LINK_PID})"
     return 0
 }
@@ -449,7 +454,9 @@ net_close() {
 # TOPOUT) are resent by lib/mp.sh rather than blocked on here.
 net_send() {
     local line="${1}"
-    if [ "${NET_LINK_UP}" -eq 0 ]; then
+    # A PONG while draining the final receive batches must not turn a
+    # failed write into link-down and hide their remaining END/MIGRATE.
+    if [ "${NET_LINK_UP}" -eq 0 ] || [ "${NET_READ_EOF}" -eq 1 ]; then
         return 1
     fi
     if ! net_line_ok "${line}"; then
@@ -551,24 +558,27 @@ net_take_lines() {
 # poll's worth - so a flooding peer fills the socket buffer, not this
 # process. Returns 1 when the link is down or just went down (EOF), which
 # is how the round learns that the hub or the connection is gone; the
-# complete lines read before the end of file are in NET_INBOX all the
-# same, because the last thing a hub says before it closes is often the
-# one that explains why (CLOSED, MIGRATE, ERR - see mp_poll).
+# complete lines read before the end of file are handed out over as many
+# polls as necessary before link-down is reported. The last thing a hub
+# says before it closes is often the one that explains why (CLOSED,
+# MIGRATE, ERR - see mp_poll); clearing a capped batch's remainder at EOF
+# would lose exactly those final messages (PR #112 review).
 NET_LINES=()
 net_poll() {
-    local line eof=0 reads=0
+    local line reads=0
     NET_INBOX=()
     if [ "${NET_LINK_UP}" -eq 0 ]; then
         return 1
     fi
-    while [ "${#NET_BUF}" -lt $(( MP_POLL_MAX * MP_LINE_MAX )) ] \
+    while [ "${NET_READ_EOF}" -eq 0 ] \
+        && [ "${#NET_BUF}" -lt $(( MP_POLL_MAX * MP_LINE_MAX )) ] \
         && [ "${reads}" -lt "${MP_POLL_MAX}" ]; do
         # Nothing pending is the normal case in most ticks.
         read -t 0 -u "${NET_LINK_IN}" 2>/dev/null || break
         reads=$(( reads + 1 ))
         if ! net_read_chunk "${NET_LINK_IN}"; then
             NET_BUF+="${NET_CHUNK}"
-            eof=1
+            NET_READ_EOF=1
             break
         fi
         NET_BUF+="${NET_CHUNK}"
@@ -585,9 +595,10 @@ net_poll() {
             net_log drop "${line}"
         fi
     done
-    if [ "${eof}" -eq 1 ]; then
-        # End of file: the peer or the hub is gone. An unterminated line
-        # in front of it is discarded.
+    if [ "${NET_READ_EOF}" -eq 1 ] && [[ "${NET_BUF}" != *$'\n'* ]]; then
+        # The last complete batch is in NET_INBOX. Only an unterminated
+        # tail may now be discarded; mp_poll handles the final batch even
+        # though this call also reports the end of the link.
         NET_BUF=""
         NET_SKIP=0
         NET_LINK_ERROR="eof"

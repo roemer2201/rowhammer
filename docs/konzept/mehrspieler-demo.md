@@ -297,7 +297,11 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   Pausenmenue, dessen Zugfenster dort nicht gesendet wird, oder ein
   Client, der die Marken weglaesst -, wird das Ereignis mit seiner
   Ankunftszeit geschrieben: der Sitz hat in der Zwischenzeit nichts
-  getan, also gehoert es dorthin. `n` und `z` haben keine Marke; sie
+  getan, also gehoert es dorthin. Vor Ablauf der ersten 2000 ms kann
+  noch kein Ereignis alt genug sein; die Ablaufpruefung gibt dann
+  nichts frei. Der Wert `-1` bedeutet nur beim ausdruecklichen
+  Abschluss der Aufnahme "alles freigeben", nie einen negativen
+  Ablaufzeitpunkt. `n` und `z` haben keine Marke; sie
   kommen ohnehin nach dem letzten Zug des Sitzes und gehen denselben
   Weg. Was beim Schliessen der Aufnahme noch wartet, wird dann
   geschrieben. Die Ereignisse des **eigenen** Sitzes warten nicht: sie

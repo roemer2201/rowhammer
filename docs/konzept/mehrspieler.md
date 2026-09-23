@@ -477,7 +477,13 @@ Vier Rollen, strikt getrennt (die vierte nur im Transport `lan`):
   Ende ueber `MP_LINE_MAX` waechst (in der Inbox das Doppelte, weil vor
   jeder Nachricht die Bridge-Kennung steht), wird bis zu ihrem
   Zeilenende verworfen, statt dass ihr Rest als eigene Nachricht
-  ankommt.
+  ankommt. Meldet die Leitung EOF, bleiben vollstaendige Zeilen im
+  Client-Puffer erhalten: `NET_READ_EOF` sperrt weitere Lese- und
+  Schreibversuche, waehrend `net_poll` weiterhin hoechstens
+  `MP_POLL_MAX` Zeilen pro Aufruf ausliefert. Erst mit dem letzten
+  vollstaendigen Stapel meldet es die Verbindung als beendet; nur ein
+  unfertiger Rest wird verworfen. So erreichen auch `END`, `MIGRATE`
+  und `CLOSED` hinter einem vollen Stapel noch `mp_poll`.
   **Der Hub trennt eine Verbindung, indem er ihre Bridge beendet**
   (`hub_bridge_end`/`hub_bridge_kill`, seit 2.0.2). Den Socket haelt
   nicht der Hub, sondern socat und die Bridge; ein Hub, der einen
@@ -914,8 +920,14 @@ Stufe):
   Ausgeschiedenen sein Platz vom Hub, fuer einen noch Spielenden sein
   Rang nach Rows unter allen, die noch spielen - einen selbst
   eingeschlossen, Gleichstand an den niedrigeren Slot wie beim Hub
-  (5.8). Die beiden Zaehlungen kommen sich nie in die Quere, weil der
-  Hub Plaetze von hinten vergibt. Braucht 1 Zeile je Gegner und passt
+  (5.8). Das sind vorlaeufige Plaetze waehrend der Runde, solange der
+  Hub Plaetze von hinten vergibt. Nach `END` mit einem Sieger gelten
+  ausschliesslich die endgueltigen Plaetze des Hubs, auch fuer noch
+  stehende Spieler; die gesamte Tabelle wird danach sortiert. Platz 1
+  kommt fuer den Sieger aus `END`, alle anderen aus `KO`. Das ist bei
+  Sprint und Ultra noetig, weil ausgeschiedene Spieler nach Rows vor
+  noch stehenden Spielern liegen koennen (5.8).
+  Braucht 1 Zeile je Gegner und passt
   immer in 48x22. (Bis 2.0.2 in Sitzordnung und mit dem Platz vom Hub
   davor, der bis zum Ausscheiden 0 ist - fast die ganze Runde stand
   also "0." vor jedem Namen. Grau sind die Ausgeschiedenen nicht; die

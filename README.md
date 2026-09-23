@@ -334,8 +334,10 @@ genug, hat ein Gegnerfeld dieselbe Breite wie das eigene (140 Spalten bei
 vier Gegnern); sonst werden daraus halb so breite Felder (100 Spalten bei
 vieren). Reicht auch das nicht, werden aus den Gegnern zwei Zeilen bzw.
 eine Zeile je Gegner - die knappste Form ist eine Rangliste nach Rows,
-Ausgeschiedene am Ende mit ihrem Platz -, sodass eine Runde auch im
-48x22-Minimum laeuft (`--mp-view`).
+Ausgeschiedene am Ende mit ihrem vorlaeufigen Platz -, sodass eine Runde
+auch im 48x22-Minimum laeuft (`--mp-view`). Nach Rundenende zeigt und
+sortiert diese Liste die endgueltigen Platzierungen des Hubs; bei Sprint
+und Ultra koennen ausgeschiedene Spieler vor noch stehenden liegen.
 
 **Wenn der Gastgeber geht:** Verlaesst er die **Lobby**, uebernimmt der
 Spieler, der **zuerst beigetreten** ist - die Sitzung laeuft unter
