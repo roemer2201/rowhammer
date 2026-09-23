@@ -829,8 +829,9 @@ Options:
                 happen unasked.
                 Env: ROWHAMMER_MP_GARBAGE   Default: off
   --mp-bot      Test client without a terminal: joins a session and
-                plays random moves, so a round with several players can
-                be tested without several terminals.
+                plays simple, now and then deliberately bad moves, so a
+                round with several players can be tested without
+                several terminals.
                 Env: ROWHAMMER_MP_BOT       Default: 0
   --reset TARGET
                 Reset persistent data in the data directory and exit

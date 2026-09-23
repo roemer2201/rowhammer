@@ -21,7 +21,13 @@
 #   hub_end_round asks when it has to name a winner. The host is a slot
 #   the hub names (HUB_HOST_SLOT, since 1.2.0): when its holder leaves,
 #   the lobby passes to whoever joined first of those still there, and
-#   everybody's ready flag is cleared with it.
+#   everybody's ready flag is cleared with it. A session holds one round:
+#   from its END on it is over (HUB_OVER, since 2.0.2) - nobody is let in
+#   and nobody inherits a lobby any more.
+#   A connection the hub refuses or drops is really closed: the hub ends
+#   the bridge that holds it (hub_bridge_end), because forgetting the slot
+#   alone left the socket open and its place under the listener's
+#   connection limit taken.
 #   It speaks to nobody directly. socat listens (TCP4-LISTEN in the "lan"
 #   transport, UNIX-LISTEN in "unix") and starts one bridge process per
 #   connection ("rowhammer.sh --mp-bridge"); the bridge has the socket on
@@ -34,7 +40,7 @@
 #   shared inbox is atomic, which is what lets several bridges share it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.2.2  (2026-09-05)
+# Version: 1.3.0  (2026-09-22)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -146,6 +152,18 @@ fi
 HUB_RUN=1
 HUB_PLAYING=0
 HUB_ROUND_END_MS=0
+# Whether the round of this session has been played. A session holds one
+# round (CLAUDE.md 5.8: a second round is a second session), so from END
+# on it is over, even though its players are still looking at their
+# result boxes: nobody is let in any more, nobody inherits a lobby that
+# does not exist any more, and a player who leaves keeps their place on
+# everybody's screen, exactly as during the round (hub_client_close).
+# CHANGE 2.0.2: the hub used to fall back into its lobby state at END. A
+# stranger could then join a session whose players were all on their way
+# out, and a host leaving their result box sent the session to another
+# player's machine - PROMOTE arrived in the middle of somebody's result
+# box, and that client started a hub for a round that was already over.
+HUB_OVER=0
 # Which slot runs the lobby, and the counter the join order is taken from.
 # -1 means the session has nobody in it yet; the first client to identify
 # itself becomes the host. It is a slot the hub names rather than the
@@ -176,13 +194,32 @@ HUB_NEXT_PING_MS=0
 HUB_PING_TOKEN=0
 HUB_INBOX_PATH=""
 HUB_DOWN_PREFIX=""
-# The beginning of a line the inbox read did not get to the end of, kept
-# until the rest of it arrives (see hub_main). The same buffer the
-# client's receive path keeps for the same reason (NET_PART in net_poll,
-# lib/net.sh).
-HUB_INBOX_PART=""
+# What the hub has read out of its inbox and not yet handled: raw text,
+# newlines and all (see hub_main and net_take_lines, lib/net.sh). An inbox
+# line is always complete - every bridge writes a whole line in one write,
+# which a pipe keeps together up to 4096 bytes - but a batch may leave
+# lines for the next pass.
+HUB_INBOX_BUF=""
+# Set when a line in the inbox grew past its limit without a newline: the
+# rest of it is dropped as well rather than taken for a message of its
+# own. (Cannot happen with bridges that behave; the check costs nothing.)
+HUB_INBOX_SKIP=0
+HUB_LINES=()
 HUB_SOCAT_PID=0
 HUB_LISTEN_PATH=""
+# The inode and change time of the socket (unix transport) and of the port
+# file this hub created, so hub_cleanup removes them only while they are still its own.
+# Two hubs of one session name on one machine are the normal picture
+# during a handover (see hub_main), and both paths are derived from the
+# name alone - the new hub has replaced them by the time the old one
+# exits.
+HUB_LISTEN_INO=""
+HUB_PORT_INO=""
+# Bridges this hub has to end, by bridge id, with the moment it does so
+# (see hub_bridge_end). The hub cannot close a connection itself - the
+# socket belongs to socat and the bridge process - so ending the bridge is
+# how a connection it refuses or drops really goes away.
+declare -A HUB_KILL_AT=()
 
 # hub_slot_free
 # Index of the first free slot in HUB_FREE_SLOT, or -1 when the session is
@@ -231,10 +268,17 @@ hub_slot_reset() {
 }
 
 # hub_count_players
-# Number of occupied slots in HUB_PLAYERS, and of those still in play in
-# HUB_ALIVE. "In play" means the player has a running round: in the lobby
-# everybody counts, during the round the ones that are neither knocked out
-# nor gone.
+# Number of players in HUB_PLAYERS, and of those still in play in
+# HUB_ALIVE. A player is a connection that has identified itself (HELLO);
+# "in play" means the player has a running round: in the lobby everybody
+# counts, during the round the ones that are neither knocked out nor gone.
+# CHANGE 2.0.2: every open connection used to count, including one that
+# had not said HELLO yet. Such a connection was a player to the start
+# button (a host could "start" against a stranger's silent connection),
+# to the beacon, and - because it had no round state - "alive" to the
+# elimination rule: the last player of a survival round was not declared
+# the winner while it sat there, and every place handed out was one too
+# high.
 HUB_PLAYERS=0
 HUB_ALIVE=0
 hub_count_players() {
@@ -243,6 +287,7 @@ hub_count_players() {
     HUB_ALIVE=0
     for (( i = 0; i < MP_MAX; i++ )); do
         [ -n "${HUB_ID[i]}" ] || continue
+        [ "${HUB_HELLO[i]}" -eq 1 ] || continue
         HUB_PLAYERS=$(( HUB_PLAYERS + 1 ))
         case "${HUB_STATE[i]}" in
             ko|gone) : ;;
@@ -279,12 +324,17 @@ hub_send() {
 }
 
 # hub_bcast LINE [EXCEPT_SLOT]
-# Send to every occupied slot, optionally skipping one - which is what
-# every peer update needs: a player is not their own peer.
+# Send to every player, optionally skipping one - which is what every peer
+# update needs: a player is not their own peer.
+# A connection that has not said HELLO yet is not a player and gets
+# nothing (2.0.2): it used to receive the roster, the pings and every
+# other message of the session before it had so much as named itself -
+# which is information for a stranger and traffic for nobody.
 hub_bcast() {
     local line="${1}" except="${2:--1}" i
     for (( i = 0; i < MP_MAX; i++ )); do
         [ -n "${HUB_ID[i]}" ] || continue
+        [ "${HUB_HELLO[i]}" -eq 1 ] || continue
         [ "${i}" -ne "${except}" ] || continue
         hub_send "${i}" "${line}" || :
     done
@@ -320,14 +370,22 @@ hub_roster_send() {
 # released again by the HELLO deadline in hub_periodic.
 hub_client_open() {
     local id="${1}" slot
-    if ! hub_slot_free; then
-        proto_msg ERR full "session is full"
-        # No slot, so no hub_send: write straight to the bridge's FIFO.
-        local fifo="${HUB_DOWN_PREFIX}.${id}"
-        if [ -p "${fifo}" ]; then
-            printf '%s\n' "${PROTO_LINE}" 1<>"${fifo}" 2>/dev/null || :
+    # Nobody gets a slot once the round has begun or the session is over:
+    # a slot handed out now could be the one a player who dropped out of
+    # the round still holds on everybody's screen (hub_client_close keeps
+    # it named), and its reset would wipe that player's figures and place
+    # before the round is decided. The HELLO would be refused anyway; the
+    # door is simply closed one message earlier. (Bugfix 2.0.2.)
+    if [ "${HUB_PLAYING}" -eq 1 ] || [ "${HUB_OVER}" -eq 1 ]; then
+        if [ "${HUB_OVER}" -eq 1 ]; then
+            hub_refuse "${id}" over "session is over"
+        else
+            hub_refuse "${id}" running "round already running"
         fi
-        debug_event "hub: connection ${id} refused, session full"
+        return 0
+    fi
+    if ! hub_slot_free; then
+        hub_refuse "${id}" full "session is full"
         return 0
     fi
     slot="${HUB_FREE_SLOT}"
@@ -343,41 +401,120 @@ hub_client_open() {
     return 0
 }
 
-# hub_client_close ID
+# hub_refuse ID CODE TEXT
+# Turn a connection away that never got a slot: tell it why, straight into
+# its bridge's FIFO (there is no slot to hub_send to), and end the bridge a
+# moment later so the connection really closes (hub_bridge_end).
+hub_refuse() {
+    local id="${1}" fifo
+    proto_msg ERR "${2}" "${3}"
+    fifo="${HUB_DOWN_PREFIX}.${id}"
+    if [ -p "${fifo}" ]; then
+        printf '%s\n' "${PROTO_LINE}" 1<>"${fifo}" 2>/dev/null || :
+    fi
+    hub_bridge_end "${id}"
+    debug_event "hub: connection ${id} refused (${2}: ${3})"
+    return 0
+}
+
+# hub_bridge_end ID
+# Have the bridge of a connection ended, HUB_STOP_GRACE_MS from now - the
+# same moment's grace hub_stop_soon gives its own last word, so a refusal
+# or an ERR written just before still reaches the socket.
+# The hub cannot close a connection by itself: the socket is held by the
+# socat child and the bridge process, and a hub that only forgot a slot
+# left both running (bugfix 2.0.2). A client dropped for flooding or for
+# malformed messages then stayed connected as long as it liked, and since
+# the listener takes at most MP_MAX connections (max-children), a handful
+# of such connections - or of refused ones, the "session is full" kind -
+# locked everybody else out of the session for good. The bridge id is the
+# bridge's process id (hub_bridge_main), and its TERM trap takes the
+# socket down with it.
+hub_bridge_end() {
+    local id="${1}"
+    [[ "${id}" =~ ${MP_NUM_RE} ]] || return 0
+    now_ms
+    HUB_KILL_AT["${id}"]=$(( NOW_MS + HUB_STOP_GRACE_MS ))
+    return 0
+}
+
+# hub_bridge_kill ID
+# End one bridge now. Only while its FIFO exists: a bridge removes it on
+# its way out, so a missing FIFO is a bridge that has gone by itself - and
+# its process id may by now belong to something else entirely.
+hub_bridge_kill() {
+    local id="${1}"
+    unset "HUB_KILL_AT[${id}]"
+    [[ "${id}" =~ ${MP_NUM_RE} ]] || return 0
+    [ -p "${HUB_DOWN_PREFIX}.${id}" ] || return 0
+    kill -TERM "${id}" 2>/dev/null || :
+    debug_event "hub: bridge ${id} ended"
+    return 0
+}
+
+# hub_client_close ID [eof]
 # A connection ended (bridge EOF, a dropped client, a missing FIFO). In
 # the lobby the slot is simply freed; during a round the player counts as
 # knocked out, so the round can finish without them (CLAUDE.md 5.8) - and
 # their slot stays occupied, because the others are still looking at it.
+# Unless the bridge reported the end itself ("eof"), it is ended as well:
+# a slot the hub has let go of must not leave its connection behind.
 hub_client_close() {
     local id="${1}" slot
     slot="${HUB_SLOT_OF_ID[${id}]:-}"
     [ -n "${slot}" ] || return 0
     unset "HUB_SLOT_OF_ID[${id}]"
     proto_rate_forget "${id}"
-    if [ "${HUB_PLAYING}" -eq 1 ] && [ "${HUB_STATE[slot]}" = "play" ]; then
-        debug_event "hub: slot ${slot} (${HUB_NAME[slot]}) lost the connection during the round"
-        hub_eliminate "${slot}" "gone"
-        # The slot keeps its name and figures so the others still see who
-        # it was; only the id is cleared, so nothing is sent there again.
+    if [ "${2:-}" != "eof" ]; then
+        hub_bridge_end "${id}"
+    fi
+    # A round is running, or has been played (HUB_OVER): whoever leaves
+    # keeps their name, figures and place on everybody's screen - only the
+    # id is cleared, so nothing is sent there again. A player still in the
+    # running round is out of it as "gone"; one who had already topped out
+    # and was watching simply stops watching.
+    # No handover in either case: the settings are frozen, the round plays
+    # itself out for everybody who is left, and moving the session to
+    # another machine mid-round would mean every board reconnecting in the
+    # middle of a duel. The host slot is simply vacated; the round ends
+    # the session anyway.
+    # CHANGE 2.0.2: this used to ask for a player in "play" only. A player
+    # who had topped out and then left - the ordinary way out of a result
+    # box - took the lobby path below instead: their slot was wiped in the
+    # middle of the round, and when it was the host's, the session was
+    # sent to another player's machine and this hub ended, taking the
+    # round down for everybody who was still playing it.
+    if [ "${HUB_PLAYING}" -eq 1 ] || [ "${HUB_OVER}" -eq 1 ]; then
+        if [ "${HUB_PLAYING}" -eq 1 ] && [ "${HUB_STATE[slot]}" = "play" ]; then
+            debug_event "hub: slot ${slot} (${HUB_NAME[slot]}) lost the connection during the round"
+            hub_eliminate "${slot}" "gone"
+        else
+            debug_event "hub: slot ${slot} (${HUB_NAME[slot]:-unnamed}) left (state ${HUB_STATE[slot]}, round over=${HUB_OVER})"
+        fi
         HUB_ID[slot]=""
-        # No handover during a round: the settings are frozen, the round
-        # plays itself out for everybody who is left, and moving the
-        # session to another machine mid-round would mean every board
-        # reconnecting in the middle of a duel. The host slot is simply
-        # vacated; the round ends the session anyway.
         if [ "${slot}" -eq "${HUB_HOST_SLOT}" ]; then
             HUB_HOST_SLOT=-1
-            debug_event "hub: the host left during the round; no handover until it is over"
+            debug_event "hub: the host left; no handover once the round has begun"
         fi
         return 0
     fi
     debug_event "hub: slot ${slot} (${HUB_NAME[slot]:-unnamed}) left"
-    local was_host=0
+    local was_host=0 announced="${HUB_HELLO[slot]}"
     if [ "${slot}" -eq "${HUB_HOST_SLOT}" ]; then
         was_host=1
     fi
     hub_slot_reset "${slot}"
     HUB_ROSTER_DIRTY=1
+    # Everybody who saw this player in the roster has to learn that the
+    # seat is empty again (protocol 6): the roster only ever names the
+    # occupied slots, so a seat that simply stopped being named stayed on
+    # every other screen for good - in the lobby, as an empty board in the
+    # round, and in the recording of that round as a seat without a single
+    # move, which the playback rightly refuses (bugfix 2.0.2).
+    if [ "${announced}" -eq 1 ]; then
+        proto_msg VACANT "${slot}"
+        hub_bcast "${PROTO_LINE}"
+    fi
     # The host left: the session moves to whoever joined first of those
     # still here, and this hub ends with the handover. Done after the slot
     # is cleared, so the one who is leaving cannot be picked again.
@@ -416,7 +553,17 @@ hub_client_msg() {
         hub_drop "${slot}" "flood" "too many messages"
         return 0
     fi
-    proto_parse "${line}" || rc=$?
+    # The charset and length gate every received line passes (CLAUDE.md
+    # 5.5), here as on the client: the bridge only cuts a line to length,
+    # it does not look at its bytes. A line that fails it is a malformed
+    # message like any other. (Added 2.0.2 - the field patterns below
+    # happened to catch every control character, but that is the
+    # parser's job description, not the filter's.)
+    if net_line_ok "${line}"; then
+        proto_parse "${line}" || rc=$?
+    else
+        rc=1
+    fi
     if [ "${rc}" -eq 2 ]; then
         # A verb this version does not know: ignored on purpose, so a
         # later version can add one without breaking this one.
@@ -471,6 +618,10 @@ hub_msg_hello() {
         hub_drop "${slot}" "running" "round already running"
         return 0
     fi
+    if [ "${HUB_OVER}" -eq 1 ]; then
+        hub_drop "${slot}" "over" "session is over"
+        return 0
+    fi
     name="${PROTO_ARG[1]}"
     HUB_NAME[slot]="${name}"
     HUB_HELLO[slot]=1
@@ -510,7 +661,7 @@ hub_msg_ready() {
     HUB_READY[slot]="${PROTO_ARG[0]}"
     HUB_ROSTER_DIRTY=1
     if [ "${slot}" -eq "${HUB_HOST_SLOT}" ] && [ "${PROTO_ARG[0]}" -eq 1 ] \
-        && [ "${HUB_PLAYING}" -eq 0 ]; then
+        && [ "${HUB_PLAYING}" -eq 0 ] && [ "${HUB_OVER}" -eq 0 ]; then
         hub_count_players
         if [ "${HUB_PLAYERS}" -ge 2 ]; then
             hub_start_round
@@ -535,8 +686,9 @@ hub_msg_ready() {
 # hands of one person.
 hub_msg_setup() {
     local slot="${1}"
-    if [ "${slot}" -ne "${HUB_HOST_SLOT}" ] || [ "${HUB_PLAYING}" -eq 1 ]; then
-        debug_event "hub: SETUP from slot ${slot} ignored (host=${HUB_HOST_SLOT}, playing=${HUB_PLAYING})"
+    if [ "${slot}" -ne "${HUB_HOST_SLOT}" ] || [ "${HUB_PLAYING}" -eq 1 ] \
+        || [ "${HUB_OVER}" -eq 1 ]; then
+        debug_event "hub: SETUP from slot ${slot} ignored (host=${HUB_HOST_SLOT}, playing=${HUB_PLAYING}, over=${HUB_OVER})"
         return 0
     fi
     HUB_MODE="${PROTO_ARG[0]}"
@@ -1048,6 +1200,17 @@ hub_start_round() {
     seed=$(( (seed % 1000000000 + 1000000000) % 1000000000 ))
     for (( i = 0; i < MP_MAX; i++ )); do
         [ -n "${HUB_ID[i]}" ] || continue
+        # A connection that has not identified itself by now is not in
+        # this round: it has no name for anybody's roster, no board and no
+        # client that would ever report a move, and as "play" it kept the
+        # round from being decided until the HELLO deadline dropped it as
+        # "gone" - with a KO for a seat nobody had seen, which also put an
+        # event for an empty seat into every recording of the round, and
+        # the playback refuses such a file (bugfix 2.0.2).
+        if [ "${HUB_HELLO[i]}" -eq 0 ]; then
+            hub_drop "${i}" "running" "round already running"
+            continue
+        fi
         HUB_STATE[i]="play"
         HUB_PENDING[i]=0
         HUB_PLACE[i]=0
@@ -1180,6 +1343,7 @@ hub_end_round() {
         HUB_PLACE[winner]=1
     fi
     HUB_PLAYING=0
+    HUB_OVER=1
     HUB_ROUND_END_MS=0
     proto_msg END "${winner}"
     hub_bcast "${PROTO_LINE}"
@@ -1205,8 +1369,10 @@ hub_periodic() {
     if [ "${MP_TRANSPORT}" = "lan" ] && (( NOW_MS >= HUB_NEXT_BEACON_MS )); then
         HUB_NEXT_BEACON_MS=$(( NOW_MS + MP_BEACON_MS ))
         hub_count_players
+        # A finished session announces itself like a running one: it is
+        # there, and it cannot be joined.
         local state="lobby"
-        if [ "${HUB_PLAYING}" -eq 1 ]; then
+        if [ "${HUB_PLAYING}" -eq 1 ] || [ "${HUB_OVER}" -eq 1 ]; then
             state="play"
         fi
         net_beacon_line "${MP_SESSION}" "${HUB_PLAYERS}" "${MP_MAX}" \
@@ -1237,6 +1403,16 @@ hub_periodic() {
         if (( NOW_MS - ${HUB_LAST_MS[i]} > MP_TIMEOUT_MS )); then
             debug_event "hub: slot ${i} timed out after ${MP_TIMEOUT_MS}ms of silence"
             hub_client_close "${HUB_ID[i]}"
+        fi
+    done
+    # Connections this hub has let go of: their grace is up, so their
+    # bridges are ended now (see hub_bridge_end).
+    # The "+" form for the empty table: bash before 4.4 calls an empty
+    # array unbound under "set -u" (the idiom mp_poll uses as well).
+    local id
+    for id in ${HUB_KILL_AT[@]+"${!HUB_KILL_AT[@]}"}; do
+        if (( NOW_MS >= ${HUB_KILL_AT[${id}]} )); then
+            hub_bridge_kill "${id}"
         fi
     done
     # The successor never answered: the session cannot move, so it ends
@@ -1287,7 +1463,11 @@ hub_listen() {
         # would have been refused by the connect test in lib/mp.sh before
         # we ever got here.
         rm -f -- "${HUB_LISTEN_PATH}" 2>/dev/null || :
-        addr="UNIX-LISTEN:${HUB_LISTEN_PATH},fork,max-children=${MP_MAX},mode=0600"
+        # unlink-close=0: socat removes a listening socket's path when it
+        # terminates, by name - and after a handover on this machine that
+        # name is the successor's socket. hub_cleanup removes the path
+        # itself, and only while it is still this hub's (bugfix 2.0.2).
+        addr="UNIX-LISTEN:${HUB_LISTEN_PATH},fork,max-children=${MP_MAX},mode=0600,unlink-close=0"
         ROWHAMMER_MP_INBOX="${HUB_INBOX_PATH}" \
         ROWHAMMER_MP_DOWN="${HUB_DOWN_PREFIX}" \
         "${NET_SOCAT}" "${addr}" \
@@ -1297,6 +1477,10 @@ hub_listen() {
         if ! kill -0 "${HUB_SOCAT_PID}" 2>/dev/null; then
             return 1
         fi
+        # Which socket is ours, for hub_cleanup: after a handover on this
+        # machine the path belongs to the successor's hub, which has
+        # replaced it with its own (bugfix 2.0.2).
+        HUB_LISTEN_INO="$(stat -c '%i %z' -- "${HUB_LISTEN_PATH}" 2>/dev/null)" || HUB_LISTEN_INO=""
         hub_port_publish
         debug_event "hub: listening on ${HUB_LISTEN_PATH}"
         return 0
@@ -1339,6 +1523,28 @@ hub_port_publish() {
     if printf '%s\n' "${MP_PORT}" > "${tmp}" 2>/dev/null; then
         mv -f -- "${tmp}" "${HUB_PORT_PATH}" 2>/dev/null || :
     fi
+    HUB_PORT_INO="$(stat -c '%i %z' -- "${HUB_PORT_PATH}" 2>/dev/null)" || HUB_PORT_INO=""
+    return 0
+}
+
+# hub_rm_own PATH INODE
+# Remove PATH only when it is still the file this hub created, told apart
+# by its inode and its change time to the nanosecond - the inode alone is
+# not enough, because the successor removes the old file right before it
+# creates its own, and a file system hands a freed inode number out again
+# at once. The socket and the port file are named after the session,
+# not after the hub, and a session that moved to another hub on this
+# machine keeps its name - so by the time the old hub exits, both paths
+# belong to the new one. Removing them by name took the moved session off
+# the disk: in the unix transport nobody could reach it any more, the
+# players following it included if they were a moment late (bugfix
+# 2.0.2).
+hub_rm_own() {
+    local path="${1}" ino="${2}" now
+    [ -n "${path}" ] && [ -n "${ino}" ] || return 0
+    now="$(stat -c '%i %z' -- "${path}" 2>/dev/null)" || return 0
+    [ "${now}" = "${ino}" ] || return 0
+    rm -f -- "${path}" 2>/dev/null || :
     return 0
 }
 HUB_PORT_PATH=""
@@ -1375,8 +1581,22 @@ hub_sweep_stale() {
 # down FIFOs of the bridges and, in the unix transport, the socket. Runs
 # from the hub process's EXIT trap, so a killed hub leaves nothing behind.
 hub_cleanup() {
+    local path id
     if [ "${HUB_SOCAT_PID}" -gt 0 ]; then
         kill "${HUB_SOCAT_PID}" 2>/dev/null || :
+    fi
+    # The bridges still standing, while their FIFOs still say which they
+    # are: killing the listener does not reach them (each is a child of a
+    # socat child of its own), so without this every connection outlived
+    # the hub and its client learned of the end only by the silence
+    # timeout (2.0.2). Their clients have had the hub's last word for
+    # HUB_STOP_GRACE_MS by now (hub_stop_soon).
+    if [ -n "${HUB_DOWN_PREFIX}" ]; then
+        for path in "${HUB_DOWN_PREFIX}".*; do
+            [ -p "${path}" ] || continue
+            id="${path##*.}"
+            hub_bridge_kill "${id}"
+        done
     fi
     if [ -n "${HUB_INBOX_PATH}" ]; then
         rm -f -- "${HUB_INBOX_PATH}" 2>/dev/null || :
@@ -1384,12 +1604,8 @@ hub_cleanup() {
     if [ -n "${HUB_DOWN_PREFIX}" ]; then
         rm -f -- "${HUB_DOWN_PREFIX}".* 2>/dev/null || :
     fi
-    if [ -n "${HUB_LISTEN_PATH}" ]; then
-        rm -f -- "${HUB_LISTEN_PATH}" 2>/dev/null || :
-    fi
-    if [ -n "${HUB_PORT_PATH}" ]; then
-        rm -f -- "${HUB_PORT_PATH}" 2>/dev/null || :
-    fi
+    hub_rm_own "${HUB_LISTEN_PATH}" "${HUB_LISTEN_INO}"
+    hub_rm_own "${HUB_PORT_PATH}" "${HUB_PORT_INO}"
     return 0
 }
 
@@ -1400,7 +1616,7 @@ hub_cleanup() {
 # one and times out otherwise, which is when the periodic work runs. No
 # sleep, no busy loop.
 hub_main() {
-    local line rc id rest n
+    local line id rest c
     umask 0077
     net_require || die "socat is required for the multiplayer (package: socat)"
     net_dir_prepare || die "${NET_ERROR}"
@@ -1435,53 +1651,45 @@ hub_main() {
     HUB_NEXT_PING_MS=$(( NOW_MS + MP_PING_MS ))
     debug_event "hub: session '${MP_SESSION}' up (transport=${MP_TRANSPORT} max=${MP_MAX} target=${MP_TARGET})"
     while [ "${HUB_RUN}" -eq 1 ]; do
-        n=0
-        while [ "${n}" -lt "${HUB_BATCH_MAX}" ]; do
-            line=""
-            rc=0
-            IFS= read -r -t 0.05 -u 9 line || rc=$?
-            if [ "${rc}" -gt 128 ]; then
-                # Timed out - the normal case, and then the variable is
-                # empty and this is just the clock. It is not always
-                # empty though: a read that runs into its timeout in the
-                # middle of a line hands back the part it did get, and
-                # dropping that would lose the line and everything the
-                # same message still had to say. It happens when the hub
-                # is descheduled mid-read, which is exactly what a full
-                # session on a busy machine does - measured once in a
-                # four player round, where it cost one player's move
-                # window: on screen nothing at all, since the next board
-                # snapshot papers over it, but the demo recording of
-                # that round keeps the hole for good (CLAUDE.md 5.20).
-                # So the part is kept and the remainder glued in front
-                # of it next time, exactly as the client's receive path
-                # does it (NET_PART in net_poll, lib/net.sh) - including
-                # the cap, so a writer sending MP_LINE_MAX bytes without
-                # a newline cannot make this buffer grow.
-                HUB_INBOX_PART="${HUB_INBOX_PART}${line}"
-                if [ "${#HUB_INBOX_PART}" -ge "${MP_LINE_MAX}" ]; then
-                    HUB_INBOX_PART=""
-                fi
-                break
-            fi
-            line="${HUB_INBOX_PART}${line}"
-            HUB_INBOX_PART=""
-            if [ -z "${line}" ]; then
-                break
-            fi
-            n=$(( n + 1 ))
+        # The clock: wait up to 50 ms for the first byte, unless complete
+        # lines are still waiting from the last pass (a batch is capped at
+        # HUB_BATCH_MAX lines). One byte with -N rather than a line: a
+        # timed "read" that runs out just as it has read the newline
+        # reports the timeout all the same, and the line then cannot be
+        # told from an unfinished one (see net_read_chunk, lib/net.sh) -
+        # with -N a newline is data like any other character.
+        if [[ "${HUB_INBOX_BUF}" != *$'\n'* ]]; then
+            c=""
+            LC_ALL=C IFS= read -r -t 0.05 -N 1 -u 9 c || :
+            HUB_INBOX_BUF+="${c}"
+        fi
+        # Then whatever else is there, in blocks, while there is room.
+        while [ "${#HUB_INBOX_BUF}" -lt $(( HUB_BATCH_MAX * MP_LINE_MAX )) ] \
+            && read -t 0 -u 9 2>/dev/null; do
+            # The inbox is opened read-write, so it never ends; a failing
+            # read is only ever a short block.
+            net_read_chunk 9 || :
+            HUB_INBOX_BUF+="${NET_CHUNK}"
+            [ "${#NET_CHUNK}" -ge "${NET_CHUNK_MAX}" ] || break
+        done
+        # Twice the line limit rather than once: an inbox line is a
+        # message plus the bridge id in front of it, and the bridge cuts
+        # the message to MP_LINE_MAX, so a full length message is
+        # legitimately longer than the limit here.
+        HUB_LINES=()
+        net_take_lines HUB_INBOX_BUF HUB_INBOX_SKIP HUB_LINES \
+            "${HUB_BATCH_MAX}" $(( 2 * MP_LINE_MAX ))
+        for line in ${HUB_LINES[@]+"${HUB_LINES[@]}"}; do
+            [ -n "${line}" ] || continue
             id="${line%% *}"
             rest="${line#* }"
             [[ "${id}" =~ ${MP_NUM_RE} ]] || continue
             case "${rest}" in
                 _OPEN) hub_client_open "${id}" ;;
-                _EOF)  hub_client_close "${id}" ;;
+                _EOF)  hub_client_close "${id}" eof ;;
                 _PEER\ *) hub_client_addr "${id}" "${rest#_PEER }" ;;
                 *)     hub_client_msg "${id}" "${rest}" ;;
             esac
-            # Nothing more waiting: leave the batch so the periodic work
-            # below runs promptly instead of after another timeout.
-            read -t 0 -u 9 2>/dev/null || break
         done
         hub_periodic
     done
@@ -1527,6 +1735,12 @@ hub_bridge_main() {
     # socket.
     cat <&8 &
     cat_pid=$!
+    # How the hub closes this connection: it sends TERM (hub_bridge_kill).
+    # Without a trap bash would simply die and leave the cat behind - an
+    # orphan holding the socket and the FIFO open for good. With it, the
+    # read below is interrupted, the cat goes and the FIFO is removed, and
+    # socat closes the socket once its child is gone (2.0.2).
+    trap 'kill "${cat_pid}" 2>/dev/null; rm -f -- "${down}" 2>/dev/null; exit 0' TERM
     while IFS= read -r line; do
         # Cut rather than reject: the hub's parser decides what a line
         # means, this end only makes sure it stays within the length the

@@ -8,7 +8,8 @@
 #   and everything the running round needs to talk to the hub.
 #   Three ways into a session, all of them ending in the same lobby: open
 #   one (which starts a hub process in the background and connects to it
-#   like any other client - the host is simply the client in slot 0),
+#   like any other client - the host is simply the client the hub names in
+#   its HOST message, the first one to arrive),
 #   join one found by its beacon, or connect to an address typed by hand.
 #   The third is not a fallback but an equal path: WLANs with client
 #   isolation, separate VLANs and quite a few container networks drop
@@ -26,9 +27,13 @@
 #   The client reports events and never consequences: it sends its
 #   counters, its clears and its top-out, and the hub decides what they
 #   are worth (see lib/hub.sh).
+#   The test bot (--mp-bot) lives here as well: a headless client that
+#   plays through the real round functions with a simple greedy placement
+#   search (mp_bot_plan), so a session of five can be tested without five
+#   terminals.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.4.4  (2026-09-19)
+# Version: 1.5.0  (2026-09-22)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -94,6 +99,15 @@ MP_SESSION_MAX=0
 # ours with QUEUE whenever a clear of ours cancelled part of it.
 MP_PENDING=0
 MP_HOLE=0
+# Garbage rows pushed into our board since our last clear was reported.
+# The hub's QUEUE answers a CLEAR, and the hub works it out before it has
+# seen what this board did in the meantime: a lock between the CLEAR and
+# the QUEUE (the first piece after the clear pause, dropped in the very
+# tick the pause ends) has already taken the queue in, and the APPLIED it
+# sent is still on its way. Taken off the hub's number, those rows are not
+# pushed in a second time (bugfix 2.0.2, CLAUDE.md 5.7). Round state like
+# the queue itself: a playback keeps one per seat (lib/state.sh).
+MP_APPLIED=0
 # The round's outcome as the hub reported it: our place, the winning slot
 # and whether the round has been decided at all.
 MP_PLACE=0
@@ -193,6 +207,7 @@ mp_reset() {
     MP_PHASE="lobby"
     MP_PENDING=0
     MP_HOLE=0
+    MP_APPLIED=0
     MP_PLACE=0
     MP_WINNER=-1
     MP_ENDED=0
@@ -320,6 +335,28 @@ mp_handle() {
                 MP_PEER_STATE[slot]="${PROTO_ARG[3]}"
             fi
             ;;
+        VACANT)
+            # A player left the lobby and their seat is empty again
+            # (protocol 6). The roster names the occupied seats only, so
+            # without this the seat stayed on this screen for good - in
+            # the lobby, as an empty board in the round, as a player the
+            # hub bookkeeping (mp_hub_stop) thought was still there, and
+            # as a seat without a single move in the recording, which the
+            # playback refuses (bugfix 2.0.2). Only in the lobby: from the
+            # start of the round on a seat keeps its player, whatever
+            # becomes of them, and a hub that says otherwise is not
+            # believed.
+            slot="${PROTO_ARG[0]}"
+            if [ "${slot}" -lt "${MP_MAX}" ] && [ "${slot}" -ne "${MP_SLOT}" ] \
+                && [ "${MP_PHASE}" = "lobby" ]; then
+                MP_PEER_NAME[slot]=""
+                MP_PEER_READY[slot]=0
+                MP_PEER_STATE[slot]="lobby"
+                MP_PEER_BOARD[slot]=""
+                debug_event "mp: slot ${slot} is empty again"
+                DIRTY=1
+            fi
+            ;;
         SEED)
             # The shared piece sequence: everybody plays the same pieces,
             # which is what makes the duel about play rather than luck. A
@@ -424,6 +461,11 @@ mp_handle() {
                 # stays plannable (CLAUDE.md 5.7).
                 MP_PENDING=$(( MP_PENDING + ${PROTO_ARG[1]} ))
                 MP_HOLE="${PROTO_ARG[2]}"
+                # Where in this player's moves the rows arrived, for the
+                # recordings the others make of this round (a mark, see
+                # PROTO_ACT_RE): which lock takes them in depends on it,
+                # and only this end knows it to the move.
+                mp_act_event y
                 debug_event "mp: ${PROTO_ARG[1]} garbage row(s) incoming, hole=${MP_HOLE}, queue=${MP_PENDING}"
                 DIRTY=1
             else
@@ -441,7 +483,10 @@ mp_handle() {
             # drift away from the round at the first cancelled attack.
             demo_record_queue "${slot}" "${PROTO_ARG[1]}"
             if [ "${slot}" -eq "${MP_SLOT}" ]; then
-                MP_PENDING="${PROTO_ARG[1]}"
+                mp_queue_set "${PROTO_ARG[1]}"
+                # The same mark as for GARBAGE: what the queue is set to
+                # depends on the rows taken in before it (mp_queue_set).
+                mp_act_event q
                 DIRTY=1
             else
                 debug_event "mp: queue of slot ${slot} is now ${PROTO_ARG[1]}"
@@ -491,7 +536,20 @@ mp_handle() {
             # the session on. Answered here rather than in the lobby: the
             # old hub is waiting for the port, and a menu that happens to
             # be open must not delay it.
-            mp_promote
+            # Only a client in the lobby takes a session over. The hub asks
+            # nobody else since 2.0.2, but a hub is not something this end
+            # has to trust (CLAUDE.md 5.5): one that asked in the middle of
+            # a round or a result box made this client start a hub of its
+            # own there, with a wait that swallowed the keys of whatever
+            # was on screen. The answer "0" is the refusal the old hub
+            # already knows how to take (it closes the session).
+            if [ "${MP_PHASE}" = "lobby" ]; then
+                mp_promote
+            else
+                debug_event "mp: asked to take the session over outside the lobby, declined"
+                proto_msg PROMOTED 0
+                net_send "${PROTO_LINE}" || :
+            fi
             ;;
         MIGRATE)
             # The session has moved to the hub the new host started.
@@ -525,19 +583,34 @@ mp_handle() {
 # because 280 ms without reading let the hub's messages pile up at the
 # very moment a clear is being reported.
 mp_poll() {
-    local line
+    local line up=1
     [ "${MP_ACTIVE}" -eq 1 ] || return 0
-    if ! net_poll; then
-        MP_ERROR="lost"
-        return 1
-    fi
+    net_poll || up=0
     if [ "${#NET_INBOX[@]}" -gt 0 ]; then
         now_ms
         MP_LAST_RX_MS="${NOW_MS}"
     fi
+    # What arrived before an end of file is handled all the same: the
+    # last lines of a hub that closes are the ones that say why - CLOSED,
+    # MIGRATE, an ERR - and a poll that found them together with the end
+    # of the link used to throw them away and report a bare "connection
+    # lost" (2.0.2; the hub ends its connections itself since then, see
+    # hub_bridge_end in lib/hub.sh).
     for line in ${NET_INBOX[@]+"${NET_INBOX[@]}"}; do
         mp_handle "${line}"
     done
+    # The recording's held events of a seat that has gone quiet (see
+    # DEMO_HOLD in lib/demo.sh) - once per poll, which is once per tick.
+    demo_hold_expire
+    if [ "${up}" -eq 0 ]; then
+        # The reason the hub gave, if it gave one, is the better message -
+        # and a round the hub has decided (END) was not lost with the link
+        # that carried the decision.
+        if [ -z "${MP_ERROR}" ] && [ "${MP_ENDED}" -eq 0 ]; then
+            MP_ERROR="lost"
+        fi
+        return 1
+    fi
     return 0
 }
 
@@ -562,15 +635,33 @@ mp_link_silent() {
 # Report our counters, but only when they actually changed - the limit in
 # the protocol is ten a second, and a round produces far fewer changes
 # than that. The peers see the same numbers our own HUD shows.
+# Two rules make the counters a checkpoint a recording can rely on
+# (CLAUDE.md 5.20), and both came with 2.0.2:
+#   - Not while the board rests on a clear. The rows of that clear are
+#     booked when the pause is over (clear_and_continue), so what the
+#     counters say in between is neither the state before the lock nor the
+#     one after it - and the playback, which compares a checkpoint only
+#     with the seat settled, took every such report for a divergence. The
+#     peers see the new numbers ~280 ms later, which nobody can tell.
+#   - The moves that produced them go out first. A STATE used to leave
+#     while its move window was still collecting, so the window that
+#     followed could carry moves made after the counters were taken - a
+#     lock among them, and the checkpoint claimed a height the stream had
+#     already left behind. Flushed first, a checkpoint sits exactly behind
+#     the last move it describes.
 mp_send_state() {
     local key
     [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    if [ "${CLEAR_PENDING}" -eq 1 ] && [ "${GAME_OVER}" -eq 0 ]; then
+        return 0
+    fi
     proto_stack_height
     key="${CLEARED_TOTAL}|${ROW_CREDIT}|${LEVEL}|${GOLD_COUNT}|${SILVER_COUNT}|${PROTO_HEIGHT}|${MP_PENDING}"
     if [ "${key}" = "${MP_LAST_STATE}" ]; then
         return 0
     fi
     MP_LAST_STATE="${key}"
+    mp_act_flush 1
     proto_msg STATE "${CLEARED_TOTAL}" "${ROW_CREDIT}" "${LEVEL}" \
         "${GOLD_COUNT}" "${SILVER_COUNT}" "${PROTO_HEIGHT}" "${MP_PENDING}"
     net_send "${PROTO_LINE}" || :
@@ -650,6 +741,11 @@ mp_round_ms() {
 # today, it cannot occur in a multiplayer round, and a message the peers
 # would have to throw away should not be produced in the first place
 # (the same rule the player name goes through in proto_name).
+# The alphabet includes the two marks "y" and "q" (protocol 6, see
+# PROTO_ACT_RE), which mp_handle adds when the hub's GARBAGE or QUEUE for
+# this player arrives. They go into the move stream only, never into this
+# player's own recording: that one stamps the hub's event itself, on the
+# same clock as the moves around it.
 mp_act_event() {
     local action="${1}" delta
     [ "${MP_ACTIVE}" -eq 1 ] || return 0
@@ -660,7 +756,7 @@ mp_act_event() {
     # would only grow (CLAUDE.md 5.20).
     [ "${DEMO_PLAYING}" -eq 0 ] || return 0
     [ "${MP_PHASE}" = "play" ] || return 0
-    [[ "${action}" =~ ^[acghklors]$ ]] || return 0
+    [[ "${action}" =~ ^[acghklorsyq]$ ]] || return 0
     mp_round_ms
     if [ -z "${MP_ACT_BUF}" ]; then
         # First token of a window: it counts from the round time of the
@@ -703,7 +799,7 @@ mp_act_flush() {
         # Count the tokens by their action letters: a full buffer goes out
         # early, because the field cannot carry more and dropping a move
         # would make a recording of this round diverge without saying so.
-        count="${MP_ACT_BUF//[^acghklors]/}"
+        count="${MP_ACT_BUF//[^acghklorsyq]/}"
         if (( NOW_MS < MP_ACT_NEXT_MS && ${#count} < MP_ACT_MAX )); then
             return 0
         fi
@@ -726,6 +822,11 @@ mp_act_flush() {
 # twenty rows" impossible (CLAUDE.md 5.4).
 mp_send_clear() {
     [ "${MP_ACTIVE}" -eq 1 ] || return 0
+    # The rows the next QUEUE has not seen yet are counted from here (see
+    # MP_APPLIED and mp_queue_set). Before the playback guard below: a
+    # replay reports nothing, but it has to take the hub's QUEUE the way
+    # the round took it, or it pushes in rows the round did not.
+    MP_APPLIED=0
     # A playback clears rows on five simulated boards and reports none of
     # them: it has no link, and the attacks of that round were settled
     # when it was played (CLAUDE.md 5.20).
@@ -777,6 +878,7 @@ mp_apply_garbage() {
     for (( i = 0; i < n; i++ )); do
         board_flood_row "${MP_HOLE}" || break
     done
+    MP_APPLIED=$(( MP_APPLIED + n ))
     # A playback pushes the very same rows into its simulated boards and
     # has nobody to tell about it - the queue it works off came out of
     # the recording (see demo_apply).
@@ -789,6 +891,27 @@ mp_apply_garbage() {
     if board_top_out; then
         return 1
     fi
+    return 0
+}
+
+# mp_queue_set COUNT
+# Take the hub's word on the length of our garbage queue (QUEUE), minus the
+# rows this board has pushed in since the clear the hub is answering was
+# reported (MP_APPLIED). The hub cancels an attack against the queue as it
+# stood when the CLEAR arrived; a lock in between has already taken that
+# queue in - uncancelled, which cannot be undone - and its APPLIED reaches
+# the hub after the QUEUE left. Setting the hub's number as it came put
+# those rows back into the queue, and the next lock pushed them in a second
+# time (bugfix 2.0.2). The hub clamps the late APPLIED the same way, so the
+# two ends agree again. Shared by the round and its replay (demo_apply),
+# which is what keeps a recording of such a moment replaying the way it
+# was played.
+mp_queue_set() {
+    local n=$(( ${1} - MP_APPLIED ))
+    if [ "${n}" -lt 0 ]; then
+        n=0
+    fi
+    MP_PENDING="${n}"
     return 0
 }
 
@@ -1046,7 +1169,7 @@ mp_hub_port_read() {
 # End the hub this client started - but only when nobody else is in the
 # session (user request, 1.2.0). Whoever opened a session used to take it
 # down with them; now the lobby passes to the next player
-# (hub_host_reassign), and killing the hub here would pull the session out
+# (hub_migrate_begin), and killing the hub here would pull the session out
 # from under everybody who is still in it.
 # Leaving it running is safe in every case: a hub with no players left
 # ends itself on its next pass (hub_periodic), so an abandoned session
@@ -1131,7 +1254,7 @@ mp_host() {
     # Not "MP_IS_HOST=1" any more: who runs the lobby is the hub's answer
     # and arrives as its HOST message. Opening the session and running it
     # are the same thing at this moment, but they stop being the same the
-    # first time a host leaves (see hub_host_reassign in lib/hub.sh).
+    # first time a host leaves (see hub_migrate_begin in lib/hub.sh).
     if [ "${MP_TRANSPORT}" = "unix" ]; then
         mp_connect_unix "${MP_SESSION}" && ok=1
     else
@@ -1333,21 +1456,27 @@ mp_connect_failed() {
 # and answers with SEED and START), everybody else's is "ready".
 mp_lobby() {
     local -a lines entries actions
-    local sel=0 dirty=1 i n line ready=0 left=0
+    local sel=0 dirty=1 i n line ready=0 left=0 up
     net_local_addr
     while :; do
-        if ! mp_poll; then
-            mp_lobby_lost
-            return 0
-        fi
-        if [ -n "${MP_ERROR}" ]; then
-            mp_lobby_lost
-            return 0
+        up=1
+        mp_poll || up=0
+        # "Not alone yet" is an answer, not a failure: the host asked to
+        # start before a second player was there. The entry is locked in
+        # that case (see below), so this only comes back from a request
+        # that crossed a player leaving on the way - and it must not end
+        # the session it was asked in, which it did until 2.0.2 (every
+        # error ended the lobby, and the host's own lobby with it).
+        if [ "${MP_ERROR}" = "err:alone" ]; then
+            MP_ERROR=""
+            dirty=1
         fi
         # The session moved: the host left and somebody else took it over.
         # Followed first, told about afterwards - the notice belongs in
         # the lobby the player ends up in, not in the one they are
-        # leaving.
+        # leaving. Asked before the state of the link: the old hub ends
+        # its connections when it stops, and a MIGRATE that arrived in
+        # the same poll as that end of file is still the answer.
         if [ -n "${MP_MOVE_ADDR}" ]; then
             local moved_to="${MP_HOST_SLOT}"
             if mp_migrate; then
@@ -1362,6 +1491,10 @@ mp_lobby() {
         fi
         if [ -n "${MP_CLOSED}" ]; then
             mp_lobby_closed "${MP_CLOSED}"
+            return 0
+        fi
+        if [ "${up}" -eq 0 ] || [ -n "${MP_ERROR}" ]; then
+            mp_lobby_lost
             return 0
         fi
         # Nothing from the hub for far too long: it is gone without
@@ -1469,8 +1602,15 @@ mp_lobby() {
             ENTER|SPACE)
                 case "${actions[sel]}" in
                     start)
-                        proto_msg READY 1
-                        net_send "${PROTO_LINE}" || :
+                        # Locked while the host sits there alone - the
+                        # line above the entries says so (CLAUDE.md 5.1).
+                        # Sent anyway, the hub would only answer "not
+                        # alone yet" (ERR alone).
+                        mp_peer_count
+                        if [ "${MP_PEER_COUNT}" -gt 0 ]; then
+                            proto_msg READY 1
+                            net_send "${PROTO_LINE}" || :
+                        fi
                         dirty=1
                         ;;
                     ready)
@@ -1733,7 +1873,10 @@ mp_lobby_line() {
     if [ "${slot}" -eq "${MP_SLOT}" ]; then
         mark="${I18N[mp_you]}"
     fi
-    if [ "${slot}" -eq 0 ]; then
+    # The host is whoever the hub names (HOST), not slot 0: the lobby can
+    # change hands, and a hub hands its slots out lowest-free-first, so
+    # the one who runs it need not sit in the first seat (bugfix 2.0.2).
+    if [ "${slot}" -eq "${MP_HOST_SLOT}" ]; then
         state="${I18N[mp_is_host]}"
     elif [ "${MP_PEER_READY[slot]}" -eq 1 ]; then
         state="${I18N[mp_is_ready]}"
@@ -1958,40 +2101,152 @@ mp_join_target() {
 # the window everybody else has to join in.
 MP_BOT_LOBBY_MS=5000
 
-# mp_bot_column
-# Where the bot drops its next piece, in MP_BOT_COLUMN: the emptiest
-# column of its board, ties broken at random. That is barely a strategy,
-# and it is not meant to be one - but it does complete a row now and
-# then, which a bot dropping into random columns practically never does.
-# Without that the bot could not exercise the half of the multiplayer
-# that only starts at the first clear: the attack arithmetic, the queue
-# and the cancelling.
-MP_BOT_COLUMN=0
-mp_bot_column() {
-    local x y best=-1 h
-    local -a candidates=()
+# mp_bot_plan
+# Where the bot puts its next piece, in MP_BOT_X (the piece's origin
+# column) and MP_BOT_ROT: every rotation at every column the piece fits
+# into is dropped in thought onto the stack and rated by the four numbers
+# the usual greedy Tetris players go by - the total height of the columns
+# afterwards, the rows it completes, the holes it covers and how uneven
+# the surface becomes (bumpiness). The weights are the well-known ones of
+# that kind of player, scaled to whole numbers (bash has no others). The
+# best placement is taken, ties broken at random.
+# That is a greedy player of the simplest kind, and it is not meant to be
+# more: a bot is a test partner, and what a test needs from it is a round
+# that lasts. The one it replaces picked "the emptiest column" without
+# looking at the piece: the column was the piece's origin rather than its
+# cells, the stack grew into a tower beside it, and every bot was out
+# after a dozen pieces - long before a clear, a garbage attack, a
+# cancelled queue or a sprint clock could have been tested (2.0.2).
+# To keep it mortal, one piece in MP_BOT_BLUNDER goes to a placement drawn
+# at random instead: without that a bot playing without garbage would
+# outlast every test that waits for it to top out.
+MP_BOT_X=0
+MP_BOT_ROT=0
+MP_BOT_BLUNDER=25
+
+# mp_bot_rand N
+# A number in 0..N-1 into MP_BOT_RAND, from the bot's own generator (a
+# linear congruential one, seeded per process in mp_bot_main) - never from
+# RANDOM. RANDOM is the piece sequence: the hub's SEED sets it, and every
+# participant draws the same bags from it (CLAUDE.md 5.1). A bot that took
+# its choices out of it as well drew a different bag from the next refill
+# on (a refill is 63 pieces, so from piece 64): it played another
+# sequence than everybody else, and a recording replayed it with the
+# common one, so its seat ran apart from the round there (bugfix 2.0.2 -
+# the bot before this one did the same with its random column).
+MP_BOT_RNG=1
+MP_BOT_RAND=0
+mp_bot_rand() {
+    MP_BOT_RNG=$(( (MP_BOT_RNG * 1103515245 + 12345) & 0x7FFFFFFF ))
+    MP_BOT_RAND=$(( (MP_BOT_RNG >> 16) % ${1} ))
+    return 0
+}
+
+mp_bot_plan() {
+    local x y rot cell col row py drop best="" score n i lines holes agg bump
+    local -a top h cxs cys cells cand_x cand_rot
+    local -A rowfill=() piececol=() piecetop=()
+    # The first occupied row of every column: a piece dropped from above
+    # meets nothing earlier, whatever lies further down.
     for (( x = 0; x < BOARD_W; x++ )); do
-        h=0
-        for (( y = HIDDEN_ROWS; y < BOARD_H; y++ )); do
+        top[x]="${BOARD_H}"
+        for (( y = 0; y < BOARD_H; y++ )); do
             if [ "${BOARD[y * BOARD_W + x]}" != "${EMPTY_CELL}" ]; then
-                h=$(( BOARD_H - y ))
+                top[x]="${y}"
                 break
             fi
         done
-        if [ "${best}" -lt 0 ] || [ "${h}" -lt "${best}" ]; then
-            best="${h}"
-            candidates=("${x}")
-        elif [ "${h}" -eq "${best}" ]; then
-            candidates+=("${x}")
-        fi
     done
-    MP_BOT_COLUMN="${candidates[RANDOM % ${#candidates[@]}]}"
-    # The target is the piece's origin, and a piece is up to four cells
-    # wide, so an origin beyond this is never reachable. Clamping it here
-    # is cheaper than teaching the bot the shape table, and it keeps
-    # every choice a move it can actually carry out.
-    if [ "${MP_BOT_COLUMN}" -gt $(( BOARD_W - 4 )) ]; then
-        MP_BOT_COLUMN=$(( BOARD_W - 4 ))
+    cand_x=()
+    cand_rot=()
+    for (( rot = 0; rot < 4; rot++ )); do
+        IFS=' ' read -r -a cells <<< "${PIECE_SHAPE["${CUR_TYPE}${rot}"]}"
+        cxs=()
+        cys=()
+        for cell in "${cells[@]}"; do
+            cxs+=("${cell%,*}")
+            cys+=("${cell#*,}")
+        done
+        for (( x = -3; x < BOARD_W; x++ )); do
+            # Resting row of the origin: the highest one at which a cell
+            # sits on top of its column.
+            py="${BOARD_H}"
+            for (( i = 0; i < ${#cxs[@]}; i++ )); do
+                col=$(( x + cxs[i] ))
+                (( col >= 0 && col < BOARD_W )) || { py=-99; break; }
+                drop=$(( top[col] - 1 - cys[i] ))
+                if [ "${drop}" -lt "${py}" ]; then
+                    py="${drop}"
+                fi
+            done
+            [ "${py}" -gt -99 ] || continue
+            # Per column the lowest and the highest cell of the piece, and
+            # per row how many of its cells land there.
+            rowfill=()
+            piececol=()
+            piecetop=()
+            for (( i = 0; i < ${#cxs[@]}; i++ )); do
+                col=$(( x + cxs[i] ))
+                row=$(( py + cys[i] ))
+                rowfill["${row}"]=$(( ${rowfill[${row}]:-0} + 1 ))
+                if [ -z "${piececol[${col}]:-}" ] || [ "${row}" -gt "${piececol[${col}]}" ]; then
+                    piececol["${col}"]="${row}"
+                fi
+                if [ -z "${piecetop[${col}]:-}" ] || [ "${row}" -lt "${piecetop[${col}]}" ]; then
+                    piecetop["${col}"]="${row}"
+                fi
+            done
+            lines=0
+            for row in "${!rowfill[@]}"; do
+                (( row >= 0 )) || continue
+                n="${rowfill[${row}]}"
+                for (( col = 0; col < BOARD_W; col++ )); do
+                    if [ "${BOARD[row * BOARD_W + col]}" != "${EMPTY_CELL}" ]; then
+                        n=$(( n + 1 ))
+                    fi
+                done
+                if [ "${n}" -ge "${BOARD_W}" ]; then
+                    lines=$(( lines + 1 ))
+                fi
+            done
+            # The holes it covers: in each of its columns, the empty cells
+            # between its lowest cell there and the old top of the column.
+            holes=0
+            for col in "${!piececol[@]}"; do
+                holes=$(( holes + top[col] - 1 - piececol[${col}] ))
+            done
+            # Column heights afterwards - every completed row takes one
+            # off each of them - their sum and their unevenness.
+            agg=0
+            for (( col = 0; col < BOARD_W; col++ )); do
+                h[col]=$(( BOARD_H - top[col] ))
+                if [ -n "${piecetop[${col}]:-}" ]; then
+                    h[col]=$(( BOARD_H - piecetop[${col}] ))
+                fi
+                h[col]=$(( h[col] - lines ))
+                agg=$(( agg + h[col] ))
+            done
+            bump=0
+            for (( col = 1; col < BOARD_W; col++ )); do
+                n=$(( h[col] - h[col - 1] ))
+                bump=$(( bump + ( n < 0 ? -n : n ) ))
+            done
+            mp_bot_rand 50
+            score=$(( 761 * lines - 510 * agg - 357 * holes * 4 - 184 * bump + MP_BOT_RAND ))
+            if [ -z "${best}" ] || [ "${score}" -gt "${best}" ]; then
+                best="${score}"
+                MP_BOT_X="${x}"
+                MP_BOT_ROT="${rot}"
+            fi
+            cand_x+=("${x}")
+            cand_rot+=("${rot}")
+        done
+    done
+    mp_bot_rand "${MP_BOT_BLUNDER}"
+    if [ "${#cand_x[@]}" -gt 0 ] && [ "${MP_BOT_RAND}" -eq 0 ]; then
+        mp_bot_rand "${#cand_x[@]}"
+        MP_BOT_X="${cand_x[MP_BOT_RAND]}"
+        MP_BOT_ROT="${cand_rot[MP_BOT_RAND]}"
     fi
     return 0
 }
@@ -2026,6 +2281,11 @@ mp_bot_main() {
     # Switched off here rather than asked for at the call site, so a bot
     # is off the books whatever --demo-record says.
     DEMO_RECORD="off"
+    # The bot's own generator, seeded from its process id and the clock so
+    # that two bots in one session do not play one game twice. Not from
+    # RANDOM - see mp_bot_rand.
+    now_ms
+    MP_BOT_RNG=$(( ($$ * 7919 + NOW_MS) & 0x7FFFFFFF ))
     if ! mp_join_target "${target}"; then
         die "bot could not join ${target}"
     fi
@@ -2039,17 +2299,20 @@ mp_bot_main() {
     # ERR alone.
     now_ms
     local next_ready=$(( NOW_MS + MP_BOT_LOBBY_MS ))
+    local up
     while [ "${MP_PHASE}" != "start" ] && [ "${MP_PHASE}" != "play" ]; do
-        mp_poll || { mp_disconnect; return 0; }
+        up=1
+        mp_poll || up=0
         # An "alone" refusal is not a reason to give up - it is the
         # answer to a question asked too early.
         if [ "${MP_ERROR}" = "err:alone" ]; then
             MP_ERROR=""
         fi
-        [ -z "${MP_ERROR}" ] || { mp_disconnect; return 0; }
         # The host left and the session moved: follow it, exactly as a
         # player's lobby does. A bot that stayed behind would be testing
-        # the one path that no longer exists.
+        # the one path that no longer exists. Asked before the state of
+        # the link, in the order the lobby asks it (mp_lobby): the old hub
+        # ends its connections when it stops.
         if [ -n "${MP_MOVE_ADDR}" ]; then
             if ! mp_migrate; then
                 debug_event "bot: could not follow the moved session"
@@ -2058,6 +2321,11 @@ mp_bot_main() {
             fi
             next_ready=0
             continue
+        fi
+        if [ "${up}" -eq 0 ] || [ -n "${MP_ERROR}" ]; then
+            debug_event "bot: link down (${MP_ERROR:-eof})"
+            mp_disconnect
+            return 0
         fi
         if [ -n "${MP_CLOSED}" ] || mp_link_silent; then
             debug_event "bot: session closed (${MP_CLOSED:-silent})"
@@ -2102,21 +2370,21 @@ mp_bot_main() {
                     clear_and_continue
                 fi
             else
-                # One decision per piece: a target column and a rotation,
-                # both drawn at random. Then one step towards it per tick
-                # and a hard drop once it is reached - which produces a
-                # stack that fills up at a believable pace.
+                # One decision per piece: a target column and a rotation
+                # (mp_bot_plan). Then one step towards it per tick and a
+                # hard drop once it is reached - which produces a stack
+                # that fills up at a believable pace.
                 if [ "${tick}" -eq 0 ]; then
-                    mp_bot_column
-                    want_x="${MP_BOT_COLUMN}"
-                    want_rot=$(( RANDOM % 4 ))
+                    mp_bot_plan
+                    want_x="${MP_BOT_X}"
+                    want_rot="${MP_BOT_ROT}"
                 fi
                 tick=$(( tick + 1 ))
                 # A blocked move or rotation ends the plan instead of
-                # being retried: the target column is chosen without
-                # looking at the piece's width, so the right-hand columns
-                # are regularly out of reach, and a bot that kept pushing
-                # against the wall would never drop another piece.
+                # being retried: the plan is made from the stack as it is,
+                # not from the path the piece has to take there, and a bot
+                # that kept pushing against a wall would never drop
+                # another piece.
                 # Announced through the same funnel a player's keys go
                 # through, so a bot produces a real move stream: without
                 # it the streams could only ever be tested with as many

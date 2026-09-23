@@ -216,7 +216,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 2.0.1  (2026-09-19)
+# Version: 2.0.2  (2026-09-22)
 
 set -euo pipefail
 
@@ -231,7 +231,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="2.0.1"
+ROWHAMMER_VERSION="2.0.2"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -412,8 +412,9 @@ MP_GARBAGE_OPT="${ROWHAMMER_MP_GARBAGE:-off}"
 # collector by socat for every beacon received. Each of them ends the
 # program instead of entering the menu.
 MP_ROLE=""
-# The test client of --mp-bot: plays random moves without a terminal, so a
-# six-player round can be tested without six terminals.
+# The test client of --mp-bot: plays without a terminal - a simple greedy
+# placement with the odd deliberate blunder (mp_bot_plan, lib/mp.sh) - so a
+# five-player round can be tested without five terminals.
 MP_BOT="${ROWHAMMER_MP_BOT:-0}"
 # Skip the menu and go straight into a session: open one (--mp-host) or
 # join one (--mp-join HOST[:PORT], or a session name in the unix
@@ -1997,21 +1998,23 @@ round_finish() {
         return 0
     fi
     if [ "${MP_ACTIVE}" -eq 1 ]; then
-        # The counters of the very last lock, and before the moves that
-        # produced them: the game loop sends them at the end of a tick
-        # and never gets to this one, so without this the last thing the
-        # others heard about this board is the state one lock before it
-        # filled up. On screen that is a stale height for a player who
-        # is out anyway; in a recording of this round it is a checkpoint
-        # sitting behind moves it does not describe, and a replay that
-        # got everything right would be accused of having drifted
-        # (demo_verify, lib/demo.sh). This order is the one the
+        # The counters of the very last lock: the game loop sends them at
+        # the end of a tick and never gets to this one, so without this
+        # the last thing the others heard about this board is the state
+        # one lock before it filled up. On screen that is a stale height
+        # for a player who is out anyway; in a recording of this round it
+        # is a checkpoint that does not describe the moves in front of
+        # it, and a replay that got everything right would be accused of
+        # having drifted (demo_verify, lib/demo.sh).
+        # mp_send_state flushes the move window first (since 2.0.2), so
+        # the last few moves - the ones that led to the top-out - go out
+        # ahead of the counters they produced, which is the order the
         # recording pairs the two by (CLAUDE.md 5.20).
         mp_send_state
-        # The moves still in the window go out next, and unconditionally:
-        # the last few before a top-out are the ones that led to it, and
-        # they would otherwise be lost with the buffer - a recording made
-        # by the other players would end a move or two early.
+        # Unconditionally as well, for the case the counters did not
+        # change: the moves would otherwise be lost with the buffer, and
+        # a recording made by the other players would end a move or two
+        # early.
         mp_act_flush 1
         mp_send_topout
         return 0
@@ -2785,7 +2788,13 @@ game_run() {
             # hub stops answering without closing anything - a killed
             # process, a machine off the network - which only silence
             # gives away (mp_link_silent, since 1.2.0).
-            if ! mp_poll || mp_link_silent; then
+            # Only while the round is undecided: once the hub has called
+            # it (END), a link that goes away afterwards - the hub ends
+            # when the last player has left, and it ends its connections
+            # with it since 2.0.2 - changes nothing about how it ended,
+            # and the END that arrived in the same poll as the end of
+            # file is one mp_poll has handled all the same.
+            if { ! mp_poll || mp_link_silent; } && [ "${MP_ENDED}" -eq 0 ]; then
                 # The hub or the connection is gone. The round is over
                 # for this client; it is booked like any other round -
                 # what was cleared was cleared (CLAUDE.md 5.8).
@@ -3157,8 +3166,8 @@ if [ -n "${MP_ROLE}" ]; then
     esac
 fi
 
-# The test bot is headless as well: it joins a session, plays random
-# moves through the real game logic and exits when the round is over. It
+# The test bot is headless as well: it joins a session, plays through the
+# real game logic and exits when the round is over. It
 # has no terminal either, which is why the check above lets it through.
 if [ "${MP_BOT}" -eq 1 ]; then
     debug_init

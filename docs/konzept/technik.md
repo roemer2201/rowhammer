@@ -125,6 +125,7 @@ rowhammer/
   tools/
     key-scan.sh        # Regressionstest der Eingabeschicht (Issue #7)
     net-fuzz.sh        # Fuzz-Test der Mehrspieler-Parser (siehe 5.5)
+    hub-check.sh       # Sitzungstest des Hubs ueber socat (siehe 5.5)
     demo-keys.sh       # Regressionstest der Demo-Tasten (siehe 3.8)
     state-check.sh     # Regressionstest des Rundenzustands (siehe 5.20)
     release.sh         # Versions-Abgleich, Release-Notes, Release-Tag
@@ -570,8 +571,15 @@ oeffentliche Paketquelle gibt (siehe 4.7).
   Bash-Syntax, ShellCheck, ASCII-Pruefung und `release.sh --mode check`;
   der Eingabe-Regressionstest `tools/key-scan.sh`, einmal normal und
   einmal mit `--gap 0.06` (die stueckweise Zustellung aus Issue #7);
-  der Tastentest der Demo-Wiedergabe `tools/demo-keys.sh` (siehe 3.8);
-  Bau beider Pakete.
+  der Tastentest der Demo-Wiedergabe `tools/demo-keys.sh` (siehe 3.8)
+  samt `tools/display-check.py`; der Rundenzustandstest
+  `tools/state-check.sh` (siehe 5.20); fuer den Mehrspieler der
+  Fuzz-Test der Parser `tools/net-fuzz.sh`, die Regressionen fuer
+  EOF-Auslieferung, Demo-Wartezeiten und Endplatzierungen in
+  `tools/multiplayer-check.py` (ohne Terminal oder socat) und seit 2.0.2 der
+  Sitzungstest `tools/hub-check.sh`, der einen echten Hub gegen
+  geskriptete socat-Clients laufen laesst (beides siehe 5.5; der Job
+  installiert `socat` dafuer nach); Bau beider Pakete.
 - `release.yml` bei einem `v*`-Tag: prueft Tag gegen Baum, baut die
   Assets und veroeffentlicht das Release. Ein bereits vorhandenes
   Release wird aktualisiert statt als Fehler behandelt, sodass ein auf

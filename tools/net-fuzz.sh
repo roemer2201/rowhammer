@@ -9,8 +9,8 @@
 #   collector a complete stranger can reach without ever opening a
 #   connection (net_discover_poll). It feeds them random and deliberately
 #   hostile lines - ANSI escapes, command substitutions, backticks, path
-#   traversal, overlength, null bytes, half lines - and checks the three
-#   properties CLAUDE.md 5.5 makes non-negotiable:
+#   traversal, overlength, null bytes, half lines, glob patterns - and
+#   checks the three properties CLAUDE.md 5.5 makes non-negotiable:
 #     1. no command out of the input is ever executed,
 #     2. no byte outside 0x20-0x7E survives into anything the game would
 #        print,
@@ -28,7 +28,7 @@
 #   net-fuzz.sh [-n|--random N] [-s|--seed N] [-v|--verbose] [-q|--silent]
 #               [-h|--help]
 #
-# Version: 1.0.1  (2026-09-05)
+# Version: 1.1.0  (2026-09-22)
 
 set -euo pipefail
 
@@ -351,11 +351,73 @@ HOSTILE=(
     'ACT 0'
     'PEERACT $(touch CANARY) 0 1l'
     'PEERACT 0 1l'
+    # The two marks protocol 6 added to the move stream carry no payload;
+    # a mark with one, or a letter next to them, is not a stream.
+    'ACT 0 120y3'
+    'ACT 0 120qq'
+    'ACT 0 120x'
+    # The seat that is empty again (protocol 6): its one field is a slot,
+    # used as an array index on the client.
+    'VACANT $(touch CANARY)'
+    'VACANT a[$(touch CANARY)]'
+    'VACANT -1'
+    'VACANT 10'
+    'VACANT 0 1'
 )
 for c in "${HOSTILE[@]}"; do
     check_line "${c}"
     check_beacon "${c}"
 done
+
+# Pathname expansion. A field is a word of the line, and a word that is
+# split off with an unquoted expansion is also globbed: "?z" became the
+# name of a file in the working directory, and "/*/*/*/*/*/*" walked the
+# file system for seconds per message (bugfix 2.0.2). Checked in a
+# directory of our own that holds a file the pattern would match, so the
+# expansion - if it happened - would produce a valid field.
+GLOB_DIR="${CANARY_DIR}/glob"
+mkdir -p -- "${GLOB_DIR}"
+: > "${GLOB_DIR}/zz"
+glob_check() {
+    local line="${1}" rc=0 t0 t1
+    CASES=$(( CASES + 1 ))
+    now_ms
+    t0="${NOW_MS}"
+    PROTO_ARG=()
+    proto_parse "${line}" || rc=$?
+    now_ms
+    t1="${NOW_MS}"
+    if [ "${rc}" -eq 0 ]; then
+        printf '%s: FAIL proto_parse accepted a glob pattern: %q -> %q\n' \
+            "${SCRIPT_NAME}" "${line}" "${PROTO_ARG[*]}" >&2
+        FAILURES=$(( FAILURES + 1 ))
+    fi
+    if [ $(( t1 - t0 )) -gt 1000 ]; then
+        printf '%s: FAIL proto_parse took %d ms for: %q\n' \
+            "${SCRIPT_NAME}" "$(( t1 - t0 ))" "${line}" >&2
+        FAILURES=$(( FAILURES + 1 ))
+    fi
+    return 0
+}
+(
+    cd -- "${GLOB_DIR}" || exit 1
+    glob_check 'HELLO 6 ?z board'
+    glob_check 'HELLO 6 z* board'
+    glob_check 'ROSTER 0 [z]z 1 lobby'
+    glob_check 'STATE /*/*/*/*/*/* 0 0 0 0 0 0'
+    # The beacon collector splits its datagram the same way.
+    NET_SESSION_NAME=()
+    printf '%s %s\n' "192.0.2.9" "ROWHAMMER ${PROTO_VERSION} ?z 1 5 27301 lobby" >&"${NET_DISCOVER_FD}"
+    net_discover_poll
+    for n in ${NET_SESSION_NAME[@]+"${NET_SESSION_NAME[@]}"}; do
+        if [ "${n}" = "zz" ]; then
+            printf '%s: FAIL the beacon collector expanded a glob pattern\n' "${SCRIPT_NAME}" >&2
+            FAILURES=$(( FAILURES + 1 ))
+        fi
+    done
+    exit "${FAILURES}"
+) || FAILURES=$(( FAILURES + 1 ))
+CASES=$(( CASES + 5 ))
 
 # Overlength: 100 kB in one line, and a line of exactly the limit.
 long="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -393,7 +455,7 @@ fi
 log "${SCRIPT_NAME}: ${RANDOM_CASES} random cases (seed ${FUZZ_SEED})"
 RANDOM="${FUZZ_SEED}"
 ALPHABET=(A B C Z 0 1 9 ' ' '$' '(' ')' '`' ';' '|' '&' '*' '.' '/' '\' '-' '_' '[' ']' '{' '}' '%' '!' '#' "'" '"' $'\t' $'\033')
-VERBS=(HELLO READY STATE BOARD CLEAR APPLIED TOPOUT PONG BYE WELCOME ROSTER SEED START PEER PEERBOARD NEEDBOARD GARBAGE QUEUE KO END PING ERR ACT PEERACT XXXX)
+VERBS=(HELLO READY STATE BOARD CLEAR APPLIED TOPOUT PONG BYE WELCOME ROSTER VACANT SEED START PEER PEERBOARD NEEDBOARD GARBAGE QUEUE KO END PING ERR ACT PEERACT XXXX)
 for (( n = 0; n < RANDOM_CASES; n++ )); do
     len=$(( RANDOM % 40 ))
     line="${VERBS[RANDOM % ${#VERBS[@]}]} "

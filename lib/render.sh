@@ -70,7 +70,7 @@
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.28.1  (2026-09-18)
+# Version: 0.28.3  (2026-09-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1457,17 +1457,13 @@ render_peers() {
 render_pane_peers() {
     local i slot row line name bar filled b
     row="${PEER_PANE_ROW}"
+    if [ "${MP_VIEW_LEVEL}" -eq 0 ]; then
+        render_pane_scoreboard
+        return 0
+    fi
     for (( i = 0; i < MP_PEER_COUNT; i++ )); do
         slot="${MP_PEER_SLOTS[i]}"
         name="${MP_PEER_NAME[slot]:0:7}"
-        if [ "${MP_VIEW_LEVEL}" -eq 0 ]; then
-            printf -v line '%d.%-7s%3s' "${MP_PEER_PLACE[slot]:-0}" \
-                "${name}" "${MP_PEER_ROWS[slot]}"
-            printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
-            PANE_RIGHT[row]="${line}"
-            row=$(( row + 1 ))
-            continue
-        fi
         printf -v line '%-8s%4s' "${name}" "${MP_PEER_ROWS[slot]}"
         printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
         PANE_RIGHT[row]="${line}"
@@ -1510,6 +1506,117 @@ render_pane_peers() {
         printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
         PANE_RIGHT[row + 1]="${line}"
         row=$(( row + 2 ))
+    done
+    return 0
+}
+
+# render_pane_scoreboard
+# Detail level 0: one line per opponent, "<place>.<name> <rows>", as a
+# table that reads from the top (CLAUDE.md 5.6) - the players still in the
+# round first, the most rows first, then the ones who are out, in the
+# order of their places.
+# The number in front is the standing: for a player who is out it is the
+# place the hub gave them, for one still playing their rank by rows among
+# everybody still playing, this player included. These provisional ranks
+# do not collide while the hub hands places out from the back. Once END
+# arrives, every rank and the order come from the hub instead: sprint
+# and ultra award final places by rows, so an eliminated player can finish
+# ahead of a standing one. The winner's place comes from END itself.
+# CHANGE 2.0.2: the lines used to come in seat order and led with the
+# place from the hub, which is 0 until a player is out - so for most of
+# the round the scoreboard read "0." in front of every name and ranked
+# nobody.
+render_pane_scoreboard() {
+    local i j slot row line name rank rows other n final=0
+    local -a order=() alive=() outs=() places=()
+    row="${PEER_PANE_ROW}"
+    if [ "${MP_ENDED}" -eq 1 ] && [ "${MP_WINNER}" -ge 0 ]; then
+        final=1
+    fi
+    for (( i = 0; i < MP_PEER_COUNT; i++ )); do
+        slot="${MP_PEER_SLOTS[i]}"
+        rank="${MP_PEER_PLACE[slot]:-0}"
+        [[ "${rank}" =~ ^[0-9]$ ]] || rank=9
+        if [ "${final}" -eq 1 ] && [ "${slot}" -eq "${MP_WINNER}" ]; then
+            rank=1
+        fi
+        places[slot]="${rank}"
+        if [ "${final}" -eq 1 ]; then
+            # Put every seat through the place sort, including boards
+            # still standing. Their provisional row rank is now obsolete.
+            outs+=("${slot}")
+            continue
+        fi
+        case "${MP_PEER_STATE[slot]}" in
+            ko|gone) outs+=("${slot}") ;;
+            *) alive+=("${slot}") ;;
+        esac
+    done
+    # Two insertion sorts over at most four seats. Rows are compared as
+    # numbers only once they are known to be numbers: they came off the
+    # wire (or out of a replay), and this function is the last line of
+    # defence before the screen (CLAUDE.md 5.5).
+    for slot in ${alive[@]+"${alive[@]}"}; do
+        rows="${MP_PEER_ROWS[slot]}"
+        [[ "${rows}" =~ ^[0-9]{1,9}$ ]] || rows=0
+        n="${#order[@]}"
+        for (( j = 0; j < ${#order[@]}; j++ )); do
+            other="${MP_PEER_ROWS[${order[j]}]}"
+            [[ "${other}" =~ ^[0-9]{1,9}$ ]] || other=0
+            if (( 10#${rows} > 10#${other} )); then
+                n="${j}"
+                break
+            fi
+        done
+        order=("${order[@]:0:n}" "${slot}" "${order[@]:n}")
+    done
+    n="${#order[@]}"
+    for slot in ${outs[@]+"${outs[@]}"}; do
+        rank="${places[slot]}"
+        j="${#order[@]}"
+        for (( i = n; i < ${#order[@]}; i++ )); do
+            other="${places[${order[i]}]}"
+            if [ "${rank}" -lt "${other}" ]; then
+                j="${i}"
+                break
+            fi
+        done
+        order=("${order[@]:0:j}" "${slot}" "${order[@]:j}")
+    done
+    for slot in ${order[@]+"${order[@]}"}; do
+        name="${MP_PEER_NAME[slot]:0:7}"
+        rows="${MP_PEER_ROWS[slot]}"
+        [[ "${rows}" =~ ^[0-9]{1,9}$ ]] || rows=0
+        case "${final}:${MP_PEER_STATE[slot]}" in
+            1:*|0:ko|0:gone)
+                rank="${places[slot]}"
+                ;;
+            *)
+                # One plus everybody still playing who is ahead: more
+                # rows, or as many from a lower seat (the tiebreaker the
+                # hub uses, CLAUDE.md 5.8). This player counts as long as
+                # their own board stands.
+                rank=1
+                for other in ${alive[@]+"${alive[@]}"}; do
+                    [ "${other}" -ne "${slot}" ] || continue
+                    j="${MP_PEER_ROWS[other]}"
+                    [[ "${j}" =~ ^[0-9]{1,9}$ ]] || j=0
+                    if (( 10#${j} > 10#${rows} )) \
+                        || { (( 10#${j} == 10#${rows} )) && [ "${other}" -lt "${slot}" ]; }; then
+                        rank=$(( rank + 1 ))
+                    fi
+                done
+                if [ "${MP_STATE}" = "play" ] \
+                    && { (( ROW_CREDIT > 10#${rows} )) \
+                         || { (( ROW_CREDIT == 10#${rows} )) && [ "${MP_SLOT}" -lt "${slot}" ]; }; }; then
+                    rank=$(( rank + 1 ))
+                fi
+                ;;
+        esac
+        printf -v line '%s.%-7s%3s' "${rank}" "${name}" "${rows}"
+        printf -v line '%-*.*s' "${PANE_W}" "${PANE_W}" "${line}"
+        PANE_RIGHT[row]="${line}"
+        row=$(( row + 1 ))
     done
     return 0
 }

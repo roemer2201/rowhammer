@@ -35,7 +35,7 @@
 #   mirrored into net.log in debug mode.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.0.0  (2026-08-11)
+# Version: 1.0.2  (2026-09-23)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -130,10 +130,20 @@ NET_LINK_OUT=-1
 NET_LINK_PID=0
 # Lines net_poll took out of the socket, oldest first.
 NET_INBOX=()
-# The tail of a line that arrived in pieces (TCP may split anywhere), kept
-# until its remainder shows up. Without this a message torn in two would
-# be lost and, worse, its halves would look like two malformed messages.
-NET_PART=""
+# What net_poll has read off the link and not yet handed out as lines:
+# raw text, newlines and all, possibly ending in the first part of a line
+# whose remainder is still on its way (TCP may split anywhere). Kept until
+# the rest shows up; capped, see net_take_lines.
+NET_BUF=""
+# Set when such an unfinished line grew past MP_LINE_MAX and was thrown
+# away: the rest of that overlong line is still on its way and is dropped
+# too, up to its newline, instead of arriving as a message of its own
+# (CLAUDE.md 5.5).
+NET_SKIP=0
+# EOF may arrive with more complete lines than one poll may hand out.
+# Keep the receive side logically up until those batches are drained;
+# no further reads or writes are attempted on the closed transport.
+NET_READ_EOF=0
 # Why the link went down, for the message the client shows afterwards:
 # "eof" (the other end closed), "send" (writing failed).
 NET_LINK_ERROR=""
@@ -391,6 +401,12 @@ net_connect() {
     NET_LINK_UP=1
     NET_LINK_ERROR=""
     NET_INBOX=()
+    # A fresh link starts with a fresh line: the tail of the previous one
+    # (a session that moved to another hub leaves the old link mid-stream)
+    # would otherwise be glued to the first line of the new one.
+    NET_BUF=""
+    NET_SKIP=0
+    NET_READ_EOF=0
     debug_event "net: link up via ${addr} (socat pid ${NET_LINK_PID})"
     return 0
 }
@@ -438,7 +454,9 @@ net_close() {
 # TOPOUT) are resent by lib/mp.sh rather than blocked on here.
 net_send() {
     local line="${1}"
-    if [ "${NET_LINK_UP}" -eq 0 ]; then
+    # A PONG while draining the final receive batches must not turn a
+    # failed write into link-down and hide their remaining END/MIGRATE.
+    if [ "${NET_LINK_UP}" -eq 0 ] || [ "${NET_READ_EOF}" -eq 1 ]; then
         return 1
     fi
     if ! net_line_ok "${line}"; then
@@ -467,57 +485,127 @@ net_send() {
     return 0
 }
 
+# net_read_chunk FD
+# Take what the descriptor has to offer right now into NET_CHUNK: raw text
+# with its newlines in it, up to NET_CHUNK_MAX bytes, waiting at most a
+# couple of milliseconds for more. Returns 1 at end of file (whatever came
+# before it is in NET_CHUNK all the same).
+# Read in blocks and split by the caller (net_take_lines) rather than line
+# by line with "read -t" - the way both receive paths read until 2.0.2.
+# When the timer of a "read -t" runs out in the very moment the newline
+# has been read, bash still reports the timeout, and the line comes back
+# without anything to tell it from a line that is not finished yet: the
+# next line was then glued to it, and both were lost as one malformed
+# message. It takes a loaded machine to hit that moment, which is exactly
+# what a full session is - measured in a five player round, where it cost
+# one player's move window, and in a stress test of the two ways of
+# reading (several hundred merged lines out of 12000 the old way, none
+# with this one). With -N a newline is data like any other character, so
+# a timeout can cut a block short but not lose where a line ends.
+# LC_ALL=C for the read itself, so -N counts bytes and a stray multibyte
+# sequence cannot swallow the newline behind it.
+NET_CHUNK=""
+NET_CHUNK_MAX=1024
+net_read_chunk() {
+    local LC_ALL=C rc=0
+    NET_CHUNK=""
+    IFS= read -r -t 0.002 -N "${NET_CHUNK_MAX}" -u "${1}" NET_CHUNK 2>/dev/null || rc=$?
+    if [ "${rc}" -ne 0 ] && [ "${rc}" -le 128 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# net_take_lines BUFFER SKIP LINES MAX LIMIT
+# Move up to MAX complete lines out of the buffer variable named BUFFER
+# into the array named LINES (appended, without their newlines). SKIP
+# names the flag that says the next line is the end of one that was
+# already dropped for its length. What is left is the start of a line
+# still on its way; once it reaches LIMIT without a newline it is dropped,
+# and so is the rest of it when it comes (SKIP). Shared by the client
+# (net_poll) and the hub (hub_main), which read the same way since 2.0.2.
+# The names are passed rather than the values because the buffer has to
+# shrink in place; the local names are prefixed so that no caller's
+# variable can be one of them (a nameref to its own name is an error).
+net_take_lines() {
+    local -n ntl_buf="${1}" ntl_skip="${2}" ntl_out="${3}"
+    local ntl_max="${4}" ntl_limit="${5}" ntl_line ntl_n=0
+    while [ "${ntl_n}" -lt "${ntl_max}" ] && [[ "${ntl_buf}" == *$'\n'* ]]; do
+        ntl_line="${ntl_buf%%$'\n'*}"
+        ntl_buf="${ntl_buf#*$'\n'}"
+        ntl_n=$(( ntl_n + 1 ))
+        if [ "${ntl_skip}" -eq 1 ]; then
+            ntl_skip=0
+            net_log drop "${ntl_line}"
+            continue
+        fi
+        ntl_out+=("${ntl_line}")
+    done
+    if [[ "${ntl_buf}" != *$'\n'* ]] && [ "${#ntl_buf}" -ge "${ntl_limit}" ]; then
+        net_log drop "${ntl_buf}"
+        ntl_buf=""
+        ntl_skip=1
+    fi
+    return 0
+}
+
 # net_poll
 # Drain up to MP_POLL_MAX lines from the link into NET_INBOX without ever
 # blocking: "read -t 0" answers whether anything is there, and only then
-# is a line read with a very short timeout. Returns 1 when the link is
-# down or just went down (EOF), which is how the round learns that the hub
-# or the connection is gone.
+# is a block read (net_read_chunk), which waits two milliseconds at the
+# most. Whatever has piled up beyond MP_POLL_MAX lines stays in NET_BUF
+# for the next tick, and nothing more is read while that is more than a
+# poll's worth - so a flooding peer fills the socket buffer, not this
+# process. Returns 1 when the link is down or just went down (EOF), which
+# is how the round learns that the hub or the connection is gone; the
+# complete lines read before the end of file are handed out over as many
+# polls as necessary before link-down is reported. The last thing a hub
+# says before it closes is often the one that explains why (CLOSED,
+# MIGRATE, ERR - see mp_poll); clearing a capped batch's remainder at EOF
+# would lose exactly those final messages (PR #112 review).
+NET_LINES=()
 net_poll() {
-    local line n=0 rc
+    local line reads=0
     NET_INBOX=()
     if [ "${NET_LINK_UP}" -eq 0 ]; then
         return 1
     fi
-    while [ "${n}" -lt "${MP_POLL_MAX}" ]; do
-        if ! read -t 0 -u "${NET_LINK_IN}" 2>/dev/null; then
-            # Nothing pending. That is the normal case in most ticks.
-            return 0
+    while [ "${NET_READ_EOF}" -eq 0 ] \
+        && [ "${#NET_BUF}" -lt $(( MP_POLL_MAX * MP_LINE_MAX )) ] \
+        && [ "${reads}" -lt "${MP_POLL_MAX}" ]; do
+        # Nothing pending is the normal case in most ticks.
+        read -t 0 -u "${NET_LINK_IN}" 2>/dev/null || break
+        reads=$(( reads + 1 ))
+        if ! net_read_chunk "${NET_LINK_IN}"; then
+            NET_BUF+="${NET_CHUNK}"
+            NET_READ_EOF=1
+            break
         fi
-        line=""
-        rc=0
-        IFS= read -r -t 0.05 -u "${NET_LINK_IN}" line || rc=$?
-        if [ "${rc}" -gt 128 ]; then
-            # Timed out with the line still unterminated: bash hands the
-            # part it did read back in the variable, so it is kept and
-            # the remainder is prepended to it on the next poll. Capped,
-            # so a peer sending 512 bytes without a newline cannot make
-            # this buffer grow.
-            NET_PART="${NET_PART}${line}"
-            if [ "${#NET_PART}" -ge "${MP_LINE_MAX}" ]; then
-                net_log drop "${NET_PART}"
-                NET_PART=""
-            fi
-            return 0
-        elif [ "${rc}" -ne 0 ]; then
-            # End of file: the peer or the hub is gone. Anything read
-            # before it was an unterminated line and is discarded.
-            NET_PART=""
-            NET_LINK_ERROR="eof"
-            NET_LINK_UP=0
-            debug_event "net: link closed by peer"
-            return 1
-        fi
-        line="${NET_PART}${line}"
-        NET_PART=""
+        NET_BUF+="${NET_CHUNK}"
+        # A short block is everything there was.
+        [ "${#NET_CHUNK}" -ge "${NET_CHUNK_MAX}" ] || break
+    done
+    NET_LINES=()
+    net_take_lines NET_BUF NET_SKIP NET_LINES "${MP_POLL_MAX}" "${MP_LINE_MAX}"
+    for line in ${NET_LINES[@]+"${NET_LINES[@]}"}; do
         if net_line_ok "${line}"; then
             NET_INBOX+=("${line}")
             net_log rx "${line}"
         else
             net_log drop "${line}"
         fi
-        n=$(( n + 1 ))
     done
+    if [ "${NET_READ_EOF}" -eq 1 ] && [[ "${NET_BUF}" != *$'\n'* ]]; then
+        # The last complete batch is in NET_INBOX. Only an unterminated
+        # tail may now be discarded; mp_poll handles the final batch even
+        # though this call also reports the end of the link.
+        NET_BUF=""
+        NET_SKIP=0
+        NET_LINK_ERROR="eof"
+        NET_LINK_UP=0
+        debug_event "net: link closed by peer"
+        return 1
+    fi
     return 0
 }
 
@@ -636,8 +724,13 @@ net_discover_poll() {
         # appended after a colon; only the address half is of interest.
         host="${sender%%:*}"
         net_ipv4_ok "${host}" || continue
-        # shellcheck disable=SC2206  # deliberate word splitting of a validated line
-        f=(${payload})
+        # Split by "read -a" and not by an unquoted expansion: the
+        # payload is the one line in this game a complete stranger can
+        # write without a connection, and an unquoted "${payload}" is
+        # pathname expansion as well as splitting - "/*/*/*/*/*/*" in a
+        # datagram walked the file system for seconds (bugfix 2.0.2, see
+        # proto_parse in lib/proto.sh).
+        IFS=' ' read -r -a f <<< "${payload}"
         [ "${#f[@]}" -eq 7 ] || continue
         [ "${f[0]}" = "${MP_BEACON_MAGIC}" ] || continue
         [ "${f[1]}" = "${PROTO_VERSION}" ] || continue

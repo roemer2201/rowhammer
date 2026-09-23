@@ -1,3 +1,30 @@
+rowhammer (2.0.2) unstable; urgency=medium
+
+  * Multiplayer: received lines are split without pathname expansion. A
+    field such as "/*/*/*/*/*/*" made the parser walk the file system for
+    seconds per message, in the hub and in the beacon collector.
+  * Multiplayer sessions: a player leaving the lobby is announced to the
+    others (protocol 6, VACANT); "start" while alone no longer ends the
+    host's own session; a host who topped out and then leaves no longer
+    moves or ends the running round; a session is over once its round
+    is, so nobody joins or takes it over afterwards; the hub really
+    disconnects the clients it refuses or drops; a session moved to
+    another hub in the unix transport keeps its socket.
+  * Garbage rows pushed in between a clear and the hub's queue update are
+    no longer pushed in a second time.
+  * Multiplayer recordings: the garbage of another player is placed at
+    the mark that player's client puts into its move stream, and counter
+    checkpoints are written where they belong. Both ends read the link
+    in blocks, because a timed line read could lose the end of a line
+    under load and merge two messages. Recorded rounds with garbage now
+    replay without a single divergence.
+  * The test bot plans its moves, keeps its own random numbers out of the
+    shared piece sequence, and lasts long enough to test a real round.
+  * The smallest opponent view is a ranking by rows.
+  * New session test tools/hub-check.sh, run by the CI.
+
+ -- roemer2201 <r.oliver@web.de>  Tue, 22 Sep 2026 12:00:00 +0000
+
 rowhammer (2.0.1) unstable; urgency=medium
 
   * A round and its recording now keep the same clock. The pause a

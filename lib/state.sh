@@ -34,7 +34,7 @@
 #   4. state_bind OTHER - switch to another slot (no unbinding needed).
 #   5. state_release SLOT - drop a slot's variables when it is done.
 #
-# Version: 1.2.0  (2026-09-18)
+# Version: 1.2.1  (2026-09-22)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -130,6 +130,10 @@ STATE_VARS=(
     # every simulated player has a queue of their own (CLAUDE.md 5.7).
     s:MP_PENDING
     s:MP_HOLE
+    # The rows pushed in since the last clear was reported, which a QUEUE
+    # from the hub is set against (mp_queue_set, lib/mp.sh). It belongs
+    # to the queue beside it, and a playback keeps one per seat.
+    s:MP_APPLIED
     # How far this round has read into the recorded piece stream. Round
     # state although it exists only during a playback: every participant
     # of a versus round draws from the same sequence (one seed, see

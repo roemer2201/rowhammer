@@ -114,6 +114,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 1.5.1 | Verbesserungen bei der Vollbildanzeige | - |
 | 2.0.0 | Rundenlogik vollstaendig entkoppelt: Clear-Pause als Rundenzustand, Buchung beim Treiber der Runde; Demo-Format 4. Phase 5 abgeschlossen | 3.1, 4.10, 5.3, 5.20 |
 | 2.0.1 | Runde und Aufnahme auf einer Uhr: Clear-Pause vor der Taste, Pruefpunkte am ruhenden Sitz, Bot ruht mit | 4.10, 5.3, 5.20 |
+| 2.0.2 | Pruefung des Mehrspielers: Glob-Luecke im Parser, Sitzungsfehler (Lobby-Geister, Start allein, Gastgeber-Abgang, Sitzungsende, Trennen), Protokoll 6, Stoerreihen doppelt, Demo-Reihenfolge ("Finding 1"), Test-Bot, Sitzungstest | 4.9, 5.1, 5.3-5.9, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1671,6 +1672,10 @@ anders aussieht.
         mitten in einer Zeile trennen; `net_poll` haelt den Rest in
         `NET_PART` und setzt ihn beim naechsten Mal davor - ohne das
         waeren aus einer Nachricht zwei ungueltige geworden.
+        _Spaeter ueberholt: 2.0.2 - gelesen wird in Bloecken
+        (`net_read_chunk`), weil ein `read -t`, dessen Timer beim
+        Zeilenende ablief, eine fertige Zeile wie eine halbe meldete;
+        siehe dort._
       - **Der Zeichensatzfilter fixiert die Locale.** Ein Bereich wie
         `[\x01-\x1f]` folgt der Kollationsreihenfolge und trifft in
         einer UTF-8-Locale auch den Punkt; `net_line_ok` setzt daher
@@ -1704,6 +1709,9 @@ anders aussieht.
       Stufe 0 eine Zeile in der rechten Seitenleiste; `auto` nimmt die
       ausfuehrlichste, fuer die das Terminal Platz hat, und rechnet bei
       jedem Resize neu.
+      _Spaeter ueberholt: 2.0.2 - Stufe 0 ist eine Rangliste nach Rows
+      statt einer Liste in Sitzordnung mit "0." vor jedem Namen, siehe
+      dort._
       - **Die Stufen 1 und 0 kosten keine Breite.** Sie nutzen die
         freien Zeilen unter der Vorschau, weshalb eine Sechs-Spieler-
         Runde auch im 48x22-Minimum laeuft - genau der Fall, fuer den
@@ -1779,6 +1787,9 @@ anders aussieht.
       am Terminal haengt. `socat` ist in beiden Paketen ein
       `Recommends`; README und Anleitung (zehnte Seite) beschreiben den
       Ablauf.
+      _Spaeter ueberholt: 2.0.2 - der Bot waehlt seine Zuege mit einer
+      Platzierungssuche statt zufaellig und nimmt seinen Zufall nicht mehr
+      aus `RANDOM`, siehe dort._
 - [x] **Sicherheits-Review und Fuzzing** (Schritt 12, `tools/net-fuzz.sh`).
       Gepruefte Eigenschaften: kein Befehl aus Eingaben wird ausgefuehrt
       (Kanarienvogel-Datei), kein Byte ausserhalb 0x20-0x7E kommt durch,
@@ -2171,7 +2182,8 @@ Fusszeilen nennen `K.O. 4`, `K.O. 3` und `SIEG`, der Kasten am Ende
       gefunden, die sonst niemand gesehen haette - genau die Klasse,
       fuer die sie da ist (alle vier gefixt, siehe 5.3 und 5.20):
       der Hub verwarf eine angelesene Zeile, wenn sein Postfach-`read`
-      mitten in ihr ablief (`HUB_INBOX_PART`); der Countdown holte die
+      mitten in ihr ablief (`HUB_INBOX_PART`, _spaeter ueberholt: 2.0.2
+      liest in Bloecken, siehe dort_); der Countdown holte die
       ersten Zuege der Mitspieler ab, bevor es die Runde gab; vor einem
       Top-Out fehlte der letzte `STATE`, sodass der Pruefpunkt hinter
       Zuegen landete, die er nicht beschreibt; und der eigene
@@ -2192,6 +2204,13 @@ Fusszeilen nennen `K.O. 4`, `K.O. 3` und `SIEG`, der Kasten am Ende
       laesst sie liegen, wie es muss), und `Enter` auf einem
       Versus-Bestenlisteneintrag startet ueber den Runden-Hash dessen
       Aufnahme.
+      _Spaeter ueberholt: 2.0.2 - die Pruefpunkte der Mitspieler werden
+      nicht mehr bis hinter das naechste `PEERACT` aufgehoben, sondern
+      sofort geschrieben, weil der Mitspieler seine Zaehler seither nach
+      seinem Zugfenster und nie in einer Clear-Pause schickt. Die Abnahme
+      hier lief mit Test-Bots, die kaum eine Reihe abbauten; mit Bots, die
+      es tun, meldete dieselbe Gegenprobe Dutzende Abweichungen, siehe
+      dort._
 - [x] **9.14 Doku, Texte, Version.** Der Abschluss des Punkts: 5.20,
       3.5, 3.8 und die Anleitungsseite 9 waren mit den Bauschritten
       selbst nachgezogen worden, hier kam der Rest dazu. In CLAUDE.md
@@ -2767,3 +2786,227 @@ ueber `demo_step` wiedergegeben, Brett und Zaehler verglichen.
    gespielt wurde.
 Nicht gefahren: eine echte Mehrspieler-Sitzung ueber Sockets - in dieser
 Umgebung ist `socat` nicht vorhanden.
+
+## Pruefung des Mehrspielers (umgesetzt, Version 2.0.2)
+
+Eine Durchsicht des ganzen Mehrspieler-Codes - Transport, Protokoll, Hub,
+Client, Test-Bot und die Aufzeichnung einer Runde - mit dem Auftrag,
+Fehler zu beheben und Verbesserungen selbststaendig vorzunehmen
+(Nutzerauftrag). Jeder Befund unten ist entweder an einem echten Hub mit
+geskripteten `socat`-Clients oder an einer echten, aufgezeichneten
+Runde (ein Client im Pseudo-Terminal, zwei bis vier Test-Bots)
+nachgewiesen worden, bevor er behoben wurde - mit einer Ausnahme, die
+dabeisteht. Die Nachweise der Sitzungsfehler stehen seither als
+`tools/hub-check.sh` im CI.
+
+**1. Pfadnamen-Expansion auf Netzdaten (Sicherheit, 5.5).** `proto_parse`
+zerlegte eine empfangene Zeile mit `fields=(${line})`, der Beacon-Sammler
+seinen Datagramm-Inhalt ebenso - und eine unquotierte Expansion ist
+nicht nur Wortzerlegung, sondern auch Globbing. Ein Feld `/*/*/*/*/*/*`
+liess den Parser das Dateisystem durchlaufen (gemessen 6,4 s bzw. 9,7 s
+fuer eine Zeile; ein Client darf 64 je Sekunde schicken, der
+Beacon-Sammler nimmt sie von jedem im Netz ohne Verbindung), und `?in`
+kam als `bin` heraus, ein Name, der nie auf der Leitung stand. Code
+wurde nicht ausgefuehrt, aber Regel 3 aus 5.5 ("zum Haengen bringen")
+war verletzt. Jetzt wird mit `read -a` zerlegt.
+_Vorzustand: `fields=(${line})` in `proto_parse`, `f=(${payload})` in
+`net_discover_poll`._ `tools/net-fuzz.sh` prueft Glob-Muster samt
+Zeitgrenze; gegen den alten Stand meldet er fuenf Befunde.
+
+**2. Die Sitzung (5.1, 5.3, 5.8).** Sieben Fehler, alle am echten Hub
+nachgestellt:
+- **Lobby-Geister.** Das `ROSTER` nennt nur besetzte Plaetze; wer die
+  Lobby verliess, blieb auf allen anderen Bildschirmen stehen - in der
+  Lobby, als leeres Brett in der Runde, fuer `mp_hub_stop` als noch
+  anwesender Spieler und in der Aufnahme als Sitz ohne Ereignis, die
+  `demo_load` deshalb abwies ("slot N has no events"). Neu: `VACANT
+  <slot>` (Protokoll 6).
+- **"Start" allein beendete die eigene Sitzung.** Der Eintrag war nicht
+  gesperrt, der Hub antwortete `ERR alone`, und die Lobby behandelte
+  jede Fehlermeldung als Verbindungsverlust: der Gastgeber flog aus
+  seiner Sitzung, und mit ihm endete der Hub. Jetzt ist der Eintrag
+  gesperrt, solange niemand sonst da ist, und `err:alone` beendet
+  nichts.
+- **Ein ausgeschiedener Gastgeber, der ging, beendete die Runde fuer
+  alle.** `hub_client_close` nahm den Rundenpfad nur fuer Spieler im
+  Zustand `play`; wer schon `ko` war und sein Ergebnisbild verliess -
+  der gewoehnliche Weg hinaus -, lief durch den Lobby-Pfad: sein Platz
+  wurde mitten in der Runde geloescht, und beim Gastgeber startete der
+  Hub einen Umzug, schickte `PROMOTE` in eine laufende Runde und beendete
+  sich. Nachgestellt mit drei Clients: kurz darauf war der Hub
+  weg.
+- **Nach `END` fiel der Hub in die Lobby zurueck.** Ein Fremder konnte
+  einer Sitzung beitreten, deren Spieler gerade gingen, und ein
+  Gastgeber, der sein Ergebnisbild verliess, schickte die Sitzung zu
+  einem anderen Spieler - dessen Client startete mitten im Ergebnisbild
+  einen Hub (im Debug-Log einer echten Runde zu sehen: "asked to take
+  the session over"). Jetzt ist die Sitzung mit `END` vorbei
+  (`HUB_OVER`): `ERR over` fuer Nachzuegler, kein Umzug, jeder behaelt
+  seinen Platz; und ein Client lehnt ein `PROMOTE` ausserhalb der Lobby
+  mit `PROMOTED 0` ab.
+- **Eine Verbindung ohne `HELLO` wurde beim Rundenstart zum Spieler.**
+  `hub_start_round` setzte jeden belegten Slot auf `play`, und
+  `hub_count_players` zaehlte jede offene Verbindung: ein stummer
+  Fremder hielt eine Survival-Runde am Leben, jeder Platz war um eins zu
+  hoch, und sein spaeteres `KO` landete als Ereignis eines leeren Sitzes
+  in jeder Aufnahme. Waehrend der Runde nahm der Hub ausserdem neue
+  Verbindungen an - auf den ersten freien Slot, womoeglich den eines
+  ausgeschiedenen Spielers, dessen Zahlen und Platz der Reset loeschte.
+  Jetzt zaehlen nur angemeldete Spieler, beim Start wird eine stumme
+  Verbindung abgewiesen, und waehrend der Runde bekommt niemand einen
+  Slot. Rundnachrichten (Roster, Pings) gehen nur noch an Angemeldete.
+- **Der Hub konnte niemanden trennen.** Den Socket halten socat und die
+  Bridge; der Hub vergass nur den Slot. Ein wegen Fluten, Muell oder
+  Stille abgewiesener Client blieb verbunden, und weil der Listener
+  hoechstens `MP_MAX` Verbindungen annimmt, sperrten fuenf solche die
+  Sitzung fuer alle. Jetzt beendet der Hub die Bridge (`TERM`, nach
+  einer Nachfrist fuer sein `ERR`); ihr neuer Trap nimmt den `cat` mit,
+  der ohne ihn als Waise uebrig blieb. Beim Beenden raeumt der Hub alle
+  Bridges ab. Weil ein Client dadurch `CLOSED`, `MIGRATE` oder `END`
+  zusammen mit dem Leitungsende bekommen kann, verarbeitet `mp_poll`
+  die Zeilen vor einem EOF jetzt noch, und die Lobby fragt den Umzug vor
+  dem Leitungszustand.
+- **Im Transport `unix` verlor eine umgezogene Sitzung ihren Socket.**
+  Socket und Portdatei tragen den Sitzungsnamen, und der alte Hub
+  loeschte beim Beenden beide - die des Nachfolgers. Mitgeloescht hat
+  ausserdem socat selbst (`unlink-close` ist bei `UNIX-LISTEN`
+  voreingestellt). Danach konnte niemand mehr beitreten, und wer dem
+  Umzug einen Moment zu spaet folgte, auch nicht. Jetzt
+  `unlink-close=0`, und `hub_cleanup` loescht nur, was noch seine Datei
+  ist (Inode und Aenderungszeit).
+Dazu Kleinigkeiten: die Lobby markierte fest Slot 0 als Gastgeber statt
+des Slots aus `HOST`; eine ueberlange Zeile kam mit ihrem Rest als
+zweite Nachricht an (jetzt bis zum Zeilenende verworfen, Client wie
+Hub); `net_connect` klebte einen angelesenen Rest der alten Leitung an
+die erste Zeile der neuen; der Hub prueft eingehende Zeilen jetzt auch
+selbst auf Zeichensatz und Laenge.
+
+**3. Stoerreihen doppelt eingeschoben (5.7).** Der Hub verrechnet einen
+Angriff gegen die Warteschlange, wie sie beim Eintreffen des `CLEAR`
+stand, und schickt `QUEUE`. Sperrt der Client vorher den naechsten Stein
+- im selben Tick, in dem die Clear-Pause endet, wird eine schon
+anliegende Taste auf den neuen Stein angewandt (2.0.1) -, schiebt er die
+Warteschlange unverrechnet ein, und das `QUEUE` setzt sie danach wieder
+hoch: die Reihen kamen ein zweites Mal. Jetzt zieht `mp_queue_set` die
+seit der letzten Clear-Meldung eingeschobenen Reihen (`MP_APPLIED`,
+Rundenzustand) vom `QUEUE` ab, in der Runde wie in der Wiedergabe. Diesen
+Fehler hat kein Testlauf gezeigt; er ist aus dem Code hergeleitet.
+
+**4. Die Aufzeichnung (5.20).** Mit den alten Test-Bots fiel an der
+Gegenprobe nichts auf, weil sie kaum eine Reihe schafften (siehe 5.).
+Mit Bots, die Reihen abbauen und Stoerreihen verschicken, meldete sie in
+einer Vier-Spieler-Runde 92 von 167 Pruefpunkten als abweichend (auf
+einem Zwischenstand, der die Stoerreihen der Mitspieler schon nach der
+Uhr einsortierte, siehe unten). Vier Ursachen:
+- **Der Bot zog andere Steine.** Er nahm seinen Zufall aus
+  `RANDOM`, also aus der gemeinsamen Steinfolge, und spielte ab dem
+  naechsten Nachfuellen (Stein 64) eine andere Folge als die Aufnahme
+  fuer ihn traegt - und als alle anderen am Tisch. Jetzt `mp_bot_rand`,
+  ein eigener Generator.
+- **Pruefpunkte an der falschen Stelle.** Ein Mitspieler schickte seine
+  Zaehler vor seinem Zugfenster und auch waehrend einer Clear-Pause (wo
+  die Reihen noch nicht verbucht sind); der Aufzeichnende hob den
+  Pruefpunkt bis hinter das naechste `PEERACT` auf. Beides stellte
+  korrekte Wiedergaben als abweichend hin. Jetzt leert `mp_send_state`
+  erst das Zugfenster und schweigt waehrend der Pause, und der
+  Pruefpunkt wird sofort geschrieben.
+  Diese beiden zusammen brachten die naechste Runde von 92 auf 47
+  Abweichungen; die restlichen 47 gingen alle auf die dritte Ursache
+  zurueck.
+- **"Finding 1" aus CODEX-REVIEW.md** (47 -> 0). Die Stoerreihen eines
+  Mitspielers standen mit der Ankunftszeit beim Aufzeichnenden in dessen
+  Strom; gemessen: ein Bot sperrte 23 ms nach dem Eintreffen der Reihen
+  den naechsten Stein, der Aufzeichnende las sie spaeter, und die
+  Wiedergabe schob sie einen Lock zu spaet ein. Der erste Versuch - die
+  Ereignisse zurueckhalten und nach der Uhr zwischen die Zuege des
+  Mitspielers sortieren - reicht dafuer nicht, eben weil der
+  Aufzeichnende spaeter liest, als ein Lock dauert. Jetzt setzt der betroffene Client beim Empfang
+  eine Marke (`y`/`q`) in seinen Zugstrom (Protokoll 6), und der
+  Aufzeichnende schreibt das zurueckgehaltene Ereignis des Hubs genau
+  dorthin; ohne Marke nach `DEMO_HOLD_MS` mit der Ankunftszeit.
+_Vorzustand: TODO.md 2.2 fuehrte das Finding als offenen Punkt mit der
+Frage, ob es in echten Runden ueberhaupt auftritt - es tut es, sobald
+Stoerreihen fliessen._
+- **Verklebte Zeilen beim Lesen** (5.3). Die naechste Runde mit fuenf
+  Plaetzen zeigte wieder 33 Abweichungen, alle an einem Sitz: ein ganzes
+  Zugfenster fehlte. Im Debug-Log des Hubs stand es als fehlerhafte
+  Nachricht, angehaengt an ein vollstaendiges `BOARD` eines anderen
+  Spielers, dem nur das Zeilenende fehlte. Ein `printf` wie das der
+  Bridge schreibt seine Zeile in einem Stueck (per `strace` geprueft);
+  verloren ging das
+  Zeilenende beim Lesen: ein `read -t`, dessen Timer ablaeuft, waehrend
+  es das `\n` gerade gelesen hat, meldet den Ablauf und gibt die fertige
+  Zeile wie eine unfertige zurueck - `HUB_INBOX_PART` bzw. `NET_PART`
+  hingen dann die naechste Zeile daran. Nachgestellt in einem
+  Belastungstest (vier Schreiber, ein Leser, CPU-Last): einige hundert
+  verklebte von 12000 Zeilen mit der alten Lesart, keine mit Bloecken
+  per `read -N`, in denen das Zeilenende ein gewoehnliches Zeichen ist.
+  Beide Leseseiten lesen seither so (`net_read_chunk`,
+  `net_take_lines`); die naechste Runde lief wieder ohne Abweichung.
+  _Vorzustand: `IFS= read -r -t 0.05` zeilenweise, mit `NET_PART` bzw.
+  `HUB_INBOX_PART` fuer den angelesenen Rest._
+
+**5. Der Test-Bot.** Er waehlte "die leerste Spalte" als Ursprung des
+Steins, ohne auf dessen Form zu sehen, baute einen Turm und schied nach
+etwa einem Dutzend Steinen aus - lange bevor ein Clear, ein Angriff oder
+eine Verrechnung zu testen war. Jetzt `mp_bot_plan`: jede Drehung an
+jeder Spalte gedanklich fallen lassen und nach Gesamthoehe, Reihen,
+Loechern und Unebenheit bewerten; einer von 25 Steinen geht absichtlich
+irgendwohin, damit eine Runde auch ohne Stoerreihen endet (offline
+gemessen: im Mittel rund 130 Steine, ohne Fehlgriffe gut 300).
+_Vorzustand: `mp_bot_column` und `want_rot=$(( RANDOM % 4 ))`._
+
+**6. Anzeige.** Die Scoreboard-Stufe 0 zeigte die Gegner in Sitzordnung
+mit dem Platz vom Hub davor, der bis zum Ausscheiden 0 ist. Jetzt eine
+Rangliste nach Rows (`render_pane_scoreboard`, 5.6).
+
+**7. Doku.** Das Konzept behauptete, die Namensabfrage leere die
+Leitung; sie tut es nicht, und seit dieser Version muss sie es auch
+nicht (sie kommt erst nach `END`). Die Aufzaehlung in 5.4/5.8 ist
+berichtigt.
+
+**Bewusst offen gelassen:** ein Client, der seinen Socket nicht mehr
+liest, aber weiter `PING` beantwortet, kann den Hub nach vielen Minuten
+an einem vollen FIFO anhalten (TODO.md 2.2).
+
+**Abnahme.** `bash -n` ueber den Baum, ShellCheck auf Stufe `error` und
+die ASCII-Pruefung ohne Befund, `tools/release.sh --mode check` ebenso;
+`tools/state-check.sh`, `tools/key-scan.sh` (72 Faelle),
+`tools/demo-keys.sh`, `tools/display-check.py` und `tools/net-fuzz.sh`
+(620 Faelle) ohne Befund. Neu `tools/hub-check.sh`: 12 Pruefungen ohne
+Befund; gegen den Stand von 2.0.1 schlagen 8 davon fehl. Dazu echte
+Runden - ein Client im Pseudo-Terminal mit `--demo-record on`, Test-Bots,
+Stoerreihen an - aufgezeichnet und ohne Terminal durch `demo_step`
+wiedergegeben, auf dem Endstand: `survival` mit fuenf Plaetzen zweimal
+(154 und 178 Pruefpunkte), `sprint` mit fuenf Plaetzen (158) und `ultra`
+mit drei Plaetzen (42), jeweils ohne eine Abweichung und ohne eine
+verworfene Zeile im Hub. Nach den Tests blieb kein Prozess zurueck (vor
+dem Trap der Bridge waren es verwaiste `cat`).
+
+**Nachkorrekturen aus Review von PR #112 (2026-09-23).** Drei
+Randfaelle des obigen Zwischenstands wurden vor dem Merge korrigiert:
+
+- `net_poll` lieferte bei EOF nur den ersten Stapel von hoechstens 16
+  Nachrichten aus und loeschte danach auch vollstaendige Restzeilen.
+  Jetzt merkt `NET_READ_EOF` das Leitungsende, bis alle Stapel
+  ausgeliefert sind. Schreibversuche waehrenddessen koennen das
+  Ausliefern nicht durch einen vorzeitigen Sendefehler abbrechen.
+- `demo_hold_expire` uebergab in den ersten 2000 ms einen negativen
+  Ablaufzeitpunkt, den `demo_hold_release` als "alles freigeben"
+  behandelte. Jetzt wartet die Ablaufpruefung diese Anfangszeit ab;
+  nur der ausdrueckliche Abschluss nutzt den Freigabewert `-1`.
+  Fruehe Stoerreihen bleiben damit bis zu ihrer Marke hinter den
+  vorherigen Zuegen des Mitspielers.
+- Das Scoreboard errechnete auch nach `END` die Plaetze stehender
+  Spieler nur untereinander. In Sprint konnte dadurch Platz 2 doppelt
+  erscheinen, obwohl der Hub Platz 2 und 3 vergeben hatte. Jetzt
+  folgen nach einem entschiedenen Rundenende Zahlen und Sortierung den
+  Hub-Plaetzen; der Sieger wird aus `END` als Platz 1 uebernommen.
+
+Nachweis: `tools/multiplayer-check.py` prueft alle drei Faelle samt
+Batch-Grenzen, unfertiger Schlusszeile, einer geteilten Nachricht,
+Schreibversuch nach EOF, Zeitgrenzen, explizitem Aufnahmeabschluss und
+einem gegnerischen Sieger. Vor den Korrekturen schlugen 13 Unterfaelle
+fehl; danach bestehen alle 11 Testmethoden. Der Test laeuft im CI
+zusammen mit dem Parser-Fuzz-Test. Die Paketversion bleibt 2.0.2, da
+die Korrekturen zum selben noch offenen PR gehoeren.
