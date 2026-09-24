@@ -46,3 +46,41 @@ Das kann passieren, wenn nach dem `KO` die Verbindung bzw. der Hub verschwindet,
 ## Kurzfazit
 
 Die wichtigste offene Schwachstelle ist die Vermischung von **Ursprungszeit und Ankunftszeit** im per-Slot-Stream. Dadurch kann eine syntaktisch korrekte Aufnahme den tatsächlichen Kausalverlauf einer Multiplayer-Partie verändern. Die KO-Fallback-Logik ist ein separater, kleinerer Genauigkeitsfehler beim Abbruch der Verbindung.
+
+---
+
+# Ergänzung: Singleplayer-Review (2026-09-24)
+
+**Basis:** `main` bei Commit `cc329000e8591ab249c4d066b996c2b5fa4741e0` (Version 2.0.3). Geprüft wurden Spiellogik, Modi, Eingabe, Persistenz und die Einzelspieler-Demo. Die folgenden Befunde sind statisch aus den Aufrufketten abgeleitet; ein interaktiver Lauf wurde nicht durchgeführt. Die beiden älteren Mehrspieler-Befunde oben bleiben unverändert und wurden hier nicht erneut bewertet.
+
+## Befunde
+
+### SP-01 · Mittel: Rundenname und Name in der Demo widersprechen sich
+
+**Stellen:** `rowhammer.sh:1829-1834, 1848-1862, 1975`; `lib/demo.sh:1161-1162, 1221-1224`; `lib/menu.sh:1661-1701`.
+
+Nimmt eine Runde einen Bestenlistenplatz ein, kann der Spieler im Abschlussdialog einen anderen Namen als den in den Einstellungen hinterlegten `PLAYER_NAME` eingeben. `record_round` übergibt diesen `ROUND_NAME` an `round_book`; Bestenlisteneintrag und Runden-Hash verwenden den eingegebenen Namen. `demo_record_finish` erhält aber nur Ende und Hash und schreibt im Demo-Header weiterhin `name=${PLAYER_NAME}`. Beispiel: Standardname „Player“, für die Runde „Alice“ eingegeben → Bestenliste „Alice“, zugehörige Aufnahme `name=Player`. Der Hash verknüpft beide Dateien weiterhin, aber die Aufnahme weist die Runde der falschen Person zu.
+
+**Vorschlag:** Den tatsächlich gewählten Namen an `demo_record_finish` übergeben und für `name=` verwenden. Bei Versus-Aufnahmen klären, ob zusätzlich der ursprüngliche Sitzungsname getrennt erhalten bleiben soll.
+
+**Prüfung nach Korrektur:** Mit Standardname „Player“ eine platzierte Einzelspieler-Runde als „Alice“ abschließen; Bestenliste und Demo-Header müssen „Alice“ zeigen und die Aufnahme muss aus der Bestenliste startbar bleiben.
+
+### SP-02 · Mittel: Systemuhrsprung verändert Spielzeit und Modusfristen
+
+**Stellen:** `rowhammer.sh:1495-1503, 1606-1610, 1649-1657, 2885-2909`; `lib/demo.sh:752-760`.
+
+`now_ms` liest mit `EPOCHREALTIME` beziehungsweise `date +%s%N` die verstellbare Systemzeit. `play_clock_tick` addiert `NOW_MS - PLAY_LAST` ungeprüft zur Spielzeit. Wird die Uhr während einer Runde zurückgestellt, sinkt `PLAY_MS` und kann sogar negativ werden; Zeitangriff, Sprint und Hochwasser gewinnen dadurch Zeit, und die Demo kann Zeitstempel in falscher Reihenfolge erhalten. Ein Sprung nach vorn lässt Zeitlimits, Hochwasser und Lock Delay sofort ablaufen. Die Rücksprungbehandlung in `clear_pause_step` schützt nur dessen eigene Frist, nicht die zentrale Spieluhr.
+
+**Vorschlag:** Fristen und verstrichene Spielzeit auf einer monotonen Uhr führen; die Kalenderzeit nur für Datumsfelder und Dateinamen verwenden. Falls kein monotoner Zeitgeber verfügbar ist, Uhrsprünge ausdrücklich erkennen und die verstrichene Zeit begrenzen, ohne Sprünge als gespielte Zeit zu buchen.
+
+**Prüfung nach Korrektur:** Während einer laufenden Sprint- und Hochwasser-Runde die Systemzeit vor- und zurückstellen; Spielzeit und nächste Frist müssen gleichmäßig weiterlaufen.
+
+### SP-03 · Niedrig: Die zehnte Demo derselben Sekunde überschreibt eine bestehende Aufnahme
+
+**Stelle:** `lib/demo.sh:1197-1204, 1324`.
+
+Bei gleichem Sekundenstempel probiert `demo_record_finish` erst den Namen ohne Zähler und dann die Suffixe 2 bis 9. Sind alle neun Pfade belegt, verlässt die Schleife bei `i=10` den Block, obwohl der zuletzt gebildete Pfad mit Suffix 9 weiterhin existiert. Das anschließende `mv -f` ersetzt dessen Aufnahme. Im normalen manuellen Spiel ist die Häufung unwahrscheinlich; bei automatisierten sehr kurzen Runden oder einer zurückgesetzten Systemuhr gehen so dennoch Aufnahmen verloren, möglicherweise auch eine von der Bestenliste referenzierte.
+
+**Vorschlag:** Den Zähler ohne feste Obergrenze weitersuchen lassen und den Zielpfad unmittelbar vor dem Verschieben gegen eine bestehende Datei absichern.
+
+**Prüfung nach Korrektur:** Neun gleichnamig datierte Demo-Dateien vorgeben und eine weitere Aufnahme abschließen; alle zehn Dateien müssen erhalten bleiben.
