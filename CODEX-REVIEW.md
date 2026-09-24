@@ -74,13 +74,3 @@ Nimmt eine Runde einen Bestenlistenplatz ein, kann der Spieler im Abschlussdialo
 **Vorschlag:** Fristen und verstrichene Spielzeit auf einer monotonen Uhr führen; die Kalenderzeit nur für Datumsfelder und Dateinamen verwenden. Falls kein monotoner Zeitgeber verfügbar ist, Uhrsprünge ausdrücklich erkennen und die verstrichene Zeit begrenzen, ohne Sprünge als gespielte Zeit zu buchen.
 
 **Prüfung nach Korrektur:** Während einer laufenden Sprint- und Hochwasser-Runde die Systemzeit vor- und zurückstellen; Spielzeit und nächste Frist müssen gleichmäßig weiterlaufen.
-
-### SP-03 · Niedrig: Die zehnte Demo derselben Sekunde überschreibt eine bestehende Aufnahme
-
-**Stelle:** `lib/demo.sh:1197-1204, 1324`.
-
-Bei gleichem Sekundenstempel probiert `demo_record_finish` erst den Namen ohne Zähler und dann die Suffixe 2 bis 9. Sind alle neun Pfade belegt, verlässt die Schleife bei `i=10` den Block, obwohl der zuletzt gebildete Pfad mit Suffix 9 weiterhin existiert. Das anschließende `mv -f` ersetzt dessen Aufnahme. Im normalen manuellen Spiel ist die Häufung unwahrscheinlich; bei automatisierten sehr kurzen Runden oder einer zurückgesetzten Systemuhr gehen so dennoch Aufnahmen verloren, möglicherweise auch eine von der Bestenliste referenzierte.
-
-**Vorschlag:** Den Zähler ohne feste Obergrenze weitersuchen lassen und den Zielpfad unmittelbar vor dem Verschieben gegen eine bestehende Datei absichern.
-
-**Prüfung nach Korrektur:** Neun gleichnamig datierte Demo-Dateien vorgeben und eine weitere Aufnahme abschließen; alle zehn Dateien müssen erhalten bleiben.
