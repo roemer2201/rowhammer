@@ -281,6 +281,28 @@ Bestaetigung, bevor der jeweilige Roadmap-Schritt beginnt:
 
 ### 2.4 Sonstiges
 
+- [ ] **Pruefhaeufigkeit der Systemzeit nach Lastbeobachtung bewerten**
+      (Nutzerentscheidung 2026-10-10, Uhr-Korrektur in
+      [PR #114](https://github.com/roemer2201/rowhammer/pull/114),
+      Konzept 4.1): Zunaechst mehrere Runden mit der unveraenderten
+      Implementierung spielen und die Last beobachten. Sie vergleicht
+      bei jedem `now_ms`-Aufruf die Systemzeit mit zwei Uptime-Abfragen,
+      also mehrfach pro Game-Loop-Durchlauf. Der tatsaechliche Mehraufwand
+      ist noch nicht quantifiziert.
+      **Moegliche spaetere Optimierung:** vollstaendiger Vergleich etwa
+      einmal pro Sekunde, dazu bei jeder Zeitabfrage ein guenstiger
+      Plausibilitaetscheck. Auffaellige Vorwaerts-/Rueckwaertsdifferenzen
+      sofort mit Uptime gegenpruefen, bevor der Zeitwert verwendet wird.
+      **Restrisiko:** Eine ausschliesslich sekundenweise Pruefung kann
+      einen Sprung erst nach bereits ausgeloestem Lock Delay oder
+      Rundenende korrigieren; diese Spielentscheidungen lassen sich durch
+      den Offset nicht rueckgaengig machen. Kleine unauffaellige Spruenge
+      koennen auch den Plausibilitaetscheck passieren; dessen Schwelle
+      bleibt zu entscheiden. Das Pruefintervall darf nicht allein von
+      der verstellbaren Systemzeit abhaengen.
+      **Zurueckgestellt:** derzeit nur dokumentieren, nicht umsetzen;
+      eine Aenderung erst nach Lastbeobachtung und neuer Entscheidung.
+
 - [ ] **Weitere Sprachen** (siehe 4.11): Deutsch und Englisch sind da,
       technisch ist eine weitere Sprache eine Datei unter `lib/lang/`
       plus ein Eintrag in `I18N_LANGS`. Ob welche dazukommen sollen, ist
