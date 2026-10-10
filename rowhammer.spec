@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        2.0.3
+Version:        2.0.4
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,10 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sat Oct 10 2026 roemer2201 <r.oliver@web.de> - 2.0.4-1
+- Correct detected wall-clock jumps using a shared offset and boot time.
+- Stop personal play time at top-out while the round timeline continues.
+- Add deterministic clock and spectator regression checks to CI.
 * Wed Sep 23 2026 roemer2201 <r.oliver@web.de> - 2.0.3-1
 - The replay of a sprint or ultra recording shows the final places of the
   hub once it has run to the end, the boards that were still standing

@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 2.0.3
+**Version:** 2.0.4
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -89,6 +89,7 @@ Alternativ geht auch eine Installation ohne Paket per `sudo make install`
   `date`, das `%N` kennt - auf den ueblichen Linux-Distributionen ist
   beides der Fall. Das Spiel prueft das beim Start und sagt es, falls
   keines von beidem da ist
+- Lesbares Linux `/proc/uptime` als Kontrolluhr gegen Systemzeitspruenge
 - Ein Terminal mit ANSI-Farbunterstuetzung, **mindestens 48x22 Zeichen**.
   Kleiner startet das Spiel nicht; wird das Fenster waehrend einer Runde
   zu klein, pausiert sie hinter einem Hinweis, bis wieder Platz da ist
@@ -98,6 +99,11 @@ Alternativ geht auch eine Installation ohne Paket per `sudo make install`
   beiden Paketen nur *empfohlen*: ohne socat laeuft das
   Einzelspieler-Spiel unveraendert, und der Menuepunkt sagt, welches
   Paket fehlt
+
+Die Spieluhr behaelt Millisekunden-Schritte bei. Erkannte Spruenge der
+Systemzeit werden zentral herausgerechnet; kleine Aenderungen innerhalb
+der Messtoleranz bleiben moeglich. Beim Ausscheiden im Mehrspieler stoppt
+die persoenliche Spielzeit, waehrend die Aufnahme bis zum Rundenende laeuft.
 
 ## Spielen
 

@@ -3,7 +3,9 @@
 # lib/demo.sh
 #
 # Description:
-#   Demo recording and playback for rowhammer. A round is recorded as the
+#   Demo recording and playback for rowhammer. Personal duration respects
+#   the stopped play clock; multiplayer timelines continue while spectating.
+#   A round is recorded as the
 #   sequence of things that happened to it - the player's actions, the
 #   gravity steps, the lock-delay locks, the flood rows of the Hochwasser
 #   mode and the piece stream the round was
@@ -116,7 +118,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.13.0  (2026-09-23)
+# Version: 0.13.1  (2026-10-10)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -653,8 +655,12 @@ demo_stamp() {
         DEMO_STAMP_MS="${MP_ROUND_MS}"
         return 0
     fi
-    now_ms
-    DEMO_STAMP_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
+    # Pauses and finalized rounds contribute no idle time to their end.
+    DEMO_STAMP_MS="${PLAY_MS}"
+    if [ "${PLAY_CLOCK_RUNNING}" -eq 1 ]; then
+        now_ms
+        DEMO_STAMP_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
+    fi
     return 0
 }
 

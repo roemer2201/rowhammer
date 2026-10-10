@@ -27,7 +27,7 @@ Stand samt seiner Begruendung; was abgeloest wurde, steht in
   nennen dieselbe Zahl.
 - **Eine Millisekunden-Uhr** (seit 1.4.2): entweder `${EPOCHREALTIME}`
   (Bash 5, ohne Fork) oder ein `date`, das `%N` kennt. `now_ms`
-  (`rowhammer.sh`) nimmt das erste, wo es da ist; welche der beiden es
+  (`lib/clock.sh`) nimmt das erste, wo es da ist; welche der beiden es
   ist, entscheidet `clock_source_init` **einmal beim Start** und legt es
   in `CLOCK_SRC` ab. Taugt keine von beiden, bricht das Spiel mit einer
   Meldung ab - wie bei der Bash-Version, und aus demselben Grund: einen
@@ -49,6 +49,31 @@ Stand samt seiner Begruendung; was abgeloest wurde, steht in
     ist. Die kopflosen Mehrspieler-Prozesse dagegen schon (der Hub-Tick
     und seine Timeouts laufen auf dieser Uhr), sie sind also **nicht**
     ausgenommen.
+- **Bereinigte Zeitbasis** (seit 2.0.4, `lib/clock.sh`): `now_ms`
+  liefert die Millisekunden der Systemzeit minus einem pro Prozess
+  fortgefuehrten Korrekturoffset. Alle Spiel-, Hub- und Netzwerkfristen
+  verwenden diese Uhr; Kalenderdatum und Dateinamen verwenden weiter
+  `date`. Linux `/proc/uptime` muss beim Start lesbar sein; auch ein
+  spaeterer Lesefehler bricht ab, statt ungeschuetzte Zeiten zu buchen.
+  - Zwei Uptime-Abfragen rahmen jede Systemzeit-Abfrage ein. Die
+    Kontrollwerte sind auf 10 ms abgeschnitten; ihre Intervalle und
+    zusaetzliche 20 ms Toleranz bestimmen, welche Differenz noch plausibel
+    ist. Eine echte Prozesspause oder Suspend verlaengert beide Uhren
+    und wird deshalb nicht herausgerechnet.
+  - Ein Anker bleibt erhalten, damit sich auch mehrere kleine Aenderungen
+    zu einer erkennbaren Abweichung summieren koennen. Bei erkanntem
+    Sprung wird dessen Differenz zu den Mittelpunkten der Bootzeitintervalle
+    zum Offset addiert und neu verankert. Ein engeres Messintervall kann
+    einen unscharfen Startanker ersetzen.
+  - Normale Abfragen behalten 1-ms-Schritte; Korrekturen haben die
+    Unsicherheit der 10-ms-Kontrolluhr und der Messdauer. Kleine Spruenge
+    innerhalb der Toleranz sind nicht sicher erkennbar. Eine Klemme
+    verhindert auch dann negative Zeitdifferenzen, kann aber kurzzeitig
+    gleiche Werte liefern. Die Uhr ist damit ein Kompromiss, keine exakte
+    monotone Millisekunden-Quelle.
+  - Regression: `tools/clock-check.py` simuliert Spruenge in beide
+    Richtungen, wiederholte Aenderungen, Messverzoegerungen, echte lange
+    Pausen, Stop/Resume und den Game-Loop mit Top-out, Resize und `END`.
 - Keine harten Abhaengigkeiten ausser Coreutils; `tput` optional (Fallback auf
   feste ANSI-Sequenzen).
 - Farben ueber ANSI-Escape-Sequenzen (8/16 Farben als Basis, 256-Farben als
@@ -106,6 +131,7 @@ rowhammer/
     config.sh          # Laden/Speichern der Nutzer-Konfiguration
     datadir.sh         # Speicherort der Spieldaten: Zeigerdatei, Umzug, Sicherung
     debug.sh           # Debug-Modus: Session-Trace in Log-Dateien
+    clock.sh           # Bereinigte Millisekunden-Uhr, gemeinsame Fristen
     demo.sh            # Demo-Aufzeichnung und -Wiedergabe (Format, Ablage)
     i18n.sh            # Uebersetzungsschicht: Sprachwahl, Texttabelle
     lang/
@@ -128,6 +154,7 @@ rowhammer/
     hub-check.sh       # Sitzungstest des Hubs ueber socat (siehe 5.5)
     demo-keys.sh       # Regressionstest der Demo-Tasten (siehe 3.8)
     state-check.sh     # Regressionstest des Rundenzustands (siehe 5.20)
+    clock-check.py     # Regressionstest der Uhr und Zuschauerzeit
     release.sh         # Versions-Abgleich, Release-Notes, Release-Tag
     demo/              # Werkzeuge fuer die asciinema-Democlips
   .github/workflows/
@@ -146,7 +173,7 @@ rowhammer/
   HISTORY.md           # Archiv der erledigten Punkte je Version
   README.md            # Anleitung fuer Spielerinnen und Spieler
   MISTRAL.md           # externe Review (Juli 2026), wird nicht gepflegt
-  CODEX-REVIEW.md      # externe Review Mehrspieler (Sept. 2026), ungepflegt
+  CODEX-REVIEW.md      # gepruefte Befunde und Korrekturstatus (Okt. 2026)
 ```
 
 Alle Module aus dem Baum oben existieren; die vier
@@ -224,8 +251,10 @@ ueberschrieben werden kann.
 
 ### 4.3 Game-Loop, Input, Rendering
 
-- **Game-Loop:** feste Tick-Rate; Fall-Intervall abhaengig vom Level.
-  Zeitmessung ueber `${EPOCHREALTIME}` (Bash 5) mit Fallback. Ruht ein
+- **Game-Loop:** bis zu `TICK_S` (20 ms) Wartezeit auf Eingabe;
+  gepufferte Tasten koennen schnellere Durchlaeufe ausloesen.
+  Fall-Intervall abhaengig vom Level. Zeitmessung ueber die bereinigte
+  Millisekunden-Uhr (4.1). Ruht ein
   Stein (Lock Delay scharf, `LOCK_PENDING`), pausiert die Gravitation und
   der Loop lockt erst nach Ablauf von `LOCK_DELAY_MS` seit `TOUCHDOWN_MS`
   (siehe 3.1).

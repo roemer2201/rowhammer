@@ -217,6 +217,13 @@ Drei Festlegungen dazu:
   die Gegner spielen dort weiter (5.8), und ihre Zeitstempel kaemen
   sonst gegen eine eingefrorene eigene Uhr. Im Einzelspieler bleibt es
   bei der Spieluhr, dort haelt eine Pause die ganze Welt an.
+  Die persoenliche Spielzeit stoppt beim eigenen Top-out einmalig
+  (`play_clock_stop`, seit 2.0.4). `PLAY_CLOCK_RUNNING` gehoert in
+  `STATE_VARS`; ein Resize und das spaetere `END` starten sie nicht neu.
+  `time=` und Statistiken enthalten damit nur aktive Spielzeit, `length=`
+  weiter die gesamte Runde. Ein bis `END` aktiver Spieler bekommt dort
+  seinen letzten Spielzeitabschnitt gebucht. `demo_stamp` respektiert
+  auch im Einzelspieler einen gestoppten Zaehler.
   Das behebt zugleich einen Fehler, der ohne diese Umstellung entstuende:
   `demo_record_event` rechnet den Stempel aus `PLAY_MS` und `PLAY_LAST`,
   und `play_clock_resume` zieht `PLAY_LAST` nach einem Menue auf

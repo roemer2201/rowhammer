@@ -26,6 +26,8 @@
 #   fixed-goal modes only successful runs are recorded, while every Time
 #   Attack and every Hochwasser round is - their rows are the same
 #   achievement whether the clock, the water or the stack ended them.
+#   Elapsed-time deadlines share a corrected millisecond clock; personal
+#   play time stops when a player becomes a spectator.
 #   The play screen is one fixed
 #   48x22 block centered in the terminal: the hold piece with the round
 #   counters below it on the left, the board in the middle and the three
@@ -216,7 +218,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 2.0.3  (2026-09-23)
+# Version: 2.0.4  (2026-10-10)
 
 set -euo pipefail
 
@@ -231,7 +233,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="2.0.3"
+ROWHAMMER_VERSION="2.0.4"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -933,7 +935,7 @@ TERM_RESIZED=0
 # datadir comes right after config: it owns the link file that says where
 # the data directory is (CLAUDE.md 4.12) and reads CONFIG_NAME from that
 # module to tell a target that already holds game data from an empty one.
-for _lib in debug config datadir i18n state demo pieces board squares highscore save stats wonders input render menu net proto hub mp screensaver; do
+for _lib in debug clock config datadir i18n state demo pieces board squares highscore save stats wonders input render menu net proto hub mp screensaver; do
     if [ ! -r "${SCRIPT_DIR}/lib/${_lib}.sh" ]; then
         die "Missing library file: ${SCRIPT_DIR}/lib/${_lib}.sh"
     fi
@@ -1141,49 +1143,9 @@ if [ -n "${RESET_OPT}" ]; then
     exit 0
 fi
 
-# CLOCK_SRC: which time source now_ms uses. Resolved once here rather
-# than probed per call - the game loop asks for the time several times
-# per frame.
-CLOCK_SRC=""
-# clock_source_init
-# Pick the time source and report whether one works at all. bash 5's
-# EPOCHREALTIME is the first choice (no fork); below that the only
-# millisecond clock left is date +%s%N.
-# CHANGE 2026-09-06 (SP-001 of the singleplayer review): the date path is
-# now verified before the game relies on it. %N is a GNU extension and
-# not required by POSIX, so a date(1) without it either passes the letter
-# through ("1757000000N") or drops it and leaves the plain seconds
-# behind. The first form makes $(( )) fail, which under set -e killed the
-# game in the middle of a round - at the one moment nobody can do
-# anything about it; the second form is worse, because it looks like a
-# number and would put the clock in 1970 once divided by a million.
-# Hence the two-part probe: all digits, and exactly nine digits longer
-# than the plain seconds. A source that fails it is a startup error like
-# the bash version above, not a degraded mode - a game whose gravity and
-# lock delay are measured in whole seconds is not this game.
-# Placed here rather than up in the prerequisites for the same
-# reason the tty check is (see there): --help and --reset never ask
-# what time it is. The headless multiplayer processes do, though -
-# the hub's tick and its timeouts run on this clock - so unlike the
-# tty check this one is not skipped for them.
-clock_source_init() {
-    if [ -n "${EPOCHREALTIME:-}" ]; then
-        CLOCK_SRC="epochrealtime"
-        return 0
-    fi
-    local secs nsec
-    # STDERR is deliberately not swallowed: a missing date(1) says so
-    # itself, and the message lands before the alternate screen.
-    secs="$(date +%s)" || return 1
-    nsec="$(date +%s%N)" || return 1
-    [[ "${secs}" =~ ^[0-9]+$ ]] || return 1
-    [[ "${nsec}" =~ ^[0-9]+$ ]] || return 1
-    [ "${#nsec}" -eq $(( ${#secs} + 9 )) ] || return 1
-    CLOCK_SRC="date"
-    return 0
-}
+# Validate the shared corrected clock after the non-clock CLI paths.
 if ! clock_source_init; then
-    die "no millisecond clock: needs bash 5 (EPOCHREALTIME) or a date(1) supporting %N, this is bash ${BASH_VERSION}"
+    die "no elapsed-time clock: needs readable Linux /proc/uptime and bash 5 (EPOCHREALTIME) or date(1) supporting %N"
 fi
 
 # The game itself needs a terminal (the reset above does not, see the
@@ -1352,7 +1314,7 @@ CLEAR_PENDING=0; CLEAR_START_MS=0
 # the game over screen do not, because those states reset PLAY_LAST to
 # "now" when play resumes (play_clock_resume), so the idle interval is
 # never added. The round keeps its PLAY_MS across a suspend/resume too.
-PLAY_MS=0; PLAY_LAST=0
+PLAY_MS=0; PLAY_LAST=0; PLAY_CLOCK_RUNNING=0
 # Guards record_round so one round enters the highscore list only
 # once (a round can end twice: game over, then quitting to the menu).
 ROUND_RECORDED=0
@@ -1484,24 +1446,7 @@ CLEAR_PAUSE_MS=$(( FLASH_MS * 2 * FLASH_CYCLES ))
 # the round logic keeps itself (CLAUDE.md 5.3).
 ROUND_NOW_MS=0
 
-# now_ms: put the current time in milliseconds into the global NOW_MS.
-# Uses bash 5's EPOCHREALTIME when available (no fork); older bash falls
-# back to date. A global instead of command substitution keeps the hot
-# game loop free of subshell forks on bash 5.
-# Which of the two it is was decided once at startup (clock_source_init
-# in the prerequisites above), so this asks a variable instead of the
-# environment - and the date branch is only ever reached on a system
-# where its output was verified to be seconds plus nanoseconds.
-now_ms() {
-    if [ "${CLOCK_SRC}" = "epochrealtime" ]; then
-        # Some locales print a decimal comma; normalize before splitting.
-        local t="${EPOCHREALTIME/,/.}"
-        local usec="${t#*.}"
-        NOW_MS=$(( ${t%.*} * 1000 + 10#${usec:0:3} ))
-    else
-        NOW_MS=$(( $(date +%s%N) / 1000000 ))
-    fi
-}
+# now_ms is provided by lib/clock.sh for all process-wide deadlines.
 
 # fmt_duration SECONDS: format a whole-second duration as MM:SS into the
 # global FMT_DURATION. Minutes are not rolled into hours so the field
@@ -1602,11 +1547,20 @@ round_hash() {
 # its goal is reached, because a hard drop finishes a run between two of
 # those ticks and those milliseconds belong to the run - which in that
 # mode is its score. Idempotent: it only ever adds the interval since
-# PLAY_LAST, which it then moves to "now".
+# PLAY_LAST, which it then moves to "now". A stopped clock is inert,
+# including later END bookkeeping after this player became a spectator.
 play_clock_tick() {
+    [ "${PLAY_CLOCK_RUNNING}" -eq 1 ] || return 0
     now_ms
     PLAY_MS=$(( PLAY_MS + NOW_MS - PLAY_LAST ))
     PLAY_LAST="${NOW_MS}"
+}
+
+# Finalize the active segment once. A spectator or paused round has no
+# new play time to book; END, leaving and resize may all call this again.
+play_clock_stop() {
+    play_clock_tick
+    PLAY_CLOCK_RUNNING=0
 }
 
 # play_clock_resume: mark "now" as the start of a fresh play-time segment
@@ -1615,6 +1569,14 @@ play_clock_tick() {
 # phase - unpausing, leaving the pause menu, a new or a resumed round -
 # so the interval spent paused or in a menu is not counted as play time.
 play_clock_resume() {
+    # An ended board must never be restarted by resize or a menu return.
+    # Replay time is supplied by its driver, never by the real clock.
+    if [ "${GAME_OVER}" -eq 1 ] || [ "${DEMO_PLAYING}" -eq 1 ] || \
+       [ "${GAME_EXIT:-0}" -eq 1 ] || [ "${GAME_SUSPENDED:-0}" -eq 1 ]; then
+        PLAY_CLOCK_RUNNING=0
+        return 0
+    fi
+    PLAY_CLOCK_RUNNING=$(( 1 - PAUSED ))
     now_ms
     LAST_FALL="${NOW_MS}"
     PLAY_LAST="${NOW_MS}"
@@ -1800,6 +1762,7 @@ record_round() {
         return 0
     fi
     ROUND_RECORDED=1
+    play_clock_stop
     # A clear that was still blinking when the round ended: the rows were
     # completed, so they belong to the round the books are being closed
     # on - take them away now rather than let them fall off the end. The
@@ -1997,6 +1960,7 @@ round_finish() {
     if [ "${DEMO_PLAYING}" -eq 1 ]; then
         return 0
     fi
+    play_clock_stop
     if [ "${MP_ACTIVE}" -eq 1 ]; then
         # The counters of the very last lock: the game loop sends them at
         # the end of a tick and never gets to this one, so without this
@@ -2319,7 +2283,7 @@ clear_and_continue() {
             # Count the time up to this very moment: a hard drop lands
             # between two loop ticks, and those milliseconds are part of
             # the run's time - which in this mode is its score.
-            play_clock_tick
+            play_clock_stop
             GOAL_REACHED=1
             GAME_OVER=1
             debug_event "ultra goal reached: rows=${ROW_CREDIT}/${ULTRA_TARGET_ROWS} time=${PLAY_MS}ms lines=${CLEARED_TOTAL} pieces=${PIECE_COUNT}"
@@ -2578,6 +2542,7 @@ handle_key() {
             # resume, restart, suspend the round into the main menu or
             # end it (lib/menu.sh sets
             # GAME_EXIT/GAME_SUSPENDED/GAME_RESTART accordingly).
+            play_clock_stop
             debug_event "pause menu opened"
             if [ "${MP_ACTIVE}" -eq 1 ]; then
                 # A multiplayer round has its own two-entry menu: it has
@@ -2693,6 +2658,7 @@ game_reset() {
     FLASH_ROWS=()
     FLASH_STATE=0
     PLAY_MS=0
+    PLAY_CLOCK_RUNNING=0
     # Back to the plain start time: the credit that bought the last
     # round's extra time is gone with ROW_CREDIT above.
     time_attack_budget
@@ -2815,7 +2781,7 @@ game_run() {
                 if [ "${MP_PLACE}" -eq 1 ]; then
                     GOAL_REACHED=1
                 fi
-                play_clock_tick
+                play_clock_stop
                 record_round
                 DIRTY=1
             fi

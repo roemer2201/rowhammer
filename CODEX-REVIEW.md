@@ -2,15 +2,16 @@
 
 **Stand:** 2026-10-10
 
-**Repository:** `roemer2201/rowhammer`, Branch `main`
+**Repository:** `roemer2201/rowhammer`
 
-**Geprüfter Commit:** `4384724fbddaaa1c990fbd4304b11f6c3cd3ce98`
+**Basis der ursprünglichen Review:** `4384724fbddaaa1c990fbd4304b11f6c3cd3ce98`
 
-**Spielversion:** 2.0.3
+**Spielversion:** 2.0.4 (Korrekturstand dieses Berichts)
 
 Dieser Bericht ersetzt die älteren, teilweise überholten Bewertungen der
-Mehrspieler-Aufzeichnung und des Singleplayers. Die Zeilenangaben beziehen
-sich auf den oben genannten Commit. Geprüft wurden die Spielsteuerung,
+Mehrspieler-Aufzeichnung und des Singleplayers. Die ursprünglichen Zeilenangaben
+beziehen sich auf den oben genannten Basis-Commit; Korrekturen sind
+separat markiert. Geprüft wurden die Spielsteuerung,
 Rundenzustände, Eingabe und Anzeige, Persistenz und Datenverzeichniswechsel,
 Mehrspieler-Protokoll und Hub sowie Demo-Aufzeichnung und Wiedergabe.
 Die Befunde unten wurden mit den echten Bash-Funktionen beziehungsweise
@@ -25,8 +26,6 @@ verstellt und ausschließlich in temporären Datenverzeichnissen gearbeitet.
 | DATA-01 | P1 / hoch | Verlegen auf einen Pfadalias kann die eigenen aktiven Daten löschen |
 | RESET-01 | P2 / mittel | `--reset all` lässt die Versus-Bestenliste stehen |
 | SP-01 | P2 / mittel | Bestenliste und Demo verwenden unterschiedliche Spielernamen |
-| SP-02 | P2 / mittel | Systemuhrsprünge verändern Spielzeit und Fristen |
-| MP-03 | P2 / mittel | Nach einem Top-out wird Zuschauerzeit als Spielzeit gebucht |
 | MP-04 | P2 / mittel | Protokollzahlen mit führender Null werden als Oktalzahlen verarbeitet |
 | DEMO-01 | P2 / mittel | Eine kurz abgebrochene Versus-Aufnahme kann vom eigenen Loader abgelehnt werden |
 
@@ -115,68 +114,6 @@ und im Header verwenden. Bei Versus-Aufnahmen die Sitzungsnamen in
 abweichenden Namen abschließen; Bestenliste, Hash-Verknüpfung und
 Demo-Header gemeinsam prüfen.
 
-### SP-02: Die Spieluhr übernimmt Sprünge der verstellbaren Systemzeit
-
-**Stellen:** `rowhammer.sh:1495-1503, 1606-1610, 1649-1657, 2885-2920`;
-`lib/demo.sh:650-661, 748-760`.
-
-`now_ms` verwendet `EPOCHREALTIME` oder `date +%s%N`.
-`play_clock_tick` addiert die Differenz zu `PLAY_LAST` ungeprüft.
-Ein Rücksprung kann `PLAY_MS` negativ machen; ein Vorwärtssprung
-kann Zeitlimits, Hochwasser, Gravity und Lock Delay vorzeitig auslösen.
-Die Rücksprungbehandlung einzelner Anzeige-/Animationsfunktionen schützt
-die zentrale Spieluhr nicht.
-
-**Nachweis:** Mit der echten `play_clock_tick`-Funktion und einer
-kontrollierten Uhr: `PLAY_MS=1000`, `PLAY_LAST=10000`,
-nächster Zeitwert `8000` → `PLAY_MS=-1000`.
-Der anschließende Zeitwert `600000` führte zu `PLAY_MS=591000`.
-Die Systemzeit des Testsystems blieb unverändert.
-
-**Korrektur:** Verstrichene Zeit und Fristen auf einer monotonen Zeitbasis
-führen; Kalenderzeit nur für Datum und Dateinamen verwenden.
-Bei einer Ersatzlösung müssen Vorwärts- und Rückwärtssprünge gemeinsam
-für Spieluhr, Rundenuhr und Fristen behandelt werden.
-
-**Regression:** Deterministische Uhrsprünge in laufenden Sprint-,
-Time-Attack- und Hochwasser-Runden sowie während eines Lock Delays einspeisen.
-Spielzeit darf nicht rückwärts laufen oder einen Uhrsprung als gespielte
-Zeit buchen.
-
-### MP-03: Warten nach dem eigenen Top-out verlängert die gebuchte Spielzeit
-
-**Stellen:** `rowhammer.sh:1990-2025, 2777-2784, 2811-2819`;
-`rowhammer.sh:1606-1610`.
-
-Nach dem Top-out ist `GAME_OVER=1`. Der normale Game-Loop zählt für
-diesen Spieler keine weitere Zeit, verarbeitet aber weiter die Nachrichten
-der anderen Teilnehmer. `PLAY_LAST` bleibt dabei auf dem letzten
-aktiven Spielzeitpunkt stehen. Beim späteren `END` führt der Loop
-unbedingt noch einmal `play_clock_tick` aus und bucht dadurch die gesamte
-Wartezeit nach.
-
-Das trifft besonders Sprint-/Ultra-Sitzungen oder Survival-Runden mit
-mindestens drei Spielern: Die übrigen Teilnehmer können nach dem eigenen
-Ausscheiden noch lange weiterspielen. Bestenliste, Gesamtstatistik,
-Ablegerate und Demo-Feld `time=` verwenden anschließend die vergrößerte
-Spielzeit. `length=` ist für die Dauer der gesamten Aufnahme bereits
-separat vorgesehen.
-
-**Nachweis:** Die echte Funktion `game_run` wurde mit einem bereits
-ausgeschiedenen Spieler (`PLAY_MS=10000`, `PLAY_LAST=10000`) gestartet.
-Ein Transportadapter lieferte `END` beim Uhrwert `60000`.
-Der Buchungsadapter erhielt `PLAY_MS=60000` statt der eingefrorenen
-`10000`.
-
-**Korrektur:** Die persönliche Spielzeit beim Top-out finalisieren und
-danach eingefroren lassen. Beim Sitzungsende nur für einen bis dahin
-aktiven Spieler den letzten Zeitabschnitt buchen; die gesamte Rundendauer
-weiter separat ermitteln.
-
-**Regression:** Drei Spieler, eigener Top-out nach zehn Sekunden,
-Rundenende nach einer Minute. Persönliche Spielzeit und Statistiken
-müssen zehn Sekunden, die Demo-Gesamtlänge ungefähr eine Minute ergeben.
-
 ### MP-04: Die Zahlen-Whitelist verhindert keine Oktalinterpretation
 
 **Stellen:** `lib/proto.sh:87, 278-281, 354-360`;
@@ -241,6 +178,90 @@ Header zu entfernen würde die tatsächliche Teilnehmerliste verfälschen.
 eines Peers abbrechen; jede tatsächlich gespeicherte Aufnahme muss
 anschließend von `demo_load` akzeptiert werden.
 
+## Korrigierte Befunde
+
+### SP-02: Systemuhrsprünge — korrigiert in 2.0.4 mit dokumentierten Grenzen
+
+**Aktueller Status:** `lib/clock.sh` bereinigt erkannte Vorwärts- und
+Rückwärtssprünge zentral über einen Offset. Die Erkennung verwendet
+beidseitige Uptime-Messintervalle plus 20 ms Toleranz; kleine Änderungen
+innerhalb dieser Grenzen bleiben möglich. Eine Klemme verhindert negative
+Differenzen. Normale Abfragen behalten Millisekunden-Schritte, korrigierte
+Intervalle haben die Unsicherheit der Kontrolluhr und Messdauer.
+`tools/clock-check.py` prüft beide Sprungrichtungen, Wiederholungen, echte
+Pausen, verzögerte Abfragen, beide Wall-Quellen und Fehler bei fehlender
+Kontrolluhr. Der folgende Nachweis beschreibt den Basis-Commit.
+
+
+**Stellen:** `rowhammer.sh:1495-1503, 1606-1610, 1649-1657, 2885-2920`;
+`lib/demo.sh:650-661, 748-760`.
+
+`now_ms` verwendet `EPOCHREALTIME` oder `date +%s%N`.
+`play_clock_tick` addiert die Differenz zu `PLAY_LAST` ungeprüft.
+Ein Rücksprung kann `PLAY_MS` negativ machen; ein Vorwärtssprung
+kann Zeitlimits, Hochwasser, Gravity und Lock Delay vorzeitig auslösen.
+Die Rücksprungbehandlung einzelner Anzeige-/Animationsfunktionen schützt
+die zentrale Spieluhr nicht.
+
+**Nachweis:** Mit der echten `play_clock_tick`-Funktion und einer
+kontrollierten Uhr: `PLAY_MS=1000`, `PLAY_LAST=10000`,
+nächster Zeitwert `8000` → `PLAY_MS=-1000`.
+Der anschließende Zeitwert `600000` führte zu `PLAY_MS=591000`.
+Die Systemzeit des Testsystems blieb unverändert.
+
+**Korrektur:** Verstrichene Zeit und Fristen auf einer monotonen Zeitbasis
+führen; Kalenderzeit nur für Datum und Dateinamen verwenden.
+Bei einer Ersatzlösung müssen Vorwärts- und Rückwärtssprünge gemeinsam
+für Spieluhr, Rundenuhr und Fristen behandelt werden.
+
+**Regression:** Deterministische Uhrsprünge in laufenden Sprint-,
+Time-Attack- und Hochwasser-Runden sowie während eines Lock Delays einspeisen.
+Spielzeit darf nicht rückwärts laufen oder einen Uhrsprung als gespielte
+Zeit buchen.
+
+### MP-03: Zuschauerzeit — behoben in 2.0.4
+
+**Aktueller Status:** `round_finish` stoppt die persönliche Uhr; deren
+Laufzustand gehört zum Rundenzustand. `play_clock_resume` startet nach
+Game Over keine Uhr neu. `END` und Buchung respektieren den Stopp,
+`mp_round_ms` läuft weiter. Der echte Game-Loop ist mit Top-out bei 10 s,
+Resize bei 60 s und `END` bei 120 s geprüft: `PLAY_MS=10000`,
+Demo-Zeitachse `120000`, auch bei gleichzeitigen Uhrsprüngen um eine Stunde.
+Der folgende Nachweis beschreibt den Basis-Commit.
+
+
+**Stellen:** `rowhammer.sh:1990-2025, 2777-2784, 2811-2819`;
+`rowhammer.sh:1606-1610`.
+
+Nach dem Top-out ist `GAME_OVER=1`. Der normale Game-Loop zählt für
+diesen Spieler keine weitere Zeit, verarbeitet aber weiter die Nachrichten
+der anderen Teilnehmer. `PLAY_LAST` bleibt dabei auf dem letzten
+aktiven Spielzeitpunkt stehen. Beim späteren `END` führt der Loop
+unbedingt noch einmal `play_clock_tick` aus und bucht dadurch die gesamte
+Wartezeit nach.
+
+Das trifft besonders Sprint-/Ultra-Sitzungen oder Survival-Runden mit
+mindestens drei Spielern: Die übrigen Teilnehmer können nach dem eigenen
+Ausscheiden noch lange weiterspielen. Bestenliste, Gesamtstatistik,
+Ablegerate und Demo-Feld `time=` verwenden anschließend die vergrößerte
+Spielzeit. `length=` ist für die Dauer der gesamten Aufnahme bereits
+separat vorgesehen.
+
+**Nachweis:** Die echte Funktion `game_run` wurde mit einem bereits
+ausgeschiedenen Spieler (`PLAY_MS=10000`, `PLAY_LAST=10000`) gestartet.
+Ein Transportadapter lieferte `END` beim Uhrwert `60000`.
+Der Buchungsadapter erhielt `PLAY_MS=60000` statt der eingefrorenen
+`10000`.
+
+**Korrektur:** Die persönliche Spielzeit beim Top-out finalisieren und
+danach eingefroren lassen. Beim Sitzungsende nur für einen bis dahin
+aktiven Spieler den letzten Zeitabschnitt buchen; die gesamte Rundendauer
+weiter separat ermitteln.
+
+**Regression:** Drei Spieler, eigener Top-out nach zehn Sekunden,
+Rundenende nach einer Minute. Persönliche Spielzeit und Statistiken
+müssen zehn Sekunden, die Demo-Gesamtlänge ungefähr eine Minute ergeben.
+
 ## Korrektur der bisherigen Review-Aussagen
 
 | Alter Befund | Aktueller Status | Beleg im geprüften Code |
@@ -248,7 +269,8 @@ anschließend von `demo_load` akzeptiert werden.
 | Mehrspieler-Finding 1: verspätete PEERACT-Ereignisse hinter Hub-Ereignissen | Der beschriebene normale Empfangspfad ist seit 2.0.2 korrigiert | `demo_slot_hub_event` hält fremde Hub-Ereignisse zurück; `demo_record_peer_act` verarbeitet `y/q`-Empfangsmarker über `demo_hold_mark`. Der Empfangszeitpunkt des betroffenen Spielers bestimmt damit die Position im Stream. |
 | Mehrspieler-Finding 2: fehlendes ROSTER verursacht falschen Top-out | Behoben seit 1.4.1 / Protokoll 5 | `hub_eliminate` sendet die Ursache mit `KO`; `mp_handle` reicht sie an `demo_record_ko(slot, place, state)` weiter. Die alte `demo_ko_flush`-Logik existiert nicht mehr. |
 | SP-01: unterschiedlicher Runden-/Demo-Name | Weiterhin offen und jetzt reproduziert | Siehe SP-01 oben. |
-| SP-02: Systemuhrsprünge | Weiterhin offen und jetzt reproduziert | Siehe SP-02 oben. |
+| SP-02: Systemuhrsprünge | Korrigiert in 2.0.4 mit dokumentierten Erkennungsgrenzen | Siehe SP-02 oben. |
+| MP-03: Zuschauerzeit | Behoben in 2.0.4 | Siehe MP-03 oben. |
 
 Die Marker-Lösung besitzt weiterhin einen ausdrücklich vorgesehenen
 Fallback: Nach `DEMO_HOLD_MS=2000` beziehungsweise beim Abschluss werden
@@ -262,7 +284,10 @@ mehr dem aktuellen Code.
 
 | Prüfung | Ergebnis |
 | --- | --- |
-| `bash -n` über alle 33 Shell-Dateien | bestanden |
+| `bash -n` über alle 34 Shell-Dateien | bestanden |
+| `tools/clock-check.py` | 18 Testmethoden bestanden |
+| ShellCheck (Stufe `error`) | bestanden |
+| `tools/hub-check.sh` | 10 TCP-Prüfungen bestanden; Unix-Teil durch Umgebung blockiert |
 | `tools/state-check.sh` | 68 Prüfungen bestanden |
 | `tools/demo-keys.sh` | 31 Prüfungen bestanden |
 | `python3 tools/display-check.py` | 7 Tests bestanden |
@@ -272,15 +297,16 @@ mehr dem aktuellen Code.
 | `tools/net-fuzz.sh --random 400` | 620 Fälle bestanden |
 | `tools/release.sh --mode check` | Exit-Status 0 |
 | `make install` in temporäres Staging, danach `--help` über den installierten Symlink | bestanden |
-| Gezielte Funktions-/CLI-Reproduktionen der sieben offenen Befunde | oben beschrieben |
+| Ursprüngliche Funktions-/CLI-Reproduktionen der sieben Befunde | Basis-Commit, oben beschrieben |
 
-`tools/hub-check.sh` wurde aufgerufen, übersprang seine Sitzungsprüfungen
-aber mangels `socat` und meldete dennoch Exit-Status 0. Das zählt hier
-ausdrücklich **nicht** als bestandener Hub-Integrationstest.
-ShellCheck war ebenfalls nicht verfügbar. Ein interaktiver vollständiger
-Spiellauf, reale TCP-/Unix-Sitzungen sowie DEB-/RPM-Paketbauten wurden
-in dieser Umgebung nicht durchgeführt.
+`tools/hub-check.sh` läuft mit nachgeladenem `socat`: alle zehn
+TCP-Prüfungen bestehen. Der anschließende Unix-Teil scheitert beim
+Listenerstart; ein unabhängiger Socket-Probelauf bestätigt, dass diese
+Umgebung AF_UNIX-Sockets mit `EPERM` verweigert. Der gesamte Test meldet
+daher Exit-Status 1 und gilt nicht als vollständig bestanden.
+Ein interaktiver vollständiger Spiellauf sowie DEB-/RPM-Paketbauten
+wurden lokal nicht durchgeführt. Die vollständigen Hub- und Paketchecks
+bleiben Teil des GitHub-CI.
 
-Die bestehenden Prüfungen sind erfolgreich, decken die oben beschriebenen
-Abläufe aber nicht ab. Geändert wurde ausschließlich dieser Bericht;
-die offenen Fehler sind damit noch nicht im Spielcode behoben.
+Die Uhr- und Zuschauerprüfungen decken die Korrekturen von SP-02 und MP-03
+ab. Die fünf übrigen Befunde sind weiter offen. Die Korrekturen und ihre Tests gehören zum oben genannten Versionsstand.
