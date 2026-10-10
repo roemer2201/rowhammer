@@ -309,7 +309,7 @@ mehr dem aktuellen Code.
 | `tools/state-check.sh` | 68 Prüfungen bestanden |
 | `tools/demo-keys.sh` | 31 Prüfungen bestanden |
 | `python3 tools/display-check.py` | 7 Tests bestanden |
-| `python3 tools/multiplayer-check.py` | 19 Tests bestanden |
+| `python3 tools/multiplayer-check.py` | 26 Testmethoden bestanden |
 | `tools/key-scan.sh --silent` | 72 Sequenzen, keine falsche Aktion oder durchgereichte inerte Taste |
 | `tools/key-scan.sh --gap 0.06 --silent` | 69 Sequenzen, keine falsche Aktion oder durchgereichte inerte Taste |
 | `tools/net-fuzz.sh --random 400` | 620 Fälle bestanden |
@@ -327,4 +327,6 @@ wurden lokal nicht durchgeführt. Die vollständigen Hub- und Paketchecks
 bleiben Teil des GitHub-CI.
 
 Die Uhr- und Zuschauerprüfungen decken die Korrekturen von SP-02 und MP-03
-ab. Die fünf übrigen Befunde sind weiter offen. Die Korrekturen und ihre Tests gehören zum oben genannten Versionsstand.
+ab. Die Protokoll- und Demo-Prüfungen decken MP-04 und DEMO-01 ab.
+Die drei übrigen Befunde (DATA-01, RESET-01 und SP-01) sind weiter offen.
+Die Korrekturen und ihre Tests gehören zum oben genannten Versionsstand.
