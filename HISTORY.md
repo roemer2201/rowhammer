@@ -115,7 +115,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 2.0.0 | Rundenlogik vollstaendig entkoppelt: Clear-Pause als Rundenzustand, Buchung beim Treiber der Runde; Demo-Format 4. Phase 5 abgeschlossen | 3.1, 4.10, 5.3, 5.20 |
 | 2.0.1 | Runde und Aufnahme auf einer Uhr: Clear-Pause vor der Taste, Pruefpunkte am ruhenden Sitz, Bot ruht mit | 4.10, 5.3, 5.20 |
 | 2.0.2 | Pruefung des Mehrspielers: Glob-Luecke im Parser, Sitzungsfehler (Lobby-Geister, Start allein, Gastgeber-Abgang, Sitzungsende, Trennen), Protokoll 6, Stoerreihen doppelt, Demo-Reihenfolge ("Finding 1"), Test-Bot, Sitzungstest | 4.9, 5.1, 5.3-5.9, 5.20 |
-| 2.0.4 | Bereinigte Uhr, gestoppte Zuschauerzeit und dezimale Protokollzahlen | 4.1, 4.3, 5.5, 5.20 |
+| 2.0.4 | Bereinigte Uhr, Zuschauerzeit, dezimale Protokollzahlen und fruehe Versus-Demos | 4.1, 4.3, 4.10, 5.5, 5.20 |
 | 2.0.3 | Endplaetze in der Demo-Wiedergabe: Demo-Format 5 mit `place`, Rangliste am Ende einer Wiedergabe | 4.10, 5.6, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
@@ -3130,3 +3130,25 @@ alle Zahlenfelder der Nachrichtentabelle, die echten APPLIED-, CLEAR-
 und GARBAGE-Handler mit `0`, `8`, `08`, `010`, Nullauffuellung und
 `999999999` sowie ungueltige Eingaben ohne Zustandseffekt oder Diagnose.
 Alle 22 Mehrspieler-Testmethoden bestehen.
+
+### Frueh abgebrochene Versus-Aufnahmen (DEMO-01, 4.10/5.20)
+
+Vorzustand: Der Writer schrieb alle besetzten Sitze in den Header,
+aber der Loader verlangte fuer jeden Sitz mindestens ein Ereignis.
+Ein frueher Abbruch vor dem ersten Zug eines Peers konnte deshalb
+eine gespeicherte Aufnahme erzeugen, die nicht wiedergegeben wurde.
+
+Nun reicht ein Ereignis in der gesamten Aufnahme. Leere Sitz-Stroeme
+behalten den normalen game_reset-Anfangszustand samt Vorschau, und alle
+Teilnehmer bleiben im Fokuswechsel erreichbar. Ein Anfangspruefpunkt
+eines leeren Sitzes wird einmal gegen diesen Zustand geprueft.
+Vollstaendig ereignislose Aufnahmen bleiben ausgeschlossen; der Writer
+prueft beim Abschluss einmal auf `e=`/`p=`, sodass eine Datei allein
+mit Pruefpunkten ebenfalls verworfen wird. Format 5 bleibt bestehen.
+
+Abnahme: Vier weitere Methoden in `tools/multiplayer-check.py` pruefen
+den echten Writer, Loader und die echte Rundensimulation samt Fokuswechsel
+bei leeren Peers, leerem eigenen Sitz und Luecken in der Sitznummerierung.
+Sie pruefen Anfangspruefpunkte, deren Abweichungsdiagnose, voellig leere
+Aufnahmen in beiden Modi und weiterhin abgewiesene ungueltige Dateien.
+Alle 26 Mehrspieler-Testmethoden bestehen.

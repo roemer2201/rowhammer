@@ -323,7 +323,8 @@ Bestaetigung, bevor der jeweilige Roadmap-Schritt beginnt:
 Review vom 10. Oktober 2026 samt Korrekturstatus. SP-02 (Systemuhrspruenge)
 und MP-03 (Zuschauerzeit) sind mit 2.0.4 korrigiert, mit den dokumentierten
 Grenzen der Uhr-Erkennung. MP-04 (Protokollzahlen) ist ebenfalls mit
-2.0.4 korrigiert. Vier weitere Befunde sind offen; ihre
+2.0.4 korrigiert, ebenso DEMO-01 (frueh abgebrochene Versus-Aufnahmen).
+Drei weitere Befunde sind offen; ihre
 Nachweise und vorgeschlagenen Korrekturen stehen im Bericht.
 
 `CODEX-REVIEW-SINGLEPLAYER.md`, die Code-Review des Einzelspielers vom

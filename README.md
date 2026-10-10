@@ -215,7 +215,10 @@ einmal ab, und **Pfeil links/rechts** waehlen, wem man dabei zusieht: der
 gewaehlte Spieler steht mittig mit Hold, Vorschau und vollem HUD (sein
 Name steht links unter dem Tempo), die uebrigen sitzen wie im Spiel
 rechts und links daneben. Der Kasten am Ende nennt Platz und Grund fuer
-genau den Spieler, auf dem der Fokus gerade steht.
+genau den Spieler, auf dem der Fokus gerade steht. Auch frueh
+abgebrochene Aufnahmen lassen sich abspielen, wenn einzelne Teilnehmer
+noch keinen Zug gemacht haben: deren Feld bleibt im Anfangszustand.
+Runden ganz ohne Ereignis werden nicht gespeichert.
 
 ### Statistik
 

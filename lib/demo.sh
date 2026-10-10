@@ -118,7 +118,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.13.1  (2026-10-10)
+# Version: 0.13.2  (2026-10-10)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1166,7 +1166,7 @@ demo_pieces_topup() {
 # again, and an empty recording is only noise in the list.
 demo_record_finish() {
     local end="${1}" hash="${2:--}" name path tmp i suffix written players=0
-    local place
+    local place line has_events=0
     local -a lines
     if [ "${DEMO_RECORDING}" -eq 0 ]; then
         return 0
@@ -1179,7 +1179,17 @@ demo_record_finish() {
         done
     fi
     demo_flush || return 0
-    if [ ! -s "${DEMO_TMP_FILE}" ]; then
+    # CHANGE 2.0.4 (DEMO-01): checkpoints describe a stream but are not
+    # events. Check for an actual event once at finish, so the writer and
+    # loader agree even if a round collected only initial checkpoints.
+    if [ -s "${DEMO_TMP_FILE}" ]; then
+        while IFS= read -r line; do
+            case "${line}" in
+                e=*|p=*) has_events=1; break ;;
+            esac
+        done < "${DEMO_TMP_FILE}"
+    fi
+    if [ "${has_events}" -eq 0 ]; then
         debug_event "demo: round had no events, recording dropped"
         demo_record_discard
         return 0
@@ -1937,10 +1947,10 @@ demo_load() {
         demo_reject "no piece stream"
         return 1
     fi
-    # Every seat of the session has to have played: a board without a
-    # single event is a participant the recording cannot show, and for a
-    # singleplayer recording this is the "round without events" case the
-    # writer refuses to store in the first place.
+    # CHANGE 2.0.4 (DEMO-01): a very early abort can leave named seats
+    # without an event. They still have the normal game_reset state and
+    # belong in the replay. Require an event in the recording as a whole,
+    # matching the writer, rather than in every occupied seat.
     for (( slot = 0; slot < DEMO_STREAM_MAX; slot++ )); do
         if [ "${DEMO_HDR_MP}" -eq 1 ]; then
             [ -n "${DEMO_PEER_NAME[slot]}" ] || continue
@@ -1948,12 +1958,12 @@ demo_load() {
             [ "${slot}" -eq 0 ] || continue
         fi
         demo_stream_bind "${slot}" || return 1
-        if [ "${#DEMO_EV_T[@]}" -eq 0 ]; then
-            demo_reject "slot ${slot} has no events"
-            return 1
-        fi
         events=$(( events + ${#DEMO_EV_T[@]} ))
     done
+    if [ "${events}" -eq 0 ]; then
+        demo_reject "no events"
+        return 1
+    fi
     # Left bound to this recording's own seat: it is the one a playback
     # starts on, and for a singleplayer recording it is stream 0.
     demo_stream_bind "${DEMO_HDR_SLOT}" || return 1
@@ -2315,6 +2325,11 @@ demo_cursors_reset() {
         DEMO_EV_N[slot]="${n}"
         if [ "${n}" -gt 0 ]; then
             DEMO_NEXT_MS[slot]="${DEMO_EV_T[0]}"
+        elif [ "${#DEMO_CK_N[@]}" -gt 0 ]; then
+            # A named seat with no moves can still carry an initial
+            # checkpoint. Run it through demo_step once to verify that
+            # checkpoint against game_reset, then the cursor is spent.
+            DEMO_NEXT_MS[slot]=0
         else
             DEMO_NEXT_MS[slot]=-1
         fi

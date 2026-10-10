@@ -179,6 +179,13 @@ Entscheidungen dahinter:
 Das Konzept und die Entscheidungen dahinter stehen in 3.8; hier das
 Dateiformat und der Weg einer Aufnahme.
 
+Writer und Loader verlangen mindestens ein Ereignis (`e=` oder `p=`)
+in der gesamten Aufnahme. Eine Datei nur mit Steinfolge oder Pruefpunkten
+ist keine gespielte Runde und wird weder gespeichert noch geladen. Bei
+Versus duerfen einzelne benannte Sitze ohne Ereignis bleiben (frueher
+Abbruch); ihre Teilnehmerdaten und ihr normaler Anfangszustand bleiben
+in der Wiedergabe erhalten (5.20).
+
 **Dateiformat** (`lib/demo.sh`). Eine Aufnahme ist eine Textdatei aus
 `key=value`-Zeilen, die - wie Savegame und Statistik (4.5) - **geparst
 und validiert, nie gesourct** wird; jedes Feld hat sein eigenes Muster

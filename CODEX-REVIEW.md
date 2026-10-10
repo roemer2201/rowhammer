@@ -26,7 +26,6 @@ verstellt und ausschließlich in temporären Datenverzeichnissen gearbeitet.
 | DATA-01 | P1 / hoch | Verlegen auf einen Pfadalias kann die eigenen aktiven Daten löschen |
 | RESET-01 | P2 / mittel | `--reset all` lässt die Versus-Bestenliste stehen |
 | SP-01 | P2 / mittel | Bestenliste und Demo verwenden unterschiedliche Spielernamen |
-| DEMO-01 | P2 / mittel | Eine kurz abgebrochene Versus-Aufnahme kann vom eigenen Loader abgelehnt werden |
 
 ### DATA-01: Ein Pfadalias umgeht den Schutz vor dem Verlegen in dasselbe Verzeichnis
 
@@ -113,7 +112,21 @@ und im Header verwenden. Bei Versus-Aufnahmen die Sitzungsnamen in
 abweichenden Namen abschließen; Bestenliste, Hash-Verknüpfung und
 Demo-Header gemeinsam prüfen.
 
-### DEMO-01: Writer und Loader widersprechen sich bei Sitzen ohne Ereignis
+## Korrigierte Befunde
+
+### DEMO-01: Frühe Versus-Aufnahmen — korrigiert in 2.0.4
+
+**Aktueller Status:** `demo_load` verlangt mindestens ein Ereignis in
+der gesamten Aufnahme. Benannte Sitze ohne Ereignis bleiben erhalten und
+werden mit dem normalen `game_reset`-Anfangszustand wiedergegeben.
+Vorhandene Anfangsprüfpunkte werden einmal geprüft. Der Writer verwirft
+auch reine Prüfpunktdateien, sodass vollständig ereignislose Aufnahmen
+nicht gespeichert werden. Format 5 bleibt unverändert.
+`tools/multiplayer-check.py` prüft echten Writer, Loader, Zustandsaufbau,
+Ereigniswiedergabe und Fokuswechsel mit leerem eigenen Sitz, leeren Peers
+und lückenhaften Sitznummern; außerdem ungültige Dateien und den
+Ausschluss völlig ereignisloser Aufnahmen. Der folgende Nachweis
+beschreibt den Basis-Commit.
 
 **Stellen:** `lib/demo.sh:1175-1180, 1247-1251, 1269-1274, 1934-1950`.
 
@@ -144,8 +157,6 @@ Header zu entfernen würde die tatsächliche Teilnehmerliste verfälschen.
 **Regression:** Eine Runde mit mehreren Sitzen vor dem ersten Ereignis
 eines Peers abbrechen; jede tatsächlich gespeicherte Aufnahme muss
 anschließend von `demo_load` akzeptiert werden.
-
-## Korrigierte Befunde
 
 ### MP-04: Protokollzahlen — korrigiert in 2.0.4
 
