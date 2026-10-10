@@ -9,7 +9,7 @@ ROWHAMMER_MULTIPLAYER_TEST_ROOT optionally selects another source tree.
 The real Bash modules run with the game's strict flags, controlled input
 and a deterministic recording clock. No terminal or socat is required.
 
-Version: 1.1.0 (2026-09-23)
+Version: 1.1.1 (2026-10-10)
 """
 
 import os
@@ -153,7 +153,93 @@ class MultiplayerChecks(unittest.TestCase):
     def run_bash(self, code, *args, data=""):
         result = bash(code, *args, data=data)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
         return result.stdout.splitlines()
+
+    def test_every_protocol_number_is_canonical_decimal(self):
+        # Cover the whole message table, including future numeric fields.
+        # Non-numeric fields use valid fixtures and must retain their text.
+        output = self.run_bash(r'''
+source "${1}/lib/proto.sh"
+declare -A sample=([f]=1 [s]=0 [N]=Player [S]=play [c]=act
+    [b]="$(printf '.%.0s' {1..200})" [h]=8 [k]=00008 [e]=proto
+    [m]=sprint [a]=127.0.0.1 [C]=host [T]=008h010y [O]=ko [t]=error)
+for value in 0 8 08 010 000000000 999999999; do
+    for verb in "${!PROTO_MSG[@]}"; do
+        read -r -a classes <<< "${PROTO_MSG[${verb}]}"
+        line="${verb}"
+        expected=()
+        for class in "${classes[@]}"; do
+            if [ "${class}" = n ]; then
+                line+=" ${value}"
+                expected+=("$(( 10#${value} ))")
+            else
+                line+=" ${sample[${class}]}"
+                expected+=("${sample[${class}]}")
+            fi
+        done
+        proto_parse "${line}"
+        [ "${PROTO_VERB}" = "${verb}" ]
+        [ "${PROTO_ARG[*]}" = "${expected[*]}" ]
+    done
+done
+printf 'decimal\n'
+''')
+        self.assertEqual(output, ["decimal"])
+
+    def test_protocol_numbers_reach_real_handler_arithmetic_as_decimal(self):
+        for value in ("0", "8", "08", "010", "000000000", "999999999"):
+            with self.subTest(value=value):
+                output = self.run_bash(r'''
+source "${1}/lib/proto.sh"
+source "${1}/lib/hub.sh"
+source "${1}/lib/mp.sh"
+debug_event() { :; }
+demo_record_garbage() { :; }
+mp_act_event() { :; }
+HUB_PENDING[0]=20
+proto_parse "APPLIED ${2}"
+hub_msg_applied 0
+printf 'pending %s\n' "${HUB_PENDING[0]}"
+GARBAGE_LINES=(0 0 1 2 4)
+GARBAGE_SILVER=1 GARBAGE_GOLD=2 GARBAGE_CAP=40
+proto_parse "CLEAR 1 ${2} 0"
+HUB_STATE[0]=play HUB_GARBAGE=1
+hub_bcast() { :; }
+hub_targets() { [ "${2}" -eq "$(( HUB_ATTACK - (20 < HUB_ATTACK ? 20 : HUB_ATTACK) ))" ]; }
+HUB_PENDING[0]=20
+hub_msg_clear 0
+[ "${HUB_PENDING[0]}" -eq "$(( 20 > HUB_ATTACK ? 20 - HUB_ATTACK : 0 ))" ]
+printf 'attack %s\n' "${HUB_ATTACK}"
+MP_SLOT=0 MP_PENDING=20
+proto_parse "GARBAGE 0 ${2} 8"
+mp_handle "GARBAGE 0 ${2} 8"
+printf 'incoming %s\n' "${MP_PENDING}"
+''', value)
+                number = int(value)
+                self.assertEqual(output, [f"pending {max(0, 20 - number)}",
+                                          f"attack {min(40, number)}",
+                                          f"incoming {20 + number}"])
+
+    def test_invalid_protocol_numbers_never_publish_arguments(self):
+        output = self.run_bash(r'''
+source "${1}/lib/proto.sh"
+source "${1}/lib/mp.sh"
+net_log() { :; }
+MP_SLOT=0 MP_PENDING=20
+for value in -1 +8 0x10 1e2 1000000000 'a[$(false)]'; do
+    proto_parse 'APPLIED 010'
+    if proto_parse "APPLIED ${value}"; then exit 1; fi
+    [ -z "${PROTO_VERB}" ] && [ "${#PROTO_ARG[@]}" -eq 0 ]
+    mp_handle "GARBAGE 0 ${value} 8"
+    [ "${MP_PENDING}" -eq 20 ]
+done
+# A bad later field must also discard an otherwise valid numeric field.
+if proto_parse 'CLEAR 010 08 nope'; then exit 1; fi
+[ -z "${PROTO_VERB}" ] && [ "${#PROTO_ARG[@]}" -eq 0 ]
+printf 'rejected\n'
+''')
+        self.assertEqual(output, ["rejected"])
 
     def test_eof_drains_all_batches_before_reporting_link_down(self):
         # Include no data, exactly one batch, several batches and more

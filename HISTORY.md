@@ -115,7 +115,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 2.0.0 | Rundenlogik vollstaendig entkoppelt: Clear-Pause als Rundenzustand, Buchung beim Treiber der Runde; Demo-Format 4. Phase 5 abgeschlossen | 3.1, 4.10, 5.3, 5.20 |
 | 2.0.1 | Runde und Aufnahme auf einer Uhr: Clear-Pause vor der Taste, Pruefpunkte am ruhenden Sitz, Bot ruht mit | 4.10, 5.3, 5.20 |
 | 2.0.2 | Pruefung des Mehrspielers: Glob-Luecke im Parser, Sitzungsfehler (Lobby-Geister, Start allein, Gastgeber-Abgang, Sitzungsende, Trennen), Protokoll 6, Stoerreihen doppelt, Demo-Reihenfolge ("Finding 1"), Test-Bot, Sitzungstest | 4.9, 5.1, 5.3-5.9, 5.20 |
-| 2.0.4 | Bereinigte Millisekunden-Uhr und gestoppte Zuschauer-Spielzeit | 4.1, 4.3, 5.20 |
+| 2.0.4 | Bereinigte Uhr, gestoppte Zuschauerzeit und dezimale Protokollzahlen | 4.1, 4.3, 5.5, 5.20 |
 | 2.0.3 | Endplaetze in der Demo-Wiedergabe: Demo-Format 5 mit `place`, Rangliste am Ende einer Wiedergabe | 4.10, 5.6, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
@@ -3116,3 +3116,17 @@ und Parserchecks sowie Syntax-, ASCII- und Versionspruefung bestehen.
 ShellCheck (Stufe error) besteht ebenfalls. Der Hub-Test besteht die
 zehn TCP-Pruefungen; sein Unix-Teil ist lokal durch das AF_UNIX-Verbot
 (EPERM) der Ausfuehrungsumgebung blockiert. Er bleibt im GitHub-CI.
+
+### Dezimale Protokollzahlen (MP-04, 5.5)
+
+Vorzustand: Gepruefte Zahlen mit fuehrender Null blieben unveraendert.
+Bash behandelte `010` als acht; `08` erzeugte eine Arithmetikdiagnose.
+`proto_parse` normalisiert nun nach Pruefung der gesamten Nachricht alle
+Felder der Klasse `n` mit `10#`. Die akzeptierte Syntax und die
+Protokollversion bleiben gleich; opaque Ping/Pong-Tokens bleiben erhalten.
+
+Abnahme: Drei neue Testmethoden in `tools/multiplayer-check.py` pruefen
+alle Zahlenfelder der Nachrichtentabelle, die echten APPLIED-, CLEAR-
+und GARBAGE-Handler mit `0`, `8`, `08`, `010`, Nullauffuellung und
+`999999999` sowie ungueltige Eingaben ohne Zustandseffekt oder Diagnose.
+Alle 22 Mehrspieler-Testmethoden bestehen.

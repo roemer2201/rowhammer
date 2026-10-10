@@ -26,7 +26,6 @@ verstellt und ausschließlich in temporären Datenverzeichnissen gearbeitet.
 | DATA-01 | P1 / hoch | Verlegen auf einen Pfadalias kann die eigenen aktiven Daten löschen |
 | RESET-01 | P2 / mittel | `--reset all` lässt die Versus-Bestenliste stehen |
 | SP-01 | P2 / mittel | Bestenliste und Demo verwenden unterschiedliche Spielernamen |
-| MP-04 | P2 / mittel | Protokollzahlen mit führender Null werden als Oktalzahlen verarbeitet |
 | DEMO-01 | P2 / mittel | Eine kurz abgebrochene Versus-Aufnahme kann vom eigenen Loader abgelehnt werden |
 
 ### DATA-01: Ein Pfadalias umgeht den Schutz vor dem Verlegen in dasselbe Verzeichnis
@@ -114,38 +113,6 @@ und im Header verwenden. Bei Versus-Aufnahmen die Sitzungsnamen in
 abweichenden Namen abschließen; Bestenliste, Hash-Verknüpfung und
 Demo-Header gemeinsam prüfen.
 
-### MP-04: Die Zahlen-Whitelist verhindert keine Oktalinterpretation
-
-**Stellen:** `lib/proto.sh:87, 278-281, 354-360`;
-`lib/hub.sh:974-979, 1114-1119`;
-`lib/mp.sh:453-464`.
-
-`PROTO_NUM_RE` akzeptiert Zahlen mit führenden Nullen.
-`proto_parse` gibt sie unverändert an die Handler weiter.
-Bash-Arithmetik interpretiert solche Werte als Oktalzahlen.
-Damit stimmen die dezimalen Vergleiche mit `test` und die anschließende
-Arithmetik nicht überein.
-
-**Nachweis:** `proto_parse 'APPLIED 010'` akzeptierte die Nachricht.
-Mit `HUB_PENDING[0]=20` setzte der echte `hub_msg_applied 0` die
-Warteschlange auf `12` statt auf `10`.
-`APPLIED 08` und `CLEAR 1 08 0` wurden ebenfalls vom Parser akzeptiert,
-lösten im jeweiligen Handler aber „value too great for base“ aus.
-Dies ist kein Nachweis einer vollständigen Hub-Abschaltung; bestätigt
-sind falsche Queue-Arithmetik und ein Abbruch des betroffenen Handlers.
-Die normalen Clients senden unaufgefüllte Zahlen, aber die Empfangsseite
-soll auch fremde Protokollnachrichten validieren.
-
-**Korrektur:** Zahlenfelder nach erfolgreicher Formprüfung zentral in
-Dezimalzahlen normalisieren (`10#`) oder führende Nullen mit einer
-kanonischen Zahlenregel ablehnen. Die Entscheidung muss für sämtliche
-numerischen Nachrichtentypen gelten.
-
-**Regression:** Nicht nur den Parser, sondern auch die Handler mit
-`0`, `8`, `08`, `010` und der maximal zulässigen Zahl testen.
-Zulässige Eingaben müssen dezimal wirken; abgelehnte Eingaben dürfen
-weder Zustand ändern noch Arithmetikdiagnosen erzeugen.
-
 ### DEMO-01: Writer und Loader widersprechen sich bei Sitzen ohne Ereignis
 
 **Stellen:** `lib/demo.sh:1175-1180, 1247-1251, 1269-1274, 1934-1950`.
@@ -179,6 +146,46 @@ eines Peers abbrechen; jede tatsächlich gespeicherte Aufnahme muss
 anschließend von `demo_load` akzeptiert werden.
 
 ## Korrigierte Befunde
+
+### MP-04: Protokollzahlen — korrigiert in 2.0.4
+
+**Aktueller Status:** `proto_parse` normalisiert nach vollständiger
+Validierung alle Zahlenfelder der Klasse `n` auf Dezimalwerte. Führende
+Nullen bleiben zulässig; Ping/Pong-Tokens und Zugdaten bleiben unverändert.
+`tools/multiplayer-check.py` prüft alle Nachrichtentypen, echte
+APPLIED-/CLEAR-/GARBAGE-Handler, Grenzwerte und ungültige Eingaben ohne
+Zustandsänderung oder Arithmetikdiagnose. Der folgende Nachweis beschreibt
+den Basis-Commit.
+
+**Stellen:** `lib/proto.sh:87, 278-281, 354-360`;
+`lib/hub.sh:974-979, 1114-1119`;
+`lib/mp.sh:453-464`.
+
+`PROTO_NUM_RE` akzeptiert Zahlen mit führenden Nullen.
+`proto_parse` gibt sie unverändert an die Handler weiter.
+Bash-Arithmetik interpretiert solche Werte als Oktalzahlen.
+Damit stimmen die dezimalen Vergleiche mit `test` und die anschließende
+Arithmetik nicht überein.
+
+**Nachweis:** `proto_parse 'APPLIED 010'` akzeptierte die Nachricht.
+Mit `HUB_PENDING[0]=20` setzte der echte `hub_msg_applied 0` die
+Warteschlange auf `12` statt auf `10`.
+`APPLIED 08` und `CLEAR 1 08 0` wurden ebenfalls vom Parser akzeptiert,
+lösten im jeweiligen Handler aber „value too great for base“ aus.
+Dies ist kein Nachweis einer vollständigen Hub-Abschaltung; bestätigt
+sind falsche Queue-Arithmetik und ein Abbruch des betroffenen Handlers.
+Die normalen Clients senden unaufgefüllte Zahlen, aber die Empfangsseite
+soll auch fremde Protokollnachrichten validieren.
+
+**Korrektur:** Zahlenfelder nach erfolgreicher Formprüfung zentral in
+Dezimalzahlen normalisieren (`10#`) oder führende Nullen mit einer
+kanonischen Zahlenregel ablehnen. Die Entscheidung muss für sämtliche
+numerischen Nachrichtentypen gelten.
+
+**Regression:** Nicht nur den Parser, sondern auch die Handler mit
+`0`, `8`, `08`, `010` und der maximal zulässigen Zahl testen.
+Zulässige Eingaben müssen dezimal wirken; abgelehnte Eingaben dürfen
+weder Zustand ändern noch Arithmetikdiagnosen erzeugen.
 
 ### SP-02: Systemuhrsprünge — korrigiert in 2.0.4 mit dokumentierten Grenzen
 

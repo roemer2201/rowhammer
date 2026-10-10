@@ -87,6 +87,7 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 * Sat Oct 10 2026 roemer2201 <r.oliver@web.de> - 2.0.4-1
 - Correct detected wall-clock jumps using a shared offset and boot time.
 - Stop personal play time at top-out while the round timeline continues.
+- Normalize validated protocol numbers to decimal before handler arithmetic.
 - Add deterministic clock and spectator regression checks to CI.
 * Wed Sep 23 2026 roemer2201 <r.oliver@web.de> - 2.0.3-1
 - The replay of a sprint or ultra recording shows the final places of the
