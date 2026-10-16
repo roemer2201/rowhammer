@@ -3092,8 +3092,12 @@ Rueckspruenge konnten negative Spielzeit, Vorwaertsspruenge vorzeitig
 faellige Fristen erzeugen (Review SP-02). Nach dem Top-out wurde beim
 spaeteren `END` die gesamte Zuschauerphase nachgebucht (MP-03).
 
-Der freigegebene Kompromiss steht in PLAN1.md: Systemzeit mit 1-ms-Schritten,
-Bootzeit als grobe Kontrolle und persistenter Korrekturoffset. Zwei
+Plan: am 2026-10-10 freigegeben, Ausgangspunkt 2.0.3. Der Kompromiss:
+Systemzeit mit 1-ms-Schritten, Bootzeit (`/proc/uptime`) als grobe
+Kontrolle und persistenter Korrekturoffset; die bereinigte Uhr darf
+nicht rueckwaerts laufen. Plan und Umsetzung bekamen getrennte Commits.
+Die Option, die Systemzeit nur einmal pro Sekunde gegen die Bootzeit zu
+pruefen, blieb ausdruecklich unimplementiert (TODO.md 2.4). Zwei
 Kontrollabfragen rahmen die Messung ein; dadurch gilt eine Verzoegerung
 zwischen den Abfragen nicht automatisch als Uhrsprung. Messintervalle und
 20 ms Toleranz lassen kleine Aenderungen offen. Die zentrale Uhr gilt fuer
@@ -3118,6 +3122,10 @@ zehn TCP-Pruefungen; sein Unix-Teil ist lokal durch das AF_UNIX-Verbot
 (EPERM) der Ausfuehrungsumgebung blockiert. Er bleibt im GitHub-CI.
 
 ### Dezimale Protokollzahlen (MP-04, 5.5)
+
+Plan: am 2026-10-10 beauftragt, als Erweiterung desselben Korrektur-PRs.
+Reihenfolge MP-04 vor DEMO-01, jede Korrektur samt Dokumentation als
+eigener Commit.
 
 Vorzustand: Gepruefte Zahlen mit fuehrender Null blieben unveraendert.
 Bash behandelte `010` als acht; `08` erzeugte eine Arithmetikdiagnose.
