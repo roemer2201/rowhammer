@@ -776,6 +776,11 @@ jede Stelle, die Empfangenes anfasst:
   ihren Inhalt rekursiv aus: `$(( x ))` mit `x='a[$(rm -rf ~)]'` fuehrt
   den Befehl aus. Deshalb: jedes Zahlenfeld **vor** der ersten Rechnung
   gegen `^[0-9]{1,9}$` pruefen und auf den erlaubten Bereich begrenzen.
+  `proto_parse` normalisiert nach vollstaendiger Formpruefung alle
+  Zahlenfelder der Klasse `n` mit `10#` zu Dezimalzahlen: `010` wird
+  `10`, `08` wird `8`. Handler rechnen ausschliesslich mit diesen
+  kanonischen Werten. Ping/Pong-Tokens sind opaque und behalten ihren
+  Wortlaut; gepackte Zug-Deltas werden separat dezimal dekodiert.
   Dasselbe gilt fuer alles, was als Array-Index oder als Schluessel eines
   assoziativen Arrays benutzt wird.
 - **Zeichensatzfilter vor allem anderen.** Jede empfangene Zeile wird

@@ -217,6 +217,13 @@ Drei Festlegungen dazu:
   die Gegner spielen dort weiter (5.8), und ihre Zeitstempel kaemen
   sonst gegen eine eingefrorene eigene Uhr. Im Einzelspieler bleibt es
   bei der Spieluhr, dort haelt eine Pause die ganze Welt an.
+  Die persoenliche Spielzeit stoppt beim eigenen Top-out einmalig
+  (`play_clock_stop`, seit 2.0.4). `PLAY_CLOCK_RUNNING` gehoert in
+  `STATE_VARS`; ein Resize und das spaetere `END` starten sie nicht neu.
+  `time=` und Statistiken enthalten damit nur aktive Spielzeit, `length=`
+  weiter die gesamte Runde. Ein bis `END` aktiver Spieler bekommt dort
+  seinen letzten Spielzeitabschnitt gebucht. `demo_stamp` respektiert
+  auch im Einzelspieler einen gestoppten Zaehler.
   Das behebt zugleich einen Fehler, der ohne diese Umstellung entstuende:
   `demo_record_event` rechnet den Stempel aus `PLAY_MS` und `PLAY_LAST`,
   und `play_clock_resume` zieht `PLAY_LAST` nach einem Menue auf
@@ -433,7 +440,12 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
     `e=` in einer Versus-Aufnahme. Dazu muessen die Sitzungsangaben
     zusammenpassen (mindestens zwei Plaetze, so viele `peer=`-Zeilen wie
     `players`, eigener Slot und Sieger unter ihnen, jeder Strom auf
-    einem besetzten Platz, kein Platz ohne Ereignisse). Abgewiesen wird
+    einem besetzten Platz). Mindestens ein Ereignis in der gesamten
+    Aufnahme ist erforderlich; einzelne benannte Plaetze duerfen ohne
+    Ereignis bleiben, etwa bei einem fruehen Abbruch. Sie starten mit
+    `game_reset` wie die anderen Sitze und behalten ihren Anfangszustand.
+    Ein vorhandener Pruefpunkt an Position null wird einmal gegen diesen
+    Zustand geprueft. Abgewiesen wird
     **mit Grund** ins Debug-Log (`demo_reject`): auf dem Bildschirm
     steht die eine uebersetzte Meldung, welches Feld welcher Datei nicht
     passte, ist eine Diagnose und gehoert dorthin, wo dieses Spiel seine

@@ -2,15 +2,16 @@
 
 **Stand:** 2026-10-10
 
-**Repository:** `roemer2201/rowhammer`, Branch `main`
+**Repository:** `roemer2201/rowhammer`
 
-**Geprüfter Commit:** `4384724fbddaaa1c990fbd4304b11f6c3cd3ce98`
+**Basis der ursprünglichen Review:** `4384724fbddaaa1c990fbd4304b11f6c3cd3ce98`
 
-**Spielversion:** 2.0.3
+**Spielversion:** 2.0.4 (Korrekturstand dieses Berichts)
 
 Dieser Bericht ersetzt die älteren, teilweise überholten Bewertungen der
-Mehrspieler-Aufzeichnung und des Singleplayers. Die Zeilenangaben beziehen
-sich auf den oben genannten Commit. Geprüft wurden die Spielsteuerung,
+Mehrspieler-Aufzeichnung und des Singleplayers. Die ursprünglichen Zeilenangaben
+beziehen sich auf den oben genannten Basis-Commit; Korrekturen sind
+separat markiert. Geprüft wurden die Spielsteuerung,
 Rundenzustände, Eingabe und Anzeige, Persistenz und Datenverzeichniswechsel,
 Mehrspieler-Protokoll und Hub sowie Demo-Aufzeichnung und Wiedergabe.
 Die Befunde unten wurden mit den echten Bash-Funktionen beziehungsweise
@@ -25,10 +26,6 @@ verstellt und ausschließlich in temporären Datenverzeichnissen gearbeitet.
 | DATA-01 | P1 / hoch | Verlegen auf einen Pfadalias kann die eigenen aktiven Daten löschen |
 | RESET-01 | P2 / mittel | `--reset all` lässt die Versus-Bestenliste stehen |
 | SP-01 | P2 / mittel | Bestenliste und Demo verwenden unterschiedliche Spielernamen |
-| SP-02 | P2 / mittel | Systemuhrsprünge verändern Spielzeit und Fristen |
-| MP-03 | P2 / mittel | Nach einem Top-out wird Zuschauerzeit als Spielzeit gebucht |
-| MP-04 | P2 / mittel | Protokollzahlen mit führender Null werden als Oktalzahlen verarbeitet |
-| DEMO-01 | P2 / mittel | Eine kurz abgebrochene Versus-Aufnahme kann vom eigenen Loader abgelehnt werden |
 
 ### DATA-01: Ein Pfadalias umgeht den Schutz vor dem Verlegen in dasselbe Verzeichnis
 
@@ -115,7 +112,104 @@ und im Header verwenden. Bei Versus-Aufnahmen die Sitzungsnamen in
 abweichenden Namen abschließen; Bestenliste, Hash-Verknüpfung und
 Demo-Header gemeinsam prüfen.
 
-### SP-02: Die Spieluhr übernimmt Sprünge der verstellbaren Systemzeit
+## Korrigierte Befunde
+
+### DEMO-01: Frühe Versus-Aufnahmen — korrigiert in 2.0.4
+
+**Aktueller Status:** `demo_load` verlangt mindestens ein Ereignis in
+der gesamten Aufnahme. Benannte Sitze ohne Ereignis bleiben erhalten und
+werden mit dem normalen `game_reset`-Anfangszustand wiedergegeben.
+Vorhandene Anfangsprüfpunkte werden einmal geprüft. Der Writer verwirft
+auch reine Prüfpunktdateien, sodass vollständig ereignislose Aufnahmen
+nicht gespeichert werden. Format 5 bleibt unverändert.
+`tools/multiplayer-check.py` prüft echten Writer, Loader, Zustandsaufbau,
+Ereigniswiedergabe und Fokuswechsel mit leerem eigenen Sitz, leeren Peers
+und lückenhaften Sitznummern; außerdem ungültige Dateien und den
+Ausschluss völlig ereignisloser Aufnahmen. Der folgende Nachweis
+beschreibt den Basis-Commit.
+
+**Stellen:** `lib/demo.sh:1175-1180, 1247-1251, 1269-1274, 1934-1950`.
+
+Der Writer speichert eine Versus-Aufnahme, sobald die gemeinsame
+temporäre Ereignisdatei nicht leer ist. Er führt alle benannten Sitze
+im Header auf, ohne zu prüfen, ob jeder Sitz bereits ein Ereignis hat.
+Der Loader verlangt hingegen für jeden benannten Sitz mindestens ein
+Ereignis.
+
+Ein besetzter Sitz ohne Ereignis ist nach einem sehr frühen lokalen
+Abbruch möglich: Ein Spieler hat sich bereits bewegt, ein anderer noch
+nicht, und die Aufnahme endet vor dessen erstem Gravity-Schritt oder
+vor dem Eintreffen seines Zugfensters. Der Sitz hat trotzdem einen
+gültigen Anfangszustand und gehört zur Runde.
+
+**Nachweis:** Der echte Writer wurde mit drei besetzten Sitzen,
+`MP_WINNER=-1` und Ereignissen nur für Sitze 0 und 1 ausgeführt.
+Er speicherte eine Datei mit allen drei `peer=`-Zeilen.
+Der echte `demo_load` lehnte genau diese Datei mit
+`slot 2 has no events` ab.
+
+**Korrektur:** Den gemeinsamen Vertrag festlegen: Ein gültiger Sitz ohne
+Bewegung sollte aus seinem Anfangszustand wiedergegeben werden können.
+Alternativ muss der Writer unvollständige Aufnahmen vor dem Speichern
+verwerfen und das erkennbar behandeln. Besetzte Sitze einfach aus dem
+Header zu entfernen würde die tatsächliche Teilnehmerliste verfälschen.
+
+**Regression:** Eine Runde mit mehreren Sitzen vor dem ersten Ereignis
+eines Peers abbrechen; jede tatsächlich gespeicherte Aufnahme muss
+anschließend von `demo_load` akzeptiert werden.
+
+### MP-04: Protokollzahlen — korrigiert in 2.0.4
+
+**Aktueller Status:** `proto_parse` normalisiert nach vollständiger
+Validierung alle Zahlenfelder der Klasse `n` auf Dezimalwerte. Führende
+Nullen bleiben zulässig; Ping/Pong-Tokens und Zugdaten bleiben unverändert.
+`tools/multiplayer-check.py` prüft alle Nachrichtentypen, echte
+APPLIED-/CLEAR-/GARBAGE-Handler, Grenzwerte und ungültige Eingaben ohne
+Zustandsänderung oder Arithmetikdiagnose. Der folgende Nachweis beschreibt
+den Basis-Commit.
+
+**Stellen:** `lib/proto.sh:87, 278-281, 354-360`;
+`lib/hub.sh:974-979, 1114-1119`;
+`lib/mp.sh:453-464`.
+
+`PROTO_NUM_RE` akzeptiert Zahlen mit führenden Nullen.
+`proto_parse` gibt sie unverändert an die Handler weiter.
+Bash-Arithmetik interpretiert solche Werte als Oktalzahlen.
+Damit stimmen die dezimalen Vergleiche mit `test` und die anschließende
+Arithmetik nicht überein.
+
+**Nachweis:** `proto_parse 'APPLIED 010'` akzeptierte die Nachricht.
+Mit `HUB_PENDING[0]=20` setzte der echte `hub_msg_applied 0` die
+Warteschlange auf `12` statt auf `10`.
+`APPLIED 08` und `CLEAR 1 08 0` wurden ebenfalls vom Parser akzeptiert,
+lösten im jeweiligen Handler aber „value too great for base“ aus.
+Dies ist kein Nachweis einer vollständigen Hub-Abschaltung; bestätigt
+sind falsche Queue-Arithmetik und ein Abbruch des betroffenen Handlers.
+Die normalen Clients senden unaufgefüllte Zahlen, aber die Empfangsseite
+soll auch fremde Protokollnachrichten validieren.
+
+**Korrektur:** Zahlenfelder nach erfolgreicher Formprüfung zentral in
+Dezimalzahlen normalisieren (`10#`) oder führende Nullen mit einer
+kanonischen Zahlenregel ablehnen. Die Entscheidung muss für sämtliche
+numerischen Nachrichtentypen gelten.
+
+**Regression:** Nicht nur den Parser, sondern auch die Handler mit
+`0`, `8`, `08`, `010` und der maximal zulässigen Zahl testen.
+Zulässige Eingaben müssen dezimal wirken; abgelehnte Eingaben dürfen
+weder Zustand ändern noch Arithmetikdiagnosen erzeugen.
+
+### SP-02: Systemuhrsprünge — korrigiert in 2.0.4 mit dokumentierten Grenzen
+
+**Aktueller Status:** `lib/clock.sh` bereinigt erkannte Vorwärts- und
+Rückwärtssprünge zentral über einen Offset. Die Erkennung verwendet
+beidseitige Uptime-Messintervalle plus 20 ms Toleranz; kleine Änderungen
+innerhalb dieser Grenzen bleiben möglich. Eine Klemme verhindert negative
+Differenzen. Normale Abfragen behalten Millisekunden-Schritte, korrigierte
+Intervalle haben die Unsicherheit der Kontrolluhr und Messdauer.
+`tools/clock-check.py` prüft beide Sprungrichtungen, Wiederholungen, echte
+Pausen, verzögerte Abfragen, beide Wall-Quellen und Fehler bei fehlender
+Kontrolluhr. Der folgende Nachweis beschreibt den Basis-Commit.
+
 
 **Stellen:** `rowhammer.sh:1495-1503, 1606-1610, 1649-1657, 2885-2920`;
 `lib/demo.sh:650-661, 748-760`.
@@ -143,7 +237,16 @@ Time-Attack- und Hochwasser-Runden sowie während eines Lock Delays einspeisen.
 Spielzeit darf nicht rückwärts laufen oder einen Uhrsprung als gespielte
 Zeit buchen.
 
-### MP-03: Warten nach dem eigenen Top-out verlängert die gebuchte Spielzeit
+### MP-03: Zuschauerzeit — behoben in 2.0.4
+
+**Aktueller Status:** `round_finish` stoppt die persönliche Uhr; deren
+Laufzustand gehört zum Rundenzustand. `play_clock_resume` startet nach
+Game Over keine Uhr neu. `END` und Buchung respektieren den Stopp,
+`mp_round_ms` läuft weiter. Der echte Game-Loop ist mit Top-out bei 10 s,
+Resize bei 60 s und `END` bei 120 s geprüft: `PLAY_MS=10000`,
+Demo-Zeitachse `120000`, auch bei gleichzeitigen Uhrsprüngen um eine Stunde.
+Der folgende Nachweis beschreibt den Basis-Commit.
+
 
 **Stellen:** `rowhammer.sh:1990-2025, 2777-2784, 2811-2819`;
 `rowhammer.sh:1606-1610`.
@@ -177,70 +280,6 @@ weiter separat ermitteln.
 Rundenende nach einer Minute. Persönliche Spielzeit und Statistiken
 müssen zehn Sekunden, die Demo-Gesamtlänge ungefähr eine Minute ergeben.
 
-### MP-04: Die Zahlen-Whitelist verhindert keine Oktalinterpretation
-
-**Stellen:** `lib/proto.sh:87, 278-281, 354-360`;
-`lib/hub.sh:974-979, 1114-1119`;
-`lib/mp.sh:453-464`.
-
-`PROTO_NUM_RE` akzeptiert Zahlen mit führenden Nullen.
-`proto_parse` gibt sie unverändert an die Handler weiter.
-Bash-Arithmetik interpretiert solche Werte als Oktalzahlen.
-Damit stimmen die dezimalen Vergleiche mit `test` und die anschließende
-Arithmetik nicht überein.
-
-**Nachweis:** `proto_parse 'APPLIED 010'` akzeptierte die Nachricht.
-Mit `HUB_PENDING[0]=20` setzte der echte `hub_msg_applied 0` die
-Warteschlange auf `12` statt auf `10`.
-`APPLIED 08` und `CLEAR 1 08 0` wurden ebenfalls vom Parser akzeptiert,
-lösten im jeweiligen Handler aber „value too great for base“ aus.
-Dies ist kein Nachweis einer vollständigen Hub-Abschaltung; bestätigt
-sind falsche Queue-Arithmetik und ein Abbruch des betroffenen Handlers.
-Die normalen Clients senden unaufgefüllte Zahlen, aber die Empfangsseite
-soll auch fremde Protokollnachrichten validieren.
-
-**Korrektur:** Zahlenfelder nach erfolgreicher Formprüfung zentral in
-Dezimalzahlen normalisieren (`10#`) oder führende Nullen mit einer
-kanonischen Zahlenregel ablehnen. Die Entscheidung muss für sämtliche
-numerischen Nachrichtentypen gelten.
-
-**Regression:** Nicht nur den Parser, sondern auch die Handler mit
-`0`, `8`, `08`, `010` und der maximal zulässigen Zahl testen.
-Zulässige Eingaben müssen dezimal wirken; abgelehnte Eingaben dürfen
-weder Zustand ändern noch Arithmetikdiagnosen erzeugen.
-
-### DEMO-01: Writer und Loader widersprechen sich bei Sitzen ohne Ereignis
-
-**Stellen:** `lib/demo.sh:1175-1180, 1247-1251, 1269-1274, 1934-1950`.
-
-Der Writer speichert eine Versus-Aufnahme, sobald die gemeinsame
-temporäre Ereignisdatei nicht leer ist. Er führt alle benannten Sitze
-im Header auf, ohne zu prüfen, ob jeder Sitz bereits ein Ereignis hat.
-Der Loader verlangt hingegen für jeden benannten Sitz mindestens ein
-Ereignis.
-
-Ein besetzter Sitz ohne Ereignis ist nach einem sehr frühen lokalen
-Abbruch möglich: Ein Spieler hat sich bereits bewegt, ein anderer noch
-nicht, und die Aufnahme endet vor dessen erstem Gravity-Schritt oder
-vor dem Eintreffen seines Zugfensters. Der Sitz hat trotzdem einen
-gültigen Anfangszustand und gehört zur Runde.
-
-**Nachweis:** Der echte Writer wurde mit drei besetzten Sitzen,
-`MP_WINNER=-1` und Ereignissen nur für Sitze 0 und 1 ausgeführt.
-Er speicherte eine Datei mit allen drei `peer=`-Zeilen.
-Der echte `demo_load` lehnte genau diese Datei mit
-`slot 2 has no events` ab.
-
-**Korrektur:** Den gemeinsamen Vertrag festlegen: Ein gültiger Sitz ohne
-Bewegung sollte aus seinem Anfangszustand wiedergegeben werden können.
-Alternativ muss der Writer unvollständige Aufnahmen vor dem Speichern
-verwerfen und das erkennbar behandeln. Besetzte Sitze einfach aus dem
-Header zu entfernen würde die tatsächliche Teilnehmerliste verfälschen.
-
-**Regression:** Eine Runde mit mehreren Sitzen vor dem ersten Ereignis
-eines Peers abbrechen; jede tatsächlich gespeicherte Aufnahme muss
-anschließend von `demo_load` akzeptiert werden.
-
 ## Korrektur der bisherigen Review-Aussagen
 
 | Alter Befund | Aktueller Status | Beleg im geprüften Code |
@@ -248,7 +287,8 @@ anschließend von `demo_load` akzeptiert werden.
 | Mehrspieler-Finding 1: verspätete PEERACT-Ereignisse hinter Hub-Ereignissen | Der beschriebene normale Empfangspfad ist seit 2.0.2 korrigiert | `demo_slot_hub_event` hält fremde Hub-Ereignisse zurück; `demo_record_peer_act` verarbeitet `y/q`-Empfangsmarker über `demo_hold_mark`. Der Empfangszeitpunkt des betroffenen Spielers bestimmt damit die Position im Stream. |
 | Mehrspieler-Finding 2: fehlendes ROSTER verursacht falschen Top-out | Behoben seit 1.4.1 / Protokoll 5 | `hub_eliminate` sendet die Ursache mit `KO`; `mp_handle` reicht sie an `demo_record_ko(slot, place, state)` weiter. Die alte `demo_ko_flush`-Logik existiert nicht mehr. |
 | SP-01: unterschiedlicher Runden-/Demo-Name | Weiterhin offen und jetzt reproduziert | Siehe SP-01 oben. |
-| SP-02: Systemuhrsprünge | Weiterhin offen und jetzt reproduziert | Siehe SP-02 oben. |
+| SP-02: Systemuhrsprünge | Korrigiert in 2.0.4 mit dokumentierten Erkennungsgrenzen | Siehe SP-02 oben. |
+| MP-03: Zuschauerzeit | Behoben in 2.0.4 | Siehe MP-03 oben. |
 
 Die Marker-Lösung besitzt weiterhin einen ausdrücklich vorgesehenen
 Fallback: Nach `DEMO_HOLD_MS=2000` beziehungsweise beim Abschluss werden
@@ -262,25 +302,31 @@ mehr dem aktuellen Code.
 
 | Prüfung | Ergebnis |
 | --- | --- |
-| `bash -n` über alle 33 Shell-Dateien | bestanden |
+| `bash -n` über alle 34 Shell-Dateien | bestanden |
+| `tools/clock-check.py` | 18 Testmethoden bestanden |
+| ShellCheck (Stufe `error`) | bestanden |
+| `tools/hub-check.sh` | 10 TCP-Prüfungen bestanden; Unix-Teil durch Umgebung blockiert |
 | `tools/state-check.sh` | 68 Prüfungen bestanden |
 | `tools/demo-keys.sh` | 31 Prüfungen bestanden |
 | `python3 tools/display-check.py` | 7 Tests bestanden |
-| `python3 tools/multiplayer-check.py` | 19 Tests bestanden |
+| `python3 tools/multiplayer-check.py` | 26 Testmethoden bestanden |
 | `tools/key-scan.sh --silent` | 72 Sequenzen, keine falsche Aktion oder durchgereichte inerte Taste |
 | `tools/key-scan.sh --gap 0.06 --silent` | 69 Sequenzen, keine falsche Aktion oder durchgereichte inerte Taste |
 | `tools/net-fuzz.sh --random 400` | 620 Fälle bestanden |
 | `tools/release.sh --mode check` | Exit-Status 0 |
 | `make install` in temporäres Staging, danach `--help` über den installierten Symlink | bestanden |
-| Gezielte Funktions-/CLI-Reproduktionen der sieben offenen Befunde | oben beschrieben |
+| Ursprüngliche Funktions-/CLI-Reproduktionen der sieben Befunde | Basis-Commit, oben beschrieben |
 
-`tools/hub-check.sh` wurde aufgerufen, übersprang seine Sitzungsprüfungen
-aber mangels `socat` und meldete dennoch Exit-Status 0. Das zählt hier
-ausdrücklich **nicht** als bestandener Hub-Integrationstest.
-ShellCheck war ebenfalls nicht verfügbar. Ein interaktiver vollständiger
-Spiellauf, reale TCP-/Unix-Sitzungen sowie DEB-/RPM-Paketbauten wurden
-in dieser Umgebung nicht durchgeführt.
+`tools/hub-check.sh` läuft mit nachgeladenem `socat`: alle zehn
+TCP-Prüfungen bestehen. Der anschließende Unix-Teil scheitert beim
+Listenerstart; ein unabhängiger Socket-Probelauf bestätigt, dass diese
+Umgebung AF_UNIX-Sockets mit `EPERM` verweigert. Der gesamte Test meldet
+daher Exit-Status 1 und gilt nicht als vollständig bestanden.
+Ein interaktiver vollständiger Spiellauf sowie DEB-/RPM-Paketbauten
+wurden lokal nicht durchgeführt. Die vollständigen Hub- und Paketchecks
+bleiben Teil des GitHub-CI.
 
-Die bestehenden Prüfungen sind erfolgreich, decken die oben beschriebenen
-Abläufe aber nicht ab. Geändert wurde ausschließlich dieser Bericht;
-die offenen Fehler sind damit noch nicht im Spielcode behoben.
+Die Uhr- und Zuschauerprüfungen decken die Korrekturen von SP-02 und MP-03
+ab. Die Protokoll- und Demo-Prüfungen decken MP-04 und DEMO-01 ab.
+Die drei übrigen Befunde (DATA-01, RESET-01 und SP-01) sind weiter offen.
+Die Korrekturen und ihre Tests gehören zum oben genannten Versionsstand.

@@ -5,7 +5,8 @@
 # Description:
 #   Round state of rowhammer, named and switchable (CLAUDE.md 5.20).
 #   The game keeps a round in globals - the board, the instance tables,
-#   the queue, the bag, the falling piece, the counters, the clocks and
+#   the queue, the bag, the falling piece, the counters, the clocks
+#   (including whether personal play time is running) and
 #   the garbage queue. That is exactly right for one round and not enough
 #   for the multiplayer demo playback, which has to hold up to MP_MAX
 #   rounds at the same time and simulate all of them.
@@ -34,7 +35,7 @@
 #   4. state_bind OTHER - switch to another slot (no unbinding needed).
 #   5. state_release SLOT - drop a slot's variables when it is done.
 #
-# Version: 1.2.1  (2026-09-22)
+# Version: 1.2.2  (2026-10-10)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -110,6 +111,7 @@ STATE_VARS=(
     s:LOCK_PENDING
     s:TOUCHDOWN_MS
     s:PLAY_MS
+    s:PLAY_CLOCK_RUNNING
     s:PLAY_LAST
     # The clear pause: whether this board is resting on a completed row,
     # when that rest started (in the clock of whoever drives the round,

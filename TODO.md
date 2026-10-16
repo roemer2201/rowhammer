@@ -287,8 +287,12 @@ Bestaetigung, bevor der jeweilige Roadmap-Schritt beginnt:
       Konzept 4.1): Zunaechst mehrere Runden mit der unveraenderten
       Implementierung spielen und die Last beobachten. Sie vergleicht
       bei jedem `now_ms`-Aufruf die Systemzeit mit zwei Uptime-Abfragen,
-      also mehrfach pro Game-Loop-Durchlauf. Der tatsaechliche Mehraufwand
-      ist noch nicht quantifiziert.
+      also mehrfach pro Game-Loop-Durchlauf. Gemessen (2026-10-16, Bash
+      5.2.21, Xeon 2,1 GHz, Linux-VM, je 20000 Aufrufe, drei Laeufe):
+      `now_ms` mit Uptime-Kontrolle 106-119 us je Aufruf, die reine
+      `EPOCHREALTIME`-Auswertung von 2.0.3 7-8 us. Ein Aufruf kostet damit
+      rund 0,5 % eines 20-ms-Ticks (`TICK_S`); wie viele Aufrufe ein
+      Durchlauf tatsaechlich macht, ist nicht gemessen.
       **Moegliche spaetere Optimierung:** vollstaendiger Vergleich etwa
       einmal pro Sekunde, dazu bei jeder Zeitabfrage ein guenstiger
       Plausibilitaetscheck. Auffaellige Vorwaerts-/Rueckwaertsdifferenzen
@@ -319,14 +323,13 @@ Bestaetigung, bevor der jeweilige Roadmap-Schritt beginnt:
 
 ## 3. Externe Reviews
 
-[CODEX-REVIEW.md](CODEX-REVIEW.md) ist eine Code-Review der
-Mehrspieler-Demoaufzeichnung vom 5. September 2026, eine
-**fremde Momentaufnahme, die nicht gepflegt wird**. Ihr zweites Finding
-(ein ausbleibendes `ROSTER` laesst eine gerissene Verbindung als
-Top-Out in die Aufnahme) ist mit 1.4.1 behoben, ihr erstes
-(Ursprungszeit und Ankunftszeit im Zugstrom) mit 2.0.2 - beides siehe
-HISTORY.md. Damit ist aus ihr nichts mehr offen; sie bleibt im Baum,
-bis jemand sie wie die Einzelspieler-Review ins Archiv verabschiedet.
+[CODEX-REVIEW.md](CODEX-REVIEW.md) fuehrt die bestaetigten Befunde der
+Review vom 10. Oktober 2026 samt Korrekturstatus. SP-02 (Systemuhrspruenge)
+und MP-03 (Zuschauerzeit) sind mit 2.0.4 korrigiert, mit den dokumentierten
+Grenzen der Uhr-Erkennung. MP-04 (Protokollzahlen) ist ebenfalls mit
+2.0.4 korrigiert, ebenso DEMO-01 (frueh abgebrochene Versus-Aufnahmen).
+Drei weitere Befunde sind offen; ihre
+Nachweise und vorgeschlagenen Korrekturen stehen im Bericht.
 
 `CODEX-REVIEW-SINGLEPLAYER.md`, die Code-Review des Einzelspielers vom
 5. September 2026, ist **nicht mehr im Baum**: alle drei Findings

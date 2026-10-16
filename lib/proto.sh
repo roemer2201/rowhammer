@@ -12,7 +12,8 @@
 #   arguments. Parsing is a whitelist throughout: proto_parse looks the
 #   verb up in a table of the verbs this version knows, checks the number
 #   of fields against that table and then every field against its own
-#   pattern. Only then do the values land in PROTO_ARG - which means no
+#   pattern. Numeric fields are then normalized to decimal. Only then do
+#   the values land in PROTO_ARG - which means no
 #   number reaches an arithmetic expansion or an array index before it has
 #   been proven to be a number, the single rule that keeps a peer from
 #   running commands in this process ("$(( x ))" evaluates its content
@@ -28,7 +29,7 @@
 #   then a length and a character class and has no gaps.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.4.0  (2026-09-22)
+# Version: 1.4.1  (2026-10-10)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -354,6 +355,16 @@ proto_parse() {
     [ "${#fields[@]}" -eq $(( n + 1 )) ] || return 1
     for (( i = 0; i < n; i++ )); do
         proto_field_ok "${spec_a[i]}" "${fields[i + 1]}" || return 1
+    done
+    # CHANGE 2.0.4 (MP-04): Bash treats a leading zero as octal. After
+    # validating the entire message, make every number decimal so 010
+    # means ten and 08 cannot abort a handler. Tokens (k) are opaque and
+    # must round-trip unchanged; packed move deltas have their own 10#
+    # decoder. No unvalidated text may reach this arithmetic expansion.
+    for (( i = 0; i < n; i++ )); do
+        if [ "${spec_a[i]}" = "n" ]; then
+            fields[i + 1]=$(( 10#${fields[i + 1]} ))
+        fi
     done
     PROTO_VERB="${verb}"
     PROTO_ARG=("${fields[@]:1}")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regressions for multiplayer EOF, recording holds and final standings.
+"""Regressions for multiplayer transport, protocol numbers and recordings.
 
 Since format 5 also the final places in the header of a versus recording,
 and the standings a replay shows once its timeline has run out.
@@ -9,17 +9,42 @@ ROWHAMMER_MULTIPLAYER_TEST_ROOT optionally selects another source tree.
 The real Bash modules run with the game's strict flags, controlled input
 and a deterministic recording clock. No terminal or socat is required.
 
-Version: 1.1.0 (2026-09-23)
+Version: 1.1.2 (2026-10-10)
 """
 
 import os
 from pathlib import Path
+import re
 import subprocess
 import unittest
 
 
 ROOT = Path(os.environ.get("ROWHAMMER_MULTIPLAYER_TEST_ROOT",
                            Path(__file__).resolve().parent.parent))
+
+
+def game_function(name):
+    """Extract the real entry-point function without running its CLI."""
+    source = (ROOT / "rowhammer.sh").read_text(encoding="ascii")
+    return re.search(r"^" + name + r"\(\) \{\n.*?^\}", source,
+                     re.M | re.S).group(0) + "\n"
+
+
+PLAY_FUNCTIONS = "".join(game_function(name) for name in (
+    "game_reset", "time_attack_budget", "update_speed", "spawn_piece",
+    "play_clock_resume", "try_move", "lock_delay_recheck"))
+
+PLAY_SETUP = r'''
+source "${1}/lib/board.sh"
+source "${1}/lib/pieces.sh"
+source "${1}/lib/proto.sh"
+source "${1}/lib/mp.sh"
+source "${1}/lib/state.sh"
+TIME_ATTACK_START_MS=60000 TIME_ATTACK_ROW_MS=1000 FLOOD_INTERVAL_MS=20000
+LEVEL_SPEEDS=(1000)
+now_ms() { NOW_MS=0; }
+render_board_dirty() { :; }
+'''
 
 
 def bash(code, *args, data=""):
@@ -153,7 +178,93 @@ class MultiplayerChecks(unittest.TestCase):
     def run_bash(self, code, *args, data=""):
         result = bash(code, *args, data=data)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
         return result.stdout.splitlines()
+
+    def test_every_protocol_number_is_canonical_decimal(self):
+        # Cover the whole message table, including future numeric fields.
+        # Non-numeric fields use valid fixtures and must retain their text.
+        output = self.run_bash(r'''
+source "${1}/lib/proto.sh"
+declare -A sample=([f]=1 [s]=0 [N]=Player [S]=play [c]=act
+    [b]="$(printf '.%.0s' {1..200})" [h]=8 [k]=00008 [e]=proto
+    [m]=sprint [a]=127.0.0.1 [C]=host [T]=008h010y [O]=ko [t]=error)
+for value in 0 8 08 010 000000000 999999999; do
+    for verb in "${!PROTO_MSG[@]}"; do
+        read -r -a classes <<< "${PROTO_MSG[${verb}]}"
+        line="${verb}"
+        expected=()
+        for class in "${classes[@]}"; do
+            if [ "${class}" = n ]; then
+                line+=" ${value}"
+                expected+=("$(( 10#${value} ))")
+            else
+                line+=" ${sample[${class}]}"
+                expected+=("${sample[${class}]}")
+            fi
+        done
+        proto_parse "${line}"
+        [ "${PROTO_VERB}" = "${verb}" ]
+        [ "${PROTO_ARG[*]}" = "${expected[*]}" ]
+    done
+done
+printf 'decimal\n'
+''')
+        self.assertEqual(output, ["decimal"])
+
+    def test_protocol_numbers_reach_real_handler_arithmetic_as_decimal(self):
+        for value in ("0", "8", "08", "010", "000000000", "999999999"):
+            with self.subTest(value=value):
+                output = self.run_bash(r'''
+source "${1}/lib/proto.sh"
+source "${1}/lib/hub.sh"
+source "${1}/lib/mp.sh"
+debug_event() { :; }
+demo_record_garbage() { :; }
+mp_act_event() { :; }
+HUB_PENDING[0]=20
+proto_parse "APPLIED ${2}"
+hub_msg_applied 0
+printf 'pending %s\n' "${HUB_PENDING[0]}"
+GARBAGE_LINES=(0 0 1 2 4)
+GARBAGE_SILVER=1 GARBAGE_GOLD=2 GARBAGE_CAP=40
+proto_parse "CLEAR 1 ${2} 0"
+HUB_STATE[0]=play HUB_GARBAGE=1
+hub_bcast() { :; }
+hub_targets() { [ "${2}" -eq "$(( HUB_ATTACK - (20 < HUB_ATTACK ? 20 : HUB_ATTACK) ))" ]; }
+HUB_PENDING[0]=20
+hub_msg_clear 0
+[ "${HUB_PENDING[0]}" -eq "$(( 20 > HUB_ATTACK ? 20 - HUB_ATTACK : 0 ))" ]
+printf 'attack %s\n' "${HUB_ATTACK}"
+MP_SLOT=0 MP_PENDING=20
+proto_parse "GARBAGE 0 ${2} 8"
+mp_handle "GARBAGE 0 ${2} 8"
+printf 'incoming %s\n' "${MP_PENDING}"
+''', value)
+                number = int(value)
+                self.assertEqual(output, [f"pending {max(0, 20 - number)}",
+                                          f"attack {min(40, number)}",
+                                          f"incoming {20 + number}"])
+
+    def test_invalid_protocol_numbers_never_publish_arguments(self):
+        output = self.run_bash(r'''
+source "${1}/lib/proto.sh"
+source "${1}/lib/mp.sh"
+net_log() { :; }
+MP_SLOT=0 MP_PENDING=20
+for value in -1 +8 0x10 1e2 1000000000 'a[$(false)]'; do
+    proto_parse 'APPLIED 010'
+    if proto_parse "APPLIED ${value}"; then exit 1; fi
+    [ -z "${PROTO_VERB}" ] && [ "${#PROTO_ARG[@]}" -eq 0 ]
+    mp_handle "GARBAGE 0 ${value} 8"
+    [ "${MP_PENDING}" -eq 20 ]
+done
+# A bad later field must also discard an otherwise valid numeric field.
+if proto_parse 'CLEAR 010 08 nope'; then exit 1; fi
+[ -z "${PROTO_VERB}" ] && [ "${#PROTO_ARG[@]}" -eq 0 ]
+printf 'rejected\n'
+''')
+        self.assertEqual(output, ["rejected"])
 
     def test_eof_drains_all_batches_before_reporting_link_down(self):
         # Include no data, exactly one batch, several batches and more
@@ -333,6 +444,138 @@ demo_load "${files[0]}"
 printf 'loaded %s\n' "${DEMO_HDR_PLACE[*]}"
 ''')
         self.assertEqual(output[-1], "loaded 1 2 3 0 0")
+
+    def test_early_recording_replays_seats_without_events(self):
+        # Include an empty own seat, two empty peers and sparse slot IDs.
+        for own, active, seats in ((0, (0, 1), (0, 1, 2)),
+                                   (0, (1,), (0, 1, 2)),
+                                   (1, (1,), (0, 1, 2)),
+                                   (4, (1,), (1, 3, 4))):
+            with self.subTest(own=own, active=active, seats=seats):
+                output = self.run_bash(RECORD_SETUP + PLAY_SETUP +
+                                      PLAY_FUNCTIONS + r'''
+MP_WINNER=-1 MP_MAX=5 MP_MODE=sprint MP_GARBAGE=1
+DEMO_MP_SLOT="${2}"
+MP_PEER_NAME=("" "" "" "" "") DEMO_SLOT_SPAWNS=(1 1 1 1 1)
+for slot in ${4}; do
+    MP_PEER_NAME[slot]="seat${slot}"
+    DEMO_SLOT_SPAWNS[slot]=1
+done
+: > "${DEMO_TMP_FILE}"
+for slot in ${3}; do
+    printf 'p=%s 10l\n' "${slot}" >> "${DEMO_TMP_FILE}"
+done
+demo_record_finish quit
+files=("${DATA_DIR}"/demos/*.demo)
+demo_load "${files[0]}"
+demo_seats_scan
+[ "${DEMO_SEATS[*]}" = "${4}" ]
+DEMO_PLAYING=1 DEMO_CLOCK_MS=0 DEMO_TIMELINE_MS="${DEMO_HDR_LENGTH}"
+demo_play_peers_begin
+demo_play_states_build
+demo_cursors_reset
+for slot in "${DEMO_SEATS[@]}"; do
+    state_bind "${slot}"
+    [ "${CUR_TYPE}" = I ] && [ "${CUR_X}" -eq 3 ]
+    [ "${GAME_OVER}" -eq 0 ] && [ "${ROW_CREDIT}" -eq 0 ]
+done
+state_bind "${DEMO_FOCUS}"
+DEMO_CLOCK_MS=10
+demo_step
+for slot in "${DEMO_SEATS[@]}"; do
+    demo_focus_set "${slot}"
+    case " ${3} " in
+        *" ${slot} "*) [ "${CUR_X}" -eq 2 ] && [ "${DEMO_CUR[slot]}" -eq 1 ] ;;
+        *) [ "${CUR_X}" -eq 3 ] && [ "${DEMO_CUR[slot]}" -eq 0 ] ;;
+    esac
+    [ "${DEMO_NEXT_MS[slot]}" -eq -1 ]
+done
+if demo_events_left; then exit 1; fi
+DEMO_CLOCK_MS="${DEMO_TIMELINE_MS}"
+if demo_step; then exit 1; fi
+demo_play_states_release
+demo_play_peers_end
+printf 'replayed\n'
+''', own, " ".join(map(str, active)), " ".join(map(str, seats)))
+                self.assertEqual(output, ["replayed"])
+
+    def test_empty_seat_checkpoint_is_verified_against_initial_state(self):
+        for rows in (0, 1):
+            with self.subTest(rows=rows):
+                output = self.run_bash(RECORD_SETUP + PLAY_SETUP +
+                                      PLAY_FUNCTIONS + r'''
+MP_WINNER=-1 MP_MODE=sprint MP_GARBAGE=1
+MP_PEER_NAME=(self out alive)
+printf 'p=1 10l\nv=0 0 %s 0 0 0 0\n' "${2}" > "${DEMO_TMP_FILE}"
+demo_record_finish quit
+files=("${DATA_DIR}"/demos/*.demo)
+demo_load "${files[0]}"
+demo_seats_scan
+DEMO_PLAYING=1 DEMO_CLOCK_MS=0
+demo_play_peers_begin
+demo_play_states_build
+demo_cursors_reset
+demo_step
+[ "${DEMO_NEXT_MS[0]}" -eq -1 ]
+printf 'checks %s %s\n' "${DEMO_CK_OK}" "${DEMO_CK_BAD}"
+DEMO_CLOCK_MS=10
+demo_step
+printf 'checks %s %s\n' "${DEMO_CK_OK}" "${DEMO_CK_BAD}"
+demo_play_states_release
+demo_play_peers_end
+''', rows)
+                expected = f"checks {int(rows == 0)} {int(rows != 0)}"
+                self.assertEqual(output, [expected, expected])
+
+    def test_malformed_recording_body_is_still_refused(self):
+        for body in ("p=3 10l", "e=10l", "p=0 10bad", "pcs=BAD",
+                     "name=changed"):
+            with self.subTest(body=body):
+                output = self.run_bash(RECORD_SETUP + r'''
+demo_record_finish quit
+files=("${DATA_DIR}"/demos/*.demo)
+printf '%s\n' "${2}" >> "${files[0]}"
+if demo_load "${files[0]}"; then exit 1; fi
+printf 'refused\n'
+''', body)
+                self.assertEqual(output, ["refused"])
+
+    def test_completely_eventless_recording_is_not_saved_or_loaded(self):
+        for mode in ("versus", "marathon"):
+            for checkpoints in (False, True):
+                with self.subTest(mode=mode, checkpoints=checkpoints):
+                    # Keep a valid header from the real writer for the
+                    # loader check, then let the writer finish an empty round.
+                    output = self.run_bash(RECORD_SETUP + r'''
+GAME_MODE="${2}"
+if [ "${GAME_MODE}" = marathon ]; then
+    DEMO_MP=0
+    printf 'e=10l\n' > "${DEMO_TMP_FILE}"
+fi
+demo_record_finish quit
+files=("${DATA_DIR}"/demos/*.demo)
+while IFS= read -r line; do
+    case "${line}" in p=*|e=*|v=*) continue ;; esac
+    printf '%s\n' "${line}"
+done < "${files[0]}" > "${DATA_DIR}/empty.demo"
+rm -- "${files[0]}"
+DEMO_RECORDING=1
+if [ "${GAME_MODE}" = versus ]; then DEMO_MP=1; fi
+DEMO_TMP_FILE="${DATA_DIR}/rec.tmp"
+: > "${DEMO_TMP_FILE}"
+if [ "${3}" -eq 1 ]; then
+    printf 'v=0 0 0 0 0 0 0\n' >> "${DATA_DIR}/empty.demo"
+    printf 'v=0 0 0 0 0 0 0\n' > "${DEMO_TMP_FILE}"
+fi
+demo_record_finish quit
+[ "${DEMO_RECORDING}" -eq 0 ] && [ ! -e "${DEMO_TMP_FILE:-/missing}" ]
+shopt -s nullglob
+files=("${DATA_DIR}"/demos/*.demo)
+[ "${#files[@]}" -eq 0 ]
+if demo_load "${DATA_DIR}/empty.demo"; then exit 1; fi
+printf 'empty refused\n'
+''', mode, int(checkpoints))
+                    self.assertEqual(output, ["empty refused"])
 
     def test_undecided_recording_names_no_places(self):
         text = self.recording(winner=-1)

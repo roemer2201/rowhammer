@@ -116,6 +116,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 2.0.1 | Runde und Aufnahme auf einer Uhr: Clear-Pause vor der Taste, Pruefpunkte am ruhenden Sitz, Bot ruht mit | 4.10, 5.3, 5.20 |
 | 2.0.2 | Pruefung des Mehrspielers: Glob-Luecke im Parser, Sitzungsfehler (Lobby-Geister, Start allein, Gastgeber-Abgang, Sitzungsende, Trennen), Protokoll 6, Stoerreihen doppelt, Demo-Reihenfolge ("Finding 1"), Test-Bot, Sitzungstest | 4.9, 5.1, 5.3-5.9, 5.20 |
 | 2.0.3 | Endplaetze in der Demo-Wiedergabe: Demo-Format 5 mit `place`, Rangliste am Ende einer Wiedergabe | 4.10, 5.6, 5.20 |
+| 2.0.4 | Bereinigte Uhr, Zuschauerzeit, dezimale Protokollzahlen und fruehe Versus-Demos | 4.1, 4.3, 4.10, 5.5, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -2338,6 +2339,9 @@ Variable statt die Umgebung. Vier Entscheidungen:
   fehlendes `date` sagt das selbst, und die Meldung landet noch vor dem
   Alternate-Screen.
 
+_Spaeter erweitert: 2.0.4 - dieselbe validierte Quelle wird mit Linux
+Bootzeit auf Spruenge kontrolliert und zentral korrigiert._
+
 **SP-002, das Quadrat (Medium).** _Vorzustand:_ `square_check_at` wies
 eine Zelle mit Instanz-ID 0 ab und fing damit jede Stoerreihe - aber
 ueber ihre ID, nicht ueber ihre Sorte. Die ID sagt "gehoert zu keinem
@@ -3080,3 +3084,79 @@ Schluessel in `demo_load`; danach bestehen alle 19 Testmethoden.
 `display-check.py`, `key-scan.sh`, `net-fuzz.sh` und `hub-check.sh`
 laufen ohne Befund. Eine Wiedergabe im echten Terminal wurde nicht
 durchgespielt.
+
+## Uhrspruenge und Zuschauerzeit (umgesetzt, Version 2.0.4)
+
+Vorzustand: Die Systemzeit wurde unveraendert als Spieluhr verwendet;
+Rueckspruenge konnten negative Spielzeit, Vorwaertsspruenge vorzeitig
+faellige Fristen erzeugen (Review SP-02). Nach dem Top-out wurde beim
+spaeteren `END` die gesamte Zuschauerphase nachgebucht (MP-03).
+
+Plan: am 2026-10-10 freigegeben, Ausgangspunkt 2.0.3. Der Kompromiss:
+Systemzeit mit 1-ms-Schritten, Bootzeit (`/proc/uptime`) als grobe
+Kontrolle und persistenter Korrekturoffset; die bereinigte Uhr darf
+nicht rueckwaerts laufen. Plan und Umsetzung bekamen getrennte Commits.
+Die Option, die Systemzeit nur einmal pro Sekunde gegen die Bootzeit zu
+pruefen, blieb ausdruecklich unimplementiert (TODO.md 2.4). Zwei
+Kontrollabfragen rahmen die Messung ein; dadurch gilt eine Verzoegerung
+zwischen den Abfragen nicht automatisch als Uhrsprung. Messintervalle und
+20 ms Toleranz lassen kleine Aenderungen offen. Die zentrale Uhr gilt fuer
+Spiel und Netzwerk, Kalenderdaten bleiben unbereinigt.
+
+Die persoenliche Spielzeit hat einen eigenen Laufzustand. Top-out stoppt
+sie einmalig, `END` bucht bei noch aktiven Spielern den letzten Abschnitt.
+Menue/Pause und Wiederaufnahme respektieren den Zustand; Resize startet
+keinen ausgeschiedenen Spieler neu. Die gemeinsame Demo-Zeitachse laeuft
+weiter. Wiedergaben nehmen ihre Zeit ausschliesslich vom Demo-Treiber.
+
+Abnahme: `tools/clock-check.py` prueft 18 Testmethoden mit echten
+Bash-Funktionen und simulierten Quellen, darunter den echten Game-Loop
+mit drei Sitzen, Top-out bei 10 s, Resize bei 60 s und `END` bei 120 s,
+auch mit Spruengen um eine Stunde. Persoenliche Zeit: 10 s;
+Aufnahme-Zeitachse: 120 s. Die Systemuhr wurde nicht verstellt.
+Der Test laeuft im CI; auch Debug-Ausgaben sind gegen eine erneute
+Anwendung desselben Offsets geprueft. Bestehende Zustands-, Demo-, Anzeige-, Eingabe-
+und Parserchecks sowie Syntax-, ASCII- und Versionspruefung bestehen.
+ShellCheck (Stufe error) besteht ebenfalls. Der Hub-Test besteht die
+zehn TCP-Pruefungen; sein Unix-Teil ist lokal durch das AF_UNIX-Verbot
+(EPERM) der Ausfuehrungsumgebung blockiert. Er bleibt im GitHub-CI.
+
+### Dezimale Protokollzahlen (MP-04, 5.5)
+
+Plan: am 2026-10-10 beauftragt, als Erweiterung desselben Korrektur-PRs.
+Reihenfolge MP-04 vor DEMO-01, jede Korrektur samt Dokumentation als
+eigener Commit.
+
+Vorzustand: Gepruefte Zahlen mit fuehrender Null blieben unveraendert.
+Bash behandelte `010` als acht; `08` erzeugte eine Arithmetikdiagnose.
+`proto_parse` normalisiert nun nach Pruefung der gesamten Nachricht alle
+Felder der Klasse `n` mit `10#`. Die akzeptierte Syntax und die
+Protokollversion bleiben gleich; opaque Ping/Pong-Tokens bleiben erhalten.
+
+Abnahme: Drei neue Testmethoden in `tools/multiplayer-check.py` pruefen
+alle Zahlenfelder der Nachrichtentabelle, die echten APPLIED-, CLEAR-
+und GARBAGE-Handler mit `0`, `8`, `08`, `010`, Nullauffuellung und
+`999999999` sowie ungueltige Eingaben ohne Zustandseffekt oder Diagnose.
+Alle 22 Mehrspieler-Testmethoden bestehen.
+
+### Frueh abgebrochene Versus-Aufnahmen (DEMO-01, 4.10/5.20)
+
+Vorzustand: Der Writer schrieb alle besetzten Sitze in den Header,
+aber der Loader verlangte fuer jeden Sitz mindestens ein Ereignis.
+Ein frueher Abbruch vor dem ersten Zug eines Peers konnte deshalb
+eine gespeicherte Aufnahme erzeugen, die nicht wiedergegeben wurde.
+
+Nun reicht ein Ereignis in der gesamten Aufnahme. Leere Sitz-Stroeme
+behalten den normalen game_reset-Anfangszustand samt Vorschau, und alle
+Teilnehmer bleiben im Fokuswechsel erreichbar. Ein Anfangspruefpunkt
+eines leeren Sitzes wird einmal gegen diesen Zustand geprueft.
+Vollstaendig ereignislose Aufnahmen bleiben ausgeschlossen; der Writer
+prueft beim Abschluss einmal auf `e=`/`p=`, sodass eine Datei allein
+mit Pruefpunkten ebenfalls verworfen wird. Format 5 bleibt bestehen.
+
+Abnahme: Vier weitere Methoden in `tools/multiplayer-check.py` pruefen
+den echten Writer, Loader und die echte Rundensimulation samt Fokuswechsel
+bei leeren Peers, leerem eigenen Sitz und Luecken in der Sitznummerierung.
+Sie pruefen Anfangspruefpunkte, deren Abweichungsdiagnose, voellig leere
+Aufnahmen in beiden Modi und weiterhin abgewiesene ungueltige Dateien.
+Alle 26 Mehrspieler-Testmethoden bestehen.
