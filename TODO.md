@@ -287,8 +287,12 @@ Bestaetigung, bevor der jeweilige Roadmap-Schritt beginnt:
       Konzept 4.1): Zunaechst mehrere Runden mit der unveraenderten
       Implementierung spielen und die Last beobachten. Sie vergleicht
       bei jedem `now_ms`-Aufruf die Systemzeit mit zwei Uptime-Abfragen,
-      also mehrfach pro Game-Loop-Durchlauf. Der tatsaechliche Mehraufwand
-      ist noch nicht quantifiziert.
+      also mehrfach pro Game-Loop-Durchlauf. Gemessen (2026-10-16, Bash
+      5.2.21, Xeon 2,1 GHz, Linux-VM, je 20000 Aufrufe, drei Laeufe):
+      `now_ms` mit Uptime-Kontrolle 106-119 us je Aufruf, die reine
+      `EPOCHREALTIME`-Auswertung von 2.0.3 7-8 us. Ein Aufruf kostet damit
+      rund 0,5 % eines 20-ms-Ticks (`TICK_S`); wie viele Aufrufe ein
+      Durchlauf tatsaechlich macht, ist nicht gemessen.
       **Moegliche spaetere Optimierung:** vollstaendiger Vergleich etwa
       einmal pro Sekunde, dazu bei jeder Zeitabfrage ein guenstiger
       Plausibilitaetscheck. Auffaellige Vorwaerts-/Rueckwaertsdifferenzen
