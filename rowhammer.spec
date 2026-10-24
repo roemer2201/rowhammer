@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        2.0.4
+Version:        2.1.0
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,10 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Sat Oct 24 2026 roemer2201 <r.oliver@web.de> - 2.1.0-1
+- Quit on Ctrl-C only after two quick presses, three in multiplayer.
+- Disable the terminal interrupt character while the game owns the tty.
+
 * Sat Oct 10 2026 roemer2201 <r.oliver@web.de> - 2.0.4-1
 - Correct detected wall-clock jumps using a shared offset and boot time.
 - Stop personal play time at top-out while the round timeline continues.

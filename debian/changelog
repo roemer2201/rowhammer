@@ -1,3 +1,13 @@
+rowhammer (2.1.0) unstable; urgency=medium
+
+  * Ctrl-C no longer quits on the first press: it has to be pressed twice
+    within half a second each, three times in a multiplayer session. A
+    single press shows a hint; quitting stays a hard exit.
+  * Disable the terminal interrupt character while the game owns the
+    terminal, so Ctrl-C no longer hits the socat coprocess of a link.
+
+ -- roemer2201 <r.oliver@web.de>  Sat, 24 Oct 2026 12:00:00 +0000
+
 rowhammer (2.0.4) unstable; urgency=medium
 
   * Correct detected wall-clock jumps with a shared offset and Linux

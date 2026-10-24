@@ -68,9 +68,11 @@
 #   for menu screens that color individual values instead of whole
 #   blocks - currently the Highscores and Statistik screens
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
+#   Since 2.1.0 it also draws the one-line Ctrl-C hint (ctrl_c_hint_screen,
+#   driven by ctrl_c_press in lib/input.sh).
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.28.4  (2026-09-23)
+# Version: 0.29.0  (2026-10-24)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -509,6 +511,28 @@ term_too_small_screen() {
     # The overlay owns the screen now; the menu that was interrupted has
     # to repaint on a cleared terminal once the resize is over.
     MENU_FULL=1
+    screen_write "${frame}"
+    return 0
+}
+
+# ctrl_c_hint_screen NEED
+# Show the Ctrl-C hint: one line in reverse video telling the player that
+# NEED quick presses quit (see ctrl_c_press in lib/input.sh). It goes on
+# the bottom row of the game block - the board's bottom border during a
+# round - centered on the terminal, so it lands in the same place in a
+# menu, in a singleplayer round and in the wider multiplayer layout. It
+# is written past the frame buffers on purpose: it is up for a moment
+# only, and ctrl_c_hint_clear has the screen repainted when it goes.
+ctrl_c_hint_screen() {
+    local text row col frame
+    printf -v text "${I18N[ctrl_c_hint]}" "${1}"
+    text=" ${text} "
+    row=$(( LAYOUT_ROW + LAYOUT_H - 1 ))
+    col=$(( (TERM_COLS - ${#text}) / 2 + 1 ))
+    if [ "${col}" -lt 1 ]; then
+        col=1
+    fi
+    printf -v frame '\e[%d;%dH\e[7m%s\e[0m' "${row}" "${col}" "${text}"
     screen_write "${frame}"
     return 0
 }

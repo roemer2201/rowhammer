@@ -187,7 +187,9 @@
 #  10. Install the cleanup trap, start the debug logs (when --debug is
 #      set), load the highscore lists, the savegame and the statistics
 #      and enter the alternate screen in raw input mode (echo and
-#      canonical mode off for the whole session).
+#      canonical mode off for the whole session; Ctrl-C arrives as a key
+#      and quits only when pressed two times in quick succession, three
+#      times in a multiplayer session).
 #  11. Run the main menu loop; the singleplayer entry picks a game mode and
 #      starts the game loop
 #      (input, gravity, locking, square detection, row flash, line
@@ -218,7 +220,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 2.0.4  (2026-10-10)
+# Version: 2.1.0  (2026-10-24)
 
 set -euo pipefail
 
@@ -233,7 +235,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="2.0.4"
+ROWHAMMER_VERSION="2.1.0"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -1282,6 +1284,11 @@ PAUSED=0; GAME_OVER=0; GAME_EXIT=0; DIRTY=1
 # DIRTY, menu_run and the info screens via their local dirty flag) repaint
 # the screen that the resize cleared. Every loop clears it after acting.
 REDRAW_PENDING=0
+# Raised together with REDRAW_PENDING by the one repaint that costs no
+# time - taking the Ctrl-C hint down (ctrl_c_hint_clear, lib/input.sh) -
+# and lowered by every resize. The game loop restarts its gravity and
+# lock delay clocks only when it is 0 (CLAUDE.md 4.3).
+REDRAW_KEEP_CLOCK=0
 # A round left via the pause menu's "Ins Hauptmenue" keeps its complete
 # state in the globals above; this flag marks it as waiting for the
 # "Fortsetzen" main menu entry (issue #12).
@@ -2799,9 +2806,15 @@ game_run() {
         # blocked for a while behind the too-small overlay). Repaint and
         # restart the gravity and play-time clocks so the resize interval
         # counts as neither fall time nor play time - like leaving a pause.
+        # Taking the Ctrl-C hint down repaints as well but costs no time;
+        # restarting the clocks for it would hand the player a fresh lock
+        # delay per Ctrl-C (REDRAW_KEEP_CLOCK, since 2.1.0).
         if [ "${REDRAW_PENDING}" -eq 1 ]; then
             REDRAW_PENDING=0
-            play_clock_resume
+            if [ "${REDRAW_KEEP_CLOCK}" -eq 0 ]; then
+                play_clock_resume
+            fi
+            REDRAW_KEEP_CLOCK=0
             RENDER_FULL=1
             DIRTY=1
         fi
@@ -2933,6 +2946,11 @@ main() {
     # started one - the hub process behind it. A hub of somebody else's
     # session is never touched.
     trap 'term_restore; net_close; mp_hub_stop; net_discover_stop; demo_record_discard; debug_close' EXIT
+    # Since 2.1.0 the terminal sends no SIGINT while the game owns it -
+    # Ctrl-C is a key there and has to be pressed repeatedly (ctrl_c_press,
+    # lib/input.sh). The INT trap still covers a Ctrl-C before the screen
+    # is set up and a SIGINT or SIGTERM sent with kill, which stays the
+    # way out of a game that should ever hang outside read_key.
     trap 'exit 130' INT TERM
     # Debug logging starts before the alternate screen, so init errors
     # (unwritable log directory etc.) stay readable.

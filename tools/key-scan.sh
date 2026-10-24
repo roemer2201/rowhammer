@@ -13,7 +13,9 @@
 #   The case table covers: cursor and modified cursor keys, navigation and
 #   function keys, the keypad in application mode, the three mouse
 #   reporting protocols, terminal replies (CSI, OSC, DCS), 8-bit CSI,
-#   bracketed paste, Alt chords, control characters and non-ASCII input.
+#   bracketed paste, Alt chords, control characters and non-ASCII input,
+#   plus the Ctrl-C guard (since 1.3.0): one Ctrl-C must leave the reader
+#   running, two in quick succession must end it before the next key.
 #   Each case carries the symbolic keys it is expected to produce, so the
 #   script doubles as a regression test: it exits non-zero as soon as one
 #   sequence maps to something else.
@@ -35,7 +37,7 @@
 # Usage:
 #   tools/key-scan.sh [-g SEC] [-d MS] [-o NAME] [-l] [-s|-v] [-h]
 #
-# Version: 1.2.1  (2026-07-30)
+# Version: 1.3.0  (2026-10-24)
 
 set -u
 
@@ -222,6 +224,11 @@ CASES=(
     "ctrl NUL (ctrl-space)|:none:|\\x00"
     "ctrl ctrl-a|:none:|\\x01"
     "ctrl ctrl-c|:none:|\\x03"
+    # The Ctrl-C guard (CLAUDE.md 4.3): a single press is no key and does
+    # not end the reader, so the key behind it still arrives; a second
+    # press within the window quits (exit 130) before the "a" is read.
+    "ctrl ctrl-c once keeps reading|a|\\x03a"
+    "ctrl ctrl-c twice quits|:none:|\\x03\\x03a"
     "ctrl tab|:none:|\\x09"
     "ctrl LF is enter|ENTER|\\x0a"
     "ctrl DEL 0x7f|:none:|\\x7f"
@@ -249,6 +256,7 @@ run_replay() {
     debug_event() { :; }
     screen_write() { :; }
     term_too_small_screen() { :; }
+    ctrl_c_hint_screen() { :; }
     # The escape parser timestamps a pending ESC; now_ms lives in
     # rowhammer.sh, so provide the same contract here.
     now_ms() {
