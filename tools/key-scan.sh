@@ -15,7 +15,9 @@
 #   reporting protocols, terminal replies (CSI, OSC, DCS), 8-bit CSI,
 #   bracketed paste, Alt chords, control characters and non-ASCII input,
 #   plus the Ctrl-C guard (since 1.3.0): one Ctrl-C must leave the reader
-#   running, two in quick succession must end it before the next key.
+#   running, two in quick succession must end it with status 130. The
+#   reader's exit status is checked as well as its reported keys, so a
+#   crash cannot pass as a correctly discarded sequence.
 #   Each case carries the symbolic keys it is expected to produce, so the
 #   script doubles as a regression test: it exits non-zero as soon as one
 #   sequence maps to something else.
@@ -37,7 +39,7 @@
 # Usage:
 #   tools/key-scan.sh [-g SEC] [-d MS] [-o NAME] [-l] [-s|-v] [-h]
 #
-# Version: 1.3.0  (2026-10-24)
+# Version: 1.3.1  (2026-10-24)
 
 set -u
 
@@ -88,11 +90,11 @@ Options (environment variable in brackets; CLI wins over environment):
 Verdicts:
   ok    the sequence produced exactly the expected keys
   warn  it deviated but the leaked keys trigger no game action
-  FAIL  it deviated and at least one leaked key triggers a game action
+  FAIL  a leaked key triggers a game action, or the reader exits incorrectly
 
 Exit status:
-  0  no sequence triggered a wrong game action (warn is tolerated)
-  1  at least one sequence triggered a wrong action (details on stdout)
+  0  no wrong game action or reader exit (warn is tolerated)
+  1  at least one wrong action or reader exit (details on stdout)
   2  usage error
 
 Examples:
@@ -117,13 +119,14 @@ say() {
 }
 
 # --- Case table -----------------------------------------------------------
-# One entry per line: NAME|EXPECTED|BYTES
+# One entry per line: NAME|EXPECTED|BYTES[|FLAG]
 #   NAME      human readable label
 #   EXPECTED  space separated symbolic keys read_key should report; empty
 #             means the sequence must be swallowed without any key press
 #   BYTES     printf %b escapes of what the terminal sends
 #   FLAG      optional; "gap0" marks a case whose expectation only holds
-#             for instant delivery, so --gap skips it
+#             for instant delivery, so --gap skips it; "exit130" expects
+#             the Ctrl-C exit status rather than the normal EOF exit 0
 # The expectations describe the *correct* behaviour, not today's - a
 # deviation is exactly what this script is meant to surface.
 CASES=(
@@ -226,9 +229,10 @@ CASES=(
     "ctrl ctrl-c|:none:|\\x03"
     # The Ctrl-C guard (CLAUDE.md 4.3): a single press is no key and does
     # not end the reader, so the key behind it still arrives; a second
-    # press within the window quits (exit 130) before the "a" is read.
+    # press within the window quits (exit 130). Check that status rather
+    # than feeding a third byte to an already closed pipe with --gap.
     "ctrl ctrl-c once keeps reading|a|\\x03a"
-    "ctrl ctrl-c twice quits|:none:|\\x03\\x03a"
+    "ctrl ctrl-c twice quits|:none:|\\x03\\x03|exit130"
     "ctrl tab|:none:|\\x09"
     "ctrl LF is enter|ENTER|\\x0a"
     "ctrl DEL 0x7f|:none:|\\x7f"
@@ -364,12 +368,13 @@ triggers_action() {
     return 1
 }
 
-# run_case NAME EXPECTED BYTES
+# run_case NAME EXPECTED BYTES EXPECTED_EXIT
 # Feed one sequence into a replay child and compare the keys it reported
 # against the expectation. Sets CASE_STATUS to ok, warn (deviates but
-# triggers nothing) or fail (deviates and triggers a game action).
+# triggers nothing) or fail (wrong reader exit status or game action).
 run_case() {
-    local name="${1}" expected="${2}" bytes="${3}" got="" hold=0
+    local name="${1}" expected="${2}" bytes="${3}" expected_exit="${4}"
+    local got="" hold=0 reader_exit
     if [ "${expected}" = ":none:" ]; then
         expected=""
     fi
@@ -381,8 +386,15 @@ run_case() {
     export KEYSCAN_OUT
     feed "${bytes}" "${hold}" | KEYSCAN_REPLAY=1 KEYSCAN_DRAIN="${DRAIN}" \
         "${BASH}" "${SCRIPT_DIR}/${SCRIPT_NAME}" --replay
+    reader_exit="${PIPESTATUS[1]}"
     got="$(cat "${KEYSCAN_OUT}")"
     rm -f "${KEYSCAN_OUT}"
+    if [ "${reader_exit}" -ne "${expected_exit}" ]; then
+        CASE_STATUS="fail"
+        printf 'FAIL %-32s -> reader exited %s (expected %s)\n' \
+            "${name}" "${reader_exit}" "${expected_exit}"
+        return 0
+    fi
     if [ "${got}" = "${expected}" ]; then
         CASE_STATUS="ok"
         say "$(printf 'ok   %-32s -> %s' "${name}" "${got:-(nothing)}")"
@@ -494,7 +506,11 @@ for entry in "${CASES[@]}"; do
         continue
     fi
     total=$(( total + 1 ))
-    run_case "${case_name}" "${case_expect}" "${case_bytes}"
+    case_exit=0
+    if [ "${case_flag}" = "exit130" ]; then
+        case_exit=130
+    fi
+    run_case "${case_name}" "${case_expect}" "${case_bytes}" "${case_exit}"
     case "${CASE_STATUS}" in
         fail) failed=$(( failed + 1 )) ;;
         warn) warned=$(( warned + 1 )) ;;
@@ -509,7 +525,7 @@ if [ "${total}" -eq 0 ]; then
     exit 2
 fi
 
-printf '\n%d of %d sequences trigger a wrong game action, %d leak inert keys (gap %ss)\n' \
+printf '\n%d of %d sequences failed (wrong action or reader exit), %d leak inert keys (gap %ss)\n' \
     "${failed}" "${total}" "${warned}" "${GAP}"
 if [ "${failed}" -gt 0 ]; then
     exit 1

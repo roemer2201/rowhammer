@@ -335,7 +335,11 @@ ueberschrieben werden kann.
   (`ctrl_c_hint_screen`, invers, untere Zeile des Spielblocks, Text
   `ctrl_c_hint` aus `lib/lang/`); sie steht laenger als das Fenster,
   weil sie die Regel nennt und eine halbe Sekunde zum Lesen nicht
-  reicht. Sie wird an den Renderern vorbei geschrieben; zum Abbau
+  reicht. `screen_write` legt sie nach jedem Bildschirm-Update erneut
+  ueber den Frame, damit Vollbildmodus und Menuewechsel sie nicht vor
+  Ablauf der Frist loeschen. Die Position wird dabei aus dem aktuellen
+  Layout berechnet; im zu kleinen Terminal wird sie unterdrueckt und
+  vor der Terminal-Wiederherstellung verworfen. Zum Abbau
   setzt `ctrl_c_hint_clear` wie ein Resize `RENDER_FULL`, `MENU_FULL`
   und `REDRAW_PENDING`, dazu `REDRAW_KEEP_CLOCK`: der Game-Loop startet
   seine Fall- und Lock-Delay-Uhren dann nicht neu, sonst bekaeme ein
@@ -350,6 +354,10 @@ ueberschrieben werden kann.
   Spiel, das je ausserhalb von `read_key` haengen sollte. `Strg+\`
   taugt dafuer nicht: Bash ignoriert SIGQUIT immer (bash(1),
   Abschnitt SIGNALS).
+  Regression: `tools/ctrl-c-check.py` prueft die Fenstergrenzen,
+  Einzelspieler und Mehrspieler-Lobby/-Runde, Textmodus, Neuaufbau und
+  Ablauf des Hinweises, Resize und das Frame-Log sowie echte
+  Terminal-Einstellungen und deren Wiederherstellung im Pseudo-Terminal.
 - **Rendering (inkrementell seit 0.22.0):** `draw_frame` baut den
   Spielbildschirm zeilenweise in das Array `FRAME_LINES`; `render_flush`
   vergleicht es mit dem zuletzt ausgegebenen Stand (`PREV_LINES`) und

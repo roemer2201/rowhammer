@@ -47,10 +47,11 @@
 #   (stty intr undef), so Ctrl-C arrives as the byte 0x03 and is counted
 #   here (ctrl_c_press). Two presses in quick succession quit, three while
 #   a multiplayer link is up; a single press only shows a hint
-#   (CLAUDE.md 4.3).
+#   (CLAUDE.md 4.3). The output funnel keeps that hint above later frames
+#   until its deadline, and terminal cleanup drops it before leaving.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.10.0  (2026-10-24)
+# Version: 0.10.1  (2026-10-24)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -161,6 +162,8 @@ CTRL_C_COUNT=0
 CTRL_C_LAST_MS=0
 # When the hint is to be taken down again (clean ms, 0 = no hint shown).
 CTRL_C_HINT_UNTIL=0
+# Keep the displayed rule stable for the lifetime of this hint.
+CTRL_C_HINT_NEED=2
 
 SAVED_STTY=""
 TERM_ACTIVE=0
@@ -231,6 +234,7 @@ ctrl_c_press() {
         exit 130
     fi
     CTRL_C_HINT_UNTIL=$(( NOW_MS + CTRL_C_HINT_MS ))
+    CTRL_C_HINT_NEED="${need}"
     # The resize overlay owns the screen while the terminal is too small;
     # the hint would only garble it.
     if [ "${TERM_TOO_SMALL}" -eq 0 ]; then
@@ -376,6 +380,8 @@ term_restore() {
     if [ "${TERM_ACTIVE}" -eq 1 ]; then
         debug_event "terminal: restoring screen and stty state"
         trap - WINCH
+        # Never append a pending hint after returning to the shell's screen.
+        CTRL_C_HINT_UNTIL=0
         screen_write $'\e[?2004l\e[?25h\e[?7h\e[?1049l'
         if [ -n "${SAVED_STTY}" ]; then
             stty "${SAVED_STTY}" || stty sane

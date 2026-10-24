@@ -3218,3 +3218,20 @@ nicht zurueck. Alle CI-Pruefungen bestehen lokal: Syntax, ShellCheck
 (Stufe error), ASCII, Versionsabgleich, `key-scan` mit und ohne Luecke,
 `state-check`, `demo-keys`, `clock-check`, `display-check`,
 `net-fuzz`, `multiplayer-check` (26) und `hub-check` (12).
+
+PR-Review #116: Der direkt gezeichnete Strg+C-Hinweis wurde von einem
+Vollbild-Frame oder Menuewechsel schon beim naechsten Tick geloescht,
+statt die zugesagten 1,5 s lesbar zu bleiben. `screen_write` legt ihn
+jetzt nach jeder Ausgabe erneut ueber den Frame, mit aktuellen
+Koordinaten nach Resize. Der Frame-Log enthaelt genau diese Ausgabe;
+beim Verlassen des Terminals wird der Hinweis vorher verworfen, damit
+er nicht im zurueckgegebenen Shell-Bildschirm auftaucht. Auch ein im
+zu kleinen Terminal begonnener Mehrspieler-Hinweis behaelt die Regel
+"3x". `tools/ctrl-c-check.py` prueft diese Faelle sowie Zeitfenster,
+Textmodus, Lobby/Runde und die Wiederherstellung der echten
+Terminal-Einstellungen im isolierten Pseudo-Terminal; es laeuft in CI.
+`key-scan` prueft nun auch den Exit-Status des Lesers ausdruecklich
+(130 beim Doppeldruck, sonst 0), statt einen Absturz als korrekt
+verworfene Eingabe durchgehen zu lassen. Der Doppeldruck-Test braucht
+dadurch kein weiteres Byte nach dem beabsichtigten Ende mehr und
+erzeugt auch mit `--gap 0.06` keinen Broken-Pipe-Fehler im Sender.
