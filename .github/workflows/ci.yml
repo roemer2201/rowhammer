@@ -123,6 +123,9 @@ jobs:
       - name: Replay all key sequences with a byte gap
         run: ./tools/key-scan.sh --gap 0.06 --silent
 
+      - name: Check Ctrl-C timing, hint repainting and terminal cleanup
+        run: python3 tools/ctrl-c-check.py
+
   # ---------------------------------------------------------------------
   # Round state module: the multiplayer demo playback holds up to five
   # rounds at once and switches between them with namerefs, so a slot

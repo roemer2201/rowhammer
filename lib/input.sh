@@ -42,9 +42,16 @@
 #   clear and let the caller repaint, and while
 #   the terminal is too small for the fixed layout, block on a "resize me"
 #   overlay until it grows back.
+#   Since 2.1.0 Ctrl-C no longer ends the game on the first press: the
+#   raw mode also takes the interrupt character away from the terminal
+#   (stty intr undef), so Ctrl-C arrives as the byte 0x03 and is counted
+#   here (ctrl_c_press). Two presses in quick succession quit, three while
+#   a multiplayer link is up; a single press only shows a hint
+#   (CLAUDE.md 4.3). The output funnel keeps that hint above later frames
+#   until its deadline, and terminal cleanup drops it before leaving.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.9.1  (2026-09-18)
+# Version: 0.10.1  (2026-10-24)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -137,6 +144,27 @@ RAW_BUF=""
 # duration of a prompt, so no path can leak it into the game loop.
 KEY_TEXT=0
 
+# Ctrl-C guard (since 2.1.0, CLAUDE.md 4.3). A single Ctrl-C used to end
+# the program at once, and in the middle of a round that is mostly an
+# accident: the key sits right next to the ones a player uses. The press
+# now has to be repeated, each repetition within CTRL_C_WINDOW_MS of the
+# previous one; CTRL_C_NEED presses quit, CTRL_C_NEED_MP while a
+# multiplayer link is up, because leaving a running session also takes
+# this seat away from everybody else in it. A press that comes too late
+# simply starts the count over. Every press short of the count shows a
+# hint for CTRL_C_HINT_MS - longer than the window on purpose: the hint
+# states the rule, and half a second is too short to read it.
+CTRL_C_WINDOW_MS=500
+CTRL_C_NEED=2
+CTRL_C_NEED_MP=3
+CTRL_C_HINT_MS=1500
+CTRL_C_COUNT=0
+CTRL_C_LAST_MS=0
+# When the hint is to be taken down again (clean ms, 0 = no hint shown).
+CTRL_C_HINT_UNTIL=0
+# Keep the displayed rule stable for the lifetime of this hint.
+CTRL_C_HINT_NEED=2
+
 SAVED_STTY=""
 TERM_ACTIVE=0
 
@@ -160,6 +188,61 @@ term_measure() {
     fi
 }
 
+# ctrl_c_hint_clear
+# Take the Ctrl-C hint down once its time is up. The hint was written
+# straight onto the screen, past the renderers, so neither the game
+# frame's line diff nor a menu frame knows it is there: both are told to
+# repaint everything (RENDER_FULL, MENU_FULL) and the caller to repaint
+# now (REDRAW_PENDING), exactly as after a resize. REDRAW_KEEP_CLOCK
+# tells the game loop that, unlike a resize, this repaint cost no time:
+# restarting the gravity and lock delay clocks here would let a player
+# hold a resting piece forever by tapping Ctrl-C once a second.
+ctrl_c_hint_clear() {
+    CTRL_C_HINT_UNTIL=0
+    RENDER_FULL=1
+    MENU_FULL=1
+    REDRAW_KEEP_CLOCK=1
+    REDRAW_PENDING=1
+}
+
+# ctrl_c_press
+# Count one Ctrl-C (the byte 0x03, see term_input_raw) and quit when the
+# count reaches the number the situation asks for: CTRL_C_NEED, or
+# CTRL_C_NEED_MP while a multiplayer link is up. A press more than
+# CTRL_C_WINDOW_MS after the previous one starts a new count. Quitting is
+# the hard exit Ctrl-C always was - "exit 130" runs the EXIT trap, which
+# restores the terminal and closes the link, and a running round is
+# neither recorded nor saved. Any press short of that shows the hint.
+# Called from the key parser, i.e. from read_key and key_drain, never
+# from a signal handler, so drawing the hint here is safe.
+ctrl_c_press() {
+    local need="${CTRL_C_NEED}"
+    if [ "${NET_LINK_UP:-0}" -eq 1 ]; then
+        need="${CTRL_C_NEED_MP}"
+    fi
+    now_ms
+    if [ "${CTRL_C_COUNT}" -gt 0 ] && \
+       [ $(( NOW_MS - CTRL_C_LAST_MS )) -le "${CTRL_C_WINDOW_MS}" ]; then
+        CTRL_C_COUNT=$(( CTRL_C_COUNT + 1 ))
+    else
+        CTRL_C_COUNT=1
+    fi
+    CTRL_C_LAST_MS="${NOW_MS}"
+    debug_event "input: ctrl-c ${CTRL_C_COUNT}/${need}"
+    if [ "${CTRL_C_COUNT}" -ge "${need}" ]; then
+        debug_event "input: ctrl-c pressed ${need} times in a row, quitting"
+        exit 130
+    fi
+    CTRL_C_HINT_UNTIL=$(( NOW_MS + CTRL_C_HINT_MS ))
+    CTRL_C_HINT_NEED="${need}"
+    # The resize overlay owns the screen while the terminal is too small;
+    # the hint would only garble it.
+    if [ "${TERM_TOO_SMALL}" -eq 0 ]; then
+        ctrl_c_hint_screen "${need}"
+    fi
+    return 0
+}
+
 # term_resize_apply
 # Apply a pending SIGWINCH (TERM_RESIZED, set asynchronously by the
 # handler installed in term_setup). Called from read_key - the one funnel
@@ -178,6 +261,10 @@ term_resize_apply() {
     # sit at different coordinates).
     layout_update
     screen_write $'\e[2J\e[H'
+    # A resize may hold the game behind the too-small overlay, so the
+    # game loop has to restart its clocks (see ctrl_c_hint_clear for the
+    # one repaint that must not).
+    REDRAW_KEEP_CLOCK=0
     REDRAW_PENDING=1
     local was_too_small="${TERM_TOO_SMALL}"
     if [ "${TERM_TOO_SMALL}" -eq 1 ]; then
@@ -229,8 +316,19 @@ term_resize_apply() {
 # "min 1 time 0" keeps a byte-wise read blocking until at least one byte
 # arrives; the game's timeouts come from bash's "read -t", which is
 # unaffected by these settings. term_restore puts the saved state back.
+#
+# CHANGE 2.1.0: "intr undef" takes the interrupt character away from the
+# terminal, so Ctrl-C no longer raises SIGINT but arrives as the byte 0x03
+# and is counted by ctrl_c_press. Turning the signal into a key is the
+# whole point: SIGINT goes to the entire foreground process group, which
+# includes the socat coprocess of a multiplayer link (lib/net.sh), so a
+# first Ctrl-C caught by a trap would already have cut the connection of
+# a game that is meant to go on. Only the interrupt character is
+# disabled, not ISIG as a whole: Ctrl-\ and Ctrl-Z keep the meaning they
+# had before. A game that should ever hang outside read_key is ended
+# with kill (SIGINT/SIGTERM), which the EXIT trap still cleans up after.
 term_input_raw() {
-    stty -echo -icanon min 1 time 0 ||
+    stty -echo -icanon intr undef min 1 time 0 ||
         die "Cannot switch the terminal into raw input mode"
 }
 
@@ -282,6 +380,8 @@ term_restore() {
     if [ "${TERM_ACTIVE}" -eq 1 ]; then
         debug_event "terminal: restoring screen and stty state"
         trap - WINCH
+        # Never append a pending hint after returning to the shell's screen.
+        CTRL_C_HINT_UNTIL=0
         screen_write $'\e[?2004l\e[?25h\e[?7h\e[?1049l'
         if [ -n "${SAVED_STTY}" ]; then
             stty "${SAVED_STTY}" || stty sane
@@ -315,7 +415,8 @@ key_drop() {
 # Anything that is not printable ASCII - control characters, the single
 # bytes of a UTF-8 character - is discarded instead of becoming a key:
 # nothing in the game is bound to it, and passing it on only invites the
-# kind of misreading issue #7 is about.
+# kind of misreading issue #7 is about. The one exception is Ctrl-C
+# (0x03), which is not a key either but is counted by ctrl_c_press.
 # In text mode (KEY_TEXT, see above) the printable byte is reported as it
 # was typed and the two erase bytes become BACKSPACE; SPACE and ENTER
 # keep their symbolic names in both modes, the prompts map them back.
@@ -346,6 +447,14 @@ key_plain() {
             ;;
         '')
             key_emit "ENTER"
+            return 0
+            ;;
+        $'\x03')
+            # Ctrl-C (since 2.1.0 a byte, not a signal - term_input_raw).
+            # Never reported as a key: no loop has to know about it, and
+            # in text mode it must not end up in a name either.
+            key_drop "ctrl-c"
+            ctrl_c_press
             return 0
             ;;
     esac
@@ -634,6 +743,15 @@ key_drain() {
 # stdin is treated as a fatal error so the loop cannot spin at full speed.
 read_key() {
     KEY=""
+    # Take a Ctrl-C hint down whose time is up. Ahead of the resize below
+    # on purpose: a resize in the same call has to win over the
+    # REDRAW_KEEP_CLOCK this sets, because the resize may have cost time.
+    if [ "${CTRL_C_HINT_UNTIL}" -gt 0 ]; then
+        now_ms
+        if [ "${NOW_MS}" -ge "${CTRL_C_HINT_UNTIL}" ]; then
+            ctrl_c_hint_clear
+        fi
+    fi
     # A SIGWINCH sets TERM_RESIZED asynchronously; the handler only flags
     # it so nothing is drawn from inside the signal. Apply it here, before
     # reading, so every game and menu loop that polls through read_key

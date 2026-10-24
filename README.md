@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 2.0.4
+**Version:** 2.1.0
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -283,6 +283,14 @@ Belegung ist zusaetzlich per `ROWHAMMER_KEY_*` uebersteuerbar (siehe
 
 In den Menues gelten Pfeiltasten bzw. `w`/`s` zum Waehlen, Enter oder
 Leertaste zum Bestaetigen und `Esc` fuer Zurueck.
+
+**Strg+C** beendet das Spiel nicht beim ersten Druck, damit es nicht
+versehentlich passiert: Es muss **zweimal schnell hintereinander**
+gedrueckt werden (hoechstens eine halbe Sekunde Abstand), in einer
+Mehrspieler-Sitzung **dreimal**. Ein einzelner Druck blendet nur einen
+Hinweis ein. Beendet wird dann sofort - eine laufende Runde wird weder
+gewertet noch gespeichert. Der regulaere Weg ist das Pausen- bzw.
+Hauptmenue.
 
 ## Mehrspieler im lokalen Netz
 

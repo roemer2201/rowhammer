@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.10.0  (2026-09-18)
+# Version: 1.11.0  (2026-10-24)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -465,6 +465,12 @@ loeschen."
     [resize_head]="Groesse:"
     [resize_need]="brauche %sx%s"
     [resize_now]="jetzt %sx%s"
+
+    # --- Ctrl-C hint ------------------------------------------------------
+    # Shown for a moment after a single Ctrl-C (ctrl_c_hint_screen in
+    # lib/render.sh); %d is the number of quick presses that quit, 2 or 3
+    # in a multiplayer session. Within the 46 columns like a menu line.
+    [ctrl_c_hint]="Beenden: Strg+C %dx schnell hintereinander"
 
     # --- World wonders ----------------------------------------------------
     [wonder_all_done]="Alle Weltwunder sind errichtet!"

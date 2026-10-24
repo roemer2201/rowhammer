@@ -5,8 +5,10 @@ Run with python3 tools/clock-check.py; unittest accepts -v and -h.
 ROWHAMMER_CLOCK_TEST_ROOT optionally selects another source tree.
 Uses the real Bash clock module and game-loop functions with controlled
 wall/boot readers and transport adapters; never changes the system clock.
+Since 1.1.0 it also checks that the repaint after the Ctrl-C hint
+(REDRAW_KEEP_CLOCK) leaves the lock delay running, unlike a resize.
 
-Version: 1.0.0 (2026-10-10)
+Version: 1.1.0 (2026-10-24)
 """
 
 import os
@@ -202,7 +204,8 @@ play_clock_tick
                 script += r'''
 MP_ACTIVE=1 MP_MAX=3 MP_START_MS=1000000 DEMO_PLAYING=0 DEMO_MP=1
 GAME_SUSPENDED=0 ROUND_RECORDED=0 MP_ENDED=0 MP_PLACE=2
-LOCK_PENDING=0 PAUSED=0 DIRTY=0 REDRAW_PENDING=0 GOAL_REACHED=0
+LOCK_PENDING=0 PAUSED=0 DIRTY=0 REDRAW_PENDING=0 REDRAW_KEEP_CLOCK=0
+GOAL_REACHED=0
 CLEARED_TOTAL=0 ROW_CREDIT=0 LEVEL=1
 mp_send_state() { :; }
 mp_act_flush() { :; }
@@ -288,7 +291,8 @@ game_reset marathon
                 with self.subTest(mode=mode, jump=jump):
                     script = SETUP + PLAY + function("game_run") + r'''
 GAME_SUSPENDED=0 MP_ACTIVE=0 ROUND_RECORDED=0 DEMO_PLAYING=0
-PAUSED=0 DIRTY=0 REDRAW_PENDING=0 CLEAR_PENDING=0 GOAL_REACHED=0
+PAUSED=0 DIRTY=0 REDRAW_PENDING=0 REDRAW_KEEP_CLOCK=0 CLEAR_PENDING=0
+GOAL_REACHED=0
 CLEARED_TOTAL=0 ROW_CREDIT=0 LEVEL=1
 LOCK_PENDING=1 LOCK_DELAY_MS=250 SPRINT_TIME_MS=180000
 TIME_ATTACK_BUDGET_MS=60000 FLOOD_NEXT_MS=7000
@@ -321,6 +325,45 @@ record_round() { printf '%s\n' "${PLAY_MS}"; }
                     result = bash(script + f"TEST_JUMP={jump}\ngame_run {mode}\n")
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stdout.strip(), "60")
+
+    def test_ctrl_c_hint_repaint_keeps_lock_delay(self):
+        # A resting piece touched down at 1000000 with 250 ms lock delay;
+        # each pass advances 150 ms and the first one raises a repaint.
+        # The hint repaint (REDRAW_KEEP_CLOCK=1) must not restart the
+        # delay, so the piece locks on pass 2 (300 ms); a resize repaint
+        # restamps the touchdown to pass 1 and the lock moves to pass 3.
+        for keep, expect in ((1, "locked 2"), (0, "locked 3")):
+            with self.subTest(keep=keep):
+                script = SETUP + PLAY + function("game_run") + r'''
+GAME_SUSPENDED=0 MP_ACTIVE=0 ROUND_RECORDED=0 DEMO_PLAYING=0
+PAUSED=0 DIRTY=0 REDRAW_PENDING=0 REDRAW_KEEP_CLOCK=0 CLEAR_PENDING=0
+GOAL_REACHED=0 CLEARED_TOTAL=0 ROW_CREDIT=0 LEVEL=1
+LOCK_PENDING=1 LOCK_DELAY_MS=250 CUR_X=4 CUR_Y=18
+handle_key() { :; }
+draw_frame() { :; }
+round_event() { :; }
+lock_and_next() { printf 'locked %s\n' "${TEST_PASS}"; GAME_EXIT=1; }
+game_reset() {
+    GAME_MODE="${1}" GAME_OVER=0 PLAY_MS=0 PLAY_CLOCK_RUNNING=0
+    play_clock_resume
+}
+TEST_PASS=0
+read_key() {
+    TEST_PASS=$(( TEST_PASS + 1 ))
+    TEST_WALL=$(( 1000000 + TEST_PASS * 150 ))
+    TEST_LO=$(( 10000 + TEST_PASS * 150 ))
+    TEST_HI="${TEST_LO}"
+    if [ "${TEST_PASS}" -eq 1 ]; then
+        REDRAW_PENDING=1
+        REDRAW_KEEP_CLOCK="${TEST_KEEP}"
+    fi
+    if [ "${TEST_PASS}" -ge 5 ]; then GAME_EXIT=1; fi
+}
+record_round() { :; }
+'''
+                result = bash(script + f"TEST_KEEP={keep}\ngame_run marathon\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), expect)
 
 
 if __name__ == "__main__":

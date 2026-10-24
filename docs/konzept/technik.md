@@ -73,7 +73,9 @@ Stand samt seiner Begruendung; was abgeloest wurde, steht in
     monotone Millisekunden-Quelle.
   - Regression: `tools/clock-check.py` simuliert Spruenge in beide
     Richtungen, wiederholte Aenderungen, Messverzoegerungen, echte lange
-    Pausen, Stop/Resume und den Game-Loop mit Top-out, Resize und `END`.
+    Pausen, Stop/Resume und den Game-Loop mit Top-out, Resize und `END`,
+    dazu den Neuaufbau nach dem Strg+C-Hinweis, der die Lock-Delay-Frist
+    weiterlaufen laesst (4.3).
 - Keine harten Abhaengigkeiten ausser Coreutils; `tput` optional (Fallback auf
   feste ANSI-Sequenzen).
 - Farben ueber ANSI-Escape-Sequenzen (8/16 Farben als Basis, 256-Farben als
@@ -263,7 +265,8 @@ ueberschrieben werden kann.
   setzen und ueber einen `trap`-Handler (EXIT/INT/TERM) garantiert
   wiederherstellen. **Der Rohmodus gilt fuer die ganze Sitzung**
   (`term_input_raw` in `lib/input.sh`, aufgerufen aus `term_setup`:
-  `stty -echo -icanon min 1 time 0`, seit 0.28.1, Issue #33) und seit
+  `stty -echo -icanon intr undef min 1 time 0`, seit 0.28.1, Issue
+  #33; `intr undef` seit 2.1.0, siehe Strg+C-Sperre unten) und seit
   0.45.0 ausnahmslos - auch die Namensabfrage zeichnet ihre Zeile
   selbst (`menu_text_input`, siehe 3.7). Ohne ihn echote das Terminal
   zwischen zwei Reads jeden Tastendruck an die Cursorposition, und weil
@@ -303,7 +306,7 @@ ueberschrieben werden kann.
   Schwanz-Byte zur Taste wird. Ein Byte, das Bash (beobachtet mit 5.1)
   im Timeout-Moment zusammen mit dem Timeout-Status liefert, wird
   weiterhin ausgewertet statt verworfen. Regressionstest:
-  `tools/key-scan.sh` (72 Faelle, auch mit kuenstlicher Byte-Luecke
+  `tools/key-scan.sh` (74 Faelle, auch mit kuenstlicher Byte-Luecke
   ueber `--gap`). Seit 0.19.0
   behandelt der Input-Layer auch Terminal-Groessenaenderungen: ein
   SIGWINCH-Trap (scharf ab `term_setup`) setzt nur das Flag
@@ -313,6 +316,48 @@ ueberschrieben werden kann.
   blockiert bei Unterschreitung des 48x22-Minimums hinter der
   "resize me"-Overlay, bis das Terminal wieder gross genug ist
   (HISTORY.md, 0.19.0 "Anpassung an Terminalgroesse").
+- **Strg+C-Sperre (seit 2.1.0):** Ein einzelnes Strg+C beendet das
+  Spiel nicht. `term_input_raw` nimmt dem Terminal zusaetzlich das
+  Interrupt-Zeichen (`stty ... intr undef`), sodass Strg+C kein SIGINT
+  mehr ausloest, sondern als Byte 0x03 ueber `read_key` ankommt. Der
+  Parser meldet es nicht als Taste (`key_plain` verwirft es und ruft
+  `ctrl_c_press`), keine Schleife muss davon wissen, und im Textmodus
+  landet es nicht im Namen. Beendet wird erst, wenn Strg+C mehrmals
+  hintereinander kommt, jeder Druck hoechstens `CTRL_C_WINDOW_MS`
+  (500 ms) nach dem vorigen: **zweimal** (`CTRL_C_NEED`), **dreimal**
+  (`CTRL_C_NEED_MP`), solange eine Mehrspieler-Verbindung steht
+  (`NET_LINK_UP`, also in Lobby und Runde) - wer dort geht, nimmt den
+  anderen seinen Sitz. Ein spaeterer Druck beginnt die Zaehlung neu.
+  Das Beenden ist das harte Ende wie zuvor: `exit 130`, der EXIT-Trap
+  stellt das Terminal wieder her und schliesst die Verbindung, eine
+  laufende Runde wird weder gewertet noch gespeichert. Jeder Druck
+  davor blendet fuer `CTRL_C_HINT_MS` (1,5 s) eine Hinweiszeile ein
+  (`ctrl_c_hint_screen`, invers, untere Zeile des Spielblocks, Text
+  `ctrl_c_hint` aus `lib/lang/`); sie steht laenger als das Fenster,
+  weil sie die Regel nennt und eine halbe Sekunde zum Lesen nicht
+  reicht. `screen_write` legt sie nach jedem Bildschirm-Update erneut
+  ueber den Frame, damit Vollbildmodus und Menuewechsel sie nicht vor
+  Ablauf der Frist loeschen. Die Position wird dabei aus dem aktuellen
+  Layout berechnet; im zu kleinen Terminal wird sie unterdrueckt und
+  vor der Terminal-Wiederherstellung verworfen. Zum Abbau
+  setzt `ctrl_c_hint_clear` wie ein Resize `RENDER_FULL`, `MENU_FULL`
+  und `REDRAW_PENDING`, dazu `REDRAW_KEEP_CLOCK`: der Game-Loop startet
+  seine Fall- und Lock-Delay-Uhren dann nicht neu, sonst bekaeme ein
+  ruhender Stein mit jedem Strg+C eine frische Lock-Delay-Frist.
+  Warum ein Byte und kein Trap mit Zaehler: SIGINT geht an die ganze
+  Vordergrund-Prozessgruppe, also auch an den socat-Coprozess der
+  Mehrspieler-Verbindung (`lib/net.sh`); schon der erste, abgefangene
+  Druck haette die Verbindung gekappt. Abgeschaltet ist nur das
+  Interrupt-Zeichen, nicht ISIG insgesamt. Der `INT`-Trap bleibt fuer
+  Strg+C vor dem Spielbildschirm (`--help`, Rueckfragen auf der
+  Konsole) und fuer ein SIGINT/SIGTERM per `kill`, den Ausweg aus einem
+  Spiel, das je ausserhalb von `read_key` haengen sollte. `Strg+\`
+  taugt dafuer nicht: Bash ignoriert SIGQUIT immer (bash(1),
+  Abschnitt SIGNALS).
+  Regression: `tools/ctrl-c-check.py` prueft die Fenstergrenzen,
+  Einzelspieler und Mehrspieler-Lobby/-Runde, Textmodus, Neuaufbau und
+  Ablauf des Hinweises, Resize und das Frame-Log sowie echte
+  Terminal-Einstellungen und deren Wiederherstellung im Pseudo-Terminal.
 - **Rendering (inkrementell seit 0.22.0):** `draw_frame` baut den
   Spielbildschirm zeilenweise in das Array `FRAME_LINES`; `render_flush`
   vergleicht es mit dem zuletzt ausgegebenen Stand (`PREV_LINES`) und

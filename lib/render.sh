@@ -68,9 +68,12 @@
 #   for menu screens that color individual values instead of whole
 #   blocks - currently the Highscores and Statistik screens
 #   (highscore_screen in lib/highscore.sh, stats_screen in lib/stats.sh).
+#   Since 2.1.0 it also draws the one-line Ctrl-C hint (ctrl_c_hint_screen,
+#   driven by ctrl_c_press in lib/input.sh), composing it after every
+#   screen update so full frames and menu transitions cannot erase it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.28.4  (2026-09-23)
+# Version: 0.29.1  (2026-10-24)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -481,10 +484,19 @@ render_theme_swatch() {
 # mode, record it byte for byte in the frame log. Every module that
 # draws to the screen (game frames, menus, prompts, terminal setup) must
 # use this instead of a direct printf, so the debug trace really is a
-# 1:1 copy of what the player saw.
+# 1:1 copy of what the player saw. Composite a pending Ctrl-C hint last:
+# a full game frame or a menu transition would otherwise erase it on
+# the next tick, long before its 1.5-second deadline.
 screen_write() {
-    printf '%s' "${1}"
-    debug_frame "${1}"
+    local out="${1}"
+    if [ "${TERM_ACTIVE:-0}" -eq 1 ] && \
+       [ "${CTRL_C_HINT_UNTIL:-0}" -gt 0 ] && \
+       [ "${TERM_TOO_SMALL:-0}" -eq 0 ]; then
+        ctrl_c_hint_frame "${CTRL_C_HINT_NEED}"
+        out+="${RENDER_CTRL_C_HINT_FRAME}"
+    fi
+    printf '%s' "${out}"
+    debug_frame "${out}"
 }
 
 # term_too_small_screen
@@ -510,6 +522,36 @@ term_too_small_screen() {
     # to repaint on a cleared terminal once the resize is over.
     MENU_FULL=1
     screen_write "${frame}"
+    return 0
+}
+
+# ctrl_c_hint_screen NEED
+# Show the Ctrl-C hint: one line in reverse video telling the player that
+# NEED quick presses quit (see ctrl_c_press in lib/input.sh). It goes on
+# the bottom row of the game block - the board's bottom border during a
+# round - centered on the terminal, so it lands in the same place in a
+# menu, in a singleplayer round and in the wider multiplayer layout. It
+# is composed after the frame buffers on purpose: it is up for a moment
+# only, and ctrl_c_hint_clear has the screen repainted when it goes.
+ctrl_c_hint_screen() {
+    CTRL_C_HINT_NEED="${1}"
+    screen_write ""
+}
+
+# ctrl_c_hint_frame NEED
+# Build the overlay without writing it, so screen_write can append it to
+# any screen update without recursion. Recompute coordinates each time
+# to keep the hint centered across resizes, including menu-only screens.
+ctrl_c_hint_frame() {
+    local text row col
+    printf -v text "${I18N[ctrl_c_hint]}" "${1}"
+    text=" ${text} "
+    row=$(( LAYOUT_ROW + LAYOUT_H - 1 ))
+    col=$(( (TERM_COLS - ${#text}) / 2 + 1 ))
+    if [ "${col}" -lt 1 ]; then
+        col=1
+    fi
+    printf -v RENDER_CTRL_C_HINT_FRAME '\e[%d;%dH\e[7m%s\e[0m' "${row}" "${col}" "${text}"
     return 0
 }
 

@@ -117,6 +117,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 2.0.2 | Pruefung des Mehrspielers: Glob-Luecke im Parser, Sitzungsfehler (Lobby-Geister, Start allein, Gastgeber-Abgang, Sitzungsende, Trennen), Protokoll 6, Stoerreihen doppelt, Demo-Reihenfolge ("Finding 1"), Test-Bot, Sitzungstest | 4.9, 5.1, 5.3-5.9, 5.20 |
 | 2.0.3 | Endplaetze in der Demo-Wiedergabe: Demo-Format 5 mit `place`, Rangliste am Ende einer Wiedergabe | 4.10, 5.6, 5.20 |
 | 2.0.4 | Bereinigte Uhr, Zuschauerzeit, dezimale Protokollzahlen und fruehe Versus-Demos | 4.1, 4.3, 4.10, 5.5, 5.20 |
+| 2.1.0 | Strg+C-Sperre: zweimal schnell beenden, dreimal im Mehrspieler | 4.3 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -3160,3 +3161,77 @@ bei leeren Peers, leerem eigenen Sitz und Luecken in der Sitznummerierung.
 Sie pruefen Anfangspruefpunkte, deren Abweichungsdiagnose, voellig leere
 Aufnahmen in beiden Modi und weiterhin abgewiesene ungueltige Dateien.
 Alle 26 Mehrspieler-Testmethoden bestehen.
+
+## Strg+C-Sperre (umgesetzt, Version 2.1.0)
+
+Vorzustand: `term_input_raw` schaltete nur Echo und Zeilenmodus ab, das
+Terminal loeste bei Strg+C weiter ein SIGINT aus, und
+`trap 'exit 130' INT TERM` beendete das Spiel beim ersten Druck - auch
+mitten in einer Runde, wo Strg+C meist ein Versehen ist.
+
+Plan: am 2026-10-23 vorgelegt und am 2026-10-24 mit den Vorgaben der
+Nutzerentscheidung freigegeben: Zeitfenster 0,5 s, zweimal im
+Einzelspieler, dreimal im Mehrspieler, hart beenden wie bisher (Runde
+weder gewertet noch gespeichert).
+
+Umsetzung (heutiger Stand: 4.3, "Strg+C-Sperre"): `stty intr undef`
+macht Strg+C zum Byte 0x03, `key_plain` uebergibt es an `ctrl_c_press`,
+das die Druecke zaehlt, beim Erreichen der Zahl `exit 130` ausfuehrt und
+sonst den Hinweis einblendet. Das Fenster gilt von Druck zu Druck. Als
+"Mehrspieler" zaehlt jede stehende Verbindung (`NET_LINK_UP`), also
+auch die Lobby, nicht erst die laufende Runde: ein Abgang trifft die
+anderen dort genauso. `REDRAW_KEEP_CLOCK` unterscheidet den Abbau des
+Hinweises von einem Resize, damit Strg+C keine frische Lock-Delay-Frist
+verschafft.
+
+Verworfen: ein SIGINT-Trap mit Zaehler. SIGINT trifft die ganze
+Vordergrund-Prozessgruppe und damit den socat-Coprozess der
+Mehrspieler-Verbindung; schon der erste Druck haette sie getrennt. Der
+Hinweis haette ausserdem aus dem Signal-Handler gezeichnet werden
+muessen, was das Projekt bewusst vermeidet (der SIGWINCH-Handler setzt
+nur ein Flag).
+
+Korrektur am Plan: Er nannte `Strg+\` als Notausgang, falls das Spiel
+ausserhalb von `read_key` haengt. Das traegt nicht - Bash ignoriert
+SIGQUIT in jedem Fall (bash(1), SIGNALS), auch im Skript; `Strg+\` hat
+das Spiel also nie beendet. Ein QUIT-Trap haette eine neue
+Ein-Tasten-Beendigung eingefuehrt und wurde deshalb nicht eingebaut;
+der Ausweg bleibt `kill` (SIGINT/SIGTERM), den der EXIT-Trap aufraeumt.
+
+Abnahme: `tools/key-scan.sh` hat zwei neue Faelle (74 statt 72): ein
+Strg+C laesst den Leser weiterlaufen und die folgende Taste ankommen,
+zwei schnelle beenden ihn vor ihr; beide bestehen auch mit `--gap 0.06`.
+`tools/clock-check.py` (jetzt 19 Testmethoden) prueft am echten
+`game_run`, dass ein ruhender Stein nach dem Hinweis-Neuaufbau
+fristgerecht lockt, nach einem Resize dagegen eine neue Frist bekommt;
+seine beiden `game_run`-Gerueste setzen `REDRAW_KEEP_CLOCK`, das sie
+unter `set -u` sonst abbrechen liesse.
+Im Pseudo-Terminal mit dem echten Spiel geprueft: im Hauptmenue
+erscheint der Hinweis nach einem Druck, zwei Druecke im Abstand von
+0,8 s beenden nicht, zwei im Abstand von 0,2 s beenden mit Status 130
+samt Wiederherstellung des Terminals (`\e[?1049l`); in einer
+Einzelspieler-Runde laeuft das Spiel nach einem Druck weiter, der
+Hinweis wird nach 1,5 s per Voll-Neuaufbau entfernt, ein Doppeldruck
+beendet; als Gastgeber in der Lobby (TCP) nennt der Hinweis "3x", zwei
+schnelle Druecke beenden nicht, drei beenden, Hub und socat bleiben
+nicht zurueck. Alle CI-Pruefungen bestehen lokal: Syntax, ShellCheck
+(Stufe error), ASCII, Versionsabgleich, `key-scan` mit und ohne Luecke,
+`state-check`, `demo-keys`, `clock-check`, `display-check`,
+`net-fuzz`, `multiplayer-check` (26) und `hub-check` (12).
+
+PR-Review #116: Der direkt gezeichnete Strg+C-Hinweis wurde von einem
+Vollbild-Frame oder Menuewechsel schon beim naechsten Tick geloescht,
+statt die zugesagten 1,5 s lesbar zu bleiben. `screen_write` legt ihn
+jetzt nach jeder Ausgabe erneut ueber den Frame, mit aktuellen
+Koordinaten nach Resize. Der Frame-Log enthaelt genau diese Ausgabe;
+beim Verlassen des Terminals wird der Hinweis vorher verworfen, damit
+er nicht im zurueckgegebenen Shell-Bildschirm auftaucht. Auch ein im
+zu kleinen Terminal begonnener Mehrspieler-Hinweis behaelt die Regel
+"3x". `tools/ctrl-c-check.py` prueft diese Faelle sowie Zeitfenster,
+Textmodus, Lobby/Runde und die Wiederherstellung der echten
+Terminal-Einstellungen im isolierten Pseudo-Terminal; es laeuft in CI.
+`key-scan` prueft nun auch den Exit-Status des Lesers ausdruecklich
+(130 beim Doppeldruck, sonst 0), statt einen Absturz als korrekt
+verworfene Eingabe durchgehen zu lassen. Der Doppeldruck-Test braucht
+dadurch kein weiteres Byte nach dem beabsichtigten Ende mehr und
+erzeugt auch mit `--gap 0.06` keinen Broken-Pipe-Fehler im Sender.
