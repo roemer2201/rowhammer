@@ -1,6 +1,6 @@
 # rowhammer
 
-**Version:** 2.1.0
+**Version:** 2.1.1
 
 Ein Tetris-artiges Spiel fuer das Terminal - komplett in **Bash**.
 
@@ -402,7 +402,7 @@ Unterverzeichnis `demos` - liegen im Datenverzeichnis
 
 | Option           | Umgebungsvariable        | Wirkung                                  |
 |------------------|--------------------------|------------------------------------------|
-| `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge                |
+| `--seed N`       | `ROWHAMMER_SEED`         | Reproduzierbare Teilfolge (hoechstens neun Ziffern); ein Seed ergibt auf jeder Bash-Version dieselben Steine |
 | `--name NAME`    | `ROWHAMMER_PLAYER_NAME`  | Spielername fuer die Bestenlisten        |
 | `--lang CODE`    | `ROWHAMMER_LANG`         | Sprache: `auto` (Standard, folgt der Locale), `de`, `en` |
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR`     | Datenverzeichnis (siehe oben)            |
@@ -541,6 +541,7 @@ lassen sich die Pruefungen so:
 ./tools/key-scan.sh              # Regressionstest der Eingabeschicht
 ./tools/key-scan.sh --gap 0.06   # dasselbe mit zerrissenen Sequenzen
 ./tools/state-check.sh           # Regressionstest des Rundenzustands
+./tools/seed-check.sh            # gibt ein Seed auf dieser Bash die festgelegte Steinfolge?
 ./tools/net-fuzz.sh              # Fuzz-Test der Mehrspieler-Parser
 ./tools/release.sh --mode check  # stimmen alle Versionsangaben ueberein?
 ```

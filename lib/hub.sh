@@ -40,7 +40,7 @@
 #   shared inbox is atomic, which is what lets several bridges share it.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.3.0  (2026-09-22)
+# Version: 1.3.1  (2026-11-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1197,6 +1197,11 @@ hub_start_round() {
     # Twice, so an overlong --seed that wrapped into a negative value in
     # bash arithmetic still lands in 0..999999999 rather than carrying a
     # minus sign onto the wire.
+    # CHANGE 2.1.1: --seed is nine digits at most and in plain decimal
+    # form since then (option check in rowhammer.sh), so a seed given by
+    # the host passes through here unchanged and only a rolled one can
+    # still be cut down. The line stays as it is: it costs nothing, and
+    # it is what stands between any other source of a seed and the wire.
     seed=$(( (seed % 1000000000 + 1000000000) % 1000000000 ))
     for (( i = 0; i < MP_MAX; i++ )); do
         [ -n "${HUB_ID[i]}" ] || continue

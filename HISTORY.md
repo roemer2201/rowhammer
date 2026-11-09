@@ -118,6 +118,7 @@ Konzept und die README.md den neuen Zustand richtig beschreiben.
 | 2.0.3 | Endplaetze in der Demo-Wiedergabe: Demo-Format 5 mit `place`, Rangliste am Ende einer Wiedergabe | 4.10, 5.6, 5.20 |
 | 2.0.4 | Bereinigte Uhr, Zuschauerzeit, dezimale Protokollzahlen und fruehe Versus-Demos | 4.1, 4.3, 4.10, 5.5, 5.20 |
 | 2.1.0 | Strg+C-Sperre: zweimal schnell beenden, dreimal im Mehrspieler | 4.3 |
+| 2.1.1 | Eigener Generator fuer die Steinfolge: ein Seed ergibt auf jeder Bash-Version dieselben Steine (Issue #115); `--seed` hoechstens neun Ziffern | 3.1, 4.2, 4.9, 4.10, 5.1, 5.4, 5.9, 5.20 |
 
 ## Phase 1 - Spielbarer Kern (umgesetzt, Version 0.1.0)
 
@@ -1031,6 +1032,9 @@ in 0.44.0 auf Nutzerentscheidung mit 100 multipliziert worden
          wird einmal je Sitzung gesetzt, nicht je Runde, und sein
          Generator hat sich zwischen Bash-Versionen geaendert - ein Byte
          je Stein macht die Frage gegenstandslos.
+         _Spaeter ueberholt: 2.1.1 - die Steinfolge kommt aus einem
+         eigenen Generator, der auf jeder Bash derselbe ist; der zweite
+         Grund ist damit entfallen, der erste gilt weiter (4.10)._
       2. **Obergrenze: eine Stueckzahl, keine Gesamtgroesse.**
          `DEMO_MAX` = 10 wie die Bestenlisten; bei ~20 kB fuer eine
          lange Runde waere ein Groessenbudget Aufwand ohne Gegenwert.
@@ -2034,6 +2038,9 @@ folgten mit `1.4.0` (eigener Abschnitt unten).
       seither modulo 1.000.000.000: ein Seed, der vom gewuenschten
       abweicht, ist das erheblich kleinere Uebel als einer, den niemand
       bekommt.
+      _Spaeter ueberholt: 2.1.1 - `--seed` nimmt hoechstens neun Ziffern
+      an, der Seed des Gastgebers kommt also unveraendert an; gekuerzt
+      wird nur noch ein gewuerfelter (5.9)._
 - [x] **9.6 Format 3 schreiben.** Kopf, `p=`- und `v=`-Zeilen, neue
       Ereignisbuchstaben, Demo-Uhr als Rundenuhr im Versus, `versus` in
       `DEMO_MODE_RE`, `end=lost`, und `--mp-bot` zeichnet nicht auf.
@@ -2910,6 +2917,8 @@ Uhr einsortierte, siehe unten). Vier Ursachen:
   naechsten Nachfuellen (Stein 64) eine andere Folge als die Aufnahme
   fuer ihn traegt - und als alle anderen am Tisch. Jetzt `mp_bot_rand`,
   ein eigener Generator.
+  _Spaeter ueberholt: 2.1.1 - `RANDOM` ist nicht mehr die Steinfolge;
+  der Bot behaelt seinen Generator aus dem in 5.9 genannten Grund._
 - **Pruefpunkte an der falschen Stelle.** Ein Mitspieler schickte seine
   Zaehler vor seinem Zugfenster und auch waehrend einer Clear-Pause (wo
   die Reihen noch nicht verbucht sind); der Aufzeichnende hob den
@@ -3235,3 +3244,151 @@ Terminal-Einstellungen im isolierten Pseudo-Terminal; es laeuft in CI.
 verworfene Eingabe durchgehen zu lassen. Der Doppeldruck-Test braucht
 dadurch kein weiteres Byte nach dem beabsichtigten Ende mehr und
 erzeugt auch mit `--gap 0.06` keinen Broken-Pipe-Fehler im Sender.
+
+
+## Eigener Generator fuer die Steinfolge (umgesetzt, Version 2.1.1)
+
+Anlass: Issue #115, gemeldet beim Nachbau des Mehrspielers fuer eine
+iOS-Fassung, die aus demselben Seed dieselbe Folge erzeugen muss.
+
+Vorzustand: `bag_refill` mischte den Beutel mit
+`$(( RANDOM % (i + 1) ))`. `--seed` setzte beim Start `RANDOM`
+(`rowhammer.sh`), der `SEED` einer Mehrspieler-Runde ebenso
+(`mp_handle`: `RANDOM="${PROTO_ARG[0]}"`). `--seed` nahm Ziffern
+beliebiger Laenge und reichte sie unveraendert weiter.
+
+Befund (Pruefung des Issues am 2026-11-09, an echten Shells gemessen -
+die Ubuntu-Pakete 4.3.48, 4.4.20, 5.0.17, 5.1.16, 5.2.21 und 5.3.9,
+entpackt und gestartet, dazu die Bash-Quellen 4.3, 4.4.18, 5.0, 5.1,
+5.2.21 und 5.3): der Issue stimmt im Kern und irrt in einem Punkt. Hinter
+`RANDOM` stehen nicht zwei, sondern **drei** Generatoren. Die ersten 20
+Steine fuer Seed 12345, mit dem alten Code im echten Spiel
+(`--seed 12345 --debug`, Zeile "bag refill" im Ereignislog):
+
+| Bash | Steine |
+| --- | --- |
+| 4.3.48, 4.4.20 | `IIOZTOSZOSOIILTOZIOL` |
+| 5.0.17 | `OTZSLTOJIITLIOTZJTTS` |
+| 5.2.21, 5.3.9 | `JILTISJOOTIJILJZLIZL` |
+
+- **Bash 4.3/4.4** (`brand` in `variables.c`): Park-Miller auf einem
+  `unsigned long`; die Korrektur eines negativen Zwischenwerts steht
+  unter `#if 0`, der Zustand laeuft dann als 64-Bit-Zahl weiter.
+- **Bash 5.0**: derselbe Schritt auf `u_bits32_t`, **mit** Korrektur
+  (`rseed = (t < 0) ? t + 0x7fffffff : t`). Der Issue hatte 4.x und 5.0
+  zusammengefasst. Die beiden laufen auseinander, sobald ein
+  Zwischenwert negativ wird - das haengt vom Seed ab: bei Seed 1 und
+  12345 schon in den ersten Steinen, bei Seed 230545106 war der ganze
+  erste Beutel noch gleich. Die ersten fuenf Werte nach `RANDOM=1` sind
+  in beiden dieselben, ein kurzer Test sieht den Unterschied also nicht.
+- **Bash 5.1 bis 5.3** (`lib/sh/random.c`): der Schritt von 5.0, der
+  Wert zusaetzlich gefaltet, `(rseed >> 16) ^ (rseed & 65535)`. 5.1,
+  5.2 und 5.3 sind darin gleich (5.3 schreibt nur `l = ret % 127773`
+  statt der Subtraktion).
+
+In einer gemischten Sitzung spielte damit jeder seine eigene Folge.
+Nachgestellt mit einem Hub und drei Test-Bots unter Bash 4.4, 5.0 und
+5.2: derselbe `SEED` in allen drei Logs, der Bot unter 5.2 mit einem
+anderen Beutel. Aus dem Code hergeleitet, nicht nachgestellt: eine
+Aufnahme einer solchen Runde traegt nur die Folge des Aufzeichnenden
+(5.20) und spielt die uebrigen Sitze mit den falschen Steinen ab.
+
+Plan: am 2026-11-09 vorgelegt und freigegeben, mit drei
+Nutzerentscheidungen: Version `2.1.1` (eine Korrektur, Protokoll und
+Formate bleiben), ein `--seed` mit mehr als neun Ziffern wird abgelehnt
+statt still gekuerzt, und kein Generator-Feld im `HELLO`.
+
+Umsetzung (heutiger Stand: 3.1, dort auch der Algorithmus):
+
+- `lib/pieces.sh` hat einen eigenen Generator, `bag_seed` und
+  `bag_rand`, und `bag_refill` zieht daraus. Er ist der von Bash 5.1
+  und spaeter, in Shell-Arithmetik nachgebaut: Schritt, Faltung und die
+  Regel aus `get_random_number`, dass ein Wert, der dem vorigen gleicht,
+  verworfen wird. Bash rechnet mit `intmax_t` (64 Bit), die Summen des
+  Schritts - die groesste liegt unter 2^31 - bleiben also ohne Maske
+  exakt.
+- `rowhammer.sh` setzt ihn beim Start: aus `--seed`, sonst einmal aus
+  `RANDOM`. `RANDOM` bekommt den Seed weiterhin mit - daraus kommen die
+  Lochspalte des Hochwasser-Modus und im Hub (der mit dem `--seed` des
+  Gastgebers gestartet wird) Stoerreihen und Zielwahl, und die waren
+  vorher gesetzt.
+- `mp_handle` ruft bei `SEED` `bag_seed` und laesst `RANDOM` in Ruhe.
+- `--seed`: hoechstens neun Ziffern (das Zahlenfeld des Protokolls,
+  `PROTO_NUM_RE`), sonst Aufruffehler 2; der Wert wird gleich bei der
+  Pruefung in seine schlichte Dezimalform gebracht.
+- `tools/demo/probe_pieces.sh` setzt den Seed ueber `bag_seed` und
+  prueft seine beiden Argumente.
+- Unveraendert: das Protokoll (Version 6, `SEED` traegt weiter eine
+  Zahl), das Demo-Format (5 - eine Aufnahme speichert die Steine, nicht
+  den Seed), der Hub und der Generator des Test-Bots.
+
+Was sich dadurch sichtbar aendert:
+
+- Auf Bash 5.1 und spaeter **nichts** an den Folgen: alter und neuer
+  Code geben fuer denselben Seed dieselben Steine (geprueft, siehe
+  Abnahme). Auf 4.3, 4.4 und 5.0 gibt ein Seed jetzt die Folge, die er
+  auf den neueren Shells schon hatte.
+- **Hochwasser mit `--seed`**: die Lochspalte zog aus demselben `RANDOM`
+  wie der Beutel und verschob dessen naechstes Mischen, je nachdem, wie
+  viele Reihen bis dahin gestiegen waren. Die Steinfolge haengt jetzt
+  nicht mehr davon ab.
+- **Fuehrende Nullen**: `--seed 010` war auf Bash 5.1+ Seed 8 (dort
+  wertet die Zuweisung an `RANDOM` den Wert als Ausdruck aus, also
+  oktal) und auf den aelteren Seed 10; `--seed 08` war auf 5.1+ ein
+  Arithmetikfehler, nach dem das Spiel mit ungesetztem `RANDOM`
+  weiterlief. Ein Gastgeber mit `--seed 08` bekam gar keine Runde: der
+  Hub scheiterte in `hub_start_round` an derselben Zahl, und ein `SEED`
+  kam bei keinem Client an (mit dem alten Code nachgestellt). Jetzt
+  ist 010 ueberall zehn und 08 acht.
+
+Verworfen:
+
+- **Ein Generator-Feld im `HELLO`**, mit dem der Hub abweichende
+  Clients abweist (zweiter Vorschlag des Issues): es haette drei
+  Klassen unterscheiden muessen statt zwei und Spieler ausgesperrt,
+  statt den Fehler zu beheben - und waere eine Protokollaenderung fuer
+  einen Zustand, den es mit dem eigenen Generator nicht mehr gibt.
+- **`BASH_COMPAT=50`**: schaltet eine Bash ab 5.1 auf den Generator von
+  5.0 zurueck, nicht auf den von 4.4 - die aelteren blieben anders.
+- **Ein neuer, einfacherer Generator** (linear kongruent wie
+  `mp_bot_rand`): er haette jedem Seed auf jeder Shell eine neue Folge
+  gegeben und keinen Massstab ausserhalb des eigenen Codes gehabt. Der
+  Nachbau laesst sich gegen `RANDOM` pruefen.
+- **Ueberlange Seeds still kuerzen** (modulo 1.000.000.000 wie im Hub):
+  gespielt wuerde ein anderer Seed als der eingegebene.
+
+Korrektur am Plan: er begruendete den Nachbau auch damit, dass die
+Seeds 13, 121 und 16 der Democlip-Werkzeuge (`tools/demo/`) auf ihre
+Folge abgestimmt seien. Das traegt nicht mehr - diese Abstimmung gilt
+seit dem 63er-Beutel (1.0.4) nicht mehr: `planner.py` erwartet fuer Seed
+121 den Anfang `I O L J`, schon der alte Code gab `J S Z L`. Die
+Entscheidung selbst steht auf den beiden Gruenden oben. An den
+Clip-Werkzeugen wurde hier nichts geaendert.
+
+Abnahme: `tools/seed-check.sh` (neu) haelt Zahlen und Steinfolgen
+fuer feste Seeds fest, die vor der Aenderung dem `RANDOM` einer Bash
+5.2 entnommen wurden, dazu die Wiederholungsregel (Seed 3, 62. Wert),
+die Schreibweise mit fuehrender Null, die Zusammensetzung dreier Beutel
+und die Unabhaengigkeit von `RANDOM` in beide Richtungen; auf einer
+Bash ab 5.1 vergleicht es zusaetzlich 150 Seeds mit je 250 Werten
+gegen `RANDOM` selbst. Es besteht auf 4.3.48, 4.4.20 und 5.0.17 (je 21
+Pruefungen) sowie auf 5.1.16, 5.2.21 und 5.3.9 (je 22). Vier absichtlich
+eingebaute Fehler findet es: ohne Wiederholungsregel, Mischen wieder
+aus `RANDOM`, ohne Basis 10, Wert ohne Faltung. Die CI startet es auf
+der Bash des Runners und in den `bash`-Images 4.3 bis 5.3; dieser
+Container-Schritt liess sich lokal nicht ausfuehren (kein Docker),
+die sechs Shells liefen dort als entpackte Pakete.
+Alter gegen neuen Code auf Bash 5.2: 400 zufaellige Seeds, je 189
+Steine (drei Beutel), keine Abweichung.
+Im Pseudo-Terminal mit dem echten Spiel, `--seed 12345`: der alte Code
+gibt auf fuenf Shells die drei Folgen der Tabelle oben, der neue auf
+allen `JILTISJOOTIJILJZLIZL`. Ohne `--seed` geben drei Sitzungen drei
+verschiedene Beutel. Eine Hochwasser-Runde mit Seed startet mit
+derselben Folge.
+Gemischte Sitzung (Hub, drei Bots unter 4.4, 5.0 und 5.2), neuer Code:
+derselbe Beutel in allen drei Logs. Ein Hub mit `--seed 08` verschickt
+`SEED 8`.
+Alle uebrigen CI-Pruefungen bestehen lokal: Syntax, ShellCheck (Stufe
+error), ASCII, Versionsabgleich, `key-scan` mit und ohne Luecke,
+`ctrl-c-check`, `state-check`, `demo-keys`, `clock-check`,
+`display-check`, `net-fuzz`, `multiplayer-check` und `hub-check`.

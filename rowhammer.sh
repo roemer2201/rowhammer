@@ -220,7 +220,7 @@
 #                [--reset config|stats|highscore|save|demo|all] [--force]
 #                [--debug] [--debug-dir DIR] [-h|--help]
 #
-# Version: 2.1.0  (2026-10-24)
+# Version: 2.1.1  (2026-11-09)
 
 set -euo pipefail
 
@@ -235,7 +235,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # Game version, reported in the debug session header. Keep in sync with
 # the Version field in the header comment above, with debian/changelog and
 # with the Version tag in rowhammer.spec (build-rpm.sh checks the latter).
-ROWHAMMER_VERSION="2.1.0"
+ROWHAMMER_VERSION="2.1.1"
 
 # --- Built-in defaults ----------------------------------------------------
 # Full precedence: command-line argument > environment variable > config
@@ -720,10 +720,25 @@ while [ "$#" -gt 0 ]; do
 done
 
 # Validate option values before touching the terminal.
-if [ -n "${SEED}" ] && ! [[ "${SEED}" =~ ^[0-9]+$ ]]; then
-    printf '%s: --seed expects a non-negative integer, got: %s\n' \
-        "${SCRIPT_NAME}" "${SEED}" >&2
-    exit 2
+# CHANGE 2.1.1: a seed is nine digits at most and is brought into its
+# plain decimal form right here. Nine, because that is the number field
+# of the multiplayer protocol (PROTO_NUM_RE, lib/proto.sh): the host's
+# --seed becomes the SEED of the session, and a seed that fits the field
+# is the one every client gets instead of a remainder of it
+# (hub_start_round, lib/hub.sh). Refused rather than cut down, so the
+# sequence played is the one that was asked for. The plain form matters
+# because bash reads a leading zero as octal wherever a number is
+# evaluated: before this "--seed 010" was seed 8 on bash 5.1 and later
+# and seed 10 on the older ones, and "--seed 08" was an arithmetic error
+# there that left the generator unseeded - the game started all the
+# same, with pieces nobody had asked for.
+if [ -n "${SEED}" ]; then
+    if ! [[ "${SEED}" =~ ^[0-9]{1,9}$ ]]; then
+        printf '%s: --seed expects a non-negative integer of at most nine digits, got: %s\n' \
+            "${SCRIPT_NAME}" "${SEED}" >&2
+        exit 2
+    fi
+    SEED="$(( 10#${SEED} ))"
 fi
 if [ -z "${DATA_DIR}" ]; then
     printf '%s: --data-dir must not be empty\n' "${SCRIPT_NAME}" >&2
@@ -1246,9 +1261,24 @@ for _var in "${KEY_ACTIONS[@]}"; do
 done
 unset _name_re _key_re _var _other _theme _theme_ok
 
-# Seeding RANDOM makes the bag shuffle sequence reproducible.
+# Seeding the piece generator makes the bag shuffle sequence reproducible.
+# CHANGE 2.1.1: the pieces come from a generator of their own (bag_rand,
+# lib/pieces.sh) and no longer from RANDOM, whose sequence for a seed
+# depends on the bash version (issue #115) - so that one is seeded here.
+# RANDOM still gets the seed as well: it keeps drawing the gap column of
+# the Hochwasser mode in this process and the garbage gap and the target
+# in the hub (lib/hub.sh), which is started with the host's --seed, and
+# those were seeded before this change and stay so. They are per bash
+# version as they always were, which costs nothing: the hub hands its
+# draws to every client, and a recording stores the flood column.
+# Without a seed the generator starts from RANDOM, which bash seeds
+# itself at startup - the state it is declared with would otherwise give
+# every session the same pieces.
 if [ -n "${SEED}" ]; then
     RANDOM="${SEED}"
+    bag_seed "${SEED}"
+else
+    bag_seed "$(( (RANDOM << 15 | RANDOM) & 0x3FFFFFFF ))"
 fi
 
 # Resolve "auto" into basic or extended by probing the terminal, then

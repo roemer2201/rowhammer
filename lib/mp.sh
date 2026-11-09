@@ -33,7 +33,7 @@
 #   terminals.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 1.5.0  (2026-09-22)
+# Version: 1.5.1  (2026-11-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -362,7 +362,14 @@ mp_handle() {
             # which is what makes the duel about play rather than luck. A
             # --seed given on the host's command line became this seed in
             # the hub; on every client it simply arrives here.
-            RANDOM="${PROTO_ARG[0]}"
+            # CHANGE 2.1.1: it seeds the piece generator (bag_seed,
+            # lib/pieces.sh) and no longer RANDOM. The generator behind
+            # RANDOM is a different one in bash 4.3/4.4, in 5.0 and from
+            # 5.1 on, so one SEED gave machines with different shells
+            # different pieces - the very thing it is sent to prevent
+            # (issue #115). RANDOM is left alone here: nothing in a round
+            # needs it to follow the hub.
+            bag_seed "${PROTO_ARG[0]}"
             debug_event "mp: seed ${PROTO_ARG[0]}"
             ;;
         START)
@@ -2134,6 +2141,12 @@ MP_BOT_BLUNDER=25
 # sequence than everybody else, and a recording replayed it with the
 # common one, so its seat ran apart from the round there (bugfix 2.0.2 -
 # the bot before this one did the same with its random column).
+# CHANGE 2.1.1: the piece sequence has a generator of its own since then
+# (bag_rand, lib/pieces.sh), so RANDOM is no longer it and a draw from
+# RANDOM could not move the bags any more. The bot keeps this generator
+# all the same: what it must never touch is now BAG_RNG, and its seed
+# from process id and clock (mp_bot_main) is what keeps two bots apart
+# even when both were started with the same --seed, which seeds RANDOM.
 MP_BOT_RNG=1
 MP_BOT_RAND=0
 mp_bot_rand() {

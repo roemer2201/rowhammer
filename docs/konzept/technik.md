@@ -125,7 +125,7 @@ rowhammer/
   rowhammer.sh         # Hauptskript: Argumente, Init, Game-Loop
   lib/
     board.sh           # Spielfeld-Zustand, Kollision, Reihenabbau
-    pieces.sh          # Baustein-Definitionen und Rotationstabellen
+    pieces.sh          # Baustein-Definitionen, Rotationstabellen, Beutel und sein Generator
     squares.sh         # Erkennung und Verwaltung von Gold-/Silber-Quadraten
     render.sh          # Rendering (Layout, Zeilen-Diff, ANSI)
     input.sh           # Nicht-blockierende Tastatureingabe
@@ -156,6 +156,7 @@ rowhammer/
     hub-check.sh       # Sitzungstest des Hubs ueber socat (siehe 5.5)
     demo-keys.sh       # Regressionstest der Demo-Tasten (siehe 3.8)
     state-check.sh     # Regressionstest des Rundenzustands (siehe 5.20)
+    seed-check.sh      # Regressionstest der Steinfolge ueber Bash-Versionen (siehe 3.1)
     clock-check.py     # Regressionstest der Uhr und Zuschauerzeit
     release.sh         # Versions-Abgleich, Release-Notes, Release-Tag
     demo/              # Werkzeuge fuer die asciinema-Democlips
@@ -220,7 +221,7 @@ Reset, Debug, Mehrspieler).
 
 | Option | Umgebung | Config | Bedeutung |
 | --- | --- | --- | --- |
-| `--seed N` | `ROWHAMMER_SEED` | - | reproduzierbare Teilfolge |
+| `--seed N` | `ROWHAMMER_SEED` | - | reproduzierbare Teilfolge: hoechstens neun Ziffern (das Zahlenfeld des Protokolls, 5.9), dezimal gelesen, auf jeder Bash-Version dieselbe (3.1) |
 | `--name NAME` | `ROWHAMMER_PLAYER_NAME` | ja | Spielername (Vorgabe der Namensabfrage, 3.7) |
 | `--lang de\|en\|auto` | `ROWHAMMER_LANG` | ja | Sprache, Standard `auto` (4.11) |
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR` | - | Datenverzeichnis (4.5); der im Einstellungsmenue gespeicherte Ort steht in einer eigenen Zeigerdatei, Praezedenz Standard < Zeiger < Env < CLI (4.12) |
@@ -647,7 +648,11 @@ oeffentliche Paketquelle gibt (siehe 4.7).
   einmal mit `--gap 0.06` (die stueckweise Zustellung aus Issue #7);
   der Tastentest der Demo-Wiedergabe `tools/demo-keys.sh` (siehe 3.8)
   samt `tools/display-check.py`; der Rundenzustandstest
-  `tools/state-check.sh` (siehe 5.20); fuer den Mehrspieler der
+  `tools/state-check.sh` (siehe 5.20); der Steinfolgentest
+  `tools/seed-check.sh` (siehe 3.1), einmal auf der Bash des Runners
+  und dann in den offiziellen `bash`-Images 4.3, 4.4, 5.0, 5.1, 5.2 und
+  5.3 - eine einzelne Bash kann nicht zeigen, dass ein Seed auf jeder
+  dieselbe Folge gibt; fuer den Mehrspieler der
   Fuzz-Test der Parser `tools/net-fuzz.sh`, die Regressionen fuer
   EOF-Auslieferung, Demo-Wartezeiten und Endplatzierungen in
   `tools/multiplayer-check.py` (ohne Terminal oder socat) und seit 2.0.2 der
