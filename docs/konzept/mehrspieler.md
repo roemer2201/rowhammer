@@ -114,7 +114,9 @@ im Code nur eine andere socat-Adresse: Prozessmodell (5.3), Protokoll
   alle starten mit demselben Seed (identische Steinfolge, Fairness) -
   auch wenn die Teilnehmer verschiedene Bash-Versionen haben: die Folge
   kommt aus einem eigenen Generator, nicht aus `RANDOM` (seit 2.1.1,
-  siehe 3.1).
+  siehe 3.1). Das gilt, wenn alle Clients diesen Generator verwenden.
+  Aeltere Clients mit Protokoll 6 koennen sich weiterhin verbinden und
+  je nach Bash-Version eine andere Steinfolge ziehen.
   Wer oben rausbaut (Top-Out), scheidet aus und wird Zuschauer
   (siehe 5.8).
 - Das Quadrat-System bleibt unveraendert die Kernmechanik: Gold- und

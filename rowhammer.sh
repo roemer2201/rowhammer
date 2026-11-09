@@ -246,6 +246,7 @@ ROWHAMMER_VERSION="2.1.1"
 # defaults, get overridden by config_load and the env/CLI blocks after
 # sourcing below.
 SEED="${ROWHAMMER_SEED:-}"
+SEED_OPT=0
 # Color on/off. Beyond the project's own ROWHAMMER_NO_COLOR we honor the
 # de-facto standard NO_COLOR variable (https://no-color.org/): when it is
 # present and not an empty string, colors are disabled regardless of its
@@ -494,10 +495,12 @@ while [ "$#" -gt 0 ]; do
                 exit 2
             fi
             SEED="${2}"
+            SEED_OPT=1
             shift 2
             ;;
         --seed=*)
             SEED="${1#*=}"
+            SEED_OPT=1
             shift
             ;;
         --name)
@@ -731,8 +734,9 @@ done
 # evaluated: before this "--seed 010" was seed 8 on bash 5.1 and later
 # and seed 10 on the older ones, and "--seed 08" was an arithmetic error
 # there that left the generator unseeded - the game started all the
-# same, with pieces nobody had asked for.
-if [ -n "${SEED}" ]; then
+# same, with pieces nobody had asked for. An explicit empty argument is
+# invalid too, while an unset or empty environment value selects a random seed.
+if [ "${SEED_OPT}" -eq 1 ] || [ -n "${SEED}" ]; then
     if ! [[ "${SEED}" =~ ^[0-9]{1,9}$ ]]; then
         printf '%s: --seed expects a non-negative integer of at most nine digits, got: %s\n' \
             "${SCRIPT_NAME}" "${SEED}" >&2

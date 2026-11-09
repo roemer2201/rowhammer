@@ -16,9 +16,9 @@
 #   probe_pieces.sh SEED [N]
 #     SEED   integer seed (as passed to rowhammer.sh --seed), at most
 #            nine digits
-#     N      how many pieces to print (default 60)
+#     N      how many pieces to print, one to six decimal digits (default 60)
 #
-# Version: 1.2.0  (2026-11-09)
+# Version: 1.2.1  (2026-11-09)
 set -u
 
 seed="${1:?usage: probe_pieces.sh SEED [N]}"
@@ -32,9 +32,11 @@ if ! [[ "${seed}" =~ ^[0-9]{1,9}$ ]]; then
     exit 2
 fi
 if ! [[ "${n}" =~ ^[0-9]{1,6}$ ]]; then
-    printf 'probe_pieces.sh: N expects a non-negative integer, got: %s\n' "${n}" >&2
+    printf 'probe_pieces.sh: N expects a non-negative integer of at most six digits, got: %s\n' "${n}" >&2
     exit 2
 fi
+# Match the decimal interpretation of SEED before using N in the loop.
+n=$(( 10#${n} ))
 
 # The library logs bag refills via debug_event; stub it out so sourcing
 # the module stays silent and side-effect free. Since 0.42.0 queue_fill

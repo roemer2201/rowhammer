@@ -299,6 +299,10 @@ Hauptmenue.
 das Glueck. Wer oben aus dem Feld baut, scheidet aus und schaut den
 anderen zu.
 
+Die gemeinsame Steinfolge ueber verschiedene Bash-Versionen hinweg ist
+garantiert, wenn alle mit rowhammer ab 2.1.1 spielen. Aeltere Clients
+koennen derselben Lobby beitreten und dabei andere Steine ziehen.
+
 **Der Gastgeber legt die Regeln fest**, und sie stehen in der Lobby jedes
 Spielers:
 
