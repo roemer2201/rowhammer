@@ -3377,7 +3377,9 @@ eingebaute Fehler findet es: ohne Wiederholungsregel, Mischen wieder
 aus `RANDOM`, ohne Basis 10, Wert ohne Faltung. Die CI startet es auf
 der Bash des Runners und in den `bash`-Images 4.3 bis 5.3; dieser
 Container-Schritt liess sich lokal nicht ausfuehren (kein Docker),
-die sechs Shells liefen dort als entpackte Pakete.
+die sechs Shells liefen dort als entpackte Pakete. Im CI-Lauf des
+Branches bestand er in allen sechs Images, zusammen mit den uebrigen
+neun Jobs.
 Alter gegen neuen Code auf Bash 5.2: 400 zufaellige Seeds, je 189
 Steine (drei Beutel), keine Abweichung.
 Im Pseudo-Terminal mit dem echten Spiel, `--seed 12345`: der alte Code
