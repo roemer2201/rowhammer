@@ -1183,7 +1183,8 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   nicht aus `RANDOM`. `SEED` setzt ihn auf jedem Client je Runde neu,
   und nur der Beutel zieht daraus: damit ist es fuer alle dieselbe
   Folge - gleich, welche Bash-Version ein Teilnehmer hat, und gleich,
-  was in seiner Runde sonst noch wuerfelt. `RANDOM` laesst ein Client
+  was in seiner Runde sonst noch wuerfelt (die Grenze sind Clients vor
+  2.1.1, siehe 5.1). `RANDOM` laesst ein Client
   bei `SEED` unberuehrt. Der Test-Bot hat fuer seine Zugwahl trotzdem
   einen eigenen Generator (`mp_bot_rand`, seit 2.0.2): den des Beutels
   darf er nicht anfassen, und sein Startwert aus Prozessnummer und Uhr

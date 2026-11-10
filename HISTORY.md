@@ -3347,7 +3347,9 @@ Verworfen:
   Clients abweist (zweiter Vorschlag des Issues): es haette drei
   Klassen unterscheiden muessen statt zwei und Spieler ausgesperrt,
   statt den Fehler zu beheben - und waere eine Protokollaenderung fuer
-  einen Zustand, den es mit dem eigenen Generator nicht mehr gibt.
+  einen Zustand, den es unter Clients ab 2.1.1 nicht mehr gibt. Fuer
+  aeltere Clients bleibt er bestehen und ist als Grenze genannt (siehe
+  PR-Review unten und 5.1).
 - **`BASH_COMPAT=50`**: schaltet eine Bash ab 5.1 auf den Generator von
   5.0 zurueck, nicht auf den von 4.4 - die aelteren blieben anders.
 - **Ein neuer, einfacherer Generator** (linear kongruent wie
@@ -3394,3 +3396,35 @@ Alle uebrigen CI-Pruefungen bestehen lokal: Syntax, ShellCheck (Stufe
 error), ASCII, Versionsabgleich, `key-scan` mit und ohne Luecke,
 `ctrl-c-check`, `state-check`, `demo-keys`, `clock-check`,
 `display-check`, `net-fuzz`, `multiplayer-check` und `hub-check`.
+
+PR-Review #117 (Commit des Nutzers auf dem Branch, hier geprueft und
+nachgetragen): drei Ergaenzungen.
+
+- **Ein ausdruecklich leeres `--seed` ist ein Aufruffehler** (`--seed ""`
+  und `--seed=`, Exit 2). _Vorzustand: es galt als nicht angegeben - das
+  Spiel wuerfelte, und zwar auch bei gesetztem `ROWHAMMER_SEED`, denn
+  die leere Kommandozeile hatte die Umgebung da schon ueberschrieben
+  (am Stand davor nachgemessen)._ `SEED_OPT` merkt sich, ob die Option
+  auf der Kommandozeile stand; eine fehlende oder leere
+  Umgebungsvariable heisst weiterhin "zufaellig".
+- **`tools/demo/probe_pieces.sh` liest `N` dezimal.** _Vorzustand, aus
+  dem ersten Commit dieses PR: `N` war auf Ziffern geprueft, lief aber
+  unveraendert in die Schleife - `020` gab 16 Steine (oktal), `08` einen
+  Arithmetikfehler und keinen Stein._ Derselbe Fehler, den die
+  Aenderung fuer den Seed behoben hatte, im Argument daneben.
+- **Die Grenze gegenueber aelteren Clients steht im Konzept und in der
+  README** (5.1): das Protokoll bleibt Version 6, ein Client bis 2.1.0
+  kann einer Sitzung also weiter beitreten und mischt dann noch mit
+  `RANDOM` - auf Bash ab 5.1 mit derselben Folge wie alle anderen, auf
+  einer aelteren mit einer anderen. Garantiert ist die gemeinsame
+  Folge, wenn alle mit 2.1.1 oder neuer spielen.
+
+Abnahme dazu: `tools/multiplayer-check.py` hat zwei neue Tests (28
+statt 26): das leere `--seed` in beiden Schreibweisen bei gesetzter
+Umgebungsvariable, und `SEED 000012345` wie `SEED 12345` ueber
+`mp_handle` - beide geben `JILTISJOOTIJILJZLIZL` und lassen `RANDOM`
+unberuehrt. Am echten Aufruf nachgeprueft: `--seed=`, `--seed=-1` und
+`--seed=1e3` enden mit 2, `--seed=0` und `--seed=000000007` nicht, eine
+leere Umgebungsvariable startet normal; `probe_pieces.sh 12345 020`
+gibt 20 Steine, `08` acht. Beide CI-Laeufe des Commits bestanden in
+allen zehn Jobs.

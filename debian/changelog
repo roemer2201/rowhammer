@@ -5,7 +5,10 @@ rowhammer (2.1.1) unstable; urgency=medium
     4.3/4.4, 5.0 and 5.1+, so players with different shells got different
     pieces from the shared seed of a multiplayer round. It has a generator
     of its own now that reproduces the one of bash 5.1 and later.
-  * --seed takes at most nine digits and reads a leading zero as decimal.
+  * --seed takes at most nine digits and reads a leading zero as decimal;
+    an explicitly empty --seed is a usage error.
+  * The shared sequence holds when every player runs 2.1.1 or later: an
+    older client can still join and may draw other pieces.
 
  -- roemer2201 <r.oliver@web.de>  Mon, 09 Nov 2026 12:00:00 +0000
 

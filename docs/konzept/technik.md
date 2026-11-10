@@ -221,7 +221,7 @@ Reset, Debug, Mehrspieler).
 
 | Option | Umgebung | Config | Bedeutung |
 | --- | --- | --- | --- |
-| `--seed N` | `ROWHAMMER_SEED` | - | reproduzierbare Teilfolge: hoechstens neun Ziffern (das Zahlenfeld des Protokolls, 5.9), dezimal gelesen, auf jeder Bash-Version dieselbe (3.1) |
+| `--seed N` | `ROWHAMMER_SEED` | - | reproduzierbare Teilfolge: hoechstens neun Ziffern (das Zahlenfeld des Protokolls, 5.9), dezimal gelesen, auf jeder Bash-Version dieselbe (3.1). Ein ausdruecklich leeres Argument (`--seed ""`, `--seed=`) ist ein Aufruffehler; eine fehlende oder leere Umgebungsvariable heisst "zufaellig" |
 | `--name NAME` | `ROWHAMMER_PLAYER_NAME` | ja | Spielername (Vorgabe der Namensabfrage, 3.7) |
 | `--lang de\|en\|auto` | `ROWHAMMER_LANG` | ja | Sprache, Standard `auto` (4.11) |
 | `--data-dir DIR` | `ROWHAMMER_DATA_DIR` | - | Datenverzeichnis (4.5); der im Einstellungsmenue gespeicherte Ort steht in einer eigenen Zeigerdatei, Praezedenz Standard < Zeiger < Env < CLI (4.12) |
