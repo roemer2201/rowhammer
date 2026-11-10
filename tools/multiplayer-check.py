@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regressions for multiplayer transport, protocol numbers and recordings.
+"""Regressions for multiplayer transport, piece seeds and recordings.
 
 Since format 5 also the final places in the header of a versus recording,
 and the standings a replay shows once its timeline has run out.
@@ -9,7 +9,7 @@ ROWHAMMER_MULTIPLAYER_TEST_ROOT optionally selects another source tree.
 The real Bash modules run with the game's strict flags, controlled input
 and a deterministic recording clock. No terminal or socat is required.
 
-Version: 1.1.2 (2026-10-10)
+Version: 1.1.3 (2026-11-09)
 """
 
 import os
@@ -265,6 +265,37 @@ if proto_parse 'CLEAR 010 08 nope'; then exit 1; fi
 printf 'rejected\n'
 ''')
         self.assertEqual(output, ["rejected"])
+
+    def test_explicit_empty_seed_is_a_usage_error(self):
+        for args in (("--seed", ""), ("--seed=",)):
+            with self.subTest(args=args):
+                result = bash(r'''
+ROWHAMMER_SEED=12345 bash "${1}/rowhammer.sh" --help "${@:2}"
+''', *args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("--seed expects a non-negative integer", result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_seed_messages_restart_the_piece_sequence_without_touching_random(self):
+        output = self.run_bash(PLAY_SETUP + r'''
+debug_event() { :; }
+demo_record_piece() { :; }
+DEMO_PLAYING=0
+RANDOM=4711
+expected_random="${RANDOM} ${RANDOM}"
+RANDOM=4711
+for value in 000012345 12345; do
+    mp_handle "SEED ${value}"
+    BAG=() QUEUE=()
+    for (( i = 0; i < 20; i++ )); do
+        bag_next
+        printf '%s' "${NEXT_TYPE}"
+    done
+    printf '\n'
+done
+[ "${RANDOM} ${RANDOM}" = "${expected_random}" ]
+''')
+        self.assertEqual(output, ["JILTISJOOTIJILJZLIZL"] * 2)
 
     def test_eof_drains_all_batches_before_reporting_link_down(self):
         # Include no data, exactly one batch, several batches and more

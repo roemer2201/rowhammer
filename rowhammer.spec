@@ -20,7 +20,7 @@
 %{!?rowhammer_release: %global rowhammer_release 1}
 
 Name:           rowhammer
-Version:        2.1.0
+Version:        2.1.1
 Release:        %{rowhammer_release}%{?dist}
 Summary:        Tetris-like terminal game written in pure bash
 
@@ -84,6 +84,13 @@ make install DESTDIR=%{buildroot} PREFIX=%{_prefix}
 %{_prefix}/games/%{name}
 
 %changelog
+* Mon Nov 09 2026 roemer2201 <r.oliver@web.de> - 2.1.1-1
+- Same piece sequence for a seed on every bash version (own generator
+  instead of RANDOM); fixes diverging pieces in mixed multiplayer sessions.
+- --seed takes at most nine digits and reads a leading zero as decimal;
+  an explicitly empty --seed is a usage error.
+- The shared sequence holds when every player runs 2.1.1 or later.
+
 * Sat Oct 24 2026 roemer2201 <r.oliver@web.de> - 2.1.0-1
 - Quit on Ctrl-C only after two quick presses, three in multiplayer.
 - Disable the terminal interrupt character while the game owns the tty.

@@ -111,7 +111,12 @@ im Code nur eine andere socat-Adresse: Prozessmodell (5.3), Protokoll
     sind genau das, was sich noch symmetrisch um das eigene Feld
     setzen laesst (zwei je Seite, siehe 5.6).
 - **Grundform:** "Versus" - jeder Spieler hat sein eigenes 10x20-Feld,
-  alle starten mit demselben Seed (identische Steinfolge, Fairness).
+  alle starten mit demselben Seed (identische Steinfolge, Fairness) -
+  auch wenn die Teilnehmer verschiedene Bash-Versionen haben: die Folge
+  kommt aus einem eigenen Generator, nicht aus `RANDOM` (seit 2.1.1,
+  siehe 3.1). Das gilt, wenn alle Clients diesen Generator verwenden.
+  Aeltere Clients mit Protokoll 6 koennen sich weiterhin verbinden und
+  je nach Bash-Version eine andere Steinfolge ziehen.
   Wer oben rausbaut (Top-Out), scheidet aus und wird Zuschauer
   (siehe 5.8).
 - Das Quadrat-System bleibt unveraendert die Kernmechanik: Gold- und
@@ -661,7 +666,7 @@ Bildschirm (siehe 5.20).
   | `PROMOTE` | - | "uebernimm die Sitzung" - nur an den Nachfolger (seit 1.2.0) |
   | `MIGRATE` | `<adresse> <port>` | "die Sitzung zieht dorthin um" (seit 1.2.0) |
   | `CLOSED` | `<host oder failed>` | die Sitzung ist zu Ende, ohne Nachfolger (seit 1.2.0) |
-  | `SEED` | `<seed>` | gemeinsamer Seed fuer die Steinfolge |
+  | `SEED` | `<seed>` | gemeinsamer Seed fuer die Steinfolge; welche Folge daraus wird, legt der Generator in 3.1 fest |
   | `START` | `<countdown_ms>` | Rundenstart |
   | `PEER` | `<slot> <lines> <rows> <level> <gold> <silver> <height> <pending> <state>` | Zustand eines Mitspielers |
   | `PEERBOARD` | `<slot> <200 Zeichen>` | Feld-Snapshot eines Mitspielers |
@@ -1161,26 +1166,30 @@ er schickt nur nichts los (`hub_msg_clear` kehrt frueh zurueck), und die
   verworfen).
 - **Seed:** der Hub-Seed muss in das Zahlenfeld des Protokolls passen
   (neun Stellen, `PROTO_NUM_RE`), deshalb nimmt `hub_start_round` ihn
-  modulo 1.000.000.000 - egal ob er gewuerfelt wurde (die Maske
-  `0x3FFFFFFF` reicht bis 1.073.741.823) oder aus `--seed` kam, das
-  Ziffern beliebiger Laenge entgegennimmt. Ein zu langer Seed wird von
-  **jedem** Client als fehlerhafte Nachricht verworfen; jeder behaelt
-  dann sein eigenes `RANDOM` und spielt eine **andere Steinfolge** -
-  genau die Fairness, fuer die der gemeinsame Seed da ist (siehe 5.1),
-  und auf dem Bildschirm stuende nichts davon. Ein Seed, der vom
-  gewuenschten abweicht, ist das erheblich kleinere Uebel als einer, den
-  niemand bekommt.
+  modulo 1.000.000.000. Das trifft nur den gewuerfelten Seed (die Maske
+  `0x3FFFFFFF` reicht bis 1.073.741.823): `--seed` nimmt seit 2.1.1
+  selbst hoechstens neun Ziffern an (4.2), der Seed des Gastgebers kommt
+  also unveraendert bei allen an. Ein zu langer Seed wuerde von
+  **jedem** Client als fehlerhafte Nachricht verworfen; jeder behielte
+  dann den Stand seines eigenen Generators und spielte eine **andere
+  Steinfolge** - genau die Fairness, fuer die der gemeinsame Seed da ist
+  (siehe 5.1), und auf dem Bildschirm stuende nichts davon. Ein Seed,
+  der vom gewuerfelten abweicht, ist das erheblich kleinere Uebel als
+  einer, den niemand bekommt.
 - **Seed (CLI):** `--seed` wird im Mehrspieler vom Hub-Seed uebersteuert; ein
   gesetzter `--seed` beim Host wird zum Sitzungs-Seed.
-- **`RANDOM` gehoert waehrend der Runde der Steinfolge.** Der Seed setzt
-  `RANDOM`, und daraus zieht jeder Teilnehmer seine Beutel - nur solange
-  nichts anderes daraus zieht, ist es fuer alle dieselbe Folge. Ein
-  normaler Client zieht in einer Versus-Runde nichts sonst daraus; der
-  Test-Bot tat es fuer seine Zugwahl und spielte damit ab dem naechsten
-  Nachfuellen (alle 63 Steine) eine andere Folge als alle anderen - auf
-  dem Bildschirm unsichtbar, in jeder Aufnahme der Runde aber ein Sitz,
-  der ab Stein 64 auseinanderlief (gefunden mit 2.0.2 von der Gegenprobe,
-  5.20). Seither hat der Bot einen eigenen Generator (`mp_bot_rand`).
+- **Die Steinfolge hat einen eigenen Generator** (`bag_seed` und
+  `bag_rand`, seit 2.1.1; Algorithmus und Begruendung in 3.1), sie kommt
+  nicht aus `RANDOM`. `SEED` setzt ihn auf jedem Client je Runde neu,
+  und nur der Beutel zieht daraus: damit ist es fuer alle dieselbe
+  Folge - gleich, welche Bash-Version ein Teilnehmer hat, und gleich,
+  was in seiner Runde sonst noch wuerfelt (die Grenze sind Clients vor
+  2.1.1, siehe 5.1). `RANDOM` laesst ein Client
+  bei `SEED` unberuehrt. Der Test-Bot hat fuer seine Zugwahl trotzdem
+  einen eigenen Generator (`mp_bot_rand`, seit 2.0.2): den des Beutels
+  darf er nicht anfassen, und sein Startwert aus Prozessnummer und Uhr
+  haelt zwei Bots auch dann auseinander, wenn beide mit demselben
+  `--seed` gestartet wurden, das `RANDOM` setzt.
 - **Terminalgroesse:** der SIGWINCH-Pfad waehlt zusaetzlich die
   Detailstufe neu (siehe 5.6).
 - **Demo-Schicht:** eine Mehrspieler-Runde wird wie jede andere

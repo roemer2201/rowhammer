@@ -392,7 +392,10 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   schreibt die Reihenfolge des Ausscheidens dorthin, wo die Runde anders
   gewertet hat.
 - **Eine Steinfolge fuer alle.** Der gemeinsame
-  Seed (5.1) gibt jedem dieselbe Folge, nur zu anderen Zeitpunkten. Der
+  Seed (5.1) gibt jedem dieselbe Folge, nur zu anderen Zeitpunkten -
+  auch ueber Bash-Versionen hinweg (eigener Generator seit 2.1.1,
+  siehe 3.1), und darauf steht die Aufnahme: sie traegt **eine** Folge,
+  die des Aufzeichnenden, und spielt jeden Sitz mit ihr ab. Der
   Aufzeichnende zieht sie deshalb weit genug: er zaehlt je Slot die
   Ereignisse mit, die einen Stein aus der Folge nehmen, und fuellt die
   Folge beim Schliessen der Aufnahme aus seinem **eigenen Beutel** bis
@@ -410,8 +413,9 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
     dieser Stelle kostet die Schleife die Runde nichts mehr.
   - **Aus dem eigenen Beutel.** Er steht genau dort, wo die eigenen
     Zuege ihn gelassen haben - `queue_fill` ist das Einzige, was aus ihm
-    nimmt -, und `RANDOM` wird je Runde aus dem `SEED` des Hubs neu
-    gesetzt, waehrend `game_reset` den Beutel leert. Weiterziehen setzt
+    nimmt -, und der Generator des Beutels wird je Runde aus dem `SEED`
+    des Hubs neu gesetzt (`bag_seed`, 3.1), waehrend `game_reset` den
+    Beutel leert. Weiterziehen setzt
     also die eine Folge fort und kann die naechste Runde der Sitzung
     nicht verschieben.
   - **Der Bedarf ist Spawns + `PREVIEW_COUNT` + 1.** Ein Brett hat neben
@@ -524,10 +528,11 @@ v=2 41 96 4 1 2 7  Pruefpunkt: die per PEER gemeldeten Zaehler von Slot 2
   also mit ihr wiedergegeben - und jeder Zug, den er in den ~280 ms nach
   einem Clear machte, trifft dort noch den Stein, der laengst ersetzt
   war. Seine Schleife dreht die Frist deshalb weiter wie `game_run`
-  (5.3). **Und er zieht seinen Zufall nicht aus `RANDOM`** (seit 2.0.2,
-  `mp_bot_rand`): `RANDOM` ist die gemeinsame Steinfolge (5.9), und ein
-  Bot, der daraus seine Zugwahl zog, spielte ab dem naechsten Nachfuellen
-  des Beutels andere Steine als die Aufnahme fuer seinen Sitz traegt.
+  (5.3). **Und er zieht seinen Zufall aus einem eigenen Generator**
+  (seit 2.0.2, `mp_bot_rand`), nicht aus dem der gemeinsamen Steinfolge
+  (5.9): ein Bot, der seine Zugwahl aus ihr zog, spielte ab dem naechsten
+  Nachfuellen des Beutels andere Steine als die Aufnahme fuer seinen
+  Sitz traegt.
   Seit 2.0.2 plant er seine Zuege ausserdem mit einer einfachen
   Platzierungssuche (`mp_bot_plan`) statt mit einer formblinden
   Spaltenwahl, die nach einem Dutzend Steinen einen Turm gebaut hatte:
@@ -577,7 +582,8 @@ Verrechnung auf:
 - **Die Stoerreihen eines Mitspielers standen an der falschen Stelle
   seines Stroms** - geloest mit den Marken, siehe oben.
 - **Der Bot zog andere Steine**, weil er `RANDOM` fuer seine Zugwahl
-  benutzte (siehe den Test-Bot oben und 5.9).
+  benutzte, das bis 2.1.1 zugleich die Steinfolge war (siehe den
+  Test-Bot oben und 5.9).
 - **Ein `QUEUE` nach einem schnellen Lock schob Reihen doppelt ein** -
   kein Aufzeichnungsfehler, sondern einer der Runde selbst, den eine
   Wiedergabe nur treu nachspielen wuerde (5.7, `mp_queue_set`; aus dem

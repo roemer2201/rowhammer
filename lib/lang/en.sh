@@ -15,7 +15,7 @@
 #   columns and the HUD labels within six.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.11.0  (2026-10-24)
+# Version: 1.11.1  (2026-11-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -726,7 +726,9 @@ multiplayer on the local network, highscores, wonders, statistics,
 demos and settings.
 
 Options:
-  --seed N      Seed the piece randomizer for a reproducible sequence.
+  --seed N      Seed the piece randomizer for a reproducible sequence
+                (at most nine digits). A seed gives the same pieces on
+                every bash version.
                 Env: ROWHAMMER_SEED         Default: (random)
   --name NAME   Player name recorded with highscore entries (max. 16
                 characters from A-Z a-z 0-9 space _ -).

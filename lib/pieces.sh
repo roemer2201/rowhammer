@@ -10,12 +10,15 @@
 #   the "Hochwasser" mode by the selectable
 #   theme), a per-type two-character glyph (PIECE_GLYPH) that keeps pieces
 #   distinguishable in the no-color mode, the bag randomizer (nine
-#   complete sets of the seven types per bag, shuffled as a whole) and
+#   complete sets of the seven types per bag, shuffled as a whole), the
+#   generator that drives its shuffle (bag_seed/bag_rand, since 2.1.1:
+#   the same sequence for a seed on every bash version, which RANDOM
+#   does not give) and
 #   the upcoming-piece queue that feeds the HUD preview. In debug mode
 #   every bag refill is logged with the shuffled piece order.
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.10.0  (2026-08-07)
+# Version: 0.11.0  (2026-11-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -142,10 +145,100 @@ BAG=()
 # gold square possible and the drought that makes it a decision.
 BAG_SETS=9
 
+# --- The generator behind the bag (since 2.1.1) ---------------------------
+# The shuffle draws from a generator of its own, written out in shell
+# arithmetic, and no longer from bash's RANDOM. The reason is what a seed
+# is for: "--seed N" promises a sequence, and a multiplayer round gives
+# every participant the hub's SEED so that all of them play the same
+# pieces (CLAUDE.md 5.1). RANDOM cannot keep either promise, because the
+# generator behind it is not the same in every bash the game runs on
+# (>= 4.3, CLAUDE.md 4.1) - measured for issue #115 with one seed on the
+# real shells, there are three of them:
+#   bash 4.3, 4.4  Park-Miller on an unsigned long, the correction of a
+#                  negative intermediate value compiled out ("#if 0" in
+#                  brand(), variables.c).
+#   bash 5.0       the same step on 32 bits, with that correction.
+#   bash 5.1+      the 5.0 step, and the result folded:
+#                  (state >> 16) ^ (state & 65535).
+# Two machines with different shells in one session therefore played
+# different pieces from one SEED, with nothing on screen to say so - and
+# a recording of a round carries one sequence for all of its seats, the
+# recorder's own (lib/demo.sh).
+#
+# The generator here is the one of bash 5.1 and later, reproduced exactly
+# (intrand32 and brand in lib/sh/random.c, get_random_number in
+# variables.c), not a new one: every seed keeps the sequence it had on
+# those shells and only the older ones move - to the sequence everybody
+# else already had. It also gives the test something to be held against
+# that is not this code: RANDOM itself. Its three parts:
+#   1. The step, "minimal standard" of Park and Miller with Schrage's
+#      split so nothing overflows 32 bits:
+#        h = state / 127773;  l = state % 127773
+#        t = 16807 * l - 2836 * h;  if t < 0 then t += 2147483647
+#        state = t
+#      A state of 0 is replaced by 123459876 before the step.
+#   2. The value: ((state >> 16) ^ (state & 65535)) & 32767.
+#   3. A value equal to the one handed out before is thrown away and the
+#      step is taken again; seeding sets that memory to 0.
+# Bash evaluates arithmetic in intmax_t, 64 bits wide on the platforms
+# the game runs on, so the sums above are exact here without any masking
+# (the largest is below 2^31); the mask in bag_seed only repeats what
+# bash does to a seed that does not fit 32 bits.
+# tools/seed-check.sh holds this to fixed vectors and, on a bash that has
+# the original, to RANDOM itself; the CI runs it on bash 4.3 to 5.3.
+#
+# BAG_RNG is the state, BAG_RNG_LAST the value handed out last and
+# BAG_RAND the result of bag_rand - passed in a global like NEXT_TYPE, to
+# keep a fork out of the game loop. All three are session state and not
+# round state (lib/state.sh), exactly as RANDOM was: one stream runs
+# through the session, and a round is the part of it that it draws.
+BAG_RNG=1
+BAG_RNG_LAST=0
+BAG_RAND=0
+
+# bag_seed N
+# Start the piece sequence over from seed N. N is decimal digits only -
+# every caller has checked that (the option check in rowhammer.sh, the
+# number field of the protocol for the hub's SEED). It is read as base 10
+# explicitly: plain arithmetic takes a leading zero for octal, so "010"
+# would be eight and "08" an arithmetic error, which throws the shell out
+# of the whole command it is in the middle of.
+bag_seed() {
+    BAG_RNG=$(( 10#${1} & 0xFFFFFFFF ))
+    BAG_RNG_LAST=0
+    return 0
+}
+
+# bag_rand
+# The next number of the generator, 0..32767, into BAG_RAND.
+bag_rand() {
+    local h l t
+    while :; do
+        if [ "${BAG_RNG}" -eq 0 ]; then
+            BAG_RNG=123459876
+        fi
+        h=$(( BAG_RNG / 127773 ))
+        l=$(( BAG_RNG % 127773 ))
+        t=$(( 16807 * l - 2836 * h ))
+        if [ "${t}" -lt 0 ]; then
+            t=$(( t + 0x7FFFFFFF ))
+        fi
+        BAG_RNG="${t}"
+        BAG_RAND=$(( ((t >> 16) ^ (t & 65535)) & 32767 ))
+        if [ "${BAG_RAND}" -ne "${BAG_RNG_LAST}" ]; then
+            break
+        fi
+    done
+    BAG_RNG_LAST="${BAG_RAND}"
+    return 0
+}
+
 # Refill the bag with BAG_SETS complete sets of the seven piece types and
-# shuffle it in place (Fisher-Yates). RANDOM drives the shuffle, so
-# seeding RANDOM makes the whole piece sequence reproducible (used by
-# --seed).
+# shuffle it in place (Fisher-Yates). bag_rand drives the shuffle, so
+# seeding it (bag_seed) makes the whole piece sequence reproducible (used
+# by --seed and by the SEED of a multiplayer round).
+# CHANGE 2.1.1: this drew from RANDOM, and seeding RANDOM was what made
+# the sequence reproducible - on one bash version, see above.
 bag_refill() {
     local i j tmp
     BAG=()
@@ -156,7 +249,8 @@ bag_refill() {
     # on its own would only reorder seven pieces at a time and keep
     # exactly the even distribution this is meant to loosen up.
     for (( i = ${#BAG[@]} - 1; i > 0; i-- )); do
-        j=$(( RANDOM % (i + 1) ))
+        bag_rand
+        j=$(( BAG_RAND % (i + 1) ))
         tmp="${BAG[i]}"
         BAG[i]="${BAG[j]}"
         BAG[j]="${tmp}"
@@ -176,8 +270,13 @@ PREVIEW_COUNT=3
 # pieces come from its recorded stream instead of the bag, and while a
 # round is being recorded every piece drawn here is noted for that stream.
 # Storing the pieces themselves rather than an RNG seed is deliberate -
-# RANDOM is seeded once per session, not per round, and its generator
-# differs between bash versions, so a seed would not replay reliably.
+# the generator is seeded once per session, not per round, so a seed
+# would not name the round it was drawn in.
+# CHANGE 2.1.1: the second reason given here was that the generator of
+# RANDOM differs between bash versions, so a seed would not replay
+# reliably. The bag has a generator of its own now (bag_rand above) and
+# that one is the same everywhere; the first reason stands, and a stored
+# sequence stays independent of BAG_SETS as well (CLAUDE.md 3.1).
 queue_fill() {
     # A plain variable instead of indexing the queue back, so the code
     # stays within the bash 4.0 the game asks for (negative array indices

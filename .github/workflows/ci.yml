@@ -3,7 +3,8 @@
 # Runs on every push to a development branch and on every pull request
 # towards main. It checks the sources against the project conventions
 # (bash syntax, ShellCheck, ASCII only, version consistency), replays the
-# input-layer regression test and builds both packages so a broken
+# input-layer regression test, holds the piece sequence to its vectors on
+# every supported bash release and builds both packages so a broken
 # packaging tree is found before a release is tagged - the release
 # workflow (release.yml) runs the very same build steps, it just adds the
 # GitHub release on top.
@@ -143,6 +144,35 @@ jobs:
 
       - name: Check slot separation and the state list
         run: ./tools/state-check.sh --silent
+
+  # ---------------------------------------------------------------------
+  # Piece sequence: a seed has to give the same pieces on every bash the
+  # game runs on - "--seed" promises that, and a multiplayer round stands
+  # on it (issue #115: bash 4.3/4.4, 5.0 and 5.1+ each have a different
+  # generator behind RANDOM, which the shuffle drew from until 2.1.1).
+  # The runner has one bash, and one bash cannot show this, so the test
+  # also runs in the official bash images of the oldest supported release
+  # and of every release after it. Those images are minimal, which is why
+  # tools/seed-check.sh uses builtins only; the tree is mounted read-only
+  # because the test writes nothing.
+  # ---------------------------------------------------------------------
+  seed-check:
+    name: Piece sequence test across bash versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Check the piece sequence on the runner's bash
+        run: ./tools/seed-check.sh
+
+      - name: Check the piece sequence on bash 4.3 to 5.3
+        run: |
+          set -euo pipefail
+          for version in 4.3 4.4 5.0 5.1 5.2 5.3; do
+            docker run --rm -v "${PWD}:/src:ro" -w /src "bash:${version}" \
+              bash tools/seed-check.sh
+          done
 
   # ---------------------------------------------------------------------
   # Demo player keys: the binding lives in demo_play, on the help page and

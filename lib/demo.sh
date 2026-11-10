@@ -33,10 +33,13 @@
 #       asciinema-style recording would have had to pin all of that down
 #       and would have had to record in full mode to stay replayable.
 #     - Robustness. The piece stream is stored literally (the letters the
-#       queue was filled with), not as an RNG seed: bash's RANDOM is
-#       seeded once per session, not per round, and its generator changed
-#       between bash releases - a seed would replay differently on a
-#       different bash. The literal stream costs one byte per piece.
+#       queue was filled with), not as an RNG seed: the generator of the
+#       bag is seeded once per session, not per round, so a seed would
+#       not name the round. The literal stream costs one byte per piece.
+#       CHANGE 2.1.1: the second reason given here - bash's RANDOM
+#       changed between bash releases, a seed would replay differently
+#       on a different bash - went with the bag's own generator
+#       (bag_rand, lib/pieces.sh), which is the same on every bash.
 #
 #   Multiplayer. A versus round is recorded the same way, only for
 #   everybody at once: every participant gets a stream of their own
@@ -118,7 +121,7 @@
 #
 #   Library file: sourced by rowhammer.sh, not meant to be executed directly.
 #
-# Version: 0.13.2  (2026-10-10)
+# Version: 0.13.3  (2026-11-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -1120,9 +1123,10 @@ demo_record_discard() {
 # doing it here costs the round nothing at all. The bag is where this
 # client's own draws left it (queue_fill is the only thing that takes
 # from it, and it stopped when this player did), so carrying on with it
-# continues the one sequence rather than starting a second one. RANDOM is
-# re-seeded per round from the hub's SEED and game_reset empties the bag,
-# so drawing further here cannot move the next round of the session
+# continues the one sequence rather than starting a second one. The
+# generator of the bag is re-seeded per round from the hub's SEED
+# (bag_seed, since 2.1.1; RANDOM before that) and game_reset empties the
+# bag, so drawing further here cannot move the next round of the session
 # either.
 # Drawing too far is harmless - one byte per piece, and the replay simply
 # does not ask for them - which is why the estimate behind

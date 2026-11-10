@@ -40,7 +40,7 @@ Die fuer uns relevanten Merkmale des Originals:
   dieselbe - ueber einen vollen Beutel kommt jede Sorte gleich oft -,
   aber innerhalb des Beutels ist die Reihenfolge frei genug fuer beides,
   die Haeufung gleicher Sorten, aus der ein Gold-Quadrat ueberhaupt erst
-  wird, und die Duerre, die es zu einer Entscheidung macht. Zwei
+  wird, und die Duerre, die es zu einer Entscheidung macht. Drei
   Festlegungen dazu:
   - **Gemischt wird ueber den ganzen Beutel**, nicht Satz fuer Satz. Ein
     Mischen je Siebenersatz wuerde nur siebenmal je sieben Steine
@@ -50,6 +50,55 @@ Die fuer uns relevanten Merkmale des Originals:
     `ULTRA_TARGET_ROWS` oder `FLOOD_INTERVAL_MS`: sie gehoert zum
     Spielgefuehl und wird nach Playtesting nachgezogen, nicht je Runde
     gewaehlt. `BAG_SETS=1` ist wieder der klassische 7er-Beutel.
+  - **Gemischt wird mit einem eigenen Generator** (`bag_seed` und
+    `bag_rand` in `lib/pieces.sh`, seit 2.1.1), nicht mit dem `RANDOM`
+    der Bash. Ein Seed ist ein Versprechen - `--seed N` nennt eine
+    Steinfolge, und eine Mehrspieler-Runde gibt jedem Teilnehmer
+    denselben (siehe 5.1) -, und `RANDOM` kann es nicht halten: der
+    Generator dahinter ist in Bash 4.3/4.4, in 5.0 und ab 5.1 jeweils
+    ein anderer (Issue #115, an den echten Shells gemessen), ein Seed
+    ergab also je nach Bash eine von drei Folgen. Der eigene Generator
+    ist **der von Bash 5.1 und spaeter, exakt nachgebaut** (`intrand32`
+    und `brand` in `lib/sh/random.c`, `get_random_number` in
+    `variables.c`), kein neuer: auf diesen Shells behaelt jeder Seed die
+    Folge, die er hatte, nur die aelteren wechseln - auf die Folge aller
+    anderen -, und der Test hat mit `RANDOM` selbst einen Massstab, der
+    nicht dieser Code ist. Er gehoert damit zu dem, was ein anderer
+    Client nachbauen muss, um aus demselben `SEED` dieselben Steine zu
+    ziehen:
+    1. Der Zustand `s` ist der Seed, dezimal gelesen (hoechstens neun
+       Ziffern, eine fuehrende Null ist keine Oktalzahl). Ist `s` gleich
+       0, tritt vor dem Schritt 123459876 an seine Stelle.
+    2. Der Schritt (Park-Miller "minimal standard" in der Zerlegung nach
+       Schrage, damit nichts ueber 32 Bit laeuft): `h = s / 127773`,
+       `l = s % 127773`, `t = 16807 * l - 2836 * h`, bei `t < 0` kommt
+       2147483647 dazu; `s = t`.
+    3. Der Wert: `((s >> 16) ^ (s & 65535)) & 32767`.
+    4. Ein Wert, der dem zuletzt ausgegebenen gleicht, wird verworfen und
+       der Schritt wiederholt; das Setzen des Seeds stellt dieses
+       Gedaechtnis auf 0.
+
+    Der Beutel entsteht daraus so: neunmal `I O T S Z J L`
+    hintereinander auf den Plaetzen 0 bis 62, dann von hinten nach vorn
+    (`i` = 62 bis 1) je ein Wert `r` und der Tausch der Plaetze `i` und
+    `r % (i + 1)`; ausgegeben wird von Platz 0 an. Der naechste Beutel
+    setzt den Generator fort. Pruefwerte: Seed 1 gibt die Werte 16807, 10791, 19566 und die
+    Steine `TTOZOSILSTISTZOTTZZI`, Seed 12345 die Steine
+    `JILTISJOOTIJILJZLIZL`; Seed 3 ist der kleinste, bei dem Regel 4
+    schon im ersten Beutel greift (beim 62. Wert). `tools/seed-check.sh`
+    haelt das fest - mit festen Folgen, die auf jeder Bash herauskommen
+    muessen, und auf einer Bash ab 5.1 zusaetzlich gegen `RANDOM` selbst
+    - und laeuft in der CI auf Bash 4.3 bis 5.3 (siehe 4.9).
+    Der Generator laeuft **durch die Sitzung, nicht durch die Runde**:
+    ohne `--seed` wird er beim Start einmal aus `RANDOM` gesetzt (das
+    die Bash selbst beim Start setzt), eine zweite Runde setzt die Folge
+    fort, und nur der `SEED` einer Mehrspieler-Runde setzt ihn je Runde
+    neu. `RANDOM` bleibt fuer alles, was keine Steinfolge ist - die
+    Lochspalte des Hochwasser-Modus (3.6), Stoerreihen und Zielwahl des
+    Hubs (5.7) -, und `--seed` setzt es weiterhin mit: diese Wuerfe sind
+    damit je Bash-Version reproduzierbar wie bisher, was genuegt, weil
+    der Hub sie an alle verteilt und eine Aufnahme die Flutspalte
+    speichert (4.10).
   Demos und der Mehrspieler bleiben davon unberuehrt: eine Aufnahme
   speichert die Steinfolge selbst und keinen Beutel (siehe 4.10), und
   die Mehrspieler-Fairness haengt am gemeinsamen Seed (siehe 5.1), nicht

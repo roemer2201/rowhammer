@@ -50,12 +50,13 @@ Bildschirmaufzeichnung (etwa im asciinema-`.cast`-Format):
   und zwingend im Full-Modus aufgenommen werden muessen, weil ein
   Zeilen-Diff nur vor dem Bildschirm Sinn ergibt, den er vorgefunden hat.
 - **Robustheit.** Die Steinfolge steht als Buchstabenkette in der Datei,
-  **nicht als RNG-Seed**, obwohl das kuerzer waere: `RANDOM` wird einmal
-  je Sitzung gesetzt, nicht
-  je Runde (eine zweite Runde setzt den Strom fort), und der Generator
-  hinter `RANDOM` hat sich zwischen Bash-Versionen geaendert: ein Seed
-  wuerde auf einer anderen Bash eine andere Runde abspielen. Ein Byte je
-  Stein macht die Frage gegenstandslos.
+  **nicht als RNG-Seed**, obwohl das kuerzer waere: der Generator des
+  Beutels (3.1) wird einmal je Sitzung gesetzt, nicht je Runde (eine
+  zweite Runde setzt den Strom fort), ein Seed benennt also keine
+  Runde. Und eine gespeicherte Folge haengt weder an der Beutelgroesse
+  (`BAG_SETS`, 3.1) noch am Generator: beide koennen sich aendern, ohne
+  dass eine Aufnahme eine andere Runde abspielt. Ein Byte je Stein macht
+  die Frage gegenstandslos.
 
 **Bedienung der Wiedergabe** (Pause und Vorspulen, plus Zeitlupe):
 

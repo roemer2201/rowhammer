@@ -20,7 +20,7 @@
 #   within its 18 columns.
 #   Library file: sourced by lib/i18n.sh, not meant to be executed directly.
 #
-# Version: 1.11.0  (2026-10-24)
+# Version: 1.11.1  (2026-11-09)
 
 # Guard: this file is a library and must be sourced, not executed.
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
@@ -779,7 +779,9 @@ Highscores, Weltwunder, Statistik, Demos und Einstellungen.
 
 Optionen:
   --seed N      Startwert des Zufallsgenerators fuer eine
-                reproduzierbare Steinfolge.
+                reproduzierbare Steinfolge (hoechstens neun Ziffern).
+                Ein Startwert ergibt auf jeder Bash-Version dieselben
+                Steine.
                 Env: ROWHAMMER_SEED         Standard: (zufaellig)
   --name NAME   Spielername, unter dem Highscore-Eintraege gespeichert
                 werden (max. 16 Zeichen aus A-Z a-z 0-9 Leerzeichen _ -).
